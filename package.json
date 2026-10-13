@@ -1,0 +1,53 @@
+{
+  "name": "my-pi-harness",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Local-first PC agent harness built independently on Pi",
+  "packageManager": "pnpm@10.34.6",
+  "engines": {
+    "node": "^24.0.0",
+    "pnpm": ">=10.34.6"
+  },
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "dev:web": "pnpm --filter @my-pi-harness/web dev",
+    "dev:daemon": "pnpm --filter @my-pi-harness/daemon dev",
+    "dev:desktop": "node scripts/dev.mjs --desktop",
+    "build": "pnpm version:sync && turbo run build",
+    "typecheck": "tsc --noEmit && turbo run typecheck",
+    "lint": "eslint . && pnpm lint:a11y && node scripts/check-boundaries.mjs && node scripts/check-source-conventions.mjs && node scripts/check-docs.mjs && pnpm version:check",
+    "lint:a11y": "oxlint --config .oxlintrc.json apps/web/src",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:artifact": "pnpm --filter @my-pi-harness/daemon test:built",
+    "test:e2e": "playwright test",
+    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test",
+    "version:sync": "node scripts/version.mjs --write",
+    "version:check": "node scripts/version.mjs",
+    "package:desktop": "pnpm build && node scripts/prepare-desktop.mjs && pnpm --filter @my-pi-harness/desktop package",
+    "smoke:desktop": "node scripts/smoke-desktop.mjs",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@my-pi-harness/eslint-config": "workspace:*",
+    "@my-pi-harness/protocol": "workspace:*",
+    "@playwright/test": "catalog:",
+    "@types/node": "catalog:",
+    "eslint": "catalog:",
+    "husky": "catalog:",
+    "lint-staged": "catalog:",
+    "oxlint": "catalog:",
+    "prettier": "catalog:",
+    "prettier-plugin-tailwindcss": "catalog:",
+    "turbo": "catalog:",
+    "typescript": "catalog:",
+    "typebox": "catalog:",
+    "vitest": "catalog:",
+    "vite": "catalog:"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,mjs,cjs,cts,mts,json,css,md,yaml,yml}": "prettier --write"
+  }
+}

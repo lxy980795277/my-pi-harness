@@ -1,0 +1,17 @@
+node_modules/
+dist/
+out/
+coverage/
+release/
+playwright-report/
+test-results/
+.turbo/
+.cache/
+.DS_Store
+.env
+.env.*
+!.env.example
+*.log
+*.tsbuildinfo
+.playwright-cli/
+output/

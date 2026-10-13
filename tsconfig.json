@@ -1,0 +1,8 @@
+{
+  "extends": "./packages/tsconfig/node.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "paths": { "@my-pi-harness/protocol": ["./packages/protocol/src/index.ts"] }
+  },
+  "include": ["*.config.ts", "tests/**/*.ts"]
+}

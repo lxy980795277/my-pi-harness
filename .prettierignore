@@ -1,0 +1,12 @@
+node_modules
+dist
+out
+release
+.cache
+.turbo
+coverage
+playwright-report
+test-results
+pnpm-lock.yaml
+.playwright-cli
+output

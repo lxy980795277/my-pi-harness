@@ -1,0 +1,19 @@
+# 版本与发布记录
+
+产品版本的唯一来源是根 `package.json` 的version。内部workspace包保持私有与 `0.0.0`，不分别发布；桌面安装包与公开APP_VERSION必须来自同一产品版本。
+
+`pnpm version:sync`生成protocol中的APP_VERSION，`pnpm version:check`拒绝生成内容与根版本不同步。Electron打包配置直接读取根版本，写入打包元数据，不修改内部desktop包的0.0.0。版本生成不改变PROTOCOL_VERSION的独立语义。
+
+## 提交时记录
+
+只有用户明确要求提交时，才按 [提交流程](../08_COLLABORATION/commit.md) 判断版本并创建 `<version>.md`。记录日期及实际新增、改进、修复，按顶层职责归类；无内容的分类省略，不宣称未验证能力。
+
+用户指定版本优先，否则按用户可见变化、兼容性与修复选择SemVer增量。产品版本更新后运行生成/一致性检查，不能只改根版本让安装包继续使用旧版本。
+
+## 发布证据
+
+当前 `pnpm package:desktop` 调用electron-builder的 `--dir`，生成本机平台的应用目录，不生成DMG、NSIS安装器，也不执行正式签名、公证或自动更新发布。正式安装产物在后续平台发布步骤增加并验证。
+
+每个发布版本记录目标平台、架构、构建及安装检查、签名状态、升级或迁移注意事项和已知限制。打包脚本存在不等于已发布或已公证，开发包、未签名包与正式安装包分别说明。
+
+首个工程版本为 [0.1.0](0.1.0.md)。M0的本机实现与验证见 [功能验证](../04_FEATURES/20261013_feature_project-foundation/verify.md)，规范与架构审计见 [审计验证](../04_FEATURES/20261013_refactor_m0-standards-audit/verify.md)。本地提交不表示应用已经对外发布。

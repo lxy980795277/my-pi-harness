@@ -1,0 +1,10 @@
+{
+  "extends": "../../packages/tsconfig/base.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "lib": ["ES2022", "DOM"],
+    "noEmit": true,
+    "paths": { "@my-pi-harness/protocol": ["../../packages/protocol/src/index.ts"] }
+  },
+  "include": ["src/preload/**/*.ts"]
+}
