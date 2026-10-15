@@ -177,6 +177,52 @@ describe('validated tool execution', () => {
     expect(searched).toContain('truncated');
   });
 
+  it.each(['sandboxed', 'full-access'] as const)(
+    'keeps application logs out of file tools with %s shell access',
+    async (shellAccess) => {
+      const protectedContext = { ...context, shellAccess };
+      const logPath = '.my-pi-harness/sessions/session.jsonl';
+      const original = 'private-log-marker';
+      await mkdir(join(context.workspaceRoot, '.my-pi-harness', 'sessions'), {
+        recursive: true,
+      });
+      await writeFile(join(context.workspaceRoot, logPath), original);
+      await writeFile(join(context.workspaceRoot, 'visible.txt'), 'ordinary-log-marker');
+      const operations = [
+        { name: 'read_file', args: { path: logPath } },
+        {
+          name: 'write_file',
+          args: { path: '.my-pi-harness/new.jsonl', content: 'new', expectedHash: null },
+        },
+        {
+          name: 'edit_file',
+          args: {
+            path: logPath,
+            oldText: original,
+            newText: 'changed',
+            expectedHash: hashBytes(Buffer.from(original)),
+          },
+        },
+        { name: 'list_files', args: { path: '.my-pi-harness', recursive: true } },
+        { name: 'search_files', args: { path: '.my-pi-harness', query: 'log-marker' } },
+      ];
+      for (const operation of operations)
+        await expect(
+          executeTool(operation.name, operation.args, protectedContext),
+        ).rejects.toMatchObject({ code: 'PROTECTED_PATH' });
+      expect(text(await executeTool('list_files', { recursive: true }, protectedContext))).toBe(
+        'visible.txt',
+      );
+      expect(
+        text(await executeTool('search_files', { query: 'log-marker' }, protectedContext)),
+      ).toBe('visible.txt:1: ordinary-log-marker');
+      expect(await readFile(join(context.workspaceRoot, logPath), 'utf8')).toBe(original);
+      await expect(
+        readFile(join(context.workspaceRoot, '.my-pi-harness', 'new.jsonl')),
+      ).rejects.toHaveProperty('code', 'ENOENT');
+    },
+  );
+
   it('returns bounded image content separately from text', async () => {
     const image = Buffer.from(
       'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aWQAAAABJRU5ErkJggg==',

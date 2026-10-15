@@ -6,6 +6,7 @@ import { cn } from '@/utils/cn';
 export const PopoverContent: FC<ComponentProps<typeof PopoverPrimitive.Content>> = ({
   className,
   children,
+  side = 'bottom',
   align = 'start',
   sideOffset = 8,
   ...props
@@ -13,6 +14,7 @@ export const PopoverContent: FC<ComponentProps<typeof PopoverPrimitive.Content>>
   return (
     <PopoverPrimitive.Portal>
       <PopoverPrimitive.Content
+        side={side}
         align={align}
         sideOffset={sideOffset}
         className={cn(

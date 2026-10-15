@@ -1,6 +1,6 @@
 # 工作区与工具协议
 
-wire协议5；Session事件信封仍为1，存储迁移追加0004为旧工作区补默认图标，旧事件和已发布迁移不重写。所有接口复用本机授权、Host/Origin和写请求CSRF校验，公开DTO由protocol/workspaces.ts、tools.ts与sessions.ts拥有。
+wire协议7；Session事件信封仍为1，0004为旧工作区补默认图标，M3追加0005保存上下文和工作状态，旧事件和已发布迁移不重写。所有接口复用本机授权、Host/Origin和写请求CSRF校验，公开DTO由protocol/workspaces.ts、tools.ts与sessions.ts拥有。
 
 ## 工作区与会话
 
@@ -11,18 +11,24 @@ wire协议5；Session事件信封仍为1，存储迁移追加0004为旧工作区
 | PUT /api/workspaces/:id    | {name,icon?,expectedRevision} → Workspace；revision冲突拒绝                  |
 | DELETE /api/workspaces/:id | 有未归档会话时409；否则隐藏记录，绝不删除文件                                |
 
-Workspace包含id、name、icon、rootPath、revision、createdAt、updatedAt。icon只允许protocol的WORKSPACE_ICONS集合；创建省略时使用folder，更新省略时保留原值，未知值返回400。旧库迁移为包含归档记录的工作区补folder，不改ID、revision或会话关联。创建和执行重验目录，根目录、Home及应用profile重叠目录拒绝。SessionSummary包含workspaceId:string|null和approvalMode:ask/read-only；创建允许省略并解析为null/ask。工作区一经创建固定，patch不提供迁移目录字段；旧会话null只支持普通聊天，不自动取得cwd权限。模型与审批设置只影响后续Run，活动Run使用已接受值。
+Workspace包含id、name、icon、rootPath、revision、createdAt、updatedAt。icon只允许protocol的WORKSPACE_ICONS集合；创建省略时使用folder，更新省略时保留原值，未知值返回400。旧库迁移为包含归档记录的工作区补folder，不改ID、revision或会话关联。创建和执行重验目录，根目录、Home及应用profile重叠目录拒绝。SessionSummary包含workspaceId:string|null和approvalMode:ask/auto/full-access/read-only；创建允许省略并解析为null/ask。菜单只提供前三项，历史read-only仍按原限制执行，打开菜单不会提升权限。工作区一经创建固定，patch不提供迁移目录字段；工作区为null的会话不注册本地文件/Shell工具，不自动取得cwd权限；M3的会话提问和规划工具仍可用。模型与审批设置只影响后续Run，活动Run使用已接受值。
 
 ## 工具与审批
 
-SessionSnapshot.tools给出所选分支的ToolCallView[]，每项包含afterMessageId，指向所属assistant消息；按消息锚点和原tool.requested事件seq排列，界面将其插在所属消息后，不按毫秒时间或哈希ID猜先后。工具请求使用tool.requested，后续状态为tool.updated，data={tool}；这些历史事件保留ToolCallRecord原字段：独立id、sessionId、runId、branchId、name、arguments、summary、status、result、diff和创建/更新时间。afterMessageId在快照读取时从既有投影列补充，不改写旧事件或工具JSON。状态为awaiting_approval、running、completed、failed、denied、cancelled或interrupted。二进制图片和私有codec不进公开投影。
+SessionSnapshot.tools给出所选分支的ToolCallView[]，每项包含afterMessageId，指向所属assistant消息；按消息锚点和原tool.requested事件seq排列，界面将其插在所属消息后，不按毫秒时间或哈希ID猜先后。工具请求使用tool.requested，后续状态为tool.updated，data={tool}；记录独立id、sessionId、runId、branchId、name、arguments、summary、status、result、diff和创建/更新时间，新记录可包含approval:{source:user|ai|full-access,decision:allow|deny|ask,reason:string|null}。历史approval缺省不补写。afterMessageId在快照读取时从既有投影列补充，不改写旧事件或工具JSON。状态为reviewing、awaiting_approval、running、completed、failed、denied、cancelled或interrupted。二进制图片和私有codec不进公开投影。
 
 `POST /api/sessions/:id/tools/:toolId/decision`输入{decision:allow|deny}，成功返回{ok:true}，工具状态由后续快照或SSE读取。决定只作用于该session所属、仍在等待的这次调用；重复、过期、跨session决定拒绝。批准与执行成功是两件事；参数、预像、目录和OS策略在实际执行时继续检查。禁止客户端提交任意工具以绕过Pi调用与审批。
 
-ask模式允许工作区内非敏感读取、目录和搜索；写入、编辑、Shell及所有Web请求逐次审批。read-only拒绝写入/编辑/Shell和Web POST，但仍可审批GET。审批等待有界，停止Run/退出会取消等待与执行。文件编辑要求SHA-256预像，创建使用expectedHash:null；调用参数提供修改内容，执行后显示Diff，当前不提供执行前Diff预览。
+ask模式允许工作区内非敏感读取、目录和搜索；写入、编辑、Shell及所有Web请求逐次审批。auto将这些待批调用交给独立、无工具的模型请求，使用当前Run模型与用户请求、冻结规则等复核资料；明确allow执行、deny拒绝、ask/无效结果/模型失败或超时转人工。复核不修改主Agent对话；停止取消请求并等待其结算，模型lease在请求结束后释放。tool.review.requested公开记录toolId/providerId/modelId，tool.review.completed增加decision/reason；完整请求仅进入privateData，不进入HTTP/SSE或JSONL。reviewing尚不能由人工decision接口批准，只有转为awaiting_approval才接受决定。
+
+full-access自动批准工具，在macOS直接执行无OS沙箱的Shell；明确选择后仅影响后续Run，不是隔离失败的自动回退。Shell使用宿主用户权限而不提权，文件工具仍限制在工作区，Plan仍禁止修改与命令。legacy read-only拒绝写入/编辑/Shell和Web POST，但仍可审批GET。MCP/Skill尚未实现，不因策略新增而开放。
+
+审批等待有界，停止Run/退出会取消等待与执行。ask/auto的macOS Shell保持无网络OS沙箱，full-access保留相同进程组取消、超时、环境白名单和输出上限；脱离所属进程组的恶意后代不在现有回收保证内。Windows/Linux Shell仍明确拒绝。文件编辑要求SHA-256预像，创建使用expectedHash:null；调用参数提供修改内容，执行后显示Diff，当前不提供执行前Diff预览。
 
 ## 上下文与恢复
 
 Run接受时私有冻结模型、工作区、策略、system prompt与工具声明。assistant toolCall通过消息私有codec保存，toolResult以tool.context保存，公开data只有branchId/afterMessageId/toolCallId。公开工具ID包含assistant消息锚点，不要求网关的SDK调用ID在整个Run内唯一；私有SDK调用/结果仍用原ID配对，已有记录的ID不重算。结果按assistant锚点插入重放上下文，分支只继承其消息前缀；HTTP/SSE不返回这些私有列。
 
 context codec新写version2、仍读version1；未完成工具周期不作为完整上下文重放，不伪造工具成功。重启将遗留工具标interrupted并终结遗留Run，不自动批准或重发副作用。文件工具路径竞态、Shell进程组以及PDF worker的实际隔离范围见[execution说明](../../packages/execution/README.md)，不能将Renderer sandbox当宿主执行沙箱。
+
+M3的Plan模式、会话工具、冻结规则、预算与检查点行为见[上下文与工作状态协议](context-interaction.md)，批准计划不替代本页的工具审批。

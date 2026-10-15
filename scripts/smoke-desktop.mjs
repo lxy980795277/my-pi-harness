@@ -64,6 +64,7 @@ const env = {
   MY_PI_HARNESS_NODE_PATH: '/missing-development-node',
   MY_PI_HARNESS_RENDERER_URL: 'http://127.0.0.1:1',
   MY_PI_HARNESS_DEVELOPMENT_ORIGIN: 'http://127.0.0.1:5174',
+  MY_PI_HARNESS_SESSION_LOG_ROOT: join(temporary, '.my-pi-harness'),
 };
 delete env['ELECTRON_RUN_AS_NODE'];
 try {

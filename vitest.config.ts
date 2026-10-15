@@ -20,6 +20,8 @@ export default defineConfig({
     },
   },
   test: {
+    // Typed ESLint creates several compiler programs; bound concurrent worker memory and CPU.
+    maxWorkers: 4,
     include: [
       'apps/daemon/test/**/*.test.ts',
       'apps/web/test/**/*.test.ts',

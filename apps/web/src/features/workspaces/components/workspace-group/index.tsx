@@ -1,41 +1,40 @@
 import type { Workspace } from '@my-pi-harness/protocol';
-import { ChevronDown, ChevronRight, Pencil, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import type { FC } from 'react';
 import { Button } from '@/components/ui/button';
 import { WorkspaceIcon } from '@/components/workspace-icon';
 import { SessionNavigation } from '@/features/sessions/components/session-navigation';
+import { WorkspaceActions } from '@/features/workspaces/components/workspace-actions';
 import { useWorkspaceGroup } from '@/features/workspaces/hooks/use-workspace-group';
 import type { WorkspaceGroup as WorkspaceGroupView } from '@/features/workspaces/utils/workspace-tree';
 
 interface WorkspaceGroupProps {
   group: WorkspaceGroupView;
   activeId: string | null;
-  activeWorkspaceId: string | null;
-  onSelectWorkspace: (id: string | null) => void;
+  onNewConversation: (id: string | null) => void;
   onSelectSession: (id: string) => void;
   onRename: (workspace: Workspace) => void;
   onRemove: (workspace: Workspace) => void;
 }
 
-/** Folder rows contain separate keyboard-operable selection and management actions. */
+/** Folder toggles and absolute management controls remain separate keyboard-operable actions. */
 export const WorkspaceGroup: FC<WorkspaceGroupProps> = ({
   group,
   activeId,
-  activeWorkspaceId,
-  onSelectWorkspace,
+  onNewConversation,
   onSelectSession,
   onRename,
   onRemove,
 }) => {
-  const state = useWorkspaceGroup(group, activeWorkspaceId, onSelectWorkspace, onRename, onRemove);
+  const state = useWorkspaceGroup(group, onNewConversation, onRename, onRemove);
   return (
     <div className="space-y-0.5" role="group" aria-label={group.name}>
-      <div className="group/workspace flex items-center gap-0.5">
+      <div className={state.rowClassName}>
         <Button
           type="button"
           variant="ghost"
           className={state.className}
-          onClick={state.select}
+          onClick={state.toggle}
           aria-expanded={state.expanded}
           title={group.workspace?.rootPath}
         >
@@ -50,30 +49,7 @@ export const WorkspaceGroup: FC<WorkspaceGroupProps> = ({
           </span>
           <span className="truncate">{group.name}</span>
         </Button>
-        {group.workspace && (
-          <div className="flex shrink-0 opacity-0 transition-opacity group-focus-within/workspace:opacity-100 group-hover/workspace:opacity-100">
-            <Button
-              type="button"
-              size="icon"
-              variant="ghost"
-              className="h-6 w-6"
-              aria-label={`编辑工作区 ${group.name}`}
-              onClick={state.rename}
-            >
-              <Pencil width={12} height={12} aria-hidden />
-            </Button>
-            <Button
-              type="button"
-              size="icon"
-              variant="ghost"
-              className="h-6 w-6"
-              aria-label={`移除工作区 ${group.name}`}
-              onClick={state.remove}
-            >
-              <Trash2 width={12} height={12} aria-hidden />
-            </Button>
-          </div>
-        )}
+        <WorkspaceActions name={group.name} managed={group.workspace !== null} state={state} />
       </div>
       {state.expanded && (
         <div>

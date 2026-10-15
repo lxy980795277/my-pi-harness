@@ -1,3 +1,7 @@
+import {
+  useAttachmentDrafts,
+  EMPTY_ATTACHMENTS,
+} from '@/features/attachments/stores/attachment-drafts';
 import type { ComposerState } from '@/features/sessions/types/session-view';
 import type { InputRequest } from '@my-pi-harness/protocol';
 import { useCallback, useState, type ChangeEvent, type FormEvent } from 'react';
@@ -18,6 +22,18 @@ export const useComposer = (
   onSend: (input: InputRequest) => Promise<void>,
   onStop: () => Promise<void>,
 ): ComposerState => {
+  const attachments = useAttachmentDrafts((state) => {
+    return state.drafts[sessionId] ?? EMPTY_ATTACHMENTS;
+  });
+  const attachmentBusy = useAttachmentDrafts((state) => {
+    return state.busy[sessionId] ?? false;
+  });
+  const clearAttachments = useAttachmentDrafts((state) => {
+    return state.clear;
+  });
+  const removeDraftAttachment = useAttachmentDrafts((state) => {
+    return state.remove;
+  });
   const storedDraft = useWorkspaceStore((state): string => {
     return state.drafts[sessionId] ?? '';
   });
@@ -47,6 +63,7 @@ export const useComposer = (
           await onSend(input);
           signal.throwIfAborted();
           confirmInput(sessionId, input.requestId);
+          clearAttachments(sessionId);
         } catch (failure: unknown) {
           if (isRejectedInput(failure)) {
             clearPendingInput(sessionId, input.requestId);
@@ -54,7 +71,7 @@ export const useComposer = (
           throw failure;
         }
       },
-      [clearPendingInput, confirmInput, onSend, sessionId],
+      [clearAttachments, clearPendingInput, confirmInput, onSend, sessionId],
     ),
   );
   const { pending: sendPending } = send;
@@ -62,7 +79,7 @@ export const useComposer = (
   const submit = useCallback(
     (event: FormEvent<HTMLFormElement>): void => {
       event.preventDefault();
-      if (sendPending || draft.trim().length === 0) {
+      if (sendPending || attachmentBusy || draft.trim().length === 0) {
         return;
       }
       const text = draft.trim();
@@ -74,10 +91,23 @@ export const useComposer = (
         text,
         mode: submittedMode,
         requestId: crypto.randomUUID(),
+        attachmentIds: attachments.map((attachment) => {
+          return attachment.id;
+        }),
       });
       sendRun(input);
     },
-    [draft, mode, prepareInput, running, sendPending, sendRun, sessionId],
+    [
+      attachmentBusy,
+      attachments,
+      draft,
+      mode,
+      prepareInput,
+      running,
+      sendPending,
+      sendRun,
+      sessionId,
+    ],
   );
   const stop = useAsyncEvent(
     useCallback(async (): Promise<void> => {
@@ -114,7 +144,22 @@ export const useComposer = (
   if (pendingInput?.mode === 'send') {
     modeOptions = [{ value: 'send', label: '原始发送 · 等待确认' }];
   }
+  const removeAttachment = useCallback(
+    (id: string): void => {
+      if (!pendingInput && !attachmentBusy) {
+        removeDraftAttachment(sessionId, id);
+      }
+    },
+    [attachmentBusy, pendingInput, removeDraftAttachment, sessionId],
+  );
   return {
+    attachmentDraftKey: sessionId,
+    attachmentIds:
+      pendingInput?.attachmentIds ??
+      attachments.map((attachment) => {
+        return attachment.id;
+      }),
+    removeAttachment,
     draft,
     changeDraft,
     keyDown: composerKeyDown,
@@ -126,7 +171,7 @@ export const useComposer = (
     running,
     stopping: running && stopRequestId === activeRunId,
     pending: sendPending,
-    disabled: sendPending || draft.trim().length === 0,
+    disabled: sendPending || attachmentBusy || draft.trim().length === 0,
     error: send.error ?? stop.error,
     draftLocked: pendingInput !== null,
     uncertain: pendingInput !== null && !sendPending,

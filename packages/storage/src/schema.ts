@@ -10,6 +10,9 @@ import type {
   SessionSummary,
   Workspace,
   ToolCallRecord,
+  WorkState,
+  AttachmentContent,
+  Checkpoint,
 } from '@my-pi-harness/protocol';
 
 /** Private SQLite columns never serve as HTTP responses without protocol validation. */
@@ -136,3 +139,29 @@ export const requests = sqliteTable(
   },
   (table) => [primaryKey({ columns: [table.sessionId, table.requestId] })],
 );
+
+/** Validated snapshots are projected from immutable work.updated events. */
+export const workStates = sqliteTable(
+  'work_states',
+  {
+    sessionId: text('session_id').notNull(),
+    branchId: text('branch_id').notNull(),
+    revision: integer('revision').notNull(),
+    data: text('data', { mode: 'json' }).$type<WorkState>().notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.sessionId, table.branchId] })],
+);
+
+/** Original bytes are private host records and never part of public event streams. */
+export const attachments = sqliteTable('attachments', {
+  id: text('id').primaryKey(),
+  data: text('data', { mode: 'json' }).$type<AttachmentContent>().notNull(),
+});
+
+export const checkpoints = sqliteTable('checkpoints', {
+  id: text('id').primaryKey(),
+  sessionId: text('session_id').notNull(),
+  branchId: text('branch_id').notNull(),
+  createdAt: integer('created_at').notNull(),
+  data: text('data', { mode: 'json' }).$type<Checkpoint>().notNull(),
+});

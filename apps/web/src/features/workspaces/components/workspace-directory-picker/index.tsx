@@ -19,7 +19,7 @@ interface WorkspaceDirectoryPickerProps {
   drop: DragEventHandler<HTMLDivElement>;
 }
 
-/** The whole folder surface opens the native picker and accepts a single native directory drop. */
+/** A centered button opens the native picker; the surrounding surface only accepts directory drops. */
 export const WorkspaceDirectoryPicker: FC<WorkspaceDirectoryPickerProps> = ({
   rootPath,
   directoryName,
@@ -42,59 +42,57 @@ export const WorkspaceDirectoryPicker: FC<WorkspaceDirectoryPickerProps> = ({
         onDragLeave={dragLeave}
         onDragOver={dragOver}
         onDrop={drop}
-        className={cn('rounded-xl border border-dashed border-border', {
-          'border-ring bg-accent text-accent-foreground': dragging,
-        })}
+        className={cn(
+          'flex h-28 min-w-0 flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-border px-4 py-2',
+          {
+            'border-ring bg-accent text-accent-foreground': dragging,
+          },
+        )}
         data-testid="workspace-directory-dropzone"
         aria-busy={pending}
         title={rootPath || undefined}
       >
+        {rootPath.length === 0 && available && (
+          <span className="text-sm text-muted-foreground">在此电脑上添加文件夹</span>
+        )}
+        {rootPath.length === 0 && !available && (
+          <span className="text-sm text-muted-foreground">请在桌面应用中添加文件夹</span>
+        )}
+        {rootPath.length > 0 && (
+          <div className="flex w-full min-w-0 flex-col items-center gap-0.5">
+            <span className="flex max-w-full items-center gap-1.5 text-xs leading-4 font-medium">
+              <FolderOpen width={16} height={16} className="shrink-0" aria-hidden />
+              <span className="truncate">{directoryName}</span>
+            </span>
+            <span
+              className="w-full truncate text-center text-[11px] leading-4 text-muted-foreground"
+              title={rootPath}
+            >
+              {rootPath}
+            </span>
+          </div>
+        )}
         <Button
           id="workspace-directory"
           type="button"
-          variant="ghost"
+          variant="secondary"
           onClick={choose}
           disabled={disabled || !editable || !available}
           aria-label="选择工作区文件夹"
-          className="h-28 w-full min-w-0 flex-col gap-1.5 rounded-xl px-4 py-2 text-foreground disabled:opacity-100"
+          className="h-7 shrink-0 gap-1.5 rounded-full px-3 text-xs"
         >
           {pending && (
             <LoaderCircle
-              width={20}
-              height={20}
+              width={14}
+              height={14}
               className="animate-spin motion-reduce:animate-none"
               aria-hidden
             />
           )}
-          {!pending && rootPath.length === 0 && (
-            <FolderPlus width={20} height={20} className="text-muted-foreground" aria-hidden />
-          )}
-          {!pending && rootPath.length > 0 && <FolderOpen width={20} height={20} aria-hidden />}
-          {pending && <span className="text-sm">正在选择文件夹…</span>}
-          {!pending && rootPath.length === 0 && available && (
-            <span className="text-sm text-muted-foreground">点击选择或拖入文件夹</span>
-          )}
-          {!pending && rootPath.length === 0 && !available && (
-            <span className="text-sm text-muted-foreground">请在桌面应用中添加文件夹</span>
-          )}
-          {rootPath.length > 0 && (
-            <span className="flex w-full min-w-0 flex-col items-center gap-0.5">
-              <span className="max-w-full truncate text-xs leading-4 font-medium">
-                {directoryName}
-              </span>
-              <span
-                className="w-full truncate text-[11px] leading-4 text-muted-foreground"
-                title={rootPath}
-              >
-                {rootPath}
-              </span>
-            </span>
-          )}
-          {!pending && rootPath.length > 0 && editable && (
-            <span className="rounded-full bg-secondary px-2.5 py-0.5 text-[11px] leading-4 text-secondary-foreground">
-              更换文件夹
-            </span>
-          )}
+          {!pending && <FolderPlus width={14} height={14} aria-hidden />}
+          {pending && '正在选择…'}
+          {!pending && rootPath.length === 0 && '添加'}
+          {!pending && rootPath.length > 0 && '更换文件夹'}
         </Button>
       </div>
     </div>

@@ -7,6 +7,10 @@ import { RuntimeError } from './errors.js';
 import type { ResolvedModel } from './model-gateway.js';
 import type { EventInput } from './runtime-ports.js';
 import { toolCallRecordId, type ToolRuntime } from './tool-runtime.js';
+import type { WorkRuntime } from './work-runtime.js';
+import { fitContext } from './context/index.js';
+import { userWithAttachments } from './attachment-context.js';
+import { contextSourceIds } from './context-sources.js';
 
 export interface RunExecutionOptions {
   session: SessionSummary;
@@ -20,6 +24,7 @@ export interface RunExecutionOptions {
   queue(): QueueInput[];
   onError(error: unknown): void;
   tools?: ToolRuntime;
+  work?: WorkRuntime;
 }
 
 /** One SDK run; event subscribers never wait for this owner's idle promise. */
@@ -69,6 +74,54 @@ export class RunExecution {
       steeringMode: 'one-at-a-time',
       followUpMode: 'one-at-a-time',
       toolExecution: 'sequential',
+      ...(options.work
+        ? {
+            transformContext: (messages: Message[], signal?: AbortSignal): Promise<Message[]> => {
+              signal?.throwIfAborted();
+              const fitted = fitContext({
+                messages,
+                systemPrompt: options.systemPrompt,
+                contextWindow: options.resolved.model.contextWindow,
+                maxOutput: options.resolved.model.maxTokens,
+                toolDefinitions: tools,
+              });
+              const work = options.work;
+              if (work) {
+                const state = work.snapshot(options.session.id).state;
+                work.save(options.session.id, { ...state, usage: fitted.usage }, options.run.id);
+                const snapshot = work.options.store.getSnapshot(options.session.id);
+                const messageIds = contextSourceIds(fitted.messages, snapshot.messages);
+                const selected = new Set(messageIds);
+                const attachmentIds = [
+                  ...new Set(
+                    snapshot.messages
+                      .filter(({ id }) => selected.has(id))
+                      .flatMap((message) => message.attachmentIds ?? []),
+                  ),
+                ];
+                this.commit([
+                  {
+                    type: 'context.prepared',
+                    runId: options.run.id,
+                    at: Date.now(),
+                    data: {
+                      branchId: options.run.branchId,
+                      usage: fitted.usage,
+                      messageIds,
+                      attachmentIds,
+                    },
+                    privateData: JSON.stringify({
+                      version: 1,
+                      systemPrompt: options.systemPrompt,
+                      messages: fitted.messages.map(encodeContextMessage),
+                    }),
+                  },
+                ]);
+              }
+              return Promise.resolve(fitted.messages);
+            },
+          }
+        : {}),
       finishTurn: ({ message }) => {
         this.turns += 1;
         if (this.turns >= 32) {
@@ -116,11 +169,18 @@ export class RunExecution {
     this.agent.clearAllQueues();
     for (const input of this.options.queue()) {
       if (!this.eligible.has(input.id)) continue;
-      const message: UserMessage = {
-        role: 'user',
-        content: input.text,
-        timestamp: input.createdAt,
-      };
+      const message: UserMessage = this.options.work
+        ? userWithAttachments(
+            this.options.work.options.store,
+            input,
+            input.createdAt,
+            this.options.resolved.model.input.includes('image'),
+          )
+        : {
+            role: 'user',
+            content: input.text,
+            timestamp: input.createdAt,
+          };
       this.queuedMessages.set(message, input);
       if (input.mode === 'steer') this.agent.steer(message);
       else this.agent.followUp(message);
@@ -182,7 +242,12 @@ export class RunExecution {
         data: {
           status: this.outcome,
           finishedAt: Date.now(),
-          error: this.outcome === 'failed' ? 'The model request did not complete.' : null,
+          error:
+            this.outcome === 'failed'
+              ? this.failure instanceof RuntimeError
+                ? this.failure.message
+                : 'The model request did not complete.'
+              : null,
         },
       },
     ]);
@@ -384,6 +449,7 @@ export class RunExecution {
       runId: this.options.run.id,
       role: 'user',
       text: input.text,
+      ...(input.attachmentIds ? { attachmentIds: input.attachmentIds } : {}),
       thinking: '',
       createdAt: Date.now(),
       status: 'complete',

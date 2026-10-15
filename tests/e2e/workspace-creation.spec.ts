@@ -116,6 +116,11 @@ test('工作区选择取消、图标编辑和刷新持久化，保存中禁止�
     await expect(dialog.getByLabel('文件夹路径', { exact: true })).toHaveCount(0);
     await expect(dialog).not.toContainText('将已有文件夹作为 Agent 的工作范围');
     await expect(save).toBeDisabled();
+    const dropzone = page.getByTestId('workspace-directory-dropzone');
+    await expect(chooser).toHaveText('添加');
+    await expect(dropzone).toHaveCSS('height', '112px');
+    await dropzone.click({ position: { x: 8, y: 8 } });
+    expect(await page.evaluate(() => window.workspaceCreationTest.chooseCalls)).toBe(0);
     await chooser.click();
     expect(await page.evaluate(() => window.workspaceCreationTest.chooseCalls)).toBe(1);
     await expect(page.getByTestId('workspace-directory-dropzone')).toHaveAttribute(
@@ -126,6 +131,7 @@ test('工作区选择取消、图标编辑和刷新持久化，保存中禁止�
     await expect(save).toBeDisabled();
     await page.evaluate((value) => window.workspaceCreationTest.finishChoose(value), directory);
     await expect(dialog.getByText(directory, { exact: true })).toBeVisible();
+    await expect(chooser).toHaveText('更换文件夹');
     await expect(save).toBeEnabled();
     await chooser.click();
     await page.evaluate(() => window.workspaceCreationTest.finishChoose(null));
@@ -175,7 +181,12 @@ test('工作区选择取消、图标编辑和刷新持久化，保存中禁止�
     expect(created).toMatchObject({ name: '图标项目', icon: 'code', revision: 1 });
     await page.reload();
     await expect(group.locator('[data-workspace-icon="code"]')).toHaveCount(1);
-    await group.getByRole('button', { name: '编辑工作区 图标项目', exact: true }).click();
+    await group.getByRole('button', { name: '图标项目', exact: true }).hover();
+    await group.getByRole('button', { name: '更多操作 图标项目', exact: true }).click();
+    await page
+      .getByRole('dialog', { name: '图标项目 的工作区操作', exact: true })
+      .getByRole('button', { name: '重命名', exact: true })
+      .click();
     const editor = page.getByRole('dialog', { name: '编辑工作区', exact: true });
     await expect(
       editor.getByRole('button', { name: '选择工作区文件夹', exact: true }),
@@ -189,7 +200,12 @@ test('工作区选择取消、图标编辑和刷新持久化，保存中禁止�
       icon: 'rocket',
       revision: 2,
     });
-    await group.getByRole('button', { name: '编辑工作区 图标项目', exact: true }).click();
+    await group.getByRole('button', { name: '图标项目', exact: true }).hover();
+    await group.getByRole('button', { name: '更多操作 图标项目', exact: true }).click();
+    await page
+      .getByRole('dialog', { name: '图标项目 的工作区操作', exact: true })
+      .getByRole('button', { name: '重命名', exact: true })
+      .click();
     await editor.getByLabel('工作区名称', { exact: true }).fill('新的项目名');
     await editor.getByRole('button', { name: '保存工作区', exact: true }).click();
     await expect(editor).not.toBeVisible();
@@ -262,6 +278,9 @@ test('浏览器添加入口提示桌面操作并禁用保存，不再要求手�
   await expect(dialog.getByRole('textbox')).toHaveCount(1);
   await expect(dialog.getByLabel('文件夹路径', { exact: true })).toHaveCount(0);
   await expect(dialog.getByText('请在桌面应用中添加文件夹', { exact: true })).toBeVisible();
+  const chooser = dialog.getByRole('button', { name: '选择工作区文件夹', exact: true });
+  await expect(chooser).toHaveText('添加');
+  await expect(chooser).toBeDisabled();
   await expect(dialog.getByRole('button', { name: '保存工作区', exact: true })).toBeDisabled();
   await dialog.getByRole('button', { name: '取消', exact: true }).click();
   await expect(dialog).not.toBeVisible();

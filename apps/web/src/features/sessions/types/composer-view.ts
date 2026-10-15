@@ -13,11 +13,13 @@ export interface ComposerChoices {
   workspaceOptions: SelectOption[];
   workspaceLocked: boolean;
   workspaceLabel: string;
-  workspacePath: string | undefined;
   workspaceIcon: WorkspaceIcon;
   changeWorkspace: ValueChange<string>;
+  workMode: 'execute' | 'plan';
   approvalMode: ApprovalMode;
   changeApprovalMode: ValueChange<string>;
+  changeWorkMode: ValueChange<string>;
+  workModeDisabled: boolean;
   modelKey: string;
   modelOptions: SelectOption[];
   changeModel: ValueChange<string>;
@@ -46,6 +48,9 @@ export interface ComposerSurfaceProps {
   changeMode?: ValueChange<string>;
   error: string | null;
   uncertain?: boolean;
+  attachmentDraftKey: string;
+  attachmentIds: string[];
+  removeAttachment: (id: string) => void;
 }
 
 export interface NewSessionState extends Omit<ComposerSurfaceProps, 'id'> {
@@ -55,6 +60,7 @@ export interface NewSessionState extends Omit<ComposerSurfaceProps, 'id'> {
 export interface NewConversationIntent {
   model: DefaultModel;
   workspaceId: string | null;
+  workMode: 'execute' | 'plan';
   approvalMode: ApprovalMode;
   input: InputRequest;
 }
@@ -66,6 +72,7 @@ export type NewConversationAttempt = NewConversationIntent & { generation: strin
   );
 
 export interface ComposerChoicesState {
+  submitBlocked: boolean;
   choices: ComposerChoices;
   error: string | null;
 }

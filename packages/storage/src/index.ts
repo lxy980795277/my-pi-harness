@@ -9,3 +9,5 @@ export {
 } from './credentials.js';
 export type { CredentialStore, CredentialBackend, SecretUpdate } from './credentials.js';
 export type { CreateSessionInput, EventInput, RequestAcceptance } from './types.js';
+
+export { sessionLogDirectory, type ProfileStoreOptions } from './session-log-directory.js';

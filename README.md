@@ -2,7 +2,7 @@
 
 基于 Pi 的本地优先 PC Agent Runtime，独立实现，支持 Electron 与浏览器共用界面。第一阶段逐步对齐标杆功能，第二阶段迭代自己的产品能力；Computer Use 延后。
 
-当前实现 **M2 工作区与执行**：工作区树、直接发送的新对话、逐次工具审批、文件/PDF/图片读取与编辑Diff、Web工具及macOS隔离Shell；保留Pi运行、六个原生Provider与三种自定义协议、API Key/OAuth、SQLite持久化、流式对话、停止、队列与编辑分支。当前Windows/Linux Shell明确不可用，不回退宿主执行；完整范围和平台限制见 [路线图](docs/00_OVERVIEW/roadmap.md)。
+当前实现 **M3 上下文与交互**：项目AGENTS规则、附件与文件引用、上下文预算/裁剪/压缩、人工提问、Plan/Todos、检查点对比恢复和工作状态重置；保留模型设置、持久会话、队列/分支，以及M2工作区、文件/PDF/图片与Web工具。权限提供请求批准、独立AI帮我批准与完全访问，macOS Shell按策略隔离；会话同时生成公开JSONL镜像。Windows/Linux Shell仍明确不可用；完整范围和平台限制见[路线图](docs/00_OVERVIEW/roadmap.md)。
 
 ## 开始开发
 
@@ -28,6 +28,8 @@ pnpm dev:desktop
 
 该命令启动 Vite 和 Electron；Electron 启动自己的 daemon，等待 Web 就绪后打开窗口，退出时关闭后台服务。两种入口共用默认开发端口，分别运行即可。桌面启动链自动授权；已授权页面可以生成另一个浏览器的配对码。
 
+会话JSONL在开发和正式运行时统一写入仓库根目录的`.my-pi-harness/`，其下按profile路径摘要隔离。独立安装包通过`MY_PI_HARNESS_SESSION_LOG_ROOT`指定该仓库中的隐藏目录。数据库与系统凭据仍使用原应用profile，旧日志保留，新位置启动时从SQLite补齐。目录和配置细节见[架构](docs/01_ARCHITECTURE/overview.md)与[存储说明](packages/storage/README.md#会话jsonl镜像)。
+
 首次 `dev` 或 `dev:desktop` 会下载官方 Node 分发包并校验 SHA-256，缓存于 `.cache/node`。打包也使用这份独立 Node，用户运行桌面产物时无需另外安装 Node。
 
 ## 目录与职责
@@ -38,9 +40,9 @@ apps/
   daemon/          Fastify 本地 API、SSE、服务生命周期
   desktop/         Electron main/preload、daemon 监督、打包
 packages/
-  agent-runtime/   Pi模型网关、Run生命周期、持久队列与历史分支
-  execution/       工作区路径、文件/PDF、受限Shell和Web工具
-  storage/         SQLite/Drizzle事务、迁移、系统凭据与profile锁
+  agent-runtime/   Pi模型网关、Run/工具、上下文与会话工作状态
+  execution/       工作区路径、文件/PDF、按策略隔离Shell和Web工具
+  storage/         SQLite/Drizzle事务、JSONL镜像、迁移、凭据与profile锁
   protocol/        浏览器安全 DTO、TypeBox schema、协议版本
   eslint-config/   共享静态规则
   tsconfig/        Node / Browser 编译配置
@@ -60,6 +62,7 @@ pnpm test:artifact                # 构建后的 daemon IPC/退出集成测试
 pnpm exec playwright install chromium
 pnpm test:e2e                     # 构建后的浏览器完整链路
 pnpm test:m2                      # 先 build，再做M2源码与浏览器定向验收
+pnpm test:m3                      # 先 build，再做M3上下文与交互定向验收
 pnpm test:provider                # 显式真实API检查，无测试凭据时skip
 pnpm package:desktop              # 当前平台未签名应用目录，输出 release/
 pnpm smoke:desktop                # 启动应用目录，验证桥、隔离、服务和退出
@@ -83,6 +86,8 @@ pnpm smoke:desktop                # 启动应用目录，验证桥、隔离、�
 - [M1 Spec与统一验收范围](docs/04_FEATURES/202610131100_feature_model-session/spec.md)
 - [M1统一验证与待验收项](docs/04_FEATURES/202610131100_feature_model-session/verify.md)
 - [模型与会话协议](docs/03_API/model-session.md)
+- [M3上下文与交互Spec](docs/04_FEATURES/202610151655_feature_m3-context-interaction/spec.md)
+- [M3统一验证与平台限制](docs/04_FEATURES/202610151655_feature_m3-context-interaction/verify.md)
 - [M2分步收尾与验收范围](docs/04_FEATURES/202610151515_feature_m2-completion/spec.md)
 - [M0 Spec 与任务](docs/04_FEATURES/202610130900_feature_project-foundation/spec.md)
 - [验证证据与平台限制](docs/04_FEATURES/202610130900_feature_project-foundation/verify.md)

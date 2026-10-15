@@ -7,6 +7,8 @@ import { registerModelRoutes } from './models/routes.js';
 import { registerSessionRoutes } from './sessions/routes.js';
 import { registerWorkspaceRoutes } from './workspaces/routes.js';
 import { registerToolRoutes } from './tools/routes.js';
+import { registerWorkRoutes } from './work/routes.js';
+import { registerAttachmentRoutes } from './attachments/routes.js';
 
 /** Install protected M1 endpoints; health and public process identity remain readable. */
 export function registerM1Routes(server: FastifyInstance, services: ApplicationServices): void {
@@ -60,7 +62,7 @@ export function registerM1Routes(server: FastifyInstance, services: ApplicationS
           error.code,
         );
       const status =
-        error.code === 'SESSION_UNAVAILABLE'
+        error.code === 'SESSION_UNAVAILABLE' || error.code === 'SESSION_LOG_UNAVAILABLE'
           ? 503
           : missing
             ? 404
@@ -69,9 +71,10 @@ export function registerM1Routes(server: FastifyInstance, services: ApplicationS
               : error instanceof StorageError
                 ? 500
                 : 422;
-      void reply
-        .code(status)
-        .send({ code: error.code, message: status === 500 ? '持久化服务不可用。' : error.message });
+      let message = status === 500 ? '持久化服务不可用。' : error.message;
+      if (error.code === 'SESSION_LOG_UNAVAILABLE')
+        message = '会话已保存，但日志文件写入失败。请重启应用后继续，勿重复执行操作。';
+      void reply.code(status).send({ code: error.code, message });
       return;
     }
     request.log.error(
@@ -85,6 +88,8 @@ export function registerM1Routes(server: FastifyInstance, services: ApplicationS
   registerSessionRoutes(server, runtime, services.store, auth, gateway, services.workspaces);
   registerWorkspaceRoutes(server, services.workspaces);
   registerToolRoutes(server, services.tools);
+  registerWorkRoutes(server, services.work);
+  registerAttachmentRoutes(server, services.attachments);
   server.addHook('preClose', async () => {
     await services.close();
   });

@@ -42,7 +42,9 @@ export const useWorkspaceDialog = (
           }
         }
         signal.throwIfAborted();
-        selectWorkspace(saved.id);
+        if (!workspace) {
+          selectWorkspace(saved.id);
+        }
         await client.invalidateQueries({ queryKey: ['workspaces'] });
         signal.throwIfAborted();
         onClose();

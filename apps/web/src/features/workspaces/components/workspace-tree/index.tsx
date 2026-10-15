@@ -21,7 +21,7 @@ export const WorkspaceTree: FC = () => {
           type="button"
           variant="ghost"
           size="icon"
-          className="h-7 w-7 rounded-full"
+          className="h-7 w-7 rounded-full transition-none"
           onClick={state.add}
           aria-label="添加工作区"
         >
@@ -42,8 +42,7 @@ export const WorkspaceTree: FC = () => {
               key={group.id}
               group={group}
               activeId={state.activeId}
-              activeWorkspaceId={state.activeWorkspaceId}
-              onSelectWorkspace={state.selectWorkspace}
+              onNewConversation={state.newConversation}
               onSelectSession={state.select}
               onRename={state.rename}
               onRemove={state.requestRemove}

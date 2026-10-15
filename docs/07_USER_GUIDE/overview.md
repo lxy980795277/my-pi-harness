@@ -1,6 +1,6 @@
 # 使用指南
 
-当前提供模型与认证设置、文字对话、流式回复、SQLite会话恢复、队列与历史分支，以及macOS工作区与有审批的工具。操作见[模型与会话](model-session.md)和[工作区与工具](workspace-execution.md)。M2的macOS本机验收完成，待用户体验；Windows Shell由用户暂缓，真实供应商未验证；Computer Use属于后续专项。具体可用状态见 [里程碑](../00_OVERVIEW/roadmap.md)。
+当前提供模型设置、持久会话、队列与历史分支、工作区与审批工具，以及M3附件、项目规则、上下文压缩、提问、计划和检查点。操作见[模型与会话](model-session.md)、[工作区与工具](workspace-execution.md)及[上下文、计划与检查点](context-interaction.md)。各平台与真实供应商状态见[里程碑](../00_OVERVIEW/roadmap.md)及所属功能验证记录；Windows Shell与浏览器新增目录仍保留原暂缓范围，Computer Use属于后续专项。
 
 ## 开发启动
 
@@ -23,6 +23,4 @@
 
 当前构建、资源装配与应用目录打包入口见 [测试入口](../05_CONSTRAINTS/testing.md)。应用目录携带自身运行资源，不依赖本仓库源码、Vite或tsx；正式安装器及签名发布在后续平台发布步骤实现。
 
-当前模型、会话与工具交互见上述指南。插件操作在所属里程碑落地后新增。
-
-- [工作区与工具](workspace-execution.md)
+当前模型、会话、工具与M3交互见上述指南。插件操作在所属里程碑落地后新增。

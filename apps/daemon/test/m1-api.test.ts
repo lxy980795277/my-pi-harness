@@ -24,6 +24,7 @@ async function setup(): Promise<{ origin: string; services: ApplicationServices 
   const config = loadDaemonConfig({
     MY_PI_HARNESS_PORT: '0',
     MY_PI_HARNESS_PROFILE_DIRECTORY: directory,
+    MY_PI_HARNESS_SESSION_LOG_ROOT: join(directory, '.my-pi-harness'),
     MY_PI_HARNESS_DESKTOP_SECRET: 'owner-secret-for-test-00000000000000000000000000000',
   });
   const services = await createApplicationServices(config, {

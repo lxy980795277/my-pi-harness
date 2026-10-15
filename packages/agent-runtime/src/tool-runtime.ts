@@ -12,6 +12,9 @@ import { Type, type TSchema } from 'typebox';
 import { Value } from 'typebox/value';
 import { RuntimeError } from './errors.js';
 import type { EventInput } from './runtime-ports.js';
+import type { WorkRuntime } from './work-runtime.js';
+import { SESSION_TOOL_DEFINITIONS, executeSessionTool } from './session-tools.js';
+import type { ApprovalReviewer } from './approval-review.js';
 
 interface ToolRunContext {
   session: SessionSummary;
@@ -29,6 +32,8 @@ export interface ToolRuntimeOptions {
   profileDirectory: string;
   resolveWorkspace(id: string): Promise<Workspace>;
   approvalTimeoutMs?: number;
+  work?: WorkRuntime;
+  reviewer?: ApprovalReviewer;
 }
 
 /** Provider call IDs pair within one assistant message, not across every turn of a run. */
@@ -55,8 +60,11 @@ export class ToolRuntime {
   }
 
   public createTools(context: ToolRunContext): AgentTool<TSchema, undefined>[] {
-    if (context.session.workspaceId === null) return [];
-    return TOOL_DEFINITIONS.map(
+    const definitions = [
+      ...(this.options.work ? SESSION_TOOL_DEFINITIONS : []),
+      ...(context.session.workspaceId === null ? [] : TOOL_DEFINITIONS),
+    ];
+    return definitions.map(
       (definition): AgentTool<TSchema, undefined> => ({
         ...definition,
         label: definition.name,
@@ -86,15 +94,25 @@ export class ToolRuntime {
     signal.throwIfAborted();
     if (context.recorded.size >= 64)
       throw new RuntimeError('TOOL_LIMIT', '本次运行已达到工具调用上限。');
-    const definition = TOOL_DEFINITIONS.find((candidate) => candidate.name === name);
+    const sessionDefinition =
+      this.options.work && SESSION_TOOL_DEFINITIONS.find((candidate) => candidate.name === name);
+    const definition =
+      sessionDefinition || TOOL_DEFINITIONS.find((candidate) => candidate.name === name);
     if (
       !definition ||
       !Value.Check(definition.parameters, args) ||
       JSON.stringify(args).length > 256_000
     )
       throw new RuntimeError('TOOL_ARGUMENTS_INVALID', '工具参数无效或超过限制。');
-    const policy = describeTool(name, args);
+    const policy = sessionDefinition
+      ? { approvalRequired: false, mutating: false, summary: name }
+      : describeTool(name, args);
     const at = Date.now();
+    let status: ToolCallRecord['status'] = 'running';
+    if (policy.approvalRequired && context.session.approvalMode !== 'full-access') {
+      status = 'awaiting_approval';
+      if (context.session.approvalMode === 'auto') status = 'reviewing';
+    }
     const tool: ToolCallRecord = {
       id: toolCallRecordId(context.run.id, context.assistantMessageId(), providerCallId),
       sessionId: context.session.id,
@@ -102,7 +120,7 @@ export class ToolRuntime {
       branchId: context.run.branchId,
       name,
       arguments: structuredClone(args),
-      status: policy.approvalRequired ? 'awaiting_approval' : 'running',
+      status,
       summary: policy.summary.slice(0, 4000),
       result: null,
       diff: null,
@@ -118,15 +136,65 @@ export class ToolRuntime {
     commit('tool.requested');
     context.recorded.add(tool.id);
     try {
+      if (sessionDefinition && this.options.work) {
+        const text = await executeSessionTool(
+          this.options.work,
+          context.session.id,
+          context.run.id,
+          tool.id,
+          name,
+          args,
+          signal,
+        );
+        tool.status = 'completed';
+        tool.result = text;
+        tool.summary = text.slice(0, 4000);
+        commit('tool.updated');
+        return { content: [{ type: 'text', text }], details: undefined };
+      }
+      if (
+        this.options.work?.snapshot(context.session.id).state.mode === 'plan' &&
+        policy.mutating
+      ) {
+        tool.status = 'denied';
+        throw new RuntimeError(
+          'PLAN_READ_ONLY',
+          'Plan模式只能读取和规划，请先确认计划并切换执行模式。',
+        );
+      }
       if (context.session.approvalMode === 'read-only' && policy.mutating) {
         tool.status = 'denied';
         throw new RuntimeError('TOOL_READ_ONLY', '当前会话为只读模式，禁止此操作。');
       }
       if (policy.approvalRequired) {
-        const decision = await this.waitForApproval(context.session.id, tool.id, signal);
+        let decision: 'allow' | 'deny' | 'ask' = 'ask';
+        if (context.session.approvalMode === 'full-access') {
+          decision = 'allow';
+          tool.approval = { source: 'full-access', decision, reason: null };
+        } else if (context.session.approvalMode === 'auto') {
+          const reviewed = this.options.reviewer
+            ? await this.options.reviewer.review(
+                {
+                  session: context.session,
+                  runId: context.run.id,
+                  tool,
+                  commit: (events) => context.commit(events),
+                },
+                signal,
+              )
+            : { decision: 'ask' as const, reason: 'AI 复核不可用，请确认本次操作。' };
+          decision = reviewed.decision;
+          tool.approval = { source: 'ai', ...reviewed };
+        }
+        if (decision === 'ask') {
+          tool.status = 'awaiting_approval';
+          commit('tool.updated');
+          decision = await this.waitForApproval(context.session.id, tool.id, signal);
+          tool.approval = { source: 'user', decision, reason: null };
+        }
         if (decision === 'deny') {
           tool.status = 'denied';
-          throw new RuntimeError('TOOL_DENIED', '用户拒绝了本次工具请求。');
+          throw new RuntimeError('TOOL_DENIED', tool.approval?.reason ?? '本次工具请求未获批准。');
         }
         signal.throwIfAborted();
         tool.status = 'running';
@@ -140,6 +208,7 @@ export class ToolRuntime {
         workspaceRoot: workspace.rootPath,
         profileDirectory: this.options.profileDirectory,
         readOnly: context.session.approvalMode === 'read-only',
+        shellAccess: context.session.approvalMode === 'full-access' ? 'full-access' : 'sandboxed',
         signal,
       });
       tool.status = 'completed';

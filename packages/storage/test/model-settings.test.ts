@@ -118,7 +118,7 @@ describe('released model settings migration', () => {
       }
       const inspection = new Database(join(directory, 'data.sqlite'));
       try {
-        expect(inspection.pragma('user_version', { simple: true })).toBe(4);
+        expect(inspection.pragma('user_version', { simple: true })).toBe(5);
         expect(
           inspection.prepare('SELECT data FROM provider_versions ORDER BY rowid').all(),
         ).toEqual(original.map((value) => ({ data: value })));

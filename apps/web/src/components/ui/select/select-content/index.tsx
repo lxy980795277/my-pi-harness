@@ -10,12 +10,16 @@ export const SelectContent: FC<ComponentProps<typeof SelectPrimitive.Content>> =
   className,
   children,
   position = 'popper',
+  side = 'bottom',
+  align = 'start',
   ...props
 }) => {
   return (
     <SelectPrimitive.Portal>
       <SelectPrimitive.Content
         position={position}
+        side={side}
+        align={align}
         className={cn(
           'relative z-[70] max-h-80 min-w-32 overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-lg',
           className,

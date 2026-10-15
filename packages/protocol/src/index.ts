@@ -1,4 +1,5 @@
 import { type Static, Type } from 'typebox';
+export * from './context.js';
 
 export {
   CustomProtocolSchema,
@@ -82,14 +83,21 @@ export type {
 } from './workspaces.js';
 export {
   ApprovalModeSchema,
+  ToolApprovalSchema,
   ToolCallRecordSchema,
   ToolCallViewSchema,
   ToolDecisionInputSchema,
 } from './tools.js';
-export type { ApprovalMode, ToolCallRecord, ToolCallView, ToolDecisionInput } from './tools.js';
+export type {
+  ApprovalMode,
+  ToolApproval,
+  ToolCallRecord,
+  ToolCallView,
+  ToolDecisionInput,
+} from './tools.js';
 
 /** 跨端应用协议版本；不等同于产品版本。 */
-export const PROTOCOL_VERSION = 5;
+export const PROTOCOL_VERSION = 7;
 
 /** 本机服务完成监听后的可公开状态，不包含配置、路径或凭据。 */
 export const HealthResponseSchema = Type.Object(

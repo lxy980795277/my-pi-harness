@@ -9,6 +9,15 @@ import { canonicalWorkspace } from './workspace-path.js';
 export { TOOL_DEFINITIONS, describeTool } from './catalog.js';
 export { ExecutionError } from './errors.js';
 export { resolveWorkspaceRoot } from './workspace-path.js';
+export {
+  workspacePath,
+  openRegular,
+  toWorkspaceRelativePath,
+  isSensitiveName,
+  isPortableFileName,
+  parseWorkspaceRelativePath,
+} from './workspace-path.js';
+export { extractPdf } from './pdf.js';
 export type { WorkspaceRootInput } from './workspace-path.js';
 export type {
   ExecutionContent,

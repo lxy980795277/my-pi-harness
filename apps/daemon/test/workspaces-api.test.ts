@@ -19,6 +19,7 @@ describe('protected workspace API', () => {
     const config = loadDaemonConfig({
       MY_PI_HARNESS_PORT: '0',
       MY_PI_HARNESS_PROFILE_DIRECTORY: profile,
+      MY_PI_HARNESS_SESSION_LOG_ROOT: join(profile, '.my-pi-harness'),
     });
     const services = await createApplicationServices(config, {
       credentials: createMemoryCredentialStore(),

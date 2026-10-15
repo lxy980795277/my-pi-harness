@@ -70,6 +70,25 @@ describe('shared workspace root policy', () => {
     }
   });
 
+  it.each(['.my-pi-harness', '.MY-PI-HARNESS'])(
+    'registers the parent project while refusing the %s log directory and descendants',
+    async (name) => {
+      const logs = join(context.workspaceRoot, name);
+      const sessions = join(logs, 'sessions');
+      await mkdir(sessions, { recursive: true });
+      expect(
+        await resolveWorkspaceRoot({
+          rootPath: context.workspaceRoot,
+          profileDirectory: context.profileDirectory,
+        }),
+      ).toBe(context.workspaceRoot);
+      for (const rootPath of [logs, sessions])
+        await expect(
+          resolveWorkspaceRoot({ rootPath, profileDirectory: context.profileDirectory }),
+        ).rejects.toMatchObject({ code: 'PROTECTED_PATH' });
+    },
+  );
+
   it('reports absent, relative and non-directory roots with safe input errors', async () => {
     await writeFile(join(directory, 'file'), 'text');
     for (const rootPath of ['relative', join(directory, 'missing'), join(directory, 'file')]) {
@@ -117,6 +136,16 @@ describe('shared workspace root policy', () => {
 });
 
 describe('portable model paths', () => {
+  it.each([
+    '.my-pi-harness/sessions/log.jsonl',
+    '.MY-PI-HARNESS/attachment.txt',
+    'nested/.My-Pi-Harness/AGENTS.md',
+  ])('rejects application log path %s before filesystem access', (path) => {
+    expect(() => parseWorkspaceRelativePath(path)).toThrow(
+      'The requested path is outside the allowed workspace files',
+    );
+  });
+
   it('normalizes real host-relative separators before parsing model paths', () => {
     expect(
       parseWorkspaceRelativePath(

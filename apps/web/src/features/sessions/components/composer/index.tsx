@@ -28,6 +28,7 @@ export const Composer: FC<ComposerProps> = ({ session, providers, onSend, onStop
           id={session.id}
           {...state}
           choices={selection.choices}
+          disabled={state.disabled || selection.submitBlocked}
           error={state.error ?? selection.error}
         />
       </div>

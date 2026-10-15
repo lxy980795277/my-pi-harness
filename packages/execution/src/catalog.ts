@@ -71,7 +71,7 @@ export const TOOL_DEFINITIONS: readonly {
   {
     name: 'shell',
     description:
-      'Run a command in the macOS OS sandbox with workspace-only writes, no network, a fresh HOME, an environment allowlist and bounded output. Unavailable on unsupported platforms.',
+      'Run a macOS command from the registered workspace under the policy frozen for this run. Sandboxed mode uses Seatbelt with workspace-only writes, no network and a fresh HOME. Explicit full access runs without OS isolation as the host user with the real HOME. Both use an environment allowlist, cancellation, time and output limits. Unavailable on other platforms.',
     parameters: object({
       command: Type.String({ minLength: 1, maxLength: 20_000 }),
       timeoutMs: Type.Optional(Type.Integer({ minimum: 100, maximum: 120_000 })),

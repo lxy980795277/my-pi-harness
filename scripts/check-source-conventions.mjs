@@ -17,6 +17,7 @@ const ignoredDirectories = new Set([
   'playwright-report',
   'test-results',
   'output',
+  '.my-pi-harness',
 ]);
 const generatedSources = new Set(['packages/protocol/src/version.ts']);
 const helperDirectories = new Set(['config', 'services', 'stores', 'constants', 'hooks', 'utils']);

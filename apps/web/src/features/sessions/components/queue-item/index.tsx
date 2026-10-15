@@ -1,6 +1,7 @@
 import type { QueueInput, QueuePatchInput } from '@my-pi-harness/protocol';
 import type { FC } from 'react';
 
+import { AttachmentList } from '@/features/attachments/components/attachment-list';
 import { Button } from '@/components/ui/button';
 import { Notice } from '@/components/ui/notice';
 import { Textarea } from '@/components/ui/textarea';
@@ -27,6 +28,9 @@ export const QueueItem: FC<QueueItemProps> = ({ input, onUpdate, onDelete }) => 
         {input.mode === 'steer' && '引导输入'}
         {input.mode === 'follow-up' && '后续输入'} · {input.modelId}
       </p>
+      {input.attachmentIds && input.attachmentIds.length > 0 && (
+        <AttachmentList ids={input.attachmentIds} />
+      )}
       {!editing && (
         <p className="max-h-24 overflow-y-auto text-xs leading-6 break-words whitespace-pre-wrap">
           {input.text}

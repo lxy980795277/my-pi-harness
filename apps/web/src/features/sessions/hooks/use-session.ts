@@ -38,7 +38,14 @@ export const useSession = (id: string): LiveSession => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['auth-status'] }),
         queryClient.invalidateQueries({ queryKey: ['session', id] }),
+        queryClient.invalidateQueries({ queryKey: ['work', id] }),
       ]);
+    }, [id, queryClient]),
+  );
+
+  const { run: refreshWork } = useAsyncEvent(
+    useCallback(async (): Promise<void> => {
+      await queryClient.invalidateQueries({ queryKey: ['work', id] });
     }, [id, queryClient]),
   );
 
@@ -47,12 +54,19 @@ export const useSession = (id: string): LiveSession => {
     let pending: SessionSnapshot | undefined;
     let flushTimer: ReturnType<typeof setTimeout> | undefined;
     let closed = false;
+    let workTimer: ReturnType<typeof setTimeout> | undefined;
 
     const flush = (): void => {
       flushTimer = undefined;
       if (pending) {
         mergeSessionSnapshot(queryClient, pending);
         pending = undefined;
+        if (workTimer === undefined) {
+          workTimer = setTimeout((): void => {
+            workTimer = undefined;
+            refreshWork();
+          }, 300);
+        }
       }
     };
     const close = subscribeSse(
@@ -102,8 +116,11 @@ export const useSession = (id: string): LiveSession => {
         clearTimeout(flushTimer);
       }
       flush();
+      if (workTimer !== undefined) {
+        clearTimeout(workTimer);
+      }
     };
-  }, [id, queryClient, recoverConnection]);
+  }, [id, queryClient, recoverConnection, refreshWork]);
 
   return { query, connection, connectionError };
 };

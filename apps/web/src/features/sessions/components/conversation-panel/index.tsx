@@ -1,6 +1,7 @@
 import type { ProviderConfig, RunView } from '@my-pi-harness/protocol';
 import { memo, type FC } from 'react';
 
+import { WorkPanel } from '@/features/work/components/work-panel';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Notice } from '@/components/ui/notice';
@@ -105,6 +106,7 @@ export const ConversationPanel: FC<ConversationPanelProps> = memo(
               providers={providers}
               onPatch={commands.patch}
             />
+            <WorkPanel key={`${sessionId}:${snapshot.session.activeBranchId}`} session={snapshot} />
             {confirmDelete && (
               <div className="px-4 pt-3">
                 <Notice>

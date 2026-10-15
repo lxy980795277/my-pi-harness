@@ -19,3 +19,17 @@ Provider当前配置有乐观revision，历史版本保留；credentialRef是公
 迁移随编译产物嵌入，记录版本与SHA-256；拒绝未知更高版本或改写已应用迁移。M1初始迁移发布后冻结，后续只追加。规则见 [后端约束](../../docs/05_CONSTRAINTS/backend.md)；接口与整个M1验收由 [功能Spec](../../docs/04_FEATURES/202610131100_feature_model-session/spec.md) 管理。
 
 `pnpm --filter @my-pi-harness/storage test`使用真实临时SQLite、实际跨进程锁/强杀恢复与显式Memory凭据替身；系统账号授权、签名与目标平台原生资源单独验收，不从单测推出已验证用户Keychain权限。源码检查不依赖dist，发布构建通过真实package exports解析protocol。
+
+0005新增按Session/Branch保存的工作状态、冻结附件与Checkpoint。`work.updated`追加完整且revision递增的状态；规则、摘要与重置锚点必须属于该分支，问题关联真实Run。`checkpoint.created`要求停止Run，保存当前工作状态及有序消息前缀；`branch.restored`建立继承空或完整前缀的新分支，旧分支与事件保持原样，恢复不修改文件。新分支工作状态初始为空，调用方显式追加恢复后的状态。每会话最多100个Checkpoint。
+
+`context.prepared`公开记录分支、估算用量、消息和附件ID，最终systemPrompt与消息codec仅保存在私有事件列；必须属于当前活跃Run，消息是分支的有序子集。附件内容独立保存在私有attachments表，通过授权的内容接口按需读取，SSE与会话快照不包含图片base64。重启对各分支仍为pending的问题追加interrupted状态，不修改先前事件或自动继续问答；原Run及工具恢复规则继续有效。
+
+## 会话JSONL镜像
+
+`openProfileStore(profileDirectory, { sessionLogRoot })`把公开日志放在`<sessionLogRoot>/sessions/<SHA256(canonicalProfilePath)>/<sessionId>.jsonl`；省略选项时根为`profile/.my-pi-harness`。显式根必须是绝对路径且末级名为`.my-pi-harness`，其父目录须已存在；SQLite profile不能等于该根或位于根内部。`sessionLogDirectory(canonicalProfileDirectory, sessionLogRoot)`是无文件副作用的路径解析函数，调用方传入真实绝对profile路径。两个profile可以共享同一根，同名Session按profile摘要隔离，profile独占锁规则不变。每个文件逐行保存已提交的公开HarnessEvent，seq、eventId及Session归属与SQLite一致，包含归档历史。SQLite仍是唯一事实源；JSONL不含privateData、Provider私有codec、凭据或附件字节，消息仅保留附件ID，因此不是可独立恢复全部会话的备份，也不提供本轮导入。ProfileStore创建会话和append同步更新镜像，重复请求不重复行；初始Plan与中断恢复的嵌套事务只在最外层SQLite真正提交后写文件，回滚不产生镜像记录。
+
+更换日志根时从SQLite补齐新位置，包含归档历史；旧`profile/sessions`与先前根下的日志均保留，不读取它们作为恢复来源，也不迁移数据库或系统凭据。
+
+每批先提交SQLite，再追加对应会话日志并fsync，没有数据库与文件的跨介质原子保证。写入或fsync失败返回SESSION_LOG_UNAVAILABLE，明确SQLite事实已经提交，暂停后续持久写入但允许读取事实；调用方不能据此重复执行工具或接受请求，应先修复文件问题并重启。启动按SQLite补齐缺失文件、缺失事件及崩溃末行，完整JSON只缺换行时补换行，不重复已匹配的事件。完整行内容不符或出现多余完整行返回SESSION_LOG_INVALID，不静默覆盖；保留问题镜像供检查，SQLite事实保持原样。
+
+日志根、sessions与profile摘要目录0700，文件0600；保留已打开目录的身份并在关闭时释放，构造或恢复失败也释放目录fd与profile所有权。拒绝不安全Session文件名、目录身份替换、符号链接、多硬链接和非普通文件；每次打开与写入前核对真实父目录和目标inode。校验逐块读取，单公开行上限32MiB；运行内只对身份、大小及时间均未变化的文件复用已校验游标。关闭不遗留后台写入任务。目录fd与写前身份检查不能替代针对可任意操控同用户文件系统的恶意进程的OS隔离；Windows使用初始目录身份核对而不打开目录fd，日志文件仍fsync；其ACL权限和目录持久化语义需要目标平台验证。

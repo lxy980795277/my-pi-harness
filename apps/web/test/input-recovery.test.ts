@@ -11,7 +11,12 @@ beforeEach(() => {
 describe('unconfirmed conversation input', () => {
   it('retries the original send after navigation and a running-state change instead of queuing another message', () => {
     const state = useWorkspaceStore.getState();
-    const input: InputRequest = { requestId: 'original-request', text: 'run once', mode: 'send' };
+    const input: InputRequest = {
+      requestId: 'original-request',
+      text: 'run once',
+      mode: 'send',
+      attachmentIds: ['frozen-attachment'],
+    };
     state.prepareInput('session', input);
     state.navigate('runtime');
     state.selectSession('another-session');
@@ -38,7 +43,13 @@ describe('unconfirmed conversation input', () => {
       model: { providerId: 'provider', modelId: 'model', thinkingLevel: 'off' as const },
       workspaceId: 'workspace',
       approvalMode: 'ask' as const,
-      input: { requestId: 'first-send', text: 'first message', mode: 'send' as const },
+      workMode: 'plan' as const,
+      input: {
+        requestId: 'first-send',
+        text: 'first message',
+        mode: 'send' as const,
+        attachmentIds: ['first-attachment'],
+      },
     };
     state.beginNewAttempt(generation, intent);
     state.markNewAttemptCreated(generation, 'created-session');
@@ -63,6 +74,7 @@ describe('unconfirmed conversation input', () => {
     state.beginNewAttempt(generation, intent);
     state.markNewAttemptCreated(generation, 'created-session');
     state.startNewConversation();
+    expect(useWorkspaceStore.getState().newConversationWorkMode).toBe('execute');
     state.markNewAttemptCreated(generation, 'late-old-response');
     expect(useWorkspaceStore.getState().newConversationGeneration).not.toBe(generation);
     expect(useWorkspaceStore.getState().newConversationAttempt).toBeNull();

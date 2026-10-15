@@ -1,6 +1,6 @@
 # 模型、授权与会话协议
 
-本机wire协议版本为5，持久事件格式仍为version:1。M1的公开schema由 `packages/protocol/src/models.ts`、`auth.ts` 和 `sessions.ts` 拥有。HTTP返回公开DTO，SDK对象、模型上下文codec、凭据和数据库Entity不跨入Renderer。列表接口直接返回数组，写会话接口返回已提交的SessionSnapshot；失败返回 `{code,message}`。
+本机wire协议版本为7，持久事件格式仍为version:1。M1的公开schema由 `packages/protocol/src/models.ts`、`auth.ts` 和 `sessions.ts` 拥有。HTTP返回公开DTO，SDK对象、模型上下文codec、凭据和数据库Entity不跨入Renderer。列表接口直接返回数组，写会话接口返回已提交的SessionSnapshot；失败返回 `{code,message}`。
 
 ## 授权
 
@@ -57,23 +57,25 @@ AuthFlow.prompt.type区分text、secret、select和manual_code；可含placehold
 
 ## Session与输入
 
-| 方法与路径                                       | 输入与结果                                       |
-| ------------------------------------------------ | ------------------------------------------------ |
-| GET /api/sessions                                | SessionSummary[]                                 |
-| POST /api/sessions                               | SessionCreateInput；返回SessionSnapshot          |
-| GET /api/sessions/:id                            | 当前分支、消息、Run、队列与snapshotSeq           |
-| PUT /api/sessions/:id                            | SessionPatchInput；设置用于后续Run               |
-| DELETE /api/sessions/:id                         | 归档会话，从列表隐藏；保留历史事实，不是隐私擦除 |
-| POST /api/sessions/:id/inputs                    | `{text,mode,requestId}`；接受输入后返回快照      |
-| POST /api/sessions/:id/stop                      | `{}`；提交取消意图、等待SDK结束，返回快照        |
-| PUT /api/sessions/:id/queue/:inputId             | `{text,revision}`；旧版本409                     |
-| DELETE /api/sessions/:id/queue/:inputId          | 删除尚未消费的输入                               |
-| POST /api/sessions/:id/queue/resume              | `{}`；显式继续保存队列                           |
-| POST /api/sessions/:id/edit                      | `{messageId,text,requestId}`；新分支重发         |
-| POST /api/sessions/:id/branches/:branchId/select | `{}`；切换历史分支，运行中409                    |
-| GET /api/sessions/:id/events?afterSeq=N          | 已授权EventSource订阅与重放                      |
+| 方法与路径                                       | 输入与结果                                                 |
+| ------------------------------------------------ | ---------------------------------------------------------- |
+| GET /api/sessions                                | SessionSummary[]                                           |
+| POST /api/sessions                               | SessionCreateInput；返回SessionSnapshot                    |
+| GET /api/sessions/:id                            | 当前分支、消息、Run、队列与snapshotSeq                     |
+| PUT /api/sessions/:id                            | SessionPatchInput；设置用于后续Run                         |
+| DELETE /api/sessions/:id                         | 归档会话，从列表隐藏；保留历史事实，不是隐私擦除           |
+| POST /api/sessions/:id/inputs                    | `{text,attachmentIds?,mode,requestId}`；接受输入后返回快照 |
+| POST /api/sessions/:id/stop                      | `{}`；提交取消意图、等待SDK结束，返回快照                  |
+| PUT /api/sessions/:id/queue/:inputId             | `{text,revision}`；旧版本409                               |
+| DELETE /api/sessions/:id/queue/:inputId          | 删除尚未消费的输入                                         |
+| POST /api/sessions/:id/queue/resume              | `{}`；显式继续保存队列                                     |
+| POST /api/sessions/:id/edit                      | `{messageId,text,requestId}`；新分支重发                   |
+| POST /api/sessions/:id/branches/:branchId/select | `{}`；切换历史分支，运行中409                              |
+| GET /api/sessions/:id/events?afterSeq=N          | 已授权EventSource订阅与重放                                |
 
 新建Session保存workspaceId和approvalMode（细节见[M2协议](workspace-execution.md)）。可以只提交title，此时owner读取持久化defaultModel并校验Provider启用、模型存在、thinkingLevel支持及认证可用后创建；未设置或失效时返回明确错误，不创建Session或发起模型请求。显式选择须同时提交providerId、modelId、thinkingLevel。修改全局默认只影响以后新建Session，不改写已有会话、队列或活动Run。默认引用失效时仍保留原值，由用户明确修改或置空，不自动选择替代模型。
+
+输入附件、消息/队列保留的attachmentIds与分支工作状态见[M3协议](context-interaction.md)。编辑用户消息重发继承原附件，队列文字修改保留原附件。
 
 同Session只允许一个活跃Run；不同Session可以并行。requestId保持幂等，同一请求重发不启动第二个Run。运行中的send返回409；follow-up在当前回复结束后消费，steer中断当前模型请求并继续同一个Run。接受、修改、删除和消费队列均有持久事务。用户停止、运行失败或重启后不会自动恢复收费请求，队列由用户明确继续；普通新消息或编辑重发不会自动消费旧暂停队列。恢复要求选择原分支，并按保存的Provider/model消费。
 
@@ -86,6 +88,8 @@ HarnessEvent包含固定格式version:1、eventId、sessionId、可空runId、se
 服务先订阅已提交事件，再同步读取和分页重放；随后将进度按32ms合并发送快照。客户端以Session和seq合并HTTP与SSE，较旧响应不能覆盖新快照。断线重连从已接受seq补读；超出当前高水位的游标返回409。15秒注释心跳、背压断开和8MiB单记录上限限制连接资源，慢客户端不阻塞模型或数据库。关闭连接清理定时器与订阅。
 
 终态区分completed、cancelled、failed和interrupted，SDK Promise resolve不等于成功。存储提交失败时取消模型并停用该会话，读取或再执行返回503/SESSION_UNAVAILABLE；不能广播未提交的完成。重启先取得profile所有权，再将遗留Run标记interrupted并保留已提交部分。
+
+每个会话另有`<logRoot>/sessions/<profileHash>/<sessionId>.jsonl`公开事件镜像，隐藏目录的开发/正式路径与配置由[架构](../01_ARCHITECTURE/overview.md#启动配置)定义。SQLite先提交，文件随后同步追加；JSONL不含privateData、私有模型codec或附件字节，不是独立恢复备份。文件失败返回503/SESSION_LOG_UNAVAILABLE，数据库事实可能已经提交，读取仍可用但后续写入暂停；先检查现有结果并修复文件问题、重启，不重复执行不确定操作。启动按SQLite补齐历史、缺失记录与崩溃末行；完整行冲突返回SESSION_LOG_INVALID，不静默覆盖。旧目录日志保留，不从其导入或覆盖数据库。详细持久化规则见[storage](../../packages/storage/README.md#会话jsonl镜像)。
 
 ## 桌面桥
 

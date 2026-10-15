@@ -1,7 +1,6 @@
 import * as SelectPrimitive from '@radix-ui/react-select';
 import { Check } from 'lucide-react';
 import { useId, type ComponentProps, type FC, type ReactNode } from 'react';
-
 import { cn } from '@/utils/cn';
 
 type SelectItemProps = ComponentProps<typeof SelectPrimitive.Item> & {
@@ -15,6 +14,7 @@ export const SelectItem: FC<SelectItemProps> = ({
   children,
   description,
   icon,
+  'aria-describedby': descriptionIds,
   ...props
 }) => {
   const generatedId = useId();
@@ -22,6 +22,7 @@ export const SelectItem: FC<SelectItemProps> = ({
   if (description) {
     descriptionId = generatedId;
   }
+  const describedBy = [descriptionIds, descriptionId].filter(Boolean).join(' ') || undefined;
   return (
     <SelectPrimitive.Item
       className={cn(
@@ -29,7 +30,7 @@ export const SelectItem: FC<SelectItemProps> = ({
         className,
       )}
       {...props}
-      aria-describedby={descriptionId}
+      aria-describedby={describedBy}
     >
       {icon && (
         <span className="mr-2 flex shrink-0" aria-hidden>

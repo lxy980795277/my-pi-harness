@@ -26,8 +26,12 @@ afterEach(async () => {
 });
 
 async function createApplication(webDistPath?: string): Promise<DaemonApplication> {
+  const directory = await mkdtemp(join(tmpdir(), 'my-pi-server-config-'));
+  temporaryDirectories.push(directory);
   const application = await createDaemonApplication(
     loadDaemonConfig({
+      MY_PI_HARNESS_PROFILE_DIRECTORY: directory,
+      MY_PI_HARNESS_SESSION_LOG_ROOT: join(directory, '.my-pi-harness'),
       MY_PI_HARNESS_PORT: '0',
       ...(webDistPath === undefined ? {} : { MY_PI_HARNESS_WEB_DIST_PATH: webDistPath }),
     }),

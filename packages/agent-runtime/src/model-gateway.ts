@@ -314,6 +314,7 @@ export class ModelGateway {
       ...selection,
       workspaceId: input.workspaceId ?? null,
       approvalMode: input.approvalMode ?? 'ask',
+      ...(input.workMode ? { workMode: input.workMode } : {}),
     };
   }
 

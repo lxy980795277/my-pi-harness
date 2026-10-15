@@ -14,6 +14,7 @@ const sensitiveNames = new Set([
   '.netrc',
   '.git-credentials',
   '.git',
+  '.my-pi-harness',
 ]);
 
 export function isWithin(root: string, target: string): boolean {

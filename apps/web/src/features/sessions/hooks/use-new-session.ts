@@ -1,6 +1,10 @@
 import type { DefaultModel, ProviderConfig, SessionSnapshot } from '@my-pi-harness/protocol';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, type ChangeEvent, type FormEvent } from 'react';
+import {
+  useAttachmentDrafts,
+  EMPTY_ATTACHMENTS,
+} from '@/features/attachments/stores/attachment-drafts';
 import { useWorkspaceStore } from '@/app/stores/workspace';
 import { useModelCatalog, useProviderModels } from '@/features/models/hooks/use-model-catalog';
 import {
@@ -53,6 +57,12 @@ export const useNewSession = (
   const approvalMode = useWorkspaceStore((state) => {
     return state.newConversationApproval;
   });
+  const workMode = useWorkspaceStore((state) => {
+    return state.newConversationWorkMode;
+  });
+  const setWorkMode = useWorkspaceStore((state) => {
+    return state.setNewConversationWorkMode;
+  });
   const setApproval = useWorkspaceStore((state) => {
     return state.setNewConversationApproval;
   });
@@ -61,6 +71,19 @@ export const useNewSession = (
   });
   const generation = useWorkspaceStore((state) => {
     return state.newConversationGeneration;
+  });
+  const attachmentDraftKey = `new:${generation}`;
+  const attachments = useAttachmentDrafts((state) => {
+    return state.drafts[attachmentDraftKey] ?? EMPTY_ATTACHMENTS;
+  });
+  const attachmentBusy = useAttachmentDrafts((state) => {
+    return state.busy[attachmentDraftKey] ?? false;
+  });
+  const clearAttachments = useAttachmentDrafts((state) => {
+    return state.clear;
+  });
+  const removeDraftAttachment = useAttachmentDrafts((state) => {
+    return state.remove;
   });
   const attempt = useWorkspaceStore((state) => {
     return state.newConversationAttempt;
@@ -110,6 +133,9 @@ export const useNewSession = (
   const send = useAsyncEvent(
     useCallback(
       async (signal: AbortSignal): Promise<void> => {
+        if (attachmentBusy) {
+          return;
+        }
         if (!selection || (!valid && !attempt)) {
           throw new Error('请选择可用的对话模型。');
         }
@@ -123,7 +149,15 @@ export const useNewSession = (
             model: selection,
             workspaceId,
             approvalMode,
-            input: { text, mode: 'send', requestId: crypto.randomUUID() },
+            workMode,
+            input: {
+              text,
+              mode: 'send',
+              requestId: crypto.randomUUID(),
+              attachmentIds: attachments.map((attachment) => {
+                return attachment.id;
+              }),
+            },
           });
         }
         if (!current) {
@@ -141,6 +175,7 @@ export const useNewSession = (
                 ...current.model,
                 workspaceId: current.workspaceId,
                 approvalMode: current.approvalMode,
+                workMode: current.workMode,
               },
               signal,
             );
@@ -167,6 +202,7 @@ export const useNewSession = (
           const accepted = await submitInput(current.sessionId, input, signal);
           signal.throwIfAborted();
           confirmInput(current.sessionId, input.requestId);
+          clearAttachments(attachmentDraftKey);
           onCreated(accepted);
         } catch (failure: unknown) {
           if (isRejectedInput(failure)) {
@@ -176,6 +212,10 @@ export const useNewSession = (
         }
       },
       [
+        attachmentBusy,
+        attachmentDraftKey,
+        attachments,
+        clearAttachments,
         approvalMode,
         attempt,
         beginAttempt,
@@ -192,6 +232,7 @@ export const useNewSession = (
         selection,
         valid,
         workspaceId,
+        workMode,
       ],
     ),
   );
@@ -252,6 +293,14 @@ export const useNewSession = (
     },
     [setApproval],
   );
+  const changeWorkMode = useCallback(
+    (value: string): void => {
+      if (!attempt && (value === 'execute' || value === 'plan')) {
+        setWorkMode(value);
+      }
+    },
+    [attempt, setWorkMode],
+  );
   const settings = useCallback((): void => {
     openSettings('models');
   }, [openSettings]);
@@ -263,9 +312,11 @@ export const useNewSession = (
     workspaceOptions: buildWorkspaceOptions(workspaces.data ?? []),
     workspaceLocked: attempt !== null,
     workspaceLabel: workspace?.name ?? '不使用工作区',
-    workspacePath: workspace?.rootPath,
     workspaceIcon: workspace?.icon ?? 'folder',
     changeWorkspace,
+    workMode: attempt?.workMode ?? workMode,
+    changeWorkMode,
+    workModeDisabled: send.pending || attempt !== null,
     approvalMode: selectedApprovalMode,
     changeApprovalMode,
     modelKey,
@@ -281,7 +332,22 @@ export const useNewSession = (
   if (attempt && attempt.phase !== 'created' && !send.pending) {
     creationWarning = '会话创建结果尚未确认，请先检查左侧对话历史；点击“新对话”可重新开始。';
   }
+  const removeAttachment = useCallback(
+    (id: string): void => {
+      if (!attempt && !attachmentBusy) {
+        removeDraftAttachment(attachmentDraftKey, id);
+      }
+    },
+    [attachmentBusy, attachmentDraftKey, attempt, removeDraftAttachment],
+  );
   return {
+    attachmentDraftKey,
+    attachmentIds:
+      attempt?.input.attachmentIds ??
+      attachments.map((attachment) => {
+        return attachment.id;
+      }),
+    removeAttachment,
     draft,
     changeDraft,
     submit,
@@ -291,6 +357,7 @@ export const useNewSession = (
     draftLocked: attempt !== null,
     disabled:
       send.pending ||
+      attachmentBusy ||
       attempt?.phase === 'unknown' ||
       attempt?.phase === 'creating' ||
       (!attempt && valid === null) ||

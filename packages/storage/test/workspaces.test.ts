@@ -178,7 +178,7 @@ describe('released workspace migration', () => {
     expect(store.readEvents(session.id)[0]?.data).toEqual(JSON.parse(originalEvent));
     const inspection = new Database(join(directory, 'data.sqlite'), { readonly: true });
     try {
-      expect(inspection.pragma('user_version', { simple: true })).toBe(4);
+      expect(inspection.pragma('user_version', { simple: true })).toBe(5);
       expect(
         inspection.prepare('SELECT data FROM events WHERE event_id = ?').get('old-event'),
       ).toEqual({ data: originalEvent });
@@ -278,7 +278,7 @@ describe('released workspace migration', () => {
     expect(reopened.getWorkspace(legacyWorkspace.id)).toEqual(changed);
     const inspection = new Database(join(directory, 'data.sqlite'), { readonly: true });
     try {
-      expect(inspection.pragma('user_version', { simple: true })).toBe(4);
+      expect(inspection.pragma('user_version', { simple: true })).toBe(5);
       expect(
         inspection
           .prepare("SELECT json_extract(data, '$.icon') AS icon FROM workspaces WHERE id = ?")

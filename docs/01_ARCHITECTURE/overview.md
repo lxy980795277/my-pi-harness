@@ -16,7 +16,7 @@
 | Agent与模型         | Pi core + Pi ai                                              | M1       |
 | 持久化              | better-sqlite3 + Drizzle、SQLite durable events              | M1       |
 
-后续依赖按实际模块添加，不创建未实现能力的空壳。SQLite执行事件与JSONL导入导出的职责见 [存储约束](../05_CONSTRAINTS/backend.md)。能力范围与当前状态以 [里程碑](../00_OVERVIEW/roadmap.md) 为准。
+后续依赖按实际模块添加，不创建未实现能力的空壳。SQLite执行事件与派生JSONL镜像的职责见[存储约束](../05_CONSTRAINTS/backend.md)。能力范围与当前状态以[里程碑](../00_OVERVIEW/roadmap.md)为准。
 
 ## Monorepo职责
 
@@ -25,14 +25,16 @@
 | `apps/web`               | 页面、交互、HTTP/SSE客户端、状态呈现                              | Node API、凭据与Agent实例              |
 | `apps/daemon`            | API装配、本机授权、事件重放、profile与服务生命周期                | 页面组件与桌面窗口                     |
 | `apps/desktop`           | Electron窗口、有限preload桥、daemon启动和退出、桌面资源与发布装配 | Agent Loop、业务数据库与工具实现       |
-| `packages/agent-runtime` | Pi模型、认证与Run编排、取消、队列和分支                           | Electron、React、Fastify与SQL实现      |
-| `packages/execution`     | 有界文件/PDF、Web与macOS沙箱Shell执行                             | Pi Loop、审批拥有者、数据库与页面      |
-| `packages/storage`       | SQLite事件/投影事务、迁移、profile锁、系统凭据                    | 模型调用和页面状态                     |
+| `packages/agent-runtime` | Pi模型、认证与Run编排、独立审批复核、取消、队列和分支             | Electron、React、Fastify与SQL实现      |
+| `packages/execution`     | 有界文件/PDF、Web与按策略隔离的macOS Shell执行                    | Pi Loop、审批拥有者、数据库与页面      |
+| `packages/storage`       | SQLite事件/投影事务、JSONL镜像、迁移、profile锁、系统凭据         | 模型调用和页面状态                     |
 | `packages/protocol`      | 跨端DTO、schema、协议版本、公开桌面桥                             | Node imports、业务服务、环境配置或密钥 |
 | `packages/eslint-config` | 共享静态检查配置                                                  | 业务实现                               |
 | `packages/tsconfig`      | 明确的TypeScript编译配置                                          | 运行时代码                             |
 
-`agent-runtime`通过明确RuntimeStore/ProviderStore与SecretStore接口接入宿主，ToolRuntime拥有逐次审批并调用execution；daemon提供注册工作区解析，Renderer只消费工具事件。`storage`实现这些持久化职责，事件追加完成后Runtime才发布SSE。其他 package 在真实职责出现时创建，避免无边界共享工具包。跨包导入使用 `@my-pi-harness/*`；相对导入仅留在同一app/package，源码检查拒绝跨workspace私有源码引用。
+`agent-runtime`通过明确RuntimeStore/ProviderStore与SecretStore接口接入宿主，ToolRuntime按冻结策略逐次确认、调用独立ModelApprovalReviewer或使用用户明确选择的full-access，再调用execution；daemon提供注册工作区解析和复核资料，Renderer只消费公开工具事件。`storage`拥有SQLite事实与事务后JSONL镜像，写入完成后Runtime才发布SSE；镜像失败保留数据库事实并明确暂停写入，重启从SQLite补齐。其他package在真实职责出现时创建，避免无边界共享工具包。跨包导入使用`@my-pi-harness/*`；相对导入仅留在同一app/package，源码检查拒绝跨workspace私有源码引用。
+
+M3由agent-runtime内的WorkRuntime/context模块拥有规则、预算、摘要和会话工具；WorkStore扩展宿主存储端口，工作状态按分支持久化。daemon的AttachmentService接收显式上传或安全工作区引用，保存冻结内容并提供受保护预览；Renderer仅缓存元数据/ID，base64仅在上传与局部预览操作中存在。人工提问和Plan/Todos不要求工作区；文件/Shell仍执行M2策略。checkpoint通过新增分支恢复消息前缀和工作状态，不撤销磁盘或外部副作用。
 
 ## 进程和连接
 
@@ -56,13 +58,16 @@ NodeNext宿主与共享包的本地相对导入写 `.js`，让编译后的ESM在
 
 ## 启动配置
 
-| 环境变量                      | 含义                                          |
-| ----------------------------- | --------------------------------------------- |
-| `MY_PI_HARNESS_PORT`          | daemon端口，默认4311；0申请动态端口           |
-| `MY_PI_HARNESS_WEB_DIST_PATH` | 可选的已构建Web目录；配置后必须包含index.html |
-| `MY_PI_HARNESS_PARENT_PID`    | 可选的所有者进程ID，用于桌面启动链的退出回收  |
+| 环境变量                         | 含义                                                                |
+| -------------------------------- | ------------------------------------------------------------------- |
+| `MY_PI_HARNESS_PORT`             | daemon端口，默认4311；0申请动态端口                                 |
+| `MY_PI_HARNESS_WEB_DIST_PATH`    | 可选的已构建Web目录；配置后必须包含index.html                       |
+| `MY_PI_HARNESS_PARENT_PID`       | 可选的所有者进程ID，用于桌面启动链的退出回收                        |
+| `MY_PI_HARNESS_SESSION_LOG_ROOT` | JSONL根覆盖；独立安装包必填，须为绝对路径且末级名为`.my-pi-harness` |
 
 配置在监听、迁移或读取应用资源前校验。`MY_PI_HARNESS_PROFILE_DIRECTORY`指定绝对profile目录，默认位于macOS Application Support或Windows LocalAppData的My Pi Harness/profiles/default；Electron在macOS从app.userData派生同类目录，Windows采用同一LocalAppData规则，避免SQLite进入Roaming目录。独立owner.sqlite持有排他事务，data.sqlite使用WAL，进程死亡由OS释放所有权。
+
+JSONL根与上述数据库位置独立：开发入口、仓库中的daemon源码和正式构建产物统一使用仓库根目录的`.my-pi-harness`，通过模块位置定位，不随cwd或自定义profile改变。独立安装包已脱离源码仓库，启动时必须通过`MY_PI_HARNESS_SESSION_LOG_ROOT`指定该仓库中的隐藏目录；缺失时明确报错。测试显式指定临时日志根。日志实际目录为`<logRoot>/sessions/<SHA256(canonicalProfilePath)>/`，避免Electron和独立daemon的不同profile混写；storage不猜测cwd或NODE_ENV。旧`profile/sessions/`及其他旧位置日志保留，启动依据SQLite补齐新位置，不迁移数据库或改变凭据namespace。运行数据不进入Git、发布资源或源码扫描。
 
 `MY_PI_HARNESS_DESKTOP_SECRET`仅由main私有启动链注入，不进入公开启动记录；`MY_PI_HARNESS_DEVELOPMENT_ORIGIN`只允许自有5174开发页面。可选GitHub身份使用`MY_PI_HARNESS_GITHUB_CLIENT_ID`及Web授权码所需client secret（Device Flow不需要secret）。字段与授权、恢复语义见[模型与会话协议](../03_API/model-session.md)。
 

@@ -15,6 +15,7 @@ interface WorkspaceState {
   newConversationDraft: string;
   newConversationModel: DefaultModel | null;
   newConversationApproval: ApprovalMode;
+  newConversationWorkMode: 'execute' | 'plan';
   newConversationGeneration: string;
   newConversationAttempt: NewConversationAttempt | null;
   pendingInputs: Readonly<Record<string, InputRequest>>;
@@ -34,6 +35,7 @@ interface WorkspaceState {
   setNewConversationDraft: (text: string) => void;
   setNewConversationModel: (model: DefaultModel) => void;
   setNewConversationApproval: (mode: ApprovalMode) => void;
+  setNewConversationWorkMode: (mode: 'execute' | 'plan') => void;
   prepareInput: (sessionId: string, input: InputRequest) => InputRequest;
   clearPendingInput: (sessionId: string, requestId: string) => void;
   confirmInput: (sessionId: string, requestId: string) => void;
@@ -71,6 +73,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => {
     newConversationDraft: '',
     newConversationModel: null,
     newConversationApproval: 'ask',
+    newConversationWorkMode: 'execute',
     newConversationGeneration: crypto.randomUUID(),
     newConversationAttempt: null,
     pendingInputs: {},
@@ -99,6 +102,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => {
         newConversationGeneration: crypto.randomUUID(),
         newConversationAttempt: null,
         newConversationDraft: '',
+        newConversationWorkMode: 'execute',
       });
     },
     setNewConversationDraft: (text: string): void => {
@@ -109,6 +113,12 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => {
     },
     setNewConversationApproval: (mode: ApprovalMode): void => {
       set({ newConversationApproval: mode });
+    },
+    setNewConversationWorkMode: (mode): void => {
+      const state = get();
+      if (!state.newConversationAttempt) {
+        set({ newConversationWorkMode: mode });
+      }
     },
     prepareInput: (sessionId: string, input: InputRequest): InputRequest => {
       const state = get();
@@ -216,6 +226,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => {
         newConversationDraft: '',
         newConversationModel: null,
         newConversationApproval: 'ask',
+        newConversationWorkMode: 'execute',
         newConversationGeneration: crypto.randomUUID(),
         newConversationAttempt: null,
         pendingInputs: {},

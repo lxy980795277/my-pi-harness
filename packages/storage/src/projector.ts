@@ -13,6 +13,7 @@ import {
 } from '@my-pi-harness/protocol';
 import { StorageError } from './errors.js';
 import { ToolProjection } from './tools.js';
+import { WorkRepository } from './work.js';
 import * as schema from './schema.js';
 import {
   BranchSelectionSchema,
@@ -28,9 +29,11 @@ import {
 /** Updates reconstructable projections inside the event append transaction. */
 export class ProjectionWriter {
   private readonly tools: ToolProjection;
+  private readonly work: WorkRepository;
 
   public constructor(private readonly db: BetterSQLite3Database<typeof schema>) {
     this.tools = new ToolProjection(db);
+    this.work = new WorkRepository(db);
   }
 
   /** Validate and load an existing session whose durable cursor agrees with its projection. */
@@ -265,6 +268,18 @@ export class ProjectionWriter {
    */
   public apply(event: HarnessEvent, privateData?: string): void {
     switch (event.type) {
+      case 'work.updated':
+        this.work.update(event);
+        break;
+      case 'checkpoint.created':
+        this.work.checkpoint(event);
+        break;
+      case 'branch.restored':
+        this.work.restore(event);
+        break;
+      case 'context.prepared':
+        this.work.prepared(event, privateData);
+        break;
       case 'run.accepted':
         this.acceptRun(event, privateData);
         break;

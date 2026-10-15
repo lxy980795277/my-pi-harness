@@ -70,6 +70,16 @@ it('does not turn a late output stream error into success', async () => {
   expect(await observed).toMatchObject({ code: 'SHELL_OUTPUT_FAILED' });
 });
 
+it('reports a process start failure without implying a sandboxed launch', async () => {
+  const { child, stdout, stderr } = processFixture();
+  const observed = observe(collectShellProcess(child, new AbortController().signal, 5000));
+  child.emit('error', new Error('synthetic start failure'));
+  stdout.end();
+  stderr.end();
+  child.emit('close', null, null);
+  expect(await observed).toMatchObject({ code: 'SHELL_START_FAILED' });
+});
+
 it('retains cancellation while output pipes are still draining', async () => {
   const { child, stdout, stderr } = processFixture();
   const controller = new AbortController();

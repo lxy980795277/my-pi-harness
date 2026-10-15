@@ -53,3 +53,7 @@ AC写可观察结果，不用「完善」「支持全部」代替具体条件。
 - [M2最终验证与暂缓项](202610151555_refactor_m2-finalization/verify.md)
 - [输入框回车发送](202610151621_fix_composer-enter-send/spec.md)
 - [输入框回车发送验证](202610151621_fix_composer-enter-send/verify.md)
+- [M3 上下文与交互](202610151655_feature_m3-context-interaction/spec.md)
+- [M3统一验证与平台限制](202610151655_feature_m3-context-interaction/verify.md)
+- [审批模式与会话JSONL镜像](202610151800_feature_approval-session-jsonl/spec.md)
+- [审批与JSONL验证](202610151800_feature_approval-session-jsonl/verify.md)

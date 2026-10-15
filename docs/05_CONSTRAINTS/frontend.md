@@ -53,6 +53,8 @@
 - 动作图标使用 lucide-react，尺寸用相等 width/height，不用 size，装饰图标 aria-hidden。Provider 品牌仅允许已引入的 `@lobehub/icons-static-svg` 静态资产，不因此引入第二套动作图标库。
 - 样式用 Tailwind 与语义 token；复杂样式可用本组件 index.scss，BEM 命名、嵌套不超过三层、不写 &-xxx 拼接。不写 JSX style、硬编码颜色或 CSS 变量 fallback；背景与 foreground 成对，维护浅/深主题，样式 import 最后。
 - Dialog、Select、ScrollArea 等基础组件的动态样式使用页面 nonce；生产 style-src 与 nonce 由宿主生成，不用 unsafe-inline/unsafe-eval 绕过 CSP。
+- Select统一以轻微背景表示焦点，不因关闭菜单后的自动回焦新增边框或光圈；保留焦点恢复与键盘选择。对话输入容器仅在文本输入聚焦时改变边框，不由底部工具栏选择器触发。
+- Select和Popover下拉默认从触发器下方开始边对齐，向右展开，保留视口碰撞避让；工作区选项只显示图标和名称，不添加路径说明行或路径悬停提示。
 - 大列表虚拟滚动，流式事件批量更新。动态行高可在所属 ref 中设置有限数值 CSS 变量用于总高度与偏移；不允许业务数据或颜色进入 style，不开放 JSX style。
 - 动画以 transform/opacity 为主，尊重减少动态效果；适配桌面和平板。控件有名称、错误说明和焦点状态，Dialog 支持键盘与关闭后的焦点恢复。
 - 注释只说明非显然行为、失败、时间和所有权，不逐行翻译或保留开发过程。公共 Hook/函数提供调用者需要的 JSDoc；删除注释掉实现与无职责副本。

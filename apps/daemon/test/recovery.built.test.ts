@@ -1,12 +1,15 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { appendFile, mkdtemp, readFile, realpath, rm } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   AuthStatusSchema,
+  AttachmentSchema,
+  AttachmentContentSchema,
+  WorkSnapshotSchema,
   DaemonReadyRecordSchema,
   HarnessEventSchema,
   ProviderConfigSchema,
@@ -14,6 +17,7 @@ import {
   type HarnessEvent,
   type SessionSnapshot,
 } from '@my-pi-harness/protocol';
+import { sessionLogDirectory } from '@my-pi-harness/storage';
 import type { Static, TSchema } from 'typebox';
 import { Value } from 'typebox/value';
 import { describe, expect, it } from 'vitest';
@@ -58,6 +62,7 @@ async function startDaemon(profile: string, children: ChildProcess[]): Promise<D
     ...process.env,
     MY_PI_HARNESS_PORT: '0',
     MY_PI_HARNESS_PROFILE_DIRECTORY: profile,
+    MY_PI_HARNESS_SESSION_LOG_ROOT: join(profile, '.my-pi-harness'),
     MY_PI_HARNESS_DESKTOP_SECRET: secret,
   };
   for (const name of [
@@ -459,6 +464,215 @@ describe('built daemon recovery with real Pi HTTP streaming', () => {
           child.kill('SIGKILL');
           await deadline(exited, 'Fixture cleanup did not stop a child');
         }
+      const ownedProvider = provider;
+      if (ownedProvider)
+        await new Promise<void>((resolve, reject) => {
+          ownedProvider.server.close((error) => (error ? reject(error) : resolve()));
+          ownedProvider.server.closeAllConnections();
+        });
+      await rm(profile, { recursive: true, force: true });
+    }
+  }, 45_000);
+});
+
+describe('built daemon M3 work recovery', () => {
+  it('preserves frozen attachments, plans, tasks and restored checkpoint branches after a normal restart', async () => {
+    const profile = await mkdtemp(join(tmpdir(), 'my-pi-built-work-recovery-'));
+    const children: ChildProcess[] = [];
+    const daemons: Daemon[] = [];
+    let provider: Awaited<ReturnType<typeof providerFixture>> | undefined;
+    try {
+      provider = await providerFixture();
+      const first = await startDaemon(profile, children);
+      daemons.push(first);
+      await api(first, '/providers', ProviderConfigSchema, 'POST', {
+        id: 'work-recovery-provider',
+        name: 'Synthetic local work provider',
+        kind: 'custom',
+        requiresApiKey: false,
+        builtinId: null,
+        api: 'openai-completions',
+        baseUrl: provider.baseUrl,
+        enabled: true,
+        models: [
+          {
+            id: 'fixture-model',
+            name: 'Fixture model',
+            api: 'openai-completions',
+            contextWindow: 8192,
+            maxTokens: 1024,
+            reasoning: false,
+            input: ['text'],
+          },
+        ],
+      });
+      const initial = await api(first, '/sessions', SessionSnapshotSchema, 'POST', {
+        title: 'M3 persisted work',
+        providerId: 'work-recovery-provider',
+        modelId: 'fixture-model',
+        thinkingLevel: 'off',
+        workMode: 'plan',
+      });
+      const sessionId = initial.session.id;
+      const originalBranchId = initial.session.activeBranchId;
+      const readWork = (daemon: Daemon, branchId: string) =>
+        api(
+          daemon,
+          `/sessions/${sessionId}/work?branchId=${encodeURIComponent(branchId)}`,
+          WorkSnapshotSchema,
+        );
+      const frozenText = 'Frozen project context: preserve the original goal.\nThe task is local.';
+      const attachment = await api(first, '/attachments', AttachmentSchema, 'POST', {
+        name: 'context.txt',
+        mediaType: 'text/plain',
+        data: Buffer.from(frozenText).toString('base64'),
+      });
+      const initialWork = await readWork(first, originalBranchId);
+      expect(initialWork.state).toMatchObject({ revision: 1, mode: 'plan' });
+      const plan = {
+        title: 'Original plan',
+        content: 'Inspect context before execution.',
+        status: 'draft',
+        updatedAt: 2,
+      };
+      const todos = [{ id: 'inspect', title: 'Inspect context', status: 'pending' }];
+      await api(first, `/sessions/${sessionId}/work`, WorkSnapshotSchema, 'PATCH', {
+        expectedBranchId: originalBranchId,
+        revision: initialWork.state.revision,
+        plan,
+        todos,
+      });
+      await api(first, `/sessions/${sessionId}/inputs`, SessionSnapshotSchema, 'POST', {
+        text: 'Keep the attached context.',
+        attachmentIds: [attachment.id],
+        requestId: 'with-attachment',
+        mode: 'send',
+      });
+      await waitSnapshot(first, sessionId, (snapshot) =>
+        snapshot.messages.some(({ text }) => text === 'durable partial 1'),
+      );
+      const stopped = await api(
+        first,
+        `/sessions/${sessionId}/stop`,
+        SessionSnapshotSchema,
+        'POST',
+        {},
+      );
+      expect(stopped.messages[0]?.attachmentIds).toEqual([attachment.id]);
+      const saved = await api(
+        first,
+        `/sessions/${sessionId}/work/checkpoints`,
+        WorkSnapshotSchema,
+        'POST',
+        {
+          expectedBranchId: originalBranchId,
+          label: 'Plan and context',
+        },
+      );
+      const checkpoint = saved.checkpoints[0];
+      if (!checkpoint) throw new Error('Checkpoint was not saved');
+      expect(checkpoint.state.plan).toEqual(plan);
+      expect(checkpoint.state.todos).toEqual(todos);
+      expect(checkpoint.messageIds).toEqual(stopped.messages.map(({ id }) => id));
+      await api(first, `/sessions/${sessionId}/work`, WorkSnapshotSchema, 'PATCH', {
+        expectedBranchId: originalBranchId,
+        revision: saved.state.revision,
+        mode: 'execute',
+        plan: { ...plan, title: 'Later approved plan', status: 'approved', updatedAt: 3 },
+        todos: [{ ...todos[0], id: 'inspect', title: 'Inspect context', status: 'completed' }],
+      });
+      await api(first, `/sessions/${sessionId}/inputs`, SessionSnapshotSchema, 'POST', {
+        text: 'Continue after the checkpoint.',
+        requestId: 'after-checkpoint',
+        mode: 'send',
+      });
+      const laterHistory = await waitSnapshot(
+        first,
+        sessionId,
+        (snapshot) => snapshot.session.activeRunId === null && snapshot.runs.length === 2,
+      );
+      expect(laterHistory.messages.at(-1)).toMatchObject({
+        text: 'durable partial 2',
+        status: 'complete',
+      });
+      const laterWork = await readWork(first, originalBranchId);
+      const restoredWork = await api(
+        first,
+        `/sessions/${sessionId}/work/checkpoints/${checkpoint.id}/restore`,
+        WorkSnapshotSchema,
+        'POST',
+        {
+          expectedBranchId: originalBranchId,
+          revision: laterWork.state.revision,
+        },
+      );
+      const restoredBranchId = restoredWork.state.branchId;
+      expect(restoredBranchId).not.toBe(originalBranchId);
+      expect(restoredWork.state).toMatchObject({ mode: 'plan', plan, todos });
+      const restoredHistory = await api(first, `/sessions/${sessionId}`, SessionSnapshotSchema);
+      expect(restoredHistory.messages).toEqual(stopped.messages);
+      expect(restoredHistory.queue).toEqual([]);
+      expect(provider.requests).toHaveLength(2);
+      expect(provider.requests[0]).toContain(frozenText.split('\n')[0]);
+      expect(await first.stop()).toEqual({ code: 0, signal: null });
+      const log = join(
+        sessionLogDirectory(await realpath(profile), join(profile, '.my-pi-harness')),
+        `${sessionId}.jsonl`,
+      );
+      await appendFile(log, '{"version":1,"eventId":"crash-tail');
+
+      const second = await startDaemon(profile, children);
+      daemons.push(second);
+      const afterRestart = await api(second, `/sessions/${sessionId}`, SessionSnapshotSchema);
+      expect(afterRestart).toEqual(restoredHistory);
+      expect(await readWork(second, restoredBranchId)).toEqual(restoredWork);
+      const content = await api(
+        second,
+        `/attachments/${attachment.id}/content`,
+        AttachmentContentSchema,
+      );
+      expect(content).toEqual({ attachment, text: frozenText, imageData: null });
+      expect(await api(second, `/attachments/${attachment.id}`, AttachmentSchema)).toEqual(
+        attachment,
+      );
+      const replayed = await replay(second, sessionId);
+      const jsonl = await readFile(log, 'utf8');
+      expect(jsonl.endsWith('\n')).toBe(true);
+      const mirrored = jsonl
+        .slice(0, -1)
+        .split('\n')
+        .map((line) => {
+          const value: unknown = JSON.parse(line);
+          return checked(HarnessEventSchema, value);
+        });
+      expect(mirrored).toEqual(replayed.events);
+      expect(jsonl).not.toContain('crash-tail');
+      expect(jsonl).not.toContain('privateData');
+      expect(jsonl).not.toContain(Buffer.from(frozenText).toString('base64'));
+
+      expect(replayed.events.filter(({ type }) => type === 'checkpoint.created')).toHaveLength(1);
+      expect(replayed.events.filter(({ type }) => type === 'branch.restored')).toHaveLength(1);
+      expect(replayed.events.some((event) => 'privateData' in event)).toBe(false);
+      expect(provider.requests).toHaveLength(2);
+      const original = await api(
+        second,
+        `/sessions/${sessionId}/branches/${originalBranchId}/select`,
+        SessionSnapshotSchema,
+        'POST',
+        {},
+      );
+      expect(original.messages).toEqual(laterHistory.messages);
+      expect((await readWork(second, originalBranchId)).state).toEqual(laterWork.state);
+      expect(provider.requests).toHaveLength(2);
+      expect(await second.stop()).toEqual({ code: 0, signal: null });
+    } finally {
+      for (const daemon of daemons) await daemon.stop();
+      for (const child of children) {
+        if (child.exitCode !== null || child.signalCode !== null) continue;
+        const exited = new Promise<void>((resolve) => child.once('exit', () => resolve()));
+        child.kill('SIGKILL');
+        await deadline(exited, 'M3 recovery cleanup did not stop a child');
+      }
       const ownedProvider = provider;
       if (ownedProvider)
         await new Promise<void>((resolve, reject) => {

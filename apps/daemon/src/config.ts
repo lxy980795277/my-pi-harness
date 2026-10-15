@@ -1,5 +1,7 @@
-import { isAbsolute, join, resolve } from 'node:path';
+import { basename, isAbsolute, join, resolve } from 'node:path';
+import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
+import { fileURLToPath } from 'node:url';
 import { Type, type Static } from 'typebox';
 import { Value } from 'typebox/value';
 
@@ -9,6 +11,7 @@ export const LOOPBACK_HOST = '127.0.0.1';
 const DaemonConfigSchema = Type.Object({
   host: Type.Literal(LOOPBACK_HOST),
   profileDirectory: Type.String({ minLength: 1 }),
+  sessionLogRoot: Type.String({ minLength: 1 }),
   ownerSecret: Type.Union([Type.String({ minLength: 40, maxLength: 128 }), Type.Null()]),
   developmentOrigin: Type.Union([Type.String(), Type.Null()]),
   githubClientId: Type.Union([Type.String({ minLength: 1, maxLength: 200 }), Type.Null()]),
@@ -41,8 +44,17 @@ function readInteger(
   return parsed;
 }
 
+function repositorySessionLogRoot(): string {
+  const repository = fileURLToPath(new URL('../../../', import.meta.url));
+  if (!existsSync(join(repository, 'pnpm-workspace.yaml')))
+    throw new DaemonConfigError(
+      'Set MY_PI_HARNESS_SESSION_LOG_ROOT to the repository .my-pi-harness directory when launching outside the repository',
+    );
+  return join(repository, '.my-pi-harness');
+}
+
 /**
- * Parse supported environment variables before opening files or listeners.
+ * Parse supported environment variables before opening profile resources or listeners.
  * @param environment Environment values supplied to this daemon process.
  * @param workingDirectory Base directory for a relative web asset path.
  * @returns Settings with a fixed loopback host and validated numeric values.
@@ -61,6 +73,14 @@ export function loadDaemonConfig(
     (!configuredProfile.trim() || !isAbsolute(configuredProfile))
   )
     throw new DaemonConfigError('MY_PI_HARNESS_PROFILE_DIRECTORY must be an absolute directory');
+  const configuredLogRoot = environment.MY_PI_HARNESS_SESSION_LOG_ROOT;
+  if (
+    configuredLogRoot !== undefined &&
+    (!isAbsolute(configuredLogRoot) || basename(configuredLogRoot) !== '.my-pi-harness')
+  )
+    throw new DaemonConfigError(
+      'MY_PI_HARNESS_SESSION_LOG_ROOT must be an absolute .my-pi-harness directory',
+    );
   const defaultData =
     process.platform === 'win32'
       ? (environment.LOCALAPPDATA ?? join(homedir(), 'AppData', 'Local'))
@@ -71,6 +91,7 @@ export function loadDaemonConfig(
   const candidate = {
     profileDirectory:
       configuredProfile ?? join(defaultData, 'My Pi Harness', 'profiles', 'default'),
+    sessionLogRoot: configuredLogRoot ?? repositorySessionLogRoot(),
     ownerSecret: environment.MY_PI_HARNESS_DESKTOP_SECRET ?? null,
     developmentOrigin: developmentOrigin ?? null,
     githubClientId: environment.MY_PI_HARNESS_GITHUB_CLIENT_ID ?? null,

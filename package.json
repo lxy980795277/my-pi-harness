@@ -1,6 +1,6 @@
 {
   "name": "my-pi-harness",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "description": "Local-first PC agent harness built independently on Pi",
@@ -12,7 +12,7 @@
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "dev:web": "pnpm --filter @my-pi-harness/web dev",
-    "dev:daemon": "pnpm --filter @my-pi-harness/daemon dev",
+    "dev:daemon": "node scripts/dev.mjs --daemon-only",
     "dev:desktop": "node scripts/dev.mjs --desktop",
     "build": "pnpm version:sync && turbo run build",
     "typecheck": "tsc --noEmit && tsc -p tests/e2e/tsconfig.json --noEmit && turbo run typecheck",
@@ -23,6 +23,7 @@
     "test": "vitest run",
     "test:artifact": "pnpm --filter @my-pi-harness/daemon test:built",
     "test:e2e": "playwright test",
+    "test:m3": "vitest run packages/agent-runtime/test/context-budget.test.ts packages/agent-runtime/test/context-rules.test.ts packages/agent-runtime/test/start-cancellation.test.ts packages/agent-runtime/test/work-runtime.test.ts packages/storage/test/context-work.test.ts apps/daemon/test/attachments.test.ts apps/daemon/test/work-api.test.ts apps/web/test/context-work.test.ts apps/web/test/work-service.test.ts && playwright test tests/e2e/m3.spec.ts",
     "test:m2": "vitest run packages/execution/test packages/agent-runtime/test/tool-runtime.test.ts packages/storage/test/tools.test.ts packages/storage/test/workspaces.test.ts apps/daemon/test/workspaces.test.ts apps/daemon/test/workspaces-api.test.ts apps/desktop/test/security.test.ts apps/desktop/test/preload.test.ts apps/web/test/timeline-entries.test.ts apps/web/test/workspace-directory.test.ts apps/web/test/workspace-tree.test.ts && playwright test tests/e2e/m2.spec.ts tests/e2e/m2-completion.spec.ts tests/e2e/workspace-creation.spec.ts",
     "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test",
     "version:sync": "node scripts/version.mjs --write",

@@ -26,6 +26,16 @@ export const useWorkspaceTree = (): WorkspaceTreeState => {
   const selectWorkspace = useWorkspaceStore((state) => {
     return state.selectWorkspace;
   });
+  const startNewConversation = useWorkspaceStore((state) => {
+    return state.startNewConversation;
+  });
+  const newConversation = useCallback(
+    (workspaceId: string | null): void => {
+      selectWorkspace(workspaceId);
+      startNewConversation();
+    },
+    [selectWorkspace, startNewConversation],
+  );
   const [dialog, setDialog] = useState<{ workspace: Workspace | null } | null>(null);
   const [removing, setRemoving] = useState<Workspace | null>(null);
   const remove = useAsyncEvent(
@@ -93,7 +103,7 @@ export const useWorkspaceTree = (): WorkspaceTreeState => {
     activeId,
     activeWorkspaceId,
     select,
-    selectWorkspace,
+    newConversation,
     add,
     rename,
     dialog,

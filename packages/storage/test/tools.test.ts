@@ -302,6 +302,7 @@ describe('durable tool projections', () => {
     store.append('session', [
       event('tool.requested', { tool: { ...tool('running'), id: 'z-running' } }),
       event('tool.requested', { tool: { ...tool('awaiting_approval'), id: 'a-awaiting' } }),
+      event('tool.requested', { tool: { ...tool('reviewing'), id: 'reviewing' } }),
     ]);
     store.close();
     const reopened = await openProfileStore(directory);
@@ -314,13 +315,20 @@ describe('durable tool projections', () => {
     ).toEqual([
       { id: 'z-running', status: 'interrupted' },
       { id: 'a-awaiting', status: 'interrupted' },
+      { id: 'reviewing', status: 'interrupted' },
     ]);
     expect(reopened.getSnapshot('session').runs[0]?.status).toBe('interrupted');
-    const tail = reopened.readEvents('session').slice(-3);
-    expect(tail.map((item) => item.type)).toEqual(['tool.updated', 'tool.updated', 'run.finished']);
+    const tail = reopened.readEvents('session').slice(-4);
+    expect(tail.map((item) => item.type)).toEqual([
+      'tool.updated',
+      'tool.updated',
+      'tool.updated',
+      'run.finished',
+    ]);
     expect(tail[1]?.seq).toBe((tail[0]?.seq ?? 0) + 1);
     expect(tail[2]?.seq).toBe((tail[1]?.seq ?? 0) + 1);
-    for (const updated of tail.slice(0, 2))
+    expect(tail[3]?.seq).toBe((tail[2]?.seq ?? 0) + 1);
+    for (const updated of tail.slice(0, 3))
       expect(updated.data['tool']).not.toHaveProperty('afterMessageId');
   });
 });

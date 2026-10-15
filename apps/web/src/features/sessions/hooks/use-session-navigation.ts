@@ -27,7 +27,7 @@ export const useSessionNavigation = (
     select,
     current,
     className: cn(
-      'h-8 w-full justify-start gap-2 rounded-lg pr-2 pl-8 text-left text-xs',
+      'h-8 w-full justify-start gap-2 rounded-lg pr-2 pl-8 text-left text-xs transition-none',
       activeClass,
     ),
     createdAtLabel: formatSessionCreatedAt(session.createdAt, Date.now()),

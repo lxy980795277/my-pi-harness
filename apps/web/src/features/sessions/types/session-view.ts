@@ -42,6 +42,9 @@ export interface ComposerState {
   error: string | null;
   draftLocked: boolean;
   uncertain: boolean;
+  attachmentDraftKey: string;
+  attachmentIds: string[];
+  removeAttachment: (id: string) => void;
 }
 export interface ConversationState extends LiveSession {
   commands: SessionCommands;

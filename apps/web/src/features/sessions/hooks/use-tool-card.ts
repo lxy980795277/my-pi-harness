@@ -1,9 +1,11 @@
 import type { ToolCallView, ToolDecisionInput } from '@my-pi-harness/protocol';
 import { useCallback } from 'react';
 import { useAsyncEvent } from '@/hooks/use-async-event';
+import { toolNeedsApproval } from '@/features/sessions/utils/approval-options';
 import type { ToolCardState } from '@/features/sessions/types/composer-view';
 
 const TOOL_STATUS_LABELS: Record<ToolCallView['status'], string> = {
+  reviewing: 'AI 复核中',
   awaiting_approval: '等待批准',
   running: '执行中',
   completed: '已完成',
@@ -36,7 +38,7 @@ export const useToolCard = (
   return {
     statusLabel: TOOL_STATUS_LABELS[tool.status],
     argumentsText: JSON.stringify(tool.arguments, null, 2),
-    needsApproval: tool.status === 'awaiting_approval',
+    needsApproval: toolNeedsApproval(tool.status),
     allow,
     deny,
     pending: decision.pending,

@@ -1,9 +1,10 @@
 import type { ToolCallView, ToolDecisionInput } from '@my-pi-harness/protocol';
-import { ShieldCheck, Wrench } from 'lucide-react';
+import { LoaderCircle, ShieldCheck, Wrench } from 'lucide-react';
 import { memo, type FC } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Notice } from '@/components/ui/notice';
+import { ApprovalAudit } from '@/features/sessions/components/approval-audit';
 import { useToolCard } from '@/features/sessions/hooks/use-tool-card';
 
 interface ToolCardProps {
@@ -52,6 +53,18 @@ export const ToolCard: FC<ToolCardProps> = memo(({ tool, onDecide }) => {
           </pre>
         </details>
       )}
+      {tool.status === 'reviewing' && (
+        <div role="status" className="flex items-center gap-2 text-xs text-muted-foreground">
+          <LoaderCircle
+            width={14}
+            height={14}
+            className="animate-spin motion-reduce:animate-none"
+            aria-hidden
+          />
+          正在由独立 AI 复核本次操作…
+        </div>
+      )}
+      <ApprovalAudit approval={tool.approval} />
       {state.error && <Notice tone="error">{state.error}</Notice>}
       {state.needsApproval && (
         <div className="space-y-3 border-t border-border/60 pt-3">

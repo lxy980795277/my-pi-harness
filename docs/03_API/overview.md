@@ -4,7 +4,7 @@
 
 应用版本与协议版本用途不同：应用版本来自根版本生成流程；`PROTOCOL_VERSION` 管理跨端协议兼容。修改协议时更新所有消费者和相应检查，不能用产品版本代替兼容判定。
 
-当前协议为5，工具快照提供assistant消息锚点，Workspace保留必填icon和有限目录拖放桥。客户端与daemon必须采用相同协议版本；SQLite迁移版本与Session事件版本分别管理，不随HTTP协议版本机械递增。
+当前协议为7，新增auto/full-access审批策略、reviewing状态与可选审批审计字段，保留附件、分支工作状态、工具assistant消息锚点、Workspace图标和有限目录拖放桥。客户端与daemon必须采用相同协议版本；SQLite迁移版本与Session事件版本分别管理，不随HTTP协议版本机械递增。
 
 ## M0 HTTP
 
@@ -40,3 +40,7 @@ preload暴露 `DesktopBridge.getInfo()`、固定目录选择 `chooseWorkspaceDir
 工具、审批、文件变化与执行恢复已有独立DTO与持久化规则。HTTP、IPC与持久化记录不能隐式复用含私有字段的服务对象。
 
 工作区与工具的API、审批和私有上下文规则见[M2协议](workspace-execution.md)。目录选择仅从当前受信任主frame调用，无参数，不暴露通用文件系统。
+
+## M3协议
+
+附件上传与引用、AGENTS、上下文预算/压缩、人工提问、Plan/Todos和检查点恢复见[上下文与工作状态协议](context-interaction.md)。工作状态有独立的分支revision；私有内容与公开事件、元数据分别读取。

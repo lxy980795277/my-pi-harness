@@ -1,6 +1,8 @@
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { AuthStatusSchema, SessionSnapshotSchema } from '@my-pi-harness/protocol';
+import { Value } from 'typebox/value';
 import { test, expect } from './fixture.js';
 import { configureTestProvider } from './model-fixtures.js';
 import { chooseOption } from './ui-controls.js';
@@ -13,14 +15,14 @@ for (const policy of ['请求批准', '只读'] as const) {
     const model = await startToolModel();
     try {
       await page.goto(daemon.origin);
-      await configureTestProvider(page, model.origin);
+      const provider = await configureTestProvider(page, model.origin);
       await page.reload();
       await expect(
         page.getByRole('heading', { name: '我们从哪里开始？', exact: true }),
       ).toBeVisible();
       await expect(page.getByLabel('会话名称', { exact: true })).toHaveCount(0);
       await expect(page.getByRole('button', { name: '创建会话', exact: true })).toHaveCount(0);
-      await registerTestWorkspace(page, '测试项目', directory);
+      const workspace = await registerTestWorkspace(page, '测试项目', directory);
       await page.reload();
       await chooseOption(
         page,
@@ -32,12 +34,32 @@ for (const policy of ['请求批准', '只读'] as const) {
         page.getByRole('combobox', { name: '对话模型', exact: true }),
         'Queue Model · Chat',
       );
-      if (policy === '只读')
-        await chooseOption(
-          page,
+      if (policy === '只读') {
+        const status: unknown = await (
+          await page.request.get(`${daemon.origin}/api/auth/status`)
+        ).json();
+        if (!Value.Check(AuthStatusSchema, status) || !status.csrfToken)
+          throw new Error('Legacy read-only fixture requires authorization');
+        const response = await page.request.post(`${daemon.origin}/api/sessions`, {
+          headers: { Origin: daemon.origin, 'X-CSRF-Token': status.csrfToken },
+          data: {
+            title: '创建工作区文件',
+            providerId: provider.id,
+            modelId: 'chat-model',
+            thinkingLevel: 'off',
+            workspaceId: workspace.id,
+            approvalMode: 'read-only',
+          },
+        });
+        const session: unknown = await response.json();
+        if (!response.ok() || !Value.Check(SessionSnapshotSchema, session))
+          throw new Error('Creating the legacy read-only session failed');
+        await page.reload();
+        await page.getByRole('button', { name: /^创建工作区文件 / }).click();
+        await expect(
           page.getByRole('combobox', { name: '执行批准方式', exact: true }),
-          policy,
-        );
+        ).toContainText('只读');
+      }
       await page.screenshot({ path: testInfo.outputPath('new-conversation.png'), fullPage: true });
       await page.getByLabel('消息', { exact: true }).fill('创建工作区文件');
       await page.getByRole('button', { name: '发送', exact: true }).click();

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import Database from 'better-sqlite3';
 import { and, asc, eq, gt, sql } from 'drizzle-orm';
 import { drizzle, type BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
@@ -13,6 +13,7 @@ import {
   RunViewSchema,
   SessionSnapshotSchema,
   SessionSummarySchema,
+  initialWorkState,
   type HarnessEvent,
   type AppSettings,
   type AppSettingsInput,
@@ -21,6 +22,9 @@ import {
   type SessionSummary,
   type Workspace,
   type WorkspaceRenameInput,
+  type WorkState,
+  type AttachmentContent,
+  type Checkpoint,
 } from '@my-pi-harness/protocol';
 import { StorageError } from './errors.js';
 import { applyMigrations } from './migrations.js';
@@ -28,6 +32,9 @@ import { acquireProfileLock, type ProfileLock } from './profile-lock.js';
 import { ProjectionWriter } from './projector.js';
 import { WorkspaceRepository } from './workspaces.js';
 import { ToolProjection } from './tools.js';
+import { WorkRepository } from './work.js';
+import { SessionJsonlMirror } from './session-jsonl.js';
+import { sessionLogDirectory, type ProfileStoreOptions } from './session-log-directory.js';
 import * as schema from './schema.js';
 import type { CreateSessionInput, EventInput, RequestAcceptance } from './types.js';
 import {
@@ -44,40 +51,88 @@ export class ProfileStore {
   private readonly projector: ProjectionWriter;
   private readonly workspaces: WorkspaceRepository;
   private readonly tools: ToolProjection;
+  private readonly work: WorkRepository;
   private closed = false;
+  private readonly mirror: SessionJsonlMirror;
+  private readonly dirtySessions = new Set<string>();
+  private transactionDepth = 0;
+  private mirrorFailure: StorageError | undefined;
 
   public constructor(
     private readonly sqlite: Database.Database,
     private readonly lock: ProfileLock,
+    options: ProfileStoreOptions = {},
   ) {
     this.db = drizzle(sqlite, { schema });
     this.projector = new ProjectionWriter(this.db);
     this.workspaces = new WorkspaceRepository(this.db);
     this.tools = new ToolProjection(this.db);
+    this.work = new WorkRepository(this.db);
+    this.mirror = new SessionJsonlMirror(lock.directory, options.sessionLogRoot);
+    try {
+      for (const { id } of this.db.select({ id: schema.sessions.id }).from(schema.sessions).all())
+        this.mirror.sync(id, (after) => this.mirrorEvents(id, after));
+    } catch (error) {
+      this.mirror.close();
+      throw error;
+    }
   }
 
   private assertOpen(): void {
     if (this.closed) throw new StorageError('STORAGE_CLOSED', 'Storage is closed');
   }
 
-  private transaction<T>(operation: () => T): T {
+  private *mirrorEvents(sessionId: string, afterSeq: number): Generator<HarnessEvent> {
+    let cursor = afterSeq;
+    while (true) {
+      const page = this.readEvents(sessionId, cursor, 500);
+      if (page.length === 0) return;
+      yield* page;
+      cursor = page.at(-1)?.seq ?? cursor;
+    }
+  }
+
+  private transaction<T>(operation: () => T, readOnly = false): T {
     this.assertOpen();
+    if (!readOnly && this.mirrorFailure) throw this.mirrorFailure;
+    const outer = this.transactionDepth === 0;
+    const previousDirty = new Set(this.dirtySessions);
+    this.transactionDepth += 1;
+    let result: T;
     try {
-      return this.sqlite.transaction(operation).immediate();
+      result = this.sqlite.transaction(operation).immediate();
     } catch (error: unknown) {
+      this.dirtySessions.clear();
+      for (const id of previousDirty) this.dirtySessions.add(id);
       if (error instanceof StorageError) throw error;
       if (
         error instanceof Error &&
         'code' in error &&
         typeof error.code === 'string' &&
         error.code.startsWith('SQLITE_CONSTRAINT')
-      ) {
+      )
         throw new StorageError('CONFLICT', 'A stored identity or relationship already exists', {
           cause: error,
         });
-      }
       throw error;
+    } finally {
+      this.transactionDepth -= 1;
     }
+    if (outer && !readOnly && this.dirtySessions.size > 0) {
+      try {
+        for (const id of this.dirtySessions)
+          this.mirror.sync(id, (after) => this.mirrorEvents(id, after));
+        this.dirtySessions.clear();
+      } catch (cause) {
+        this.mirrorFailure = new StorageError(
+          'SESSION_LOG_UNAVAILABLE',
+          'SQLite changes are committed, but the session log could not be synchronized. Restart before retrying; committed operations must not be repeated.',
+          { cause },
+        );
+        throw this.mirrorFailure;
+      }
+    }
+    return result;
   }
 
   /** Close the business database before releasing profile ownership; repeated close is safe. */
@@ -85,7 +140,11 @@ export class ProfileStore {
     if (this.closed) return;
     this.closed = true;
     try {
-      this.sqlite.close();
+      try {
+        this.mirror.close();
+      } finally {
+        this.sqlite.close();
+      }
     } finally {
       this.lock.release();
     }
@@ -213,6 +272,7 @@ export class ProfileStore {
 
   /** Create the initial branch and session event in one transaction. */
   public createSession(input: CreateSessionInput): SessionSummary {
+    this.mirror.validateSessionId(input.id);
     return this.transaction(() => {
       if (input.workspaceId !== null && this.workspaces.get(input.workspaceId) === undefined)
         throw new StorageError('WORKSPACE_NOT_FOUND', 'Workspace does not exist');
@@ -265,6 +325,18 @@ export class ProfileStore {
         .insert(schema.events)
         .values({ ...event, privateData: null })
         .run();
+      this.dirtySessions.add(session.id);
+      if (input.workMode === 'plan') {
+        this.append(session.id, [
+          {
+            type: 'work.updated',
+            runId: null,
+            at: input.at,
+            data: { state: { ...initialWorkState(branch.id), revision: 1, mode: 'plan' } },
+          },
+        ]);
+        return this.projector.session(session.id);
+      }
       return session;
     });
   }
@@ -350,7 +422,34 @@ export class ProfileStore {
             (left, right) => left.createdAt - right.createdAt || left.id.localeCompare(right.id),
           ),
       });
-    });
+    }, true);
+  }
+
+  /** Read the selected branch's durable work state, or the empty revision-zero state. */
+  public getWorkState(sessionId: string, branchId?: string): WorkState {
+    this.assertOpen();
+    const session = this.getSession(sessionId);
+    if (!session)
+      throw new StorageError('SESSION_NOT_FOUND', 'Session does not exist or is archived');
+    return this.work.get(sessionId, branchId ?? session.activeBranchId);
+  }
+
+  /** Checkpoints retain their original branch and immutable message prefix. */
+  public listCheckpoints(sessionId: string): Checkpoint[] {
+    this.assertOpen();
+    if (!this.getSession(sessionId))
+      throw new StorageError('SESSION_NOT_FOUND', 'Session does not exist or is archived');
+    return this.work.listCheckpoints(sessionId);
+  }
+
+  /** Store frozen content privately; replacing an existing attachment ID is rejected. */
+  public putAttachment(input: AttachmentContent): void {
+    this.transaction(() => this.work.putAttachment(input));
+  }
+
+  public getAttachment(id: string): AttachmentContent | undefined {
+    this.assertOpen();
+    return this.work.getAttachment(id);
   }
 
   /** An acceptance remains queryable after its queue item is consumed or removed. */
@@ -534,6 +633,7 @@ export class ProfileStore {
           .run();
         accepted.push(event);
       }
+      if (accepted.length > 0) this.dirtySessions.add(sessionId);
       return accepted;
     });
   }
@@ -601,8 +701,28 @@ export class ProfileStore {
     return this.transaction(() => {
       const output: HarnessEvent[] = [];
       for (const session of this.listSessions()) {
-        if (session.activeRunId === null) continue;
         const at = Date.now();
+        const workEvents: EventInput[] = [];
+        for (const state of this.work.interruptedStates(session.id)) {
+          workEvents.push({
+            type: 'work.updated',
+            runId: null,
+            at,
+            data: {
+              state: {
+                ...state,
+                revision: state.revision + 1,
+                questions: state.questions.map((question) =>
+                  question.status === 'pending' ? { ...question, status: 'interrupted' } : question,
+                ),
+              },
+            },
+          });
+        }
+        if (session.activeRunId === null) {
+          if (workEvents.length > 0) output.push(...this.append(session.id, workEvents));
+          continue;
+        }
         const tools: EventInput[] = this.tools
           .unfinished(session.id, session.activeRunId)
           .map((tool) => ({
@@ -621,6 +741,7 @@ export class ProfileStore {
         output.push(
           ...this.append(session.id, [
             ...tools,
+            ...workEvents,
             {
               type: 'run.finished',
               runId: session.activeRunId,
@@ -642,25 +763,43 @@ export class ProfileStore {
 /**
  * Open one profile, migrate and interrupt old runs before any model work can begin.
  * @param directory Local application profile, separate from Pi or other harness data.
+ * @param options Explicit log root; omission uses a hidden directory inside this profile.
  * @returns An owned synchronous store with its cross-process lock held until close.
  */
-export async function openProfileStore(directory: string): Promise<ProfileStore> {
+export async function openProfileStore(
+  directory: string,
+  options: ProfileStoreOptions = {},
+): Promise<ProfileStore> {
+  if (options.sessionLogRoot !== undefined)
+    sessionLogDirectory(resolve(directory), options.sessionLogRoot);
   const lock = await acquireProfileLock(directory);
   let database: Database.Database | undefined;
+  let store: ProfileStore | undefined;
   try {
     database = new Database(join(lock.directory, 'data.sqlite'), { timeout: 1000 });
     database.pragma('foreign_keys = ON');
     applyMigrations(database);
     database.pragma('journal_mode = WAL');
     database.pragma('synchronous = FULL');
-    const store = new ProfileStore(database, lock);
+    store = new ProfileStore(database, lock, options);
     store.recoverInterrupted();
     return store;
   } catch (error: unknown) {
-    try {
-      database?.close();
-    } finally {
-      lock.release();
+    if (store) {
+      try {
+        store.close();
+      } catch (cleanupError) {
+        throw new AggregateError(
+          [error, cleanupError],
+          'Profile recovery failed and storage cleanup also failed',
+        );
+      }
+    } else {
+      try {
+        database?.close();
+      } finally {
+        lock.release();
+      }
     }
     throw error;
   }

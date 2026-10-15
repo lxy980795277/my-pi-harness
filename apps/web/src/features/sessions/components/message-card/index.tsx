@@ -1,6 +1,7 @@
 import type { EditInput, MessageView } from '@my-pi-harness/protocol';
 import { memo, type FC } from 'react';
 
+import { AttachmentList } from '@/features/attachments/components/attachment-list';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Notice } from '@/components/ui/notice';
@@ -46,6 +47,9 @@ export const MessageCard: FC<MessageCardProps> = memo(({ message, canEdit, onEdi
             {message.thinking}
           </p>
         </details>
+      )}
+      {message.attachmentIds && message.attachmentIds.length > 0 && (
+        <AttachmentList ids={message.attachmentIds} />
       )}
       {!editing && (
         <p className="text-sm leading-7 [overflow-wrap:anywhere] break-words whitespace-pre-wrap">

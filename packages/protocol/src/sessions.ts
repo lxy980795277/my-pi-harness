@@ -36,6 +36,7 @@ export const MessageViewSchema = Type.Object(
     runId: nullableId,
     role: Type.Union([Type.Literal('user'), Type.Literal('assistant')]),
     text: Type.String({ maxLength: 2_000_000 }),
+    attachmentIds: Type.Optional(Type.Array(id, { maxItems: 8 })),
     thinking: Type.String({ maxLength: 2_000_000 }),
     createdAt: timestamp,
     status: Type.Union([
@@ -80,6 +81,7 @@ export const QueueInputSchema = Type.Object(
     id,
     sessionId: id,
     text,
+    attachmentIds: Type.Optional(Type.Array(id, { maxItems: 8 })),
     mode: Type.Union([Type.Literal('follow-up'), Type.Literal('steer')]),
     providerId: id,
     modelId: id,
@@ -143,6 +145,7 @@ export const SessionCreateInputSchema = Type.Object(
     thinkingLevel: Type.Optional(ThinkingLevelSchema),
     workspaceId: Type.Optional(nullableId),
     approvalMode: Type.Optional(ApprovalModeSchema),
+    workMode: Type.Optional(Type.Union([Type.Literal('execute'), Type.Literal('plan')])),
   },
   { additionalProperties: false },
 );
@@ -156,6 +159,7 @@ export const ResolvedSessionCreateInputSchema = Type.Object(
     thinkingLevel: ThinkingLevelSchema,
     workspaceId: nullableId,
     approvalMode: ApprovalModeSchema,
+    workMode: Type.Optional(Type.Union([Type.Literal('execute'), Type.Literal('plan')])),
   },
   { additionalProperties: false },
 );
@@ -174,6 +178,7 @@ export type SessionPatchInput = Static<typeof SessionPatchInputSchema>;
 export const InputRequestSchema = Type.Object(
   {
     text,
+    attachmentIds: Type.Optional(Type.Array(id, { maxItems: 8 })),
     mode: Type.Union([Type.Literal('send'), Type.Literal('follow-up'), Type.Literal('steer')]),
     requestId: id,
   },

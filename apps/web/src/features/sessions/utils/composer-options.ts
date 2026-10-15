@@ -13,11 +13,6 @@ import {
 } from '@/features/models/utils/model-options';
 
 export const NO_WORKSPACE = 'no-workspace';
-export const APPROVAL_OPTIONS: SelectOption[] = [
-  { value: 'ask', label: '请求批准', description: '读取工作区自动执行，修改与命令逐次批准' },
-  { value: 'read-only', label: '只读', description: '禁止文件修改和 Shell 执行' },
-];
-
 /** Workspace options use only host registrations; an absent choice never grants cwd access. */
 export const buildWorkspaceOptions = (workspaces: readonly Workspace[]): SelectOption[] => {
   return [
@@ -26,7 +21,6 @@ export const buildWorkspaceOptions = (workspaces: readonly Workspace[]): SelectO
       return {
         value: workspace.id,
         label: workspace.name,
-        description: workspace.rootPath,
         icon: createElement(WorkspaceIcon, { icon: workspace.icon }),
       };
     }),
@@ -57,9 +51,9 @@ export const titleFromFirstMessage = (text: string): string => {
   return text.trim().replace(/\s+/g, ' ').slice(0, 60);
 };
 
-/** Select values must match the two actual execution policies. */
+/** Keeps legacy read-only records readable while accepting the three current execution policies. */
 export const readApprovalMode = (value: string): ApprovalMode | null => {
-  if (value === 'ask' || value === 'read-only') {
+  if (value === 'ask' || value === 'auto' || value === 'full-access' || value === 'read-only') {
     return value;
   }
   return null;

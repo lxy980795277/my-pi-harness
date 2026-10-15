@@ -10,7 +10,7 @@ import {
 } from '@my-pi-harness/protocol';
 import { Value } from 'typebox/value';
 import { app, session, shell } from 'electron';
-import { resolveProfileDirectory } from './profile-directory.js';
+import { resolveProfileDirectory, resolveSessionLogRoot } from './profile-directory.js';
 
 /** 桌面只监督自己启动的独立 Node 服务，不 import 服务业务源码。 */
 export interface ManagedDaemon {
@@ -58,6 +58,7 @@ export async function startDaemon({ signal }: DaemonStartOptions = {}): Promise<
   const cwd = app.isPackaged
     ? resolve(resources, 'daemon')
     : fileURLToPath(new URL('../../../daemon', import.meta.url));
+  const configuredLogRoot = process.env['MY_PI_HARNESS_SESSION_LOG_ROOT'];
   const environment: NodeJS.ProcessEnv = {
     ...process.env,
     MY_PI_HARNESS_PORT: app.isPackaged ? '0' : '4311',
@@ -68,6 +69,11 @@ export async function startDaemon({ signal }: DaemonStartOptions = {}): Promise<
       userData: app.getPath('userData'),
       home: app.getPath('home'),
       ...(process.env['LOCALAPPDATA'] ? { localAppData: process.env['LOCALAPPDATA'] } : {}),
+    }),
+    MY_PI_HARNESS_SESSION_LOG_ROOT: resolveSessionLogRoot({
+      packaged: app.isPackaged,
+      developmentRoot: fileURLToPath(new URL('../../../../', import.meta.url)),
+      ...(configuredLogRoot === undefined ? {} : { configuredRoot: configuredLogRoot }),
     }),
     ...(app.isPackaged ? { MY_PI_HARNESS_WEB_DIST_PATH: resolve(resources, 'web') } : {}),
   };

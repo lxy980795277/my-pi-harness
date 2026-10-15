@@ -25,6 +25,7 @@ const FixtureStateSchema = Type.Object({
   origin: Type.String({ minLength: 1 }),
   shutdownCount: Type.Integer({ minimum: 0 }),
   exitCode: Type.Union([Type.Integer(), Type.Null()]),
+  sessionLogRoot: Type.String(),
   developmentOrigins: Type.Array(Type.Object({ key: Type.String(), value: Type.String() })),
 });
 
@@ -36,6 +37,7 @@ let fixture: Fixture | undefined;
 async function prepareFixture(mode: FixtureMode): Promise<Fixture> {
   const resources = await mkdtemp(join(tmpdir(), 'my-pi-harness-supervisor-'));
   fixture = { resources, statePath: join(resources, 'fixture-state.json') };
+  vi.stubEnv('MY_PI_HARNESS_SESSION_LOG_ROOT', join(resources, '.my-pi-harness'));
   const nodeDirectory = join(resources, 'node');
   const daemonDirectory = join(resources, 'daemon');
   const bootstrapDirectory = join(daemonDirectory, 'dist');
@@ -59,6 +61,7 @@ let origin = '';
 const save = (exitCode) => {
   writeFileSync(statePath + '.tmp', JSON.stringify({
     pid: process.pid, origin, shutdownCount, exitCode,
+    sessionLogRoot: process.env.MY_PI_HARNESS_SESSION_LOG_ROOT,
     developmentOrigins: Object.entries(process.env)
       .filter(([key]) => key.toUpperCase() === 'MY_PI_HARNESS_DEVELOPMENT_ORIGIN')
       .map(([key, value]) => ({ key, value })),
@@ -156,6 +159,12 @@ afterEach(async () => {
 });
 
 describe('desktop daemon supervisor', { concurrent: false }, () => {
+  it('requires a repository log root before spawning a standalone packaged daemon', async () => {
+    const current = await prepareFixture('valid-ready');
+    vi.stubEnv('MY_PI_HARNESS_SESSION_LOG_ROOT', undefined);
+    await expect(startDaemon()).rejects.toThrow('MY_PI_HARNESS_SESSION_LOG_ROOT');
+    expect(await readAvailableState(current)).toBeUndefined();
+  });
   it.each(['MY_PI_HARNESS_DEVELOPMENT_ORIGIN', 'My_Pi_Harness_Development_Origin'])(
     'removes inherited %s from the real packaged child',
     async (key) => {
@@ -165,6 +174,7 @@ describe('desktop daemon supervisor', { concurrent: false }, () => {
       try {
         const state = await readState(current);
         expect(state.developmentOrigins).toEqual([]);
+        expect(state.sessionLogRoot).toBe(join(current.resources, '.my-pi-harness'));
       } finally {
         await daemon.stop();
       }

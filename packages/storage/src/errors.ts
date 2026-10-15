@@ -11,7 +11,9 @@ export type StorageErrorCode =
   | 'WORKSPACE_NOT_FOUND'
   | 'CONFLICT'
   | 'INVALID_EVENT'
-  | 'INVALID_RECORD';
+  | 'INVALID_RECORD'
+  | 'SESSION_LOG_INVALID'
+  | 'SESSION_LOG_UNAVAILABLE';
 
 /** A storage failure with a safe, transport-independent code. */
 export class StorageError extends Error {

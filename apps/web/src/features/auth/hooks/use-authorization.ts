@@ -1,5 +1,6 @@
 import type { AuthStatus } from '@my-pi-harness/protocol';
 import { useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
+import { useAttachmentDrafts } from '@/features/attachments/stores/attachment-drafts';
 import { useCallback, useEffect, useState } from 'react';
 
 import { fetchAuthStatus, logoutBrowser, pairBrowser } from '@/features/auth/services/auth';
@@ -16,6 +17,9 @@ interface Authorization {
 
 /** Owns local cookie authorization; private cache is erased on explicit logout. */
 export const useAuthorization = (): Authorization => {
+  const resetAttachmentDrafts = useAttachmentDrafts((state) => {
+    return state.reset;
+  });
   const queryClient = useQueryClient();
   const task = useRequestTask();
   const [revoked, setRevoked] = useState(false);
@@ -42,13 +46,14 @@ export const useAuthorization = (): Authorization => {
 
   useEffect(() => {
     if (query.data?.authenticated === false) {
+      resetAttachmentDrafts();
       queryClient.removeQueries({
         predicate: (cached): boolean => {
           return cached.queryKey[0] !== 'auth-status' && cached.queryKey[0] !== 'health';
         },
       });
     }
-  }, [query.data?.authenticated, queryClient]);
+  }, [query.data?.authenticated, queryClient, resetAttachmentDrafts]);
 
   const pair = useCallback(
     async (code: string): Promise<void> => {

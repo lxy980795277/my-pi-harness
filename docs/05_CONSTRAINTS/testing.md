@@ -15,6 +15,7 @@
 | `pnpm test:artifact`   | 构建后的 daemon CLI、IPC、恢复及退出，先 build                    |
 | `pnpm test:e2e`        | 构建 Web/daemon 的 Playwright 用户场景，先 build                  |
 | `pnpm test:m2`         | 工作区/工具/目录桥/时间线源码与M2浏览器链路，先 build             |
+| `pnpm test:m3`         | 上下文、附件、工作状态源码与M3浏览器链路，先 build                |
 | `pnpm test:provider`   | 显式专用 TEST_API_KEY/BASE_URL/MODEL 的真实 Provider；缺配置 skip |
 | `pnpm package:desktop` | 构建、资源准备与应用目录打包                                      |
 | `pnpm smoke:desktop`   | 实际桌面产物启动、隔离、桥及退出；前提见脚本                      |
@@ -48,6 +49,7 @@
 ## 并发与清理
 
 - 每个用例独占临时目录、动态端口和身份，不污染用户 profile、Keychain 或开发端口；不输出认证头和秘密。测试凭据用明确假值或独立临时 namespace。
+- 源码Vitest最多4个worker，限制真实ESLint/TypeScript编译面与子进程测试的冷启动资源争用；平台超时仍是失败，不通过跳过断言或全局延长时限掩盖。
 - 所有失败路径在 finally/afterEach 关闭请求、流、child、server、计时器与句柄，不仅清空变量。超时必须使测试失败，不能伪装自跳过。
 - 等明确事件或有界状态轮询，不用任意 sleep 代替就绪。fetch 超时不能证明端口关闭，child.killed 不等于退出；观察所属 PID、真实控制关闭和连接拒绝，避免误测另一实例。
 - process.env、cwd、全局 mock 和 process 属性修改用后恢复，相关测试避免同进程并发；worker仍隔离磁盘。并发缓存或竞态通过可控 gate 安排交错，不触碰真实共享下载缓存。

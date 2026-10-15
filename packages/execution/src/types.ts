@@ -15,6 +15,8 @@ export interface ExecutionContext {
   workspaceRoot: string;
   profileDirectory: string;
   readOnly: boolean;
+  /** Frozen by the run owner; omission keeps macOS Seatbelt isolation. */
+  shellAccess?: 'sandboxed' | 'full-access';
   signal: AbortSignal;
 }
 

@@ -70,6 +70,7 @@ function spawnDaemon(
     ...process.env,
     MY_PI_HARNESS_PORT: '0',
     MY_PI_HARNESS_PROFILE_DIRECTORY: profile,
+    MY_PI_HARNESS_SESSION_LOG_ROOT: join(profile, '.my-pi-harness'),
     MY_PI_HARNESS_PARENT_PID: String(process.pid),
     ...environmentOverrides,
   };
@@ -227,6 +228,23 @@ afterEach(async () => {
 });
 
 describe('built daemon owner channel', () => {
+  it('rejects an invalid session log root before publishing readiness', async () => {
+    const daemon = spawnDaemon({ MY_PI_HARNESS_SESSION_LOG_ROOT: './.my-pi-harness' });
+    await expect(
+      withDeadline(daemon.readiness, 'Invalid session log root did not fail startup'),
+    ).rejects.toThrow('Daemon exited before readiness');
+    expect(await withDeadline(daemon.exited, 'Invalid log root did not end the daemon')).toEqual({
+      code: 1,
+      signal: null,
+    });
+    await withDeadline(
+      Promise.all([daemon.stdoutEnded, daemon.diagnosticsEnded]),
+      'Startup output did not close',
+    );
+    expect(daemon.stdout()).toBe('');
+    expect(daemon.diagnostics()).toContain('MY_PI_HARNESS_SESSION_LOG_ROOT');
+  });
+
   it('rejects an unprobeable parent PID before publishing readiness', async () => {
     const daemon = spawnDaemon({ MY_PI_HARNESS_PARENT_PID: '2147483648' });
     await expect(

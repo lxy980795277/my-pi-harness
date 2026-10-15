@@ -1,4 +1,4 @@
-import type { DragEventHandler } from 'react';
+import type { DragEventHandler, RefObject } from 'react';
 import type { Workspace, WorkspaceIcon } from '@my-pi-harness/protocol';
 import type { WorkspaceGroup } from '@/features/workspaces/utils/workspace-tree';
 import type { Action, FormSubmit, InputChange, ValueChange } from '@/types/view-events';
@@ -30,9 +30,16 @@ export interface WorkspaceDialogState {
 
 export interface WorkspaceGroupState {
   expanded: boolean;
-  select: Action;
+  toggle: Action;
   rename: Action;
   remove: Action;
+  newConversation: Action;
+  menuOpen: boolean;
+  changeMenuOpen: ValueChange<boolean>;
+  menuTrigger: RefObject<HTMLButtonElement | null>;
+  closeMenuFocus: (event: Event) => void;
+  rowClassName: string;
+  actionsClassName: string;
   className: string;
 }
 
@@ -41,7 +48,7 @@ export interface WorkspaceTreeState {
   activeId: string | null;
   activeWorkspaceId: string | null;
   select: ValueChange<string>;
-  selectWorkspace: ValueChange<string | null>;
+  newConversation: ValueChange<string | null>;
   add: Action;
   rename: ValueChange<Workspace>;
   dialog: { workspace: Workspace | null } | null;

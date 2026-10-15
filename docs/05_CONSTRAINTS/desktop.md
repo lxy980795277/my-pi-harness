@@ -62,7 +62,7 @@ Windows环境变量名不区分大小写，env不能同时保留Path和PATH。`.
 
 原生模块按实际加载宿主构建：better-sqlite3在独立Node daemon中使用，面向随包Node版本和平台架构；main/preload中的原生模块才面向Electron ABI。禁止混用两套二进制。[Electron原生模块说明](https://www.electronjs.org/docs/latest/tutorial/using-native-node-modules)
 
-安装资源只读；数据、日志和缓存使用明确用户目录，不写app.asar或安装路径。下载缓存使用独立临时目录，校验和解压完成后原子发布manifest；命中仍检查实际资源，失败不留可命中的半成品。生产依赖的符号链接不得指向源码仓库或应用资源之外。
+安装资源只读；SQLite与缓存沿用明确用户profile，会话JSONL按[架构](../01_ARCHITECTURE/overview.md)使用仓库根隐藏目录，独立安装包要求显式指定日志根，不写app.asar或安装路径。下载缓存使用独立临时目录，校验和解压完成后原子发布manifest；命中仍检查实际资源，失败不留可命中的半成品。生产依赖的符号链接不得指向源码仓库或应用资源之外。
 
 ## 发布与验收
 

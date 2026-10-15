@@ -1,4 +1,5 @@
 import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 import { ensureNode } from './node-runtime.mjs';
 import { spawnOwnedProcess, withNodeRuntimePath } from './process-tree.mjs';
 
@@ -7,6 +8,7 @@ const node = await ensureNode();
 const pnpm = process.env['npm_execpath'];
 if (!pnpm) throw new Error('请通过 pnpm dev 或 pnpm dev:desktop 启动');
 const desktop = process.argv.includes('--desktop');
+const daemonOnly = process.argv.includes('--daemon-only');
 const children = [];
 let stopPromise;
 let cleanupReported = false;
@@ -18,6 +20,8 @@ function start(name) {
     MY_PI_HARNESS_DEVELOPMENT_ORIGIN: 'http://127.0.0.1:5174',
     MY_PI_HARNESS_RENDERER_URL: 'http://127.0.0.1:5174',
     MY_PI_HARNESS_PARENT_PID: String(process.pid),
+    MY_PI_HARNESS_SESSION_LOG_ROOT:
+      process.env['MY_PI_HARNESS_SESSION_LOG_ROOT'] ?? join(root, '.my-pi-harness'),
   };
   delete env['ELECTRON_RUN_AS_NODE'];
   const owned = spawnOwnedProcess(node, [pnpm, '--filter', `@my-pi-harness/${name}`, 'dev'], {
@@ -61,5 +65,5 @@ function requestStop(code = 0) {
 
 process.on('SIGINT', () => requestStop());
 process.on('SIGTERM', () => requestStop());
-start('web');
+if (!daemonOnly) start('web');
 start(desktop ? 'desktop' : 'daemon');

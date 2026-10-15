@@ -10,3 +10,12 @@ export { encodeContextMessage, decodeContextMessage } from './context-codec.js';
 export { BUILTIN_PROVIDER_IDS, loadBuiltinProvider } from './provider-loader.js';
 export { ToolRuntime, type ToolRuntimeOptions } from './tool-runtime.js';
 export type { EventInput, InputAcceptance, ProviderStore, RuntimeStore } from './runtime-ports.js';
+export { WorkRuntime } from './work-runtime.js';
+export type { WorkRuntimeOptions, WorkStore } from './work-ports.js';
+export { SESSION_TOOL_DEFINITIONS } from './session-tools.js';
+export { ModelApprovalReviewer } from './approval-review.js';
+export type {
+  ApprovalReviewer,
+  ApprovalReviewInput,
+  ApprovalReviewResult,
+} from './approval-review.js';

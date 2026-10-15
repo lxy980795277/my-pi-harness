@@ -17,7 +17,11 @@ it.skipIf(!apiKey)(
       throw new Error('Set TEST_API_KEY, TEST_BASE_URL and TEST_MODEL together');
     const directory = await mkdtemp(join(tmpdir(), 'my-pi-real-provider-'));
     const services = await createApplicationServices(
-      loadDaemonConfig({ MY_PI_HARNESS_PROFILE_DIRECTORY: directory, MY_PI_HARNESS_PORT: '0' }),
+      loadDaemonConfig({
+        MY_PI_HARNESS_PROFILE_DIRECTORY: directory,
+        MY_PI_HARNESS_SESSION_LOG_ROOT: join(directory, '.my-pi-harness'),
+        MY_PI_HARNESS_PORT: '0',
+      }),
       { credentials: createMemoryCredentialStore() },
     );
     try {

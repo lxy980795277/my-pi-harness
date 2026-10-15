@@ -5,7 +5,16 @@ import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
-const ignored = new Set(['node_modules', 'dist', 'out', 'release', '.cache', '.turbo', '.git']);
+const ignored = new Set([
+  'node_modules',
+  'dist',
+  'out',
+  'release',
+  '.cache',
+  '.turbo',
+  '.git',
+  '.my-pi-harness',
+]);
 const serverPackages = new Set(['fastify', 'better-sqlite3', 'drizzle-orm']);
 
 async function sources(directory) {

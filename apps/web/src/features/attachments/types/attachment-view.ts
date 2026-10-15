@@ -1,0 +1,22 @@
+import type { Attachment, AttachmentContent } from '@my-pi-harness/protocol';
+import type { UseQueryResult } from '@tanstack/react-query';
+import type { RefObject } from 'react';
+import type { AsyncEvent } from '@/hooks/use-async-event';
+import type { Action, InputChange, ValueChange } from '@/types/view-events';
+
+export interface AttachmentComposerState {
+  input: RefObject<HTMLInputElement | null>;
+  open: boolean;
+  setOpen: ValueChange<boolean>;
+  choose: Action;
+  changeFiles: InputChange;
+  remove: ValueChange<string>;
+  upload: AsyncEvent<[File[]]>;
+}
+export interface AttachmentPreviewState {
+  open: boolean;
+  setOpen: ValueChange<boolean>;
+  show: Action;
+  metadata: UseQueryResult<Attachment, Error>;
+  content: UseQueryResult<AttachmentContent, Error>;
+}

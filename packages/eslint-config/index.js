@@ -14,6 +14,7 @@ export function createConfig(rootDirectory) {
         '**/out/**',
         '**/release/**',
         '**/.cache/**',
+        '**/.my-pi-harness/**',
         '**/.turbo/**',
         '**/coverage/**',
         '**/playwright-report/**',

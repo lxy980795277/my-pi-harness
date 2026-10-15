@@ -19,6 +19,7 @@ import {
   readApprovalMode,
 } from '@/features/sessions/utils/composer-options';
 import { useWorkspaces } from '@/features/workspaces/hooks/use-workspaces';
+import { useComposerWorkMode } from '@/features/work/hooks/use-composer-work-mode';
 import { useAsyncEvent } from '@/hooks/use-async-event';
 
 /** Existing conversations retain their directory; model and policy changes affect future runs. */
@@ -27,6 +28,7 @@ export const useComposerChoices = (
   providers: ProviderConfig[],
   onPatch: (input: SessionPatchInput) => Promise<void>,
 ): ComposerChoicesState => {
+  const workMode = useComposerWorkMode(session);
   const workspaces = useWorkspaces();
   const openSettings = useWorkspaceStore((state) => {
     return state.openSettings;
@@ -91,9 +93,11 @@ export const useComposerChoices = (
     workspaceOptions: buildWorkspaceOptions(workspaces.data ?? []),
     workspaceLocked: true,
     workspaceLabel,
-    workspacePath: workspace?.rootPath,
     workspaceIcon: workspace?.icon ?? 'folder',
     changeWorkspace,
+    workMode: workMode.mode,
+    changeWorkMode: workMode.change,
+    workModeDisabled: workMode.disabled,
     approvalMode: session.approvalMode,
     changeApprovalMode,
     modelKey: modelSelectionKey(session.providerId, session.modelId),
@@ -105,5 +109,9 @@ export const useComposerChoices = (
     settings,
     disabled: save.pending || session.activeRunId !== null,
   };
-  return { choices, error: save.error };
+  return {
+    submitBlocked: save.pending || workMode.sendingBlocked,
+    choices,
+    error: save.error ?? workMode.error,
+  };
 };

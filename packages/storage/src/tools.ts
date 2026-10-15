@@ -28,7 +28,7 @@ const ContextEventSchema = Type.Object(
 );
 
 function active(status: ToolCallRecord['status']): boolean {
-  return status === 'running' || status === 'awaiting_approval';
+  return status === 'running' || status === 'awaiting_approval' || status === 'reviewing';
 }
 
 /** Tool cards and private results are projected within their session event transaction. */

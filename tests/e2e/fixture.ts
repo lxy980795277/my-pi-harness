@@ -42,6 +42,7 @@ export const test = base.extend<{ daemon: RunningDaemon }>({
           ...process.env,
           MY_PI_HARNESS_PORT: '0',
           MY_PI_HARNESS_PROFILE_DIRECTORY: profile,
+          MY_PI_HARNESS_SESSION_LOG_ROOT: join(profile, '.my-pi-harness'),
           MY_PI_HARNESS_DESKTOP_SECRET: ownerSecret,
           MY_PI_HARNESS_PARENT_PID: String(process.pid),
           MY_PI_HARNESS_WEB_DIST_PATH: fileURLToPath(

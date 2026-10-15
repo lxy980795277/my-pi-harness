@@ -139,7 +139,7 @@ export async function collectShellProcess(
     });
     child.on('error', (cause) => {
       fail(
-        new ExecutionError('SANDBOX_START_FAILED', 'The shell sandbox could not start', { cause }),
+        new ExecutionError('SHELL_START_FAILED', 'The shell process could not start', { cause }),
       );
     });
   });

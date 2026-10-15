@@ -5,6 +5,7 @@ import { Label } from '@/components/ui/label';
 import { Notice } from '@/components/ui/notice';
 import { SelectField } from '@/components/ui/select-field';
 import { Textarea } from '@/components/ui/textarea';
+import { AttachmentList } from '@/features/attachments/components/attachment-list';
 import { ComposerControls } from '@/features/sessions/components/composer-controls';
 import type { ComposerSurfaceProps } from '@/features/sessions/types/composer-view';
 
@@ -27,6 +28,9 @@ export const ComposerSurface: FC<ComposerSurfaceProps> = ({
   changeMode,
   error,
   uncertain = false,
+  attachmentDraftKey,
+  attachmentIds,
+  removeAttachment,
 }) => {
   return (
     <form onSubmit={submit} className="w-full space-y-3">
@@ -34,7 +38,7 @@ export const ComposerSurface: FC<ComposerSurfaceProps> = ({
       {uncertain && (
         <Notice>上次提交结果尚未确认。点击发送会按原消息和请求重试，请先检查对话记录。</Notice>
       )}
-      <div className="rounded-3xl border border-border/50 bg-card p-3 text-card-foreground shadow-[0_6px_32px_-12px_var(--border)] focus-within:border-ring/40">
+      <div className="rounded-3xl border border-border/50 bg-card p-3 text-card-foreground shadow-[0_6px_32px_-12px_var(--border)] has-[textarea:focus]:border-ring/40">
         <Label htmlFor={`message-draft-${id}`} className="sr-only">
           消息
         </Label>
@@ -48,8 +52,24 @@ export const ComposerSurface: FC<ComposerSurfaceProps> = ({
           onKeyDown={keyDown}
           className="max-h-64 min-h-28 resize-none rounded-xl border-0 bg-transparent px-2 py-1 text-sm focus-visible:border-transparent focus-visible:ring-0"
         />
+        {attachmentIds.length > 0 && (
+          <div className="px-2 pt-2">
+            <AttachmentList
+              ids={attachmentIds}
+              onRemove={removeAttachment}
+              disabled={pending || draftLocked}
+            />
+          </div>
+        )}
         <div className="mt-3 flex items-end justify-between gap-2">
-          <ComposerControls id={id} choices={choices} />
+          <ComposerControls
+            id={id}
+            choices={choices}
+            attachment={{
+              draftKey: attachmentDraftKey,
+              locked: pending || draftLocked,
+            }}
+          />
           <div className="flex shrink-0 items-center gap-2">
             {running && stop && (
               <Button
