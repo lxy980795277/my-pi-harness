@@ -6,7 +6,7 @@ import { Value } from 'typebox/value';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { startDaemon } from '../src/main/daemon.js';
 
-vi.mock('electron', () => ({ app: { isPackaged: true } }));
+vi.mock('electron', () => ({ app: { isPackaged: true, getPath: () => '/temporary-profile' } }));
 
 type FixtureMode =
   | 'invalid-ready'
@@ -25,6 +25,7 @@ const FixtureStateSchema = Type.Object({
   origin: Type.String({ minLength: 1 }),
   shutdownCount: Type.Integer({ minimum: 0 }),
   exitCode: Type.Union([Type.Integer(), Type.Null()]),
+  developmentOrigins: Type.Array(Type.Object({ key: Type.String(), value: Type.String() })),
 });
 
 type FixtureState = Static<typeof FixtureStateSchema>;
@@ -58,6 +59,9 @@ let origin = '';
 const save = (exitCode) => {
   writeFileSync(statePath + '.tmp', JSON.stringify({
     pid: process.pid, origin, shutdownCount, exitCode,
+    developmentOrigins: Object.entries(process.env)
+      .filter(([key]) => key.toUpperCase() === 'MY_PI_HARNESS_DEVELOPMENT_ORIGIN')
+      .map(([key, value]) => ({ key, value })),
   }));
   renameSync(statePath + '.tmp', statePath);
 };
@@ -144,6 +148,7 @@ afterEach(async () => {
       }
     }
   } finally {
+    vi.unstubAllEnvs();
     if (originalResourcesPath === undefined) Reflect.deleteProperty(process, 'resourcesPath');
     else Object.defineProperty(process, 'resourcesPath', originalResourcesPath);
     if (current !== undefined) await rm(current.resources, { recursive: true, force: true });
@@ -151,6 +156,20 @@ afterEach(async () => {
 });
 
 describe('desktop daemon supervisor', { concurrent: false }, () => {
+  it.each(['MY_PI_HARNESS_DEVELOPMENT_ORIGIN', 'My_Pi_Harness_Development_Origin'])(
+    'removes inherited %s from the real packaged child',
+    async (key) => {
+      vi.stubEnv(key, 'http://127.0.0.1:5174');
+      const current = await prepareFixture('valid-ready');
+      const daemon = await startDaemon();
+      try {
+        const state = await readState(current);
+        expect(state.developmentOrigins).toEqual([]);
+      } finally {
+        await daemon.stop();
+      }
+    },
+  );
   it.each([
     ['invalid-ready', '本机服务启动记录无效'],
     ['oversized-ready', '本机服务启动记录过大'],

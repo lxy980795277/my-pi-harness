@@ -7,7 +7,10 @@ import { secureWindow } from './security.js';
  * @param rendererUrl Validated local Web URL used for navigation and bridge authorization.
  * @returns An owned window ready for loadURL.
  */
-export function createMainWindow(rendererUrl: string): BrowserWindow {
+export function createMainWindow(
+  rendererUrl: string,
+  openAuth?: (flowId: string) => Promise<void>,
+): BrowserWindow {
   const window = new BrowserWindow({
     width: 1280,
     height: 850,
@@ -23,7 +26,7 @@ export function createMainWindow(rendererUrl: string): BrowserWindow {
       webviewTag: false,
     },
   });
-  secureWindow(window, new URL(rendererUrl).origin);
+  secureWindow(window, new URL(rendererUrl).origin, openAuth);
   window.once('ready-to-show', () => {
     if (!window.isDestroyed()) window.show();
   });

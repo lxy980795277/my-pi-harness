@@ -1,6 +1,6 @@
 # 桌面治理
 
-先读 [Electron/PC约束](../05_CONSTRAINTS/desktop.md)、[安全](../05_CONSTRAINTS/security.md)、[架构](../01_ARCHITECTURE/overview.md) 与发布范围。审查main、preload、daemon监督和开发/发布脚本，不能只查看BrowserWindow安全布尔值。
+先读 [Electron/PC约束](../05_CONSTRAINTS/desktop.md)、[架构](../01_ARCHITECTURE/overview.md) 与发布范围。审查main、preload、daemon监督和开发/发布脚本，不能只查看BrowserWindow安全布尔值。
 
 - 页面地址与资源解析受控，开发覆盖不进入生产；导航、重定向和新窗口均有拒绝路径。
 - session同时处理权限检查和申请；来源不可信、另一窗口及子frame无法取得桥能力。

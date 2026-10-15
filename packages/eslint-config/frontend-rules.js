@@ -85,6 +85,88 @@ const returnsFreshValue = (selector, sourceCode) => {
 /** Rules expose deterministic checks; state ownership still requires code review. */
 export const frontendPlugin = {
   rules: {
+    'presentation-only': {
+      meta: {
+        type: 'problem',
+        schema: [],
+        messages: {
+          service: 'TSX 只组合界面；Service 和 Query 请求编排放到 .ts Hook。',
+          control: '业务组件使用 components/ui 的 shadcn 控件，不直接使用原生交互控件。',
+          handler: 'JSX 事件使用具名回调，事件处理放在组件函数或 .ts Hook 中。',
+          transform: 'JSX map 回调只返回界面，选项计算和多步转换放到 .ts 函数。',
+        },
+      },
+      create(context) {
+        const filename = context.filename.replaceAll('\\', '/');
+        if (!filename.endsWith('.tsx')) return {};
+        const primitive = filename.includes('/src/components/ui/');
+        const nativeControls = new Set([
+          'button',
+          'input',
+          'textarea',
+          'select',
+          'option',
+          'optgroup',
+          'label',
+          'fieldset',
+          'legend',
+        ]);
+        return {
+          ImportDeclaration(node) {
+            if (node.importKind === 'type') return;
+            const module = node.source.value;
+            if (/(?:^|\/)services\//.test(module)) {
+              if (
+                node.specifiers.length === 0 ||
+                node.specifiers.some((specifier) => specifier.importKind !== 'type')
+              ) {
+                context.report({ node, messageId: 'service' });
+              }
+            }
+            if (module !== '@tanstack/react-query') return;
+            for (const specifier of node.specifiers) {
+              if (specifier.importKind === 'type') continue;
+              const imported = specifier.imported?.name ?? specifier.imported?.value;
+              if (specifier.type !== 'ImportSpecifier' || imported !== 'QueryClientProvider') {
+                context.report({ node: specifier, messageId: 'service' });
+              }
+            }
+          },
+          JSXOpeningElement(node) {
+            if (
+              !primitive &&
+              node.name.type === 'JSXIdentifier' &&
+              nativeControls.has(node.name.name)
+            ) {
+              context.report({ node, messageId: 'control' });
+            }
+          },
+          JSXAttribute(node) {
+            if (!/^on[A-Z]/.test(node.name.name ?? '')) return;
+            if (
+              ['ArrowFunctionExpression', 'FunctionExpression'].includes(
+                node.value?.expression?.type,
+              )
+            ) {
+              context.report({ node, messageId: 'handler' });
+            }
+          },
+          'JSXExpressionContainer CallExpression'(node) {
+            if (node.callee.type !== 'MemberExpression' || memberName(node.callee) !== 'map')
+              return;
+            const callback = node.arguments[0];
+            if (!['ArrowFunctionExpression', 'FunctionExpression'].includes(callback?.type)) return;
+            const body = callback.body;
+            if (
+              body.type === 'BlockStatement' &&
+              (body.body.length !== 1 || body.body[0].type !== 'ReturnStatement')
+            ) {
+              context.report({ node: callback, messageId: 'transform' });
+            }
+          },
+        };
+      },
+    },
     'transport-owner': {
       meta: {
         type: 'problem',

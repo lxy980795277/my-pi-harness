@@ -67,7 +67,10 @@ export class DesktopApplication {
     const renderer = developmentRenderer ?? resolveRendererUrl(this.daemon.origin);
     if (!app.isPackaged) await waitForRenderer(renderer, signal);
     signal.throwIfAborted();
-    const window = createMainWindow(renderer);
+    await this.daemon.authorizeRenderer(new URL(renderer).origin);
+    signal.throwIfAborted();
+    const daemon = this.daemon;
+    const window = createMainWindow(renderer, (flowId) => daemon.openAuth(flowId));
     this.window = window;
     window.once('closed', () => {
       if (this.window === window) this.window = undefined;

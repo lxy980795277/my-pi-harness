@@ -27,9 +27,12 @@
   "dependencies": {
     "@fastify/static": "catalog:",
     "@my-pi-harness/protocol": "workspace:*",
+    "@my-pi-harness/execution": "workspace:*",
     "fastify": "catalog:",
     "pino": "catalog:",
-    "typebox": "catalog:"
+    "typebox": "catalog:",
+    "@my-pi-harness/storage": "workspace:*",
+    "@my-pi-harness/agent-runtime": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",

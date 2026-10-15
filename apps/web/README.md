@@ -2,9 +2,39 @@
 
 浏览器与 Electron 共用的 React 工作台。页面负责布局和状态呈现，通过共享协议访问本机 daemon；不访问 Node、模型凭据、数据库或 Pi 实例。基础 UI 在 `src/components/ui/` 中按 shadcn 的组合方式维护，主题使用 Tailwind CSS 语义 token。
 
-手写组件使用 `FC<Props>`、具名导出和独立的 `index.tsx` 目录；Hook 与状态规则见 [React 约束](../../docs/05_CONSTRAINTS/react.md) 和 [Zustand 约束](../../docs/05_CONSTRAINTS/zustand.md)。HTTP/SSE 统一客户端位于 `src/services/`，领域 DTO 在 Feature Service 中校验；Query 拥有服务器快照，当前 M0 没有独立 Zustand Store。
+Web 源码与测试面使用 Bundler 解析，模块导入无后缀，样式和本地静态资产保留实际扩展。手写组件使用 `FC<Props>`、具名导出和独立的 `index.tsx` 目录；Hook 与状态规则见 [前端规范](../../docs/05_CONSTRAINTS/frontend.md)。HTTP/SSE 统一客户端位于 `src/services/`，领域 DTO 在 Feature Service 中校验；Query 拥有服务器快照，Zustand 只保存导航、会话选择和未提交草稿。
 
-当前 M0 只显示真实的健康检查、服务元数据和 `runtime.ready` 事件，提供浅深主题与手动重连。Agent 对话、模型配置和工具执行按后续里程碑实施；页面不生成模拟会话或工具结果。
+M1 提供本机配对、Provider/模型配置、专用凭据写入、连接测试、OAuth 交互和可选 GitHub 应用身份登录。会话工作台包含保存的历史、流式文字/推理内容、停止、后续输入/引导、持久队列编辑删除与显式恢复、编辑重发和历史分支选择。运行状态页保留健康检查、服务元数据、`runtime.ready`、浅深主题和手动重连。
+
+## 工作区与对话
+
+时间线按服务端消息顺序组合，将工具插在其afterMessageId指向的assistant后；同一消息内保留请求事件顺序，不用毫秒时间或工具ID重排。
+
+主页面以居中输入框开始对话，首次发送才创建会话。输入栏统一按上下文、工作区、执行批准方式、模型和发送排列；上下文添加明确禁用，等待 M3。模型默认继承全局设置，本次选择只影响当前对话。已有对话继续使用相同输入栏，保留排队、引导和停止。
+
+全部会话位于最左侧工作区树，每个目录下显示对话标题和创建时间；旧会话以及不可用目录的历史仍在“未分配工作区”可读。工作区可登记、编辑名称/图标和移除，已有会话的目录固定。Electron通过有限桥点击选择或拖入目录，路径只读；浏览器继续使用和编辑已有工作区，新增目录后续补齐。目录有效性和允许范围由daemon判断；没有工作区不会自动获得当前目录访问权限。移除登记不删除磁盘文件，有保留会话时由服务拒绝。
+
+工作区图标使用protocol的18个固定ID，统一映射到共享Lucide组件，侧栏与composer选项共用；默认folder保留展开状态及hover箭头。添加弹窗使用名称组合输入、shadcn Popover图标面板和目录选择区；组合边框只响应名称输入聚焦，图标按钮保留独立的键盘焦点提示。选择/拖放、取消及晚到响应由独立Hook持有。
+
+首次发送先完成会话创建，再以固定 requestId 提交消息，成功后才切换选中会话。未确认输入及其原始模式、文本、请求 ID 保留在非持久化 Store，页面或会话切换不会丢失；结果未知时锁住草稿和模式，重试复用原请求，不因收到运行事件而变成新的排队输入。首次创建也保留独立 generation 与会话关联，只有明确点击“新对话”才开启另一轮；创建结果未知时刷新左侧历史并要求用户检查，不能自动重试创建。工具调用与消息在同一虚拟时间线按创建时间呈现，显示参数、结果和文件差异；待批准调用提供仅针对本次操作的允许和拒绝，状态以提交后的快照为准。完整能力和执行限制见 [M2 Spec](../../docs/04_FEATURES/202610150930_feature_workspace-execution/spec.md)。
+
+## 模型设置
+
+侧栏底部用户信息卡片点击后立即显示设置 Dialog，模型内容按需加载，加载状态留在弹窗内；滚动区右侧和上下保留外框间距。页面导航不再包含设置项，通用设置复用工作台同一主题状态，关闭后恢复入口焦点并保留会话和输入草稿。模型页显示 六个固定内置 Provider 与自定义服务；内置只支持启停、认证和只读模型目录。自定义配置包含名称、三种 Pi 协议、Base URL 与 API Key 要求，可先保存空模型列表，再在独立模型 Dialog 添加 ID、上下文、输出限制与推理能力；编辑器固定草稿开始时的 Provider revision，不能用中途刷新后的 revision 覆盖他人修改；只有自身成功保存的响应推进重试基准。保存整个模型草稿时携带该 revision，未编辑的 headers/compat 保留。每个模型有独立连接测试结果。
+
+默认模型和思考等级保存到本机 profile。新会话直接采用有效默认值，已存在会话继续保留原 Provider/model/thinking，旧账户通过精确 ID 兼容读取。默认失效时要求重新选择，不自动换用其他服务。配置保存、认证完成与连接成功分别展示；关闭 API Key 要求不会删除已存凭据，启用时仍可继续使用。
+
+API Key 表单只显示未保存的输入；已有凭据只显示脱敏状态，需明确确认移除后重新认证。Provider OAuth 由其配置 Dialog 拥有，支持浏览器/桌面授权页、设备码、普通/秘密/手动码/select challenge；普通 text challenge 允许明确提交空值。成功刷新公开配置并关闭，取消或关闭终止所属流程。全局授权面板仅展示可选的 GitHub 应用身份，与模型认证分开。
+
+## 数据与生命周期
+
+浏览器以同源 HttpOnly cookie 授权，写请求使用当前授权的 CSRF token；配对码、API Key、OAuth prompt 回复只留在专用表单和提交请求中，不进入 Store、Query、LocalStorage 或 URL。收到 HTTP 401 时立即收回私有页面访问并检查授权；显式退出先卸载私有订阅，再清除请求缓存和草稿。
+
+`features/sessions/queries/projection.ts` 是 HTTP、命令响应和 SSE 的共用合并入口。它只接受更大的单会话 `snapshotSeq`，较旧 refetch 和重复重放不能覆盖较新的正文或分支；SSE 将完整已提交投影按 32ms 批次呈现。切换会话时关闭订阅并取消视图持有的请求，断线通过 EventSource 重连和 HTTP 读取恢复，断线本身不会停止后台运行。
+
+时间线使用 TanStack Virtual 测量可变行高。只有该列表在 ref 中写入计算后的布局 CSS 变量，正文、颜色和其他业务控件不使用内联样式；用户离开底部后流式更新保持阅读位置，可以明确跳回最新内容。消息以 React 文本呈现，不将模型返回值作为 HTML 注入。
+
+纯投影竞态、默认选择、授权链接与 challenge 语义测试在 `test/`；浏览器与桌面的真实跨进程验收由根目录 M1 测试和 [M1 Spec](../../docs/04_FEATURES/202610131100_feature_model-session/spec.md) 记录，真实供应商认证与受控测试服务分别标识。
 
 ## 开发
 
@@ -26,4 +56,8 @@ pnpm --filter @my-pi-harness/web build
 
 构建输出为 `dist/` 静态文件。发布版由 daemon 托管这些文件与 `/api`，Electron 加载 daemon 的实际监听地址；浏览器也访问同一服务。Vite 是开发工具，不是发布服务。桌面资源装配由 `apps/desktop` 负责。
 
-浏览器源码和 Vite 配置分别使用 `tsconfig.json` 与 `tsconfig.node.json`；浏览器程序没有 Node ambient 类型。源码检查与 Vite 打包通过路径映射读取 protocol 源码，不依赖旧 `dist`。
+浏览器源码和 Vite 配置分别使用 `tsconfig.json` 与 `tsconfig.node.json`；浏览器程序没有 Node ambient 类型。源码检查与 Vite 打包通过路径映射读取 protocol 源码，不依赖旧 `dist`；测试使用独立 `tsconfig.test.json`，不会通过 NodeNext 编译面追入 Renderer。
+
+TSX 仅布局和绑定同步具名事件。状态转换、选项构建、请求与 Query 编排由 `.ts` Hook/函数拥有；不用三目、void 运算符和 Promise 链。`hooks/use-async-event.ts` 是唯一同步异步桥，处理异常、重复触发、取消与卸载；秘密不进入 mutation variables。业务使用 shadcn 控件，基础层才接触原生交互标签与 Radix。
+
+生产 HTML 的 CSP nonce 由 daemon 每次响应生成，开发使用 Vite 的 nonce。入口在渲染前初始化 `get-nonce`，Radix 的 Select/ScrollArea 与弹窗滚动锁共享该值；缺少 nonce 明确失败，不放宽 `style-src`。

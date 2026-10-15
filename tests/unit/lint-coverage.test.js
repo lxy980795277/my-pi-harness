@@ -75,6 +75,7 @@ describe('real ESLint configuration coverage', () => {
     'vitest.config.ts',
     'playwright.config.ts',
     'apps/web/vite.config.ts',
+    'apps/web/test/projection.test.ts',
     'apps/desktop/electron.vite.config.ts',
     'apps/desktop/src/main/index.ts',
     'apps/desktop/src/preload/index.ts',
@@ -122,9 +123,58 @@ describe('real ESLint configuration coverage', () => {
       'project-react/component-declaration',
       'project-react/zustand-selector',
       'project-react/transport-owner',
+      'project-react/presentation-only',
     ]) {
       expect(severity(config.rules[rule]), `${path}: ${rule}`).toBe(2);
     }
+  });
+
+  it('includes the independent Bundler test program', async () => {
+    const eslint = new ESLint({ cwd: root });
+    const config = await eslint.calculateConfigForFile(
+      join(root, 'apps/web/test/projection.test.ts'),
+    );
+    expect(config.languageOptions.parserOptions.project).toContain('./apps/web/tsconfig.test.json');
+  });
+
+  it('includes the browser-aware E2E program without relaxing typed rules', async () => {
+    const eslint = new ESLint({ cwd: root });
+    const file = join(root, 'tests/e2e/settings.spec.ts');
+    const config = await eslint.calculateConfigForFile(file);
+    expectTypedConfig(config, file);
+    expect(config.languageOptions.parserOptions.project).toContain('./tests/e2e/tsconfig.json');
+    expect(config.languageOptions.parserOptions.project).toContain('./apps/web/tsconfig.test.json');
+  });
+
+  it('resolves DOM values through the E2E program instead of the Node program', async () => {
+    const eslint = new ESLint({ cwd: root });
+    const results = await eslint.lintText(
+      'export const readTitle = (): string => document.title;',
+      {
+        filePath: join(root, 'tests/e2e/settings.spec.ts'),
+      },
+    );
+    expect(results[0].messages).toEqual([]);
+    const rejected = await eslint.lintText(
+      'export const launch = (): void => { Promise.resolve(); };',
+      {
+        filePath: join(root, 'tests/e2e/settings.spec.ts'),
+      },
+    );
+    expect(rejected[0].messages).toContainEqual(
+      expect.objectContaining({ ruleId: '@typescript-eslint/no-floating-promises', severity: 2 }),
+    );
+  });
+
+  it('resolves Renderer imports through the independent Bundler test program', async () => {
+    const eslint = new ESLint({ cwd: root });
+    const results = await eslint.lintText(
+      "import { authorizationUrl } from '../src/utils/authorization-url'; export const read = (): string | null => { return authorizationUrl('https://example.com'); };",
+      {
+        filePath: join(root, 'apps/web/test/authorization-url.test.ts'),
+      },
+    );
+    expect(results[0].messages).toEqual([]);
   });
 
   it.each([

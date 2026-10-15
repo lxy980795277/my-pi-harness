@@ -53,6 +53,8 @@ describe('real Oxlint accessibility gate', () => {
   it.each([
     ['image without alt', '<img src="fixture.png" />', 'alt-text'],
     ['button without a name', '<button type="button" />', 'control-has-associated-label'],
+    ['clickable div', '<div onClick={save}>保存</div>', 'no-static-element-interactions'],
+    ['clickable span', '<span onClick={save}>保存</span>', 'click-events-have-key-events'],
   ])('rejects an %s with its accessibility rule diagnostic', async (_name, jsx, rule) => {
     const result = await lintFixture(`export const Fixture = () => (${jsx});\n`);
     expect(result.code).not.toBe(0);

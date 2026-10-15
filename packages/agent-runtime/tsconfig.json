@@ -1,0 +1,11 @@
+{
+  "extends": "../tsconfig/node.json",
+  "compilerOptions": {
+    "paths": {
+      "@my-pi-harness/protocol": ["../protocol/src/index.ts"],
+      "@my-pi-harness/storage": ["../storage/src/index.ts"],
+      "@my-pi-harness/execution": ["../execution/src/index.ts"]
+    }
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts", "vitest.config.ts"]
+}

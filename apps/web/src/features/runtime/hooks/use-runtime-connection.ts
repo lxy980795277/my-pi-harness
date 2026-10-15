@@ -1,8 +1,9 @@
 import type { HealthResponse, RuntimeReadyEvent } from '@my-pi-harness/protocol';
 import { useCallback, useEffect, useState } from 'react';
 
-import { useHealth } from '@/features/runtime/queries/health.js';
-import { subscribeToRuntime } from '@/features/runtime/services/runtime-events.js';
+import { useHealth } from '@/features/runtime/queries/health';
+import { useAsyncEvent } from '@/hooks/use-async-event';
+import { subscribeToRuntime } from '@/features/runtime/services/runtime-events';
 
 type EventConnection =
   | { status: 'loading' }
@@ -54,10 +55,13 @@ export const useRuntimeConnection = (): RuntimeConnection => {
     });
   }, [healthQuery.data, healthQuery.isSuccess, healthQuery.isFetching]);
 
-  const retry = useCallback((): void => {
-    setConnection({ status: 'loading' });
-    void refetch();
-  }, [refetch]);
+  const retryEvent = useAsyncEvent(
+    useCallback(async (): Promise<void> => {
+      setConnection({ status: 'loading' });
+      await refetch();
+    }, [refetch]),
+  );
+  const retry = retryEvent.run;
 
   const health = healthQuery.data;
 

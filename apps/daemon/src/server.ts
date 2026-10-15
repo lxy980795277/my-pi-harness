@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { stat } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import fastifyStatic from '@fastify/static';
 import {
@@ -9,9 +9,17 @@ import {
   type HealthResponse,
   type RuntimeReadyEvent,
 } from '@my-pi-harness/protocol';
-import Fastify, { type FastifyBaseLogger, type FastifyInstance } from 'fastify';
+import Fastify, {
+  type FastifyBaseLogger,
+  type FastifyInstance,
+  type FastifyReply,
+  type FastifyRequest,
+} from 'fastify';
 import type { DaemonConfig } from './config.js';
+import type { ApplicationServices } from './services.js';
+import { registerM1Routes } from './features/routes.js';
 import { RuntimeEventStreams } from './runtime-events.js';
+import { createWebDocumentRenderer } from './web-document.js';
 
 /** Resources owned by one local daemon process. */
 export interface DaemonApplication {
@@ -29,10 +37,18 @@ export interface DaemonApplication {
 export async function createDaemonApplication(
   config: DaemonConfig,
   logger?: FastifyBaseLogger,
+  services?: ApplicationServices,
 ): Promise<DaemonApplication> {
   const server = Fastify({
     forceCloseConnections: true,
+    ajv: { customOptions: { coerceTypes: false, removeAdditional: false, useDefaults: false } },
+    bodyLimit: 256 * 1024,
     ...(logger === undefined ? { logger: false } : { loggerInstance: logger }),
+  });
+  server.addHook('onSend', (_request, reply, payload, done) => {
+    reply.header('Content-Security-Policy', "frame-ancestors 'none'");
+    reply.header('X-Frame-Options', 'DENY');
+    done(null, payload);
   });
   const identity: RuntimeReadyEvent = {
     type: 'runtime.ready',
@@ -69,12 +85,25 @@ export async function createDaemonApplication(
     return reply;
   });
 
+  if (services) registerM1Routes(server, services);
+
   if (config.webDistPath !== null) {
     const root = config.webDistPath;
     if (!(await stat(root)).isDirectory() || !(await stat(join(root, 'index.html'))).isFile()) {
       throw new Error('Web assets must contain an index.html file');
     }
-    await server.register(fastifyStatic, { root });
+    const renderDocument = createWebDocumentRenderer(
+      await readFile(join(root, 'index.html'), 'utf8'),
+    );
+    const sendDocument = (_request: FastifyRequest, reply: FastifyReply): void => {
+      reply
+        .header('Cache-Control', 'no-store')
+        .type('text/html; charset=utf-8')
+        .send(renderDocument());
+    };
+    server.get('/', sendDocument);
+    server.get('/index.html', sendDocument);
+    await server.register(fastifyStatic, { root, index: false });
     server.setNotFoundHandler((request, reply) => {
       const pathname = request.url.split('?')[0] ?? request.url;
       if (
@@ -82,7 +111,10 @@ export async function createDaemonApplication(
         !/^\/api(?:\/|$)/.test(pathname) &&
         request.headers.accept?.includes('text/html')
       ) {
-        return reply.sendFile('index.html');
+        return reply
+          .header('Cache-Control', 'no-store')
+          .type('text/html; charset=utf-8')
+          .send(renderDocument());
       }
       return reply.code(404).send({ code: 'NOT_FOUND', message: 'Resource not found' });
     });

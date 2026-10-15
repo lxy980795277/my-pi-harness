@@ -56,11 +56,11 @@ async function hasLiveGroup(group) {
   });
 }
 
-async function stopUnixGroup(child, group) {
+async function stopUnixGroup(child, group, gracePeriodMs) {
   if (await hasLiveGroup(group)) {
     if (
       signalGroup(group, 'SIGTERM') &&
-      !(await waitUntil(async () => !(await hasLiveGroup(group)), TERM_GRACE_MS))
+      !(await waitUntil(async () => !(await hasLiveGroup(group)), gracePeriodMs))
     ) {
       signalGroup(group, 'SIGKILL');
       if (!(await waitUntil(async () => !(await hasLiveGroup(group)), KILL_WAIT_MS))) {
@@ -121,12 +121,15 @@ async function stopWindowsTree(child) {
  * Repeated stop calls never signal a previously completed PID or process group.
  * @param command Executable selected by the development launcher.
  * @param args Argument vector passed without a shell.
- * @param options Spawn settings; shell and detached are owned by this helper.
+ * @param options Spawn settings and optional POSIX gracePeriodMs; shell and detached are owned by this helper.
  * @returns The actual child and a shared, bounded cleanup operation.
  */
 export function spawnOwnedProcess(command, args, options = {}) {
+  const { gracePeriodMs = TERM_GRACE_MS, ...spawnOptions } = options;
+  if (!Number.isInteger(gracePeriodMs) || gracePeriodMs < 1 || gracePeriodMs > 30_000)
+    throw new Error('Invalid development shutdown grace period');
   const child = spawn(command, args, {
-    ...options,
+    ...spawnOptions,
     detached: process.platform !== 'win32',
     shell: false,
   });
@@ -141,7 +144,7 @@ export function spawnOwnedProcess(command, args, options = {}) {
       if (group === undefined) return;
       try {
         if (process.platform === 'win32') await stopWindowsTree(child);
-        else await stopUnixGroup(child, group);
+        else await stopUnixGroup(child, group, gracePeriodMs);
       } catch (error) {
         throw new AggregateError(
           childError === undefined ? [error] : [error, childError],

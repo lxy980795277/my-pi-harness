@@ -4,6 +4,8 @@
 
 应用版本与协议版本用途不同：应用版本来自根版本生成流程；`PROTOCOL_VERSION` 管理跨端协议兼容。修改协议时更新所有消费者和相应检查，不能用产品版本代替兼容判定。
 
+当前协议为5，工具快照提供assistant消息锚点，Workspace保留必填icon和有限目录拖放桥。客户端与daemon必须采用相同协议版本；SQLite迁移版本与Session事件版本分别管理，不随HTTP协议版本机械递增。
+
 ## M0 HTTP
 
 | 方法与路径                | 行为                               |
@@ -19,7 +21,7 @@ health响应字段为 `status: "ready"`、`appVersion`、`protocolVersion`、`in
 
 传输每15秒尝试写入SSE注释 `: heartbeat`；响应处于背压时跳过本次心跳，避免积压无业务价值的输出。它用于保持连接，不是EventSource可见的 `message` 或业务事件。连接关闭清理计时器和响应订阅；服务关闭结束全部SSE连接。该SSE路径不提供HEAD订阅，HEAD请求不会分配长连接。
 
-M0没有Session事件持久化、seq重放或Agent状态，不能将当前SSE描述为已经具备这些后续能力。
+`runtime/events`仅提供进程状态，不提供Session事件持久化、seq重放或Agent状态；这些能力由独立Session接口提供。
 
 ## 桌面启动与桥
 
@@ -27,8 +29,14 @@ daemon监听成功后向启动管道写入 `daemon.ready` 记录，包含 `host:
 
 桌面所有者通过Node IPC发送唯一控制消息 `{ type: "daemon.shutdown" }` 请求正常退出，daemon按schema拒绝其他控制值。IPC断开或父进程退出也触发服务关闭；该进程控制管道不暴露给Renderer。
 
-preload只暴露 `DesktopBridge.getInfo()`，返回经过校验的 `appVersion` 和 `platform`。Renderer不接收通用 `ipcRenderer`、Node对象或任意channel；main校验消息来源，只接受当前窗口的受信任页面。
+preload暴露 `DesktopBridge.getInfo()`、固定目录选择 `chooseWorkspaceDirectory()`、目录拖放 `getDroppedWorkspaceDirectory(file)` 与有限 `openAuth(flowId)`，后者的授权规则见[模型与会话协议](model-session.md)。getInfo返回经过校验的 `appVersion` 和 `platform`。拖放仅接受浏览器拥有的真实File，preload用Electron webUtils获取路径，main检查所属主frame、参数和实际目录；合成File或普通文件拒绝。点击与拖放均返回canonical目录，取消选择返回null，注册仍执行完整根策略。Renderer不接收通用 `ipcRenderer`、Node对象或任意channel；main校验消息来源，只接受当前窗口的受信任页面。
 
-## 后续协议
+## M1协议
 
-Session、Run、工具、审批、文件变化与恢复协议在所属里程碑新增，明确字段、关联ID、错误码所有者与持久化规则。HTTP、IPC与持久化记录不能隐式复用含私有字段的服务对象。
+模型、会话、输入队列、分支、本机授权与OAuth见[模型与会话协议](model-session.md)。M0的runtime/events继续只表示进程状态，不承担Session事件；私有会话使用受保护的独立订阅。
+
+## M2协议
+
+工具、审批、文件变化与执行恢复已有独立DTO与持久化规则。HTTP、IPC与持久化记录不能隐式复用含私有字段的服务对象。
+
+工作区与工具的API、审批和私有上下文规则见[M2协议](workspace-execution.md)。目录选择仅从当前受信任主frame调用，无参数，不暴露通用文件系统。

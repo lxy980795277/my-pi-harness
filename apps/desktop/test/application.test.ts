@@ -71,7 +71,12 @@ describe('desktop application lifetime', () => {
     });
     const second = application.stop();
     expect(vi.mocked(startDaemon).mock.calls[0]?.[0]?.signal?.aborted).toBe(true);
-    startup.resolve({ origin: 'http://127.0.0.1:1234', stop: stopDaemon });
+    startup.resolve({
+      origin: 'http://127.0.0.1:1234',
+      stop: stopDaemon,
+      authorizeRenderer: vi.fn().mockResolvedValue(undefined),
+      openAuth: vi.fn().mockResolvedValue(undefined),
+    });
     await vi.waitFor(() => expect(stopDaemon).toHaveBeenCalledOnce());
     expect(stopped).toBe(false);
     cleanup.resolve();
@@ -84,7 +89,12 @@ describe('desktop application lifetime', () => {
   it('destroys pending navigation and reclaims its ready child on shutdown', async () => {
     const navigation = deferred<void>();
     const stopDaemon = vi.fn<() => Promise<void>>().mockResolvedValue();
-    vi.mocked(startDaemon).mockResolvedValue({ origin: 'http://127.0.0.1:1234', stop: stopDaemon });
+    vi.mocked(startDaemon).mockResolvedValue({
+      origin: 'http://127.0.0.1:1234',
+      stop: stopDaemon,
+      authorizeRenderer: vi.fn().mockResolvedValue(undefined),
+      openAuth: vi.fn().mockResolvedValue(undefined),
+    });
     window.loadURL.mockReturnValue(navigation.promise);
     window.destroy.mockImplementation(() => {
       window.isDestroyed.mockReturnValue(true);

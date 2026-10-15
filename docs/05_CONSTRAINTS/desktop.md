@@ -2,6 +2,8 @@
 
 本页规定桌面实现与发布必须满足的要求；当前已实现范围以 [架构](../01_ARCHITECTURE/overview.md) 和所属功能验证为准。后续要求不表示能力已经实现。Web Renderer复用浏览器页面，桌面专有能力通过有限协议接入。
 
+main/preload与构建工具使用strict TypeScript和NodeNext；包内ESM导入保留编译后的`.js`，不将Web的无后缀或UI风格规则强施宿主代码。通用类型、外部解析、错误、日志与持久化见 [后端规范](backend.md)，Renderer见 [前端规范](frontend.md)。
+
 ## 进程职责
 
 | 进程            | 职责                                                   | 禁止承担                                    |
@@ -22,6 +24,7 @@ main不执行同步网络、重型文件遍历或CPU密集任务；耗时工作�
 - session同时设置权限检查与权限申请处理，默认拒绝。必要权限按当前窗口、frame、来源和种类建立最小白名单，不默认允许摄像头、麦克风、定位、通知和屏幕捕获。[session权限处理](https://www.electronjs.org/docs/latest/api/session)
 - 不接入webview或可加载任意远程页面的通用窗口；后续必要时定义独立session、导航、权限与桥接规则，不复用产品特权preload。
 - 发布页面由daemon以同源HTTP托管，属于本机回环通信；外部资源要求HTTPS，不降低远端证书检查。
+- 发布CSP限制frame、object、base、脚本与连接来源；Radix动态style使用每次响应的nonce，不启用unsafe-eval/unsafe-inline。开发HMR例外不能带入生产；Renderer隔离不等于daemon工具的OS sandbox。
 
 ## IPC检查
 
@@ -45,7 +48,7 @@ contextBridge.exposeInMainWorld('desktop', {
 - daemon使用独立Node；发布按process.resourcesPath定位随包Node与JavaScript。生产忽略开发可执行文件、页面URL、tsx和源码覆盖项，不要求用户预装Node或pnpm。
 - Electron启动入口清除ELECTRON_RUN_AS_NODE等改变启动模式的宿主覆盖项；不得用Electron的process.execPath冒充独立Node。开发和发布准备共用已校验的Node资源流程。
 - stop幂等，重复请求共享关闭结果；先IPC正常关闭，再有界等待，超时按平台强制回收。确认真实exit/close，child.killed仅表示已发送信号。[Node子进程](https://nodejs.org/download/release/v24.20.0/docs/api/child_process.html)
-- before-quit阻止重复退出绕过清理；启动失败回收已获得资源，窗口关闭清除引用。M0关闭最后窗口即退出，不隐式增加托盘或macOS驻留模式。
+- before-quit阻止重复退出绕过清理；启动失败回收已获得资源，窗口关闭清除引用。当前关闭最后窗口即退出，不隐式增加托盘或macOS驻留模式。
 - daemon监测所有者IPC失联和父进程存活，不仅依靠before-quit；Windows注销和关机不保证发出该事件。[Electron应用生命周期](https://www.electronjs.org/docs/latest/api/app)
 - 开发聚合脚本拥有自己启动的进程组或进程树，正常退出和单个子进程失败都回收其他服务；禁止按端口或进程名误杀独立服务。
 

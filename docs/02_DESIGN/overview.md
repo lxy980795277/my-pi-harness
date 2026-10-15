@@ -4,7 +4,7 @@ Web 和 Electron 共用 React 界面，使用 shadcn/ui 与 Tailwind CSS。基�
 
 视觉、组件与可访问性原则见 [设计语言](design-language.md)，前端写法由前端约束负责；新业务组件在所属Spec中定义实际状态和变体。
 
-M0 页面显示本机服务状态和版本信息。连接中、连接成功、连接失败和断线重连必须可区分；没有 Agent 能力时不呈现假的会话、工具结果或成功执行记录。页面的实际验证由 [M0 Spec](../04_FEATURES/20261013_feature_project-foundation/spec.md) 承担。
+M0 页面显示本机服务状态和版本信息。连接中、连接成功、连接失败和断线重连必须可区分；没有 Agent 能力时不呈现假的会话、工具结果或成功执行记录。页面的实际验证由 [M0 Spec](../04_FEATURES/202610130900_feature_project-foundation/spec.md) 承担。
 
 ## 前端数据职责
 

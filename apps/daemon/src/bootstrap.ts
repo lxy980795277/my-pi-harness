@@ -1,15 +1,45 @@
 import { DaemonControlMessageSchema, type DaemonReadyRecord } from '@my-pi-harness/protocol';
 import pino from 'pino';
 import { Value } from 'typebox/value';
+import { createApplicationServices } from './services.js';
 import { loadDaemonConfig } from './config.js';
 import { watchParentProcess } from './parent-monitor.js';
 import { createDaemonApplication } from './server.js';
+import { clearAmbientModelEnvironment } from './model-environment.js';
 
-const logger = pino({ level: 'info' }, pino.destination(2));
+const logger = pino(
+  {
+    level: 'info',
+    serializers: {
+      req: (request: { method: string; url: string }) => ({
+        method: request.method,
+        url: request.url.split('?')[0],
+      }),
+    },
+  },
+  pino.destination(2),
+);
 
 async function main(): Promise<void> {
   const config = loadDaemonConfig();
-  const { server, identity } = await createDaemonApplication(config, logger);
+  clearAmbientModelEnvironment(process.env);
+  const services = await createApplicationServices(config, {
+    onError: (error) =>
+      logger.error(
+        { errorName: error instanceof Error ? error.name : 'unknown' },
+        'Runtime operation failed',
+      ),
+  });
+  let application;
+  try {
+    application = await createDaemonApplication(config, logger, services);
+  } catch (error: unknown) {
+    await services.close();
+    throw error;
+  }
+  const { server, identity } = application;
+  if (config.ownerSecret === null && process.stderr.isTTY)
+    process.stderr.write(`浏览器一次性配对码（10分钟有效）：${services.auth.pairingCode}\n`);
   let stopParentMonitor: (() => void) | undefined;
   let shutdownPromise: Promise<void> | undefined;
   const shutdown = (reason: string): Promise<void> => {

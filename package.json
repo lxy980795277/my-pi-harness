@@ -1,6 +1,6 @@
 {
   "name": "my-pi-harness",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "Local-first PC agent harness built independently on Pi",
@@ -15,7 +15,7 @@
     "dev:daemon": "pnpm --filter @my-pi-harness/daemon dev",
     "dev:desktop": "node scripts/dev.mjs --desktop",
     "build": "pnpm version:sync && turbo run build",
-    "typecheck": "tsc --noEmit && turbo run typecheck",
+    "typecheck": "tsc --noEmit && tsc -p tests/e2e/tsconfig.json --noEmit && turbo run typecheck",
     "lint": "eslint . && pnpm lint:a11y && node scripts/check-boundaries.mjs && node scripts/check-source-conventions.mjs && node scripts/check-docs.mjs && pnpm version:check",
     "lint:a11y": "oxlint --config .oxlintrc.json apps/web/src",
     "format": "prettier --write .",
@@ -23,12 +23,14 @@
     "test": "vitest run",
     "test:artifact": "pnpm --filter @my-pi-harness/daemon test:built",
     "test:e2e": "playwright test",
+    "test:m2": "vitest run packages/execution/test packages/agent-runtime/test/tool-runtime.test.ts packages/storage/test/tools.test.ts packages/storage/test/workspaces.test.ts apps/daemon/test/workspaces.test.ts apps/daemon/test/workspaces-api.test.ts apps/desktop/test/security.test.ts apps/desktop/test/preload.test.ts apps/web/test/timeline-entries.test.ts apps/web/test/workspace-directory.test.ts apps/web/test/workspace-tree.test.ts && playwright test tests/e2e/m2.spec.ts tests/e2e/m2-completion.spec.ts tests/e2e/workspace-creation.spec.ts",
     "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test",
     "version:sync": "node scripts/version.mjs --write",
     "version:check": "node scripts/version.mjs",
     "package:desktop": "pnpm build && node scripts/prepare-desktop.mjs && pnpm --filter @my-pi-harness/desktop package",
     "smoke:desktop": "node scripts/smoke-desktop.mjs",
-    "prepare": "husky"
+    "prepare": "husky",
+    "test:provider": "vitest run apps/daemon/test/provider-real.test.ts"
   },
   "devDependencies": {
     "@my-pi-harness/eslint-config": "workspace:*",

@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import {
@@ -26,6 +29,7 @@ interface ManagedDaemon {
 }
 
 const daemons: ManagedDaemon[] = [];
+const profiles: string[] = [];
 const CLI_PATH = fileURLToPath(new URL('../dist/bootstrap.js', import.meta.url));
 const PACKAGE_PATH = fileURLToPath(new URL('..', import.meta.url));
 
@@ -60,9 +64,12 @@ function sendControl(
 function spawnDaemon(
   environmentOverrides: Readonly<Record<string, string>> = {},
 ): ManagedDaemon & { readiness: Promise<DaemonReadyRecord> } {
+  const profile = mkdtempSync(join(tmpdir(), 'my-pi-cli-'));
+  profiles.push(profile);
   const environment: NodeJS.ProcessEnv = {
     ...process.env,
     MY_PI_HARNESS_PORT: '0',
+    MY_PI_HARNESS_PROFILE_DIRECTORY: profile,
     MY_PI_HARNESS_PARENT_PID: String(process.pid),
     ...environmentOverrides,
   };
@@ -216,6 +223,7 @@ afterEach(async () => {
       }
     }),
   );
+  for (const profile of profiles.splice(0)) rmSync(profile, { recursive: true, force: true });
 });
 
 describe('built daemon owner channel', () => {

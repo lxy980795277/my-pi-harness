@@ -15,6 +15,7 @@ function start(name) {
   const env = {
     ...withNodeRuntimePath(node, process.env),
     MY_PI_HARNESS_NODE_PATH: node,
+    MY_PI_HARNESS_DEVELOPMENT_ORIGIN: 'http://127.0.0.1:5174',
     MY_PI_HARNESS_RENDERER_URL: 'http://127.0.0.1:5174',
     MY_PI_HARNESS_PARENT_PID: String(process.pid),
   };
@@ -22,6 +23,7 @@ function start(name) {
   const owned = spawnOwnedProcess(node, [pnpm, '--filter', `@my-pi-harness/${name}`, 'dev'], {
     cwd: root,
     stdio: 'inherit',
+    gracePeriodMs: 20_000,
     env,
   });
   children.push(owned);

@@ -1,9 +1,9 @@
 import { CheckCircle2, CircleAlert, LoaderCircle, RefreshCw } from 'lucide-react';
 import type { FC } from 'react';
 
-import { Badge } from '@/components/ui/badge/index.js';
-import { Button } from '@/components/ui/button/index.js';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card/index.js';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 interface ConnectionCardProps {
   status: 'loading' | 'error' | 'ready';

@@ -14,6 +14,7 @@
   --accent-foreground: var(--foreground);
   --border: oklch(0.31 0.01 240);
   --ring: oklch(0.7 0.05 230);
+  --workspace-folder: oklch(0.72 0.16 250);
   --success: oklch(0.28 0.035 155);
   --success-foreground: oklch(0.8 0.08 155);
   --success-solid: oklch(0.72 0.1 155);

@@ -65,5 +65,17 @@ export default defineConfig(({ command, mode }) => {
       port: 5174,
       strictPort: true,
     },
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks: (id): string | undefined => {
+            if (/\/node_modules\/(?:react|react-dom|scheduler)\//.test(id)) {
+              return 'react-vendor';
+            }
+            return undefined;
+          },
+        },
+      },
+    },
   };
 });

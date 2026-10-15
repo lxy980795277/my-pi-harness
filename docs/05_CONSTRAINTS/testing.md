@@ -1,82 +1,62 @@
-# 验证与测试
+# Testing 规范
 
-Vitest验证业务判断、协议、配置和生命周期；Playwright验证真实Web/桌面交互。测试描述可观察行为，包含实际风险对应的非法输入、失败和清理路径，不镜像实现细节。
+测试描述用户或调用方能观察的行为，按改动风险选择检查。静态规则、源码测试、构建产物、浏览器、真实服务和目标平台分别提供证据；不因脚本存在、类型通过或全 mock 就声明功能已经验证。
 
-## 检查选择
+## 命令与检查范围
 
-根据改动选择最小覆盖范围，静态检查、行为测试、产物启动和人工体验分别提供证据。`pnpm check`聚合format、lint、typecheck和Vitest，不包括Playwright、完整打包或目标机器安装。
+| 命令                   | 证据范围                                                          |
+| ---------------------- | ----------------------------------------------------------------- |
+| `pnpm format:check`    | 格式                                                              |
+| `pnpm lint`            | ESLint、Oxlint a11y、依赖、源码约定、文档与版本                   |
+| `pnpm typecheck`       | 全 workspace 源码，包括 Web 独立 Bundler 测试面                   |
+| `pnpm test`            | Vitest 源码行为，不依赖 dist                                      |
+| `pnpm check`           | 上述四类，不包括 Playwright 或打包                                |
+| `pnpm build`           | 真实构建与版本生成                                                |
+| `pnpm test:artifact`   | 构建后的 daemon CLI、IPC、恢复及退出，先 build                    |
+| `pnpm test:e2e`        | 构建 Web/daemon 的 Playwright 用户场景，先 build                  |
+| `pnpm test:m2`         | 工作区/工具/目录桥/时间线源码与M2浏览器链路，先 build             |
+| `pnpm test:provider`   | 显式专用 TEST_API_KEY/BASE_URL/MODEL 的真实 Provider；缺配置 skip |
+| `pnpm package:desktop` | 构建、资源准备与应用目录打包                                      |
+| `pnpm smoke:desktop`   | 实际桌面产物启动、隔离、桥及退出；前提见脚本                      |
 
-| 命令                   | 证据范围                                             |
-| ---------------------- | ---------------------------------------------------- |
-| `pnpm format:check`    | 格式                                                 |
-| `pnpm lint`            | ESLint、a11y、依赖边界、源码约定、文档与版本检查     |
-| `pnpm lint:a11y`       | Renderer可访问性规则检查；由lint统一调用             |
-| `pnpm typecheck`       | workspace源码类型                                    |
-| `pnpm test`            | Vitest源码行为测试，不依赖dist                       |
-| `pnpm test:artifact`   | 真实构建后的daemon CLI、IPC及退出；先执行build       |
-| `pnpm test:e2e`        | 构建Web与daemon的Playwright场景；先执行build         |
-| `pnpm build`           | 构建与应用版本生成                                   |
-| `pnpm smoke:desktop`   | 桌面产物启动，前提以脚本声明为准                     |
-| `pnpm package:desktop` | 构建、桌面资源准备与应用目录打包；产物范围见发布规范 |
+根 package.json 是可执行入口，命令变化同步本页。局部变更运行最小充分检查；里程碑整体验收可做工程范围检查。代码、环境及风险未变化时复用已有通过结果，不因 commit/push 重复全量。CI负责keyless全量和macOS/Windows矩阵，真实供应商与外部账户独立配置，不让普通测试依赖用户Key或产生费用。
 
-表中命令描述M0检查入口，脚本存在和源码审查不表示检查已经通过，实际结果由功能verify记录。首次M0验收可运行工程范围检查；日常局部改动不机械运行全部套件。已有通过结果只在代码、环境或未解决问题变化后重复。CI的职责是keyless全量与macOS/Windows平台矩阵；真实Provider或外部服务检查需独立配置，不能默默变成普通单测的费用依赖。
+## 机械规则与审查
 
-## 可靠性
+- ESLint 对所有 TS/TSX/CTS/MTS 配置明确编译面，no-floating-promises/no-misused-promises 保持类型感知；JS/MJS/CJS 也执行实际规则。测试和构建配置不排除在检查外。
+- Web 全禁三目、void 运算符和 then/catch/finally 调用；检查 TSX Service/Query 编排、裸交互控件、内联事件、组件声明、Hook 与 Store 选择器。唯一 use-async-event.ts 启动豁免由源码 gate 限定路径、单条说明和对应调用，不开放全局 Promise 例外。
+- 源码 gate 检查命名、组件目录、helper 聚合、样式 import 顺序、1000 行上限，以及 Web 无后缀/Node 显式 .js。生成代码例外必须登记具体路径，不整片排除手写目录。
+- 每个新增或调整的硬规则同时有合法与非法 fixture，必须执行规则并看到拒绝；只比对配置文本或错误字符串不算规则生效。配置覆盖测试检查每类真实文件适用实际规则。
+- Oxlint a11y 检查 HTML/ARIA 基础约束；shadcn 仍需真实页面检查名称、键盘、焦点及 Dialog 状态。不能以可点击 div/span 规避裸控件门禁。
+- 行数不能证明职责，静态检查不做完整别名或所有权证明。TSX 复杂度、是否值得抽 Hook、Store/Query 单一来源、取消责任和凭据不进入缓存由 review 与行为检查共同确认。
 
-- 单测可用可控替身；HTTP、SSE和子进程生命周期至少有真实边界检查，不能把所有外部交互都mock后声称集成通过。
-- 测试使用临时目录和动态端口，负责关闭连接、计时器和进程，不污染用户数据或依赖共享固定端口。
-- 时序测试等待明确状态，不使用任意sleep代替就绪信号。
-- 错误输入、禁止来源、非法依赖或缺失产物的检查需要证明实际拒绝，不能只检查规则文本存在。
-- 不在测试输出中打印密钥、认证头或真实敏感文件。
+## 按风险设计用例
 
-人工体验、系统授权、签名安装或真实API结果在verify单独标注；没有执行的路径使用Not verified。当前检查入口以根package.json为可执行来源，命令改变时同步本页。
+| 改动           | 单元/集成重点                        | 额外证据                            |
+| -------------- | ------------------------------------ | ----------------------------------- |
+| schema/配置    | 有效输入、未知字段、范围、默认值     | 真实 HTTP/IPC 解析及拒绝            |
+| 状态/权限/工具 | 主路径、拒绝、取消、结果未知         | 实际副作用边界与用户结果            |
+| 连接/子进程    | 分片、启动失败、重复关闭、所有者失联 | 构建 CLI 与所属进程退出             |
+| 页面/交互      | 复杂纯逻辑、Hook 状态、秘密清理      | Playwright、键盘与视觉观察          |
+| SQLite/迁移    | 旧版本、顺序、重复、事务失败、损坏   | 真实临时库与恢复                    |
+| 桌面/发布      | 资源、来源和桥拒绝                   | 临时 cwd 启动、无源码依赖、目标平台 |
 
-## 按风险分配用例
+不机械为纯 DTO、转发函数或简单布局建镜像测试；修复 bug 建立可复现回归，重构优先沿用行为测试。存储使用真实临时 SQLite，HTTP/SSE/IPC/进程保留真实边界，不全 mock 后称集成通过。普通单测可替换模型和不确定网络，真实 Provider 独立测试且标明未配置原因。
 
-| 改动                 | 单元/集成重点                            | 需要的额外证据                    |
-| -------------------- | ---------------------------------------- | --------------------------------- |
-| 配置或公开schema     | 有效输入、非法范围、未知字段政策、默认值 | 对应真实HTTP/IPC解析              |
-| 状态、策略、工具判断 | 主路径、拒绝、取消、结果未知             | 真实副作用边界、用户结果          |
-| 连接和子进程         | 分片记录、启动失败、重复关闭、父进程失联 | 构建后的CLI与平台退出             |
-| 页面与交互           | 复杂纯逻辑和Hook状态转换                 | Playwright操作、键盘与视觉观察    |
-| 存储与迁移           | 事务失败、顺序、重复、旧版本、损坏       | 真实SQLite、备份与恢复            |
-| 打包和资源           | 配置及资源规则                           | 应用目录从临时cwd启动、无源码链接 |
+测试位于所有者 app/package 的 test 目录和根 tests/unit、tests/e2e；源码用路径解析 src，产物测试先 build 并解析 exports，不混用旧 dist。mock只声明消费者需要的接口，通过参数或工厂注入；不使用双重 unknown 断言伪造完整服务，Vitest类型从vitest导入。
 
-不为简单DTO、纯转发route或只重复实现的断言机械增加单测。修复bug时优先建立能复现行为的回归；重构复用已有行为验证。组件布局用真实页面检查，不能把静态字符串比较当用户交互验证。
+## 并发与清理
 
-现有用例位于各app的test目录和根tests/unit、tests/e2e，沿用 `.test.ts`/`.test.js`；新目录随实际拥有者建立，不为复制参考项目改成另一套文件布局。单测通过源码paths解析，产物检查明确先build，不能混用旧dist。
+- 每个用例独占临时目录、动态端口和身份，不污染用户 profile、Keychain 或开发端口；不输出认证头和秘密。测试凭据用明确假值或独立临时 namespace。
+- 所有失败路径在 finally/afterEach 关闭请求、流、child、server、计时器与句柄，不仅清空变量。超时必须使测试失败，不能伪装自跳过。
+- 等明确事件或有界状态轮询，不用任意 sleep 代替就绪。fetch 超时不能证明端口关闭，child.killed 不等于退出；观察所属 PID、真实控制关闭和连接拒绝，避免误测另一实例。
+- process.env、cwd、全局 mock 和 process 属性修改用后恢复，相关测试避免同进程并发；worker仍隔离磁盘。并发缓存或竞态通过可控 gate 安排交错，不触碰真实共享下载缓存。
+- 测试 UI 订阅、取消和清理时包含重复 setup/cleanup、关闭与在途返回、旧响应覆盖、重复点击等实际风险；不只验证成功结果。
 
-## Mock与边界
+## 交付证据
 
-单测可替换模型、MCP和网络等不可控依赖；repository行为使用临时数据库，HTTP/SSE和进程生命周期保留真实本机边界。外部真实Provider检查独立运行并标明需要凭据，普通CI不依赖用户Key。
-
-mock只声明消费者实际需要的方法，以函数参数或工厂注入，不构造完整框架实例。不使用 `as unknown as Service` 掩盖缺失方法，Vitest类型从vitest导入，不写Jest的Mock命名空间。
-
-```ts
-import { expect, it, vi, type Mock } from 'vitest';
-
-it('停止后只关闭一次连接', async () => {
-  const close: Mock<() => Promise<void>> = vi.fn(async () => undefined);
-  const resource = createOwnedConnection({ close });
-  await Promise.all([resource.stop(), resource.stop()]);
-  expect(close).toHaveBeenCalledTimes(1);
-});
-```
-
-此例说明测试重复关闭的行为，createOwnedConnection是示意，不是已有API；实际进程退出仍用真实子进程验证。测试名描述观察结果，不写「正确运行」。
-
-## 并发与失败清理
-
-每个用例独占临时目录、动态端口和测试身份；使用真实网络时不依赖开发端口。失败时同样在finally/afterEach关闭响应、child、server和文件句柄；不能只清空测试变量。
-
-改动process.env、process资源属性、cwd或全局mock的测试避免同进程并发，保存并恢复原值；不同worker仍需独立磁盘资源。并发缓存测试用可控gate安排交错，不能碰真实共享缓存或下载大运行时。
-
-等待明确事件或有界轮询，超时是失败；fetch超时不能作为端口已关闭的证据，child.killed不能证明退出。退出测试观察所属PID实际消失、控制关闭原因和端口拒绝，避免误测另一个实例。
-
-## 覆盖率与检查证据
-
-覆盖率帮助找未覆盖分支，不能代替行为验收。业务判断、权限拒绝、异常与清理分支是重点；纯UI布局不以单元覆盖率评价。不复制参考项目的旧百分比和coverage命令：本仓库当前未设置覆盖率门槛，新增门槛时必须同时定义排除项、实际命令与CI，并记录结果。
-
-提交hook当前执行lint-staged、lint、typecheck和Vitest，hook不是Playwright或安装验收。日常自测按风险选择，已有证据可复用；不能因规范写了某条规则便声称该条已有自动gate。
-
-verify按UseCase记录命令、环境、结果与缺口；自动检查、人工体验、真实Provider、目标平台安装和签名分别列出。失败先记录复现和修复再验证，不预填通过、不提前生成验证成功文件。
+- 新功能先更新 Spec/UseCase/Tasks，按已授权范围连续实现；不重复索要许可，不擅自提交、推送、重写分支或覆盖用户改动。不绕过失败 hook、测试或安全检查。
+- 实际验证后才写 verify，逐项记录命令、环境、结果、缺口及必要截图。失败先记录复现和修复，不提前生成“通过”，只报告运行过的命令。
+- 浏览器、Electron实际启动、真实API/OAuth、Windows机器、安装、签名与公证分别说明；未运行标记 Not verified，自动测试不能冒充用户验收。
+- 覆盖率用于找遗漏，不代替行为检查。本仓库尚无覆盖率门槛，新增需同时定义命令、排除项和CI；不复制参考仓库的百分比。
+- 提交 hook 执行其实际配置的静态/源码检查，不代表 Playwright 或安装验收。产品版本、签名与发布范围由 [发布规范](../06_RELEASES/overview.md) 拥有。

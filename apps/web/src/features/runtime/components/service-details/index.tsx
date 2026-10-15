@@ -1,7 +1,7 @@
 import type { HealthResponse } from '@my-pi-harness/protocol';
 import type { FC } from 'react';
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card/index.js';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 interface ServiceDetailsProps {
   health: HealthResponse | undefined;

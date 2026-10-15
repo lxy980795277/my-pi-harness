@@ -1,9 +1,12 @@
-import { APP_VERSION, type DesktopInfo } from '@my-pi-harness/protocol';
+import { APP_VERSION } from '@my-pi-harness/protocol';
+import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { BrowserWindow, type IpcMainInvokeEvent } from 'electron';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { secureWindow } from '../src/main/security.js';
 
-type InfoHandler = (event: IpcMainInvokeEvent, ...arguments_: unknown[]) => DesktopInfo;
+type InfoHandler = (event: IpcMainInvokeEvent, ...arguments_: unknown[]) => unknown;
 type PermissionRequest = (
   contents: unknown,
   permission: string,
@@ -17,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   checkPermission: vi.fn<(handler: (() => boolean) | null) => void>(),
   requestPermission: vi.fn<(handler: PermissionRequest | null) => void>(),
   frames: [] as { url: string }[],
+  chooseDirectory: vi.fn<() => Promise<{ canceled: boolean; filePaths: string[] }>>(),
 }));
 
 vi.mock('electron', async () => {
@@ -40,6 +44,7 @@ vi.mock('electron', async () => {
   }
   return {
     BrowserWindow: TestWindow,
+    dialog: { showOpenDialog: mocks.chooseDirectory },
     ipcMain: { handle: mocks.handle, removeHandler: mocks.removeHandler },
   };
 });
@@ -126,10 +131,91 @@ describe('desktop window security', () => {
     expect(() => handler(event)).toThrow('桌面请求来源无效');
   });
 
+  it('only opens the workspace directory picker for the owned main frame', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'my-pi-picker-'));
+    try {
+      const window = new BrowserWindow({});
+      secureWindow(window, 'http://127.0.0.1:1234');
+      const handler = mocks.handle.mock.calls.find(
+        ([channel]) => channel === 'desktop:choose-workspace-directory',
+      )?.[1];
+      if (!handler) throw new Error('Missing workspace picker');
+      const event = invokeEvent(window);
+      mocks.chooseDirectory.mockResolvedValueOnce({ canceled: false, filePaths: [directory] });
+      expect(await handler(event)).toBe(await realpath(directory));
+      mocks.chooseDirectory.mockResolvedValueOnce({ canceled: true, filePaths: [] });
+      expect(await handler(event)).toBeNull();
+      mocks.chooseDirectory.mockResolvedValueOnce({ canceled: false, filePaths: [] });
+      await expect(handler(event)).rejects.toThrow('请选择一个本机文件夹');
+      mocks.chooseDirectory.mockResolvedValueOnce({
+        canceled: false,
+        filePaths: [directory, directory],
+      });
+      await expect(handler(event)).rejects.toThrow('请选择一个本机文件夹');
+      const file = join(directory, 'regular.txt');
+      await writeFile(file, 'not a directory');
+      mocks.chooseDirectory.mockResolvedValueOnce({ canceled: false, filePaths: [file] });
+      await expect(handler(event)).rejects.toThrow('请选择文件夹，不能选择文件');
+      const other = new BrowserWindow({});
+      await expect(handler(invokeEvent(other))).rejects.toThrow('桌面请求来源无效');
+      await expect(handler(event, '/private')).rejects.toThrow('桌面请求来源无效');
+      expect(mocks.chooseDirectory).toHaveBeenCalledTimes(5);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('only resolves one existing dropped directory for its owned main frame', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'my-pi-drop-'));
+    try {
+      const window = new BrowserWindow({});
+      secureWindow(window, 'http://127.0.0.1:1234');
+      const handler = mocks.handle.mock.calls.find(
+        ([channel]) => channel === 'desktop:get-dropped-workspace-directory',
+      )?.[1];
+      if (!handler) throw new Error('Missing workspace drop handler');
+      const event = invokeEvent(window);
+      expect(await handler(event, directory)).toBe(await realpath(directory));
+      const target = join(directory, '工作区');
+      const alias = join(directory, 'alias');
+      await mkdir(target);
+      await symlink(target, alias, 'junction');
+      expect(await handler(event, alias)).toBe(await realpath(target));
+      const other = new BrowserWindow({});
+      await expect(handler(invokeEvent(other), directory)).rejects.toThrow('桌面请求来源无效');
+      await expect(
+        handler({ ...event, senderFrame: other.webContents.mainFrame }, directory),
+      ).rejects.toThrow('桌面请求来源无效');
+      await expect(handler({ ...event, senderFrame: null }, directory)).rejects.toThrow(
+        '桌面请求来源无效',
+      );
+      const frame = mocks.frames[0];
+      if (!frame) throw new Error('No main frame');
+      frame.url = 'https://example.com/';
+      await expect(handler(event, directory)).rejects.toThrow('桌面请求来源无效');
+      frame.url = 'http://127.0.0.1:1234/';
+      await expect(handler(event)).rejects.toThrow('请选择一个本机文件夹');
+      await expect(handler(event, directory, directory)).rejects.toThrow('请选择一个本机文件夹');
+      for (const path of [null, {}, '', 'relative/path', `${directory}\0`, 'a'.repeat(4097)])
+        await expect(handler(event, path)).rejects.toThrow('请选择有效的本机文件夹');
+      await expect(handler(event, join(directory, 'missing'))).rejects.toThrow(
+        '请选择有效的本机文件夹',
+      );
+      const file = join(directory, 'regular.txt');
+      await writeFile(file, 'not a directory');
+      await expect(handler(event, file)).rejects.toThrow('请选择文件夹，不能选择文件');
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
   it('removes its IPC handler when its window closes', () => {
     const window = new BrowserWindow({});
     secureWindow(window, 'http://127.0.0.1:1234');
     window.emit('closed');
-    expect(mocks.removeHandler).toHaveBeenCalledExactlyOnceWith('desktop:get-info');
+    expect(mocks.removeHandler).toHaveBeenCalledWith('desktop:get-info');
+    expect(mocks.removeHandler).toHaveBeenCalledWith('desktop:choose-workspace-directory');
+    expect(mocks.removeHandler).toHaveBeenCalledWith('desktop:get-dropped-workspace-directory');
+    expect(mocks.removeHandler).toHaveBeenCalledTimes(3);
   });
 });

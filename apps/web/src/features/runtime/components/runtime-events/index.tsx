@@ -2,8 +2,8 @@ import type { RuntimeReadyEvent } from '@my-pi-harness/protocol';
 import { Radio } from 'lucide-react';
 import type { FC } from 'react';
 
-import { Badge } from '@/components/ui/badge/index.js';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card/index.js';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 interface RuntimeEventsProps {
   event: RuntimeReadyEvent | undefined;

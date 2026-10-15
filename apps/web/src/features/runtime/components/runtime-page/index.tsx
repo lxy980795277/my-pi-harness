@@ -1,13 +1,13 @@
 import { ArrowRight, Layers3 } from 'lucide-react';
 import { memo, type FC } from 'react';
 
-import { Badge } from '@/components/ui/badge/index.js';
-import { ConnectionCard } from '@/features/runtime/components/connection-card/index.js';
-import { RuntimeEvents } from '@/features/runtime/components/runtime-events/index.js';
-import { ServiceDetails } from '@/features/runtime/components/service-details/index.js';
-import { useRuntimeConnection } from '@/features/runtime/hooks/use-runtime-connection.js';
+import { Badge } from '@/components/ui/badge';
+import { ConnectionCard } from '@/features/runtime/components/connection-card';
+import { RuntimeEvents } from '@/features/runtime/components/runtime-events';
+import { ServiceDetails } from '@/features/runtime/components/service-details';
+import { useRuntimeConnection } from '@/features/runtime/hooks/use-runtime-connection';
 
-/** M0 workspace: verifies the product foundation before Agent features are added. */
+/** Public diagnostics for the local service shared by both product entry points. */
 export const RuntimePage: FC = memo(() => {
   const connection = useRuntimeConnection();
 
@@ -18,7 +18,7 @@ export const RuntimePage: FC = memo(() => {
           <h1 className="text-lg font-semibold tracking-tight">本机运行状态</h1>
           <p className="text-xs text-muted-foreground">查看服务连接、运行环境与事件通道。</p>
         </div>
-        <Badge>M0 · 工程底座</Badge>
+        <Badge>M1 · 模型与会话</Badge>
       </header>
 
       <ConnectionCard
@@ -45,14 +45,15 @@ export const RuntimePage: FC = memo(() => {
         />
         <div className="space-y-2">
           <h2 id="foundation-heading" className="text-xs font-medium">
-            当前完成工程连接
+            工作台连接
           </h2>
           <p className="text-xs leading-6 text-muted-foreground">
-            浏览器与桌面应用共用此界面。Agent 对话、模型配置和工具执行将在后续里程碑实现。
+            浏览器与桌面应用共用此界面。完成本机授权后，可在模型设置中配置
+            Provider，在会话中查看保存的历史与运行状态。
           </p>
           <p className="flex items-center gap-2 text-[11px] text-muted-foreground">
             <ArrowRight width={12} height={12} strokeWidth={1.5} aria-hidden />
-            下一步：接入 Pi 内核与单 Agent 运行
+            模型与会话使用同一套本机服务
           </p>
         </div>
       </section>

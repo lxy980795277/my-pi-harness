@@ -141,14 +141,28 @@ describe('local daemon API', () => {
   it('serves SPA routes without hiding unknown API routes behind index.html', async () => {
     const webDistPath = await mkdtemp(join(tmpdir(), 'my-pi-harness-web-'));
     temporaryDirectories.push(webDistPath);
-    await writeFile(join(webDistPath, 'index.html'), '<!doctype html><title>Local Harness</title>');
+    await writeFile(
+      join(webDistPath, 'index.html'),
+      '<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="script-src \'self\'; style-src \'self\'"><title>Local Harness</title></head><body></body></html>',
+    );
     const { server } = await createApplication(webDistPath);
     const page = await server.inject({ url: '/sessions/one', headers: { accept: 'text/html' } });
     const api = await server.inject({ url: '/api/missing', headers: { accept: 'text/html' } });
     expect(page.statusCode).toBe(200);
+    expect(page.headers['content-security-policy']).toBe("frame-ancestors 'none'");
+    expect(page.headers['x-frame-options']).toBe('DENY');
     expect(page.body).toContain('<title>Local Harness</title>');
     expect(api.statusCode).toBe(404);
     expect(api.headers['content-type']).toContain('application/json');
+    const first = await server.inject({ url: '/' });
+    const next = await server.inject({ url: '/index.html' });
+    const nonce = /property="csp-nonce" nonce="([A-Za-z0-9+/=]+)"/.exec(first.body)?.[1];
+    expect(nonce).toBeDefined();
+    expect(first.headers['cache-control']).toBe('no-store');
+    expect(first.body).toContain(`style-src 'self' 'nonce-${nonce}'`);
+    expect(first.body).toContain("script-src 'self';");
+    expect(first.body).not.toContain('unsafe-inline');
+    expect(next.body).not.toContain(`nonce="${nonce}"`);
   });
 
   it('rejects configured Web assets that do not contain an application entry', async () => {

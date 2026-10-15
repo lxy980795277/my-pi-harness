@@ -10,7 +10,7 @@
 - 注释实现、backup/unused/deprecated副本和空package替代真实规划。
 - 依赖没有源码、配置、样式、测试或发布资源使用者。
 
-行数review阈值见 [禁止事项](../05_CONSTRAINTS/forbidden.md)，依赖误报检查见 [死代码治理](../10_GOVERNANCE/dead-code.md)。不以多建转发文件规避职责判断。
+源码行数与职责审查见 [前端](../05_CONSTRAINTS/frontend.md) 和 [后端](../05_CONSTRAINTS/backend.md)，依赖误报检查见 [死代码治理](../10_GOVERNANCE/dead-code.md)。不以多建转发文件规避职责判断。
 
 ## 实施步骤
 

@@ -1,0 +1,471 @@
+import { spawn, type ChildProcess } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { createServer, type IncomingMessage, type Server } from 'node:http';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import {
+  AuthStatusSchema,
+  DaemonReadyRecordSchema,
+  HarnessEventSchema,
+  ProviderConfigSchema,
+  SessionSnapshotSchema,
+  type HarnessEvent,
+  type SessionSnapshot,
+} from '@my-pi-harness/protocol';
+import type { Static, TSchema } from 'typebox';
+import { Value } from 'typebox/value';
+import { describe, expect, it } from 'vitest';
+
+const root = fileURLToPath(new URL('../../../', import.meta.url));
+const launcher = fileURLToPath(new URL('../../../tests/e2e/start-daemon.mjs', import.meta.url));
+interface Outcome {
+  code: number | null;
+  signal: NodeJS.Signals | null;
+}
+interface Daemon {
+  child: ChildProcess;
+  origin: string;
+  cookie: string;
+  csrf: string;
+  exited: Promise<Outcome>;
+  stop(): Promise<Outcome>;
+}
+
+function checked<T extends TSchema>(schema: T, value: unknown): Static<T> {
+  if (!Value.Check(schema, value)) throw new Error('Invalid built daemon response');
+  return value;
+}
+
+async function deadline<T>(task: Promise<T>, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      task,
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new Error(label)), 10_000);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function startDaemon(profile: string, children: ChildProcess[]): Promise<Daemon> {
+  const secret = randomBytes(32).toString('base64url');
+  const environment: NodeJS.ProcessEnv = {
+    ...process.env,
+    MY_PI_HARNESS_PORT: '0',
+    MY_PI_HARNESS_PROFILE_DIRECTORY: profile,
+    MY_PI_HARNESS_DESKTOP_SECRET: secret,
+  };
+  for (const name of [
+    'NODE_OPTIONS',
+    'MY_PI_HARNESS_WEB_DIST_PATH',
+    'MY_PI_HARNESS_DEVELOPMENT_ORIGIN',
+    'MY_PI_HARNESS_PARENT_PID',
+    'MY_PI_HARNESS_GITHUB_CLIENT_ID',
+    'MY_PI_HARNESS_GITHUB_CLIENT_SECRET',
+  ])
+    delete environment[name];
+  // The artifact fixture explicitly injects Memory credentials; shipped bootstrap remains unchanged.
+  const child = spawn(process.execPath, [launcher], {
+    cwd: root,
+    env: environment,
+    stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
+  });
+  children.push(child);
+  const exited = new Promise<Outcome>((resolve) =>
+    child.once('exit', (code, signal) => resolve({ code, signal })),
+  );
+  let diagnostics = '';
+  child.stderr?.on('data', (chunk: Buffer) => {
+    diagnostics = `${diagnostics}${chunk.toString()}`.slice(-16_384);
+  });
+  const ready = await deadline(
+    new Promise<Static<typeof DaemonReadyRecordSchema>>((resolve, reject) => {
+      let pending = '';
+      const cleanup = (): void => {
+        child.stdout?.off('data', receive);
+        child.off('error', failed);
+        child.off('exit', earlyExit);
+      };
+      const failed = (error: Error): void => {
+        cleanup();
+        reject(error);
+      };
+      const earlyExit = (): void =>
+        failed(new Error(`Recovery fixture exited before readiness: ${diagnostics}`));
+      const receive = (chunk: Buffer): void => {
+        pending += chunk.toString();
+        if (pending.length > 64 * 1024) {
+          failed(new Error('Oversized readiness record'));
+          return;
+        }
+        const newline = pending.indexOf('\n');
+        if (newline === -1) return;
+        try {
+          const value: unknown = JSON.parse(pending.slice(0, newline));
+          const record = checked(DaemonReadyRecordSchema, value);
+          cleanup();
+          resolve(record);
+        } catch (error) {
+          failed(error instanceof Error ? error : new Error('Invalid readiness JSON'));
+        }
+      };
+      child.stdout?.on('data', receive);
+      child.once('error', failed);
+      child.once('exit', earlyExit);
+    }),
+    'Built daemon did not become ready',
+  );
+  const origin = `http://${ready.host}:${ready.port}`;
+  const bootstrap = await fetch(`${origin}/api/auth/desktop`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ secret }),
+    signal: AbortSignal.timeout(5000),
+  });
+  const cookie = bootstrap.headers.get('set-cookie')?.split(';')[0];
+  if (!bootstrap.ok || !cookie) throw new Error('Artifact owner authorization failed');
+  const response = await fetch(`${origin}/api/auth/status`, {
+    headers: { Cookie: cookie },
+    signal: AbortSignal.timeout(5000),
+  });
+  const status: unknown = await response.json();
+  const csrf = checked(AuthStatusSchema, status).csrfToken;
+  if (!response.ok || !csrf) throw new Error('Artifact owner has no CSRF token');
+  let stopping: Promise<Outcome> | undefined;
+  return {
+    child,
+    origin,
+    cookie,
+    csrf,
+    exited,
+    stop: () =>
+      (stopping ??= (async () => {
+        if (child.exitCode !== null || child.signalCode !== null) return exited;
+        if (child.connected) child.send({ type: 'daemon.shutdown' }, () => undefined);
+        else child.kill('SIGTERM');
+        const timer = setTimeout(() => {
+          child.kill('SIGKILL');
+        }, 5000);
+        try {
+          return await deadline(exited, 'Built daemon did not exit');
+        } finally {
+          clearTimeout(timer);
+        }
+      })()),
+  };
+}
+
+async function api<T extends TSchema>(
+  daemon: Daemon,
+  path: string,
+  schema: T,
+  method = 'GET',
+  body?: unknown,
+): Promise<Static<T>> {
+  const response = await fetch(`${daemon.origin}/api${path}`, {
+    method,
+    headers: {
+      Cookie: daemon.cookie,
+      Origin: daemon.origin,
+      'X-CSRF-Token': daemon.csrf,
+      'Content-Type': 'application/json',
+    },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    signal: AbortSignal.timeout(5000),
+  });
+  const value: unknown = await response.json();
+  if (!response.ok)
+    throw new Error(`${method} ${path} returned ${response.status}: ${JSON.stringify(value)}`);
+  return checked(schema, value);
+}
+
+async function waitSnapshot(
+  daemon: Daemon,
+  sessionId: string,
+  predicate: (snapshot: SessionSnapshot) => boolean,
+): Promise<SessionSnapshot> {
+  const until = Date.now() + 10_000;
+  while (Date.now() < until) {
+    const snapshot = await api(daemon, `/sessions/${sessionId}`, SessionSnapshotSchema);
+    if (predicate(snapshot)) return snapshot;
+    await new Promise<void>((resolve) => setTimeout(resolve, 20));
+  }
+  throw new Error('Expected durable session projection was not observed');
+}
+
+async function bodyText(request: IncomingMessage): Promise<string> {
+  let body = '';
+  for await (const chunk of request) {
+    if (!(chunk instanceof Buffer)) throw new Error('Unexpected HTTP body bytes');
+    body += chunk.toString();
+  }
+  return body;
+}
+
+async function providerFixture(): Promise<{ server: Server; baseUrl: string; requests: string[] }> {
+  const requests: string[] = [];
+  const server = createServer((request, response) => {
+    void bodyText(request)
+      .then((body) => {
+        requests.push(body);
+        const number = requests.length;
+        response.writeHead(200, { 'Content-Type': 'text/event-stream' });
+        const chunk = (delta: object, finish: string | null): void => {
+          response.write(
+            `data: ${JSON.stringify({ id: `fixture-${number}`, object: 'chat.completion.chunk', created: 1, model: 'fixture-model', choices: [{ index: 0, delta, finish_reason: finish }] })}\n\n`,
+          );
+        };
+        chunk({ role: 'assistant' }, null);
+        chunk({ content: `durable partial ${number}` }, null);
+        if (number !== 1 && number !== 3) {
+          chunk({}, 'stop');
+          response.end('data: [DONE]\n\n');
+        }
+      })
+      .catch(() => {
+        response.destroy();
+      });
+  });
+  await new Promise<void>((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', resolve);
+  });
+  const address = server.address();
+  if (!address || typeof address === 'string') throw new Error('Provider has no TCP address');
+  return { server, baseUrl: `http://127.0.0.1:${address.port}/v1`, requests };
+}
+
+async function replay(
+  daemon: Daemon,
+  sessionId: string,
+): Promise<{ events: HarnessEvent[]; snapshot: SessionSnapshot }> {
+  const response = await fetch(`${daemon.origin}/api/sessions/${sessionId}/events?afterSeq=0`, {
+    headers: { Cookie: daemon.cookie },
+    signal: AbortSignal.timeout(5000),
+  });
+  if (!response.ok || !response.body) throw new Error('Authorized replay failed');
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  const events: HarnessEvent[] = [];
+  let pending = '';
+  try {
+    while (true) {
+      const chunk = await reader.read();
+      if (chunk.done) throw new Error('Replay ended before its snapshot');
+      if (!(chunk.value instanceof Uint8Array)) throw new Error('Replay returned non-byte data');
+      pending += decoder.decode(chunk.value, { stream: true });
+      let end = pending.indexOf('\n\n');
+      while (end !== -1) {
+        const record = pending.slice(0, end);
+        pending = pending.slice(end + 2);
+        const eventName = /^event: (.+)$/m.exec(record)?.[1];
+        const data = /^data: (.+)$/m.exec(record)?.[1];
+        if (data) {
+          const value: unknown = JSON.parse(data);
+          if (eventName === 'session.event') events.push(checked(HarnessEventSchema, value));
+          if (eventName === 'session.snapshot')
+            return { events, snapshot: checked(SessionSnapshotSchema, value) };
+        }
+        end = pending.indexOf('\n\n');
+      }
+    }
+  } finally {
+    await reader.cancel();
+  }
+}
+
+describe('built daemon recovery with real Pi HTTP streaming', () => {
+  it('keeps stopped queues paused, recovers a killed run, replays facts and resumes only on explicit command', async () => {
+    const profile = await mkdtemp(join(tmpdir(), 'my-pi-built-recovery-'));
+    const children: ChildProcess[] = [];
+    const daemons: Daemon[] = [];
+    let provider: Awaited<ReturnType<typeof providerFixture>> | undefined;
+    try {
+      provider = await providerFixture();
+      const first = await startDaemon(profile, children);
+      daemons.push(first);
+      await api(first, '/providers', ProviderConfigSchema, 'POST', {
+        id: 'recovery-provider',
+        name: 'Synthetic local provider',
+        kind: 'custom',
+        requiresApiKey: true,
+        builtinId: null,
+        api: 'openai-completions',
+        baseUrl: provider.baseUrl,
+        enabled: true,
+        models: [
+          {
+            id: 'fixture-model',
+            name: 'Fixture model',
+            api: 'openai-completions',
+            contextWindow: 8192,
+            maxTokens: 1024,
+            reasoning: false,
+            input: ['text'],
+          },
+        ],
+      });
+      await api(first, '/providers/recovery-provider/key', ProviderConfigSchema, 'POST', {
+        key: 'synthetic-key-first-process',
+      });
+      const initial = await api(first, '/sessions', SessionSnapshotSchema, 'POST', {
+        title: 'Process recovery',
+        providerId: 'recovery-provider',
+        modelId: 'fixture-model',
+        thinkingLevel: 'off',
+      });
+      const sessionId = initial.session.id;
+      const send = (
+        daemon: Daemon,
+        text: string,
+        requestId: string,
+        mode = 'send',
+      ): Promise<SessionSnapshot> =>
+        api(daemon, `/sessions/${sessionId}/inputs`, SessionSnapshotSchema, 'POST', {
+          text,
+          requestId,
+          mode,
+        });
+      await send(first, 'Initial request', 'initial');
+      await waitSnapshot(first, sessionId, (snapshot) =>
+        snapshot.messages.some(({ text }) => text === 'durable partial 1'),
+      );
+      await send(first, 'Keep me pending after stop', 'paused-follow-up', 'follow-up');
+      const stopped = await api(
+        first,
+        `/sessions/${sessionId}/stop`,
+        SessionSnapshotSchema,
+        'POST',
+        {},
+      );
+      expect(stopped.session.activeRunId).toBeNull();
+      expect(stopped.runs[0]?.status).toBe('cancelled');
+      expect(stopped.queue.map(({ text }) => text)).toEqual(['Keep me pending after stop']);
+      expect(provider.requests).toHaveLength(1);
+
+      await send(first, 'Independent new request', 'new-after-stop');
+      const completed = await waitSnapshot(
+        first,
+        sessionId,
+        (snapshot) => snapshot.session.activeRunId === null && snapshot.runs.length === 2,
+      );
+      expect(completed.runs.filter(({ status }) => status === 'completed')).toHaveLength(1);
+      expect(completed.messages).toContainEqual(
+        expect.objectContaining({
+          role: 'assistant',
+          text: 'durable partial 2',
+          status: 'complete',
+          stopReason: 'stop',
+        }),
+      );
+      expect(completed.queue).toHaveLength(1);
+      expect(provider.requests).toHaveLength(2);
+      expect(provider.requests[1]).toContain('Independent new request');
+      expect(provider.requests[1]).not.toContain('Keep me pending after stop');
+      await send(first, 'Request killed during streaming', 'crash');
+      await waitSnapshot(first, sessionId, (snapshot) =>
+        snapshot.messages.some(({ text }) => text === 'durable partial 3'),
+      );
+      const beforeKill = await send(
+        first,
+        'Keep me pending after crash',
+        'crash-follow-up',
+        'follow-up',
+      );
+      expect(beforeKill.queue).toHaveLength(2);
+      first.child.kill('SIGKILL');
+      const killed = await deadline(first.exited, 'Killed daemon remained alive');
+      expect(killed.code !== 0 || killed.signal !== null).toBe(true);
+
+      const second = await startDaemon(profile, children);
+      daemons.push(second);
+      const restored = await api(second, `/sessions/${sessionId}`, SessionSnapshotSchema);
+      expect(restored.session.activeRunId).toBeNull();
+      expect(restored.runs).toHaveLength(3);
+      expect(restored.runs.filter(({ status }) => status === 'interrupted')).toHaveLength(1);
+      expect(restored.messages).toContainEqual(
+        expect.objectContaining({ text: 'durable partial 3', status: 'interrupted' }),
+      );
+      expect(restored.queue.map(({ text }) => text)).toEqual([
+        'Keep me pending after stop',
+        'Keep me pending after crash',
+      ]);
+      expect(restored.snapshotSeq).toBe(beforeKill.snapshotSeq + 1);
+      expect(provider.requests).toHaveLength(3);
+      const replayed = await replay(second, sessionId);
+      expect(replayed.snapshot).toEqual(restored);
+      expect(replayed.events.map(({ seq }) => seq)).toEqual(
+        Array.from({ length: restored.snapshotSeq }, (_value, index) => index + 1),
+      );
+      expect(replayed.events.at(-1)).toMatchObject({
+        type: 'run.finished',
+        data: { status: 'interrupted' },
+      });
+      expect(JSON.stringify(replayed)).not.toContain('synthetic-key');
+      expect(replayed.events.some((event) => 'privateData' in event)).toBe(false);
+      await api(second, '/providers/recovery-provider/key', ProviderConfigSchema, 'POST', {
+        key: 'synthetic-key-second-process',
+      });
+      expect(
+        (await api(second, `/sessions/${sessionId}`, SessionSnapshotSchema)).runs,
+      ).toHaveLength(3);
+      expect(provider.requests).toHaveLength(3);
+      await api(second, `/sessions/${sessionId}/queue/resume`, SessionSnapshotSchema, 'POST', {});
+      const resumed = await waitSnapshot(
+        second,
+        sessionId,
+        (snapshot) => snapshot.session.activeRunId === null && snapshot.queue.length === 0,
+      );
+      expect(resumed.runs).toHaveLength(4);
+      expect(resumed.runs.filter(({ status }) => status === 'completed')).toHaveLength(2);
+      for (const number of [2, 4, 5])
+        expect(resumed.messages).toContainEqual(
+          expect.objectContaining({
+            role: 'assistant',
+            text: `durable partial ${number}`,
+            status: 'complete',
+            stopReason: 'stop',
+          }),
+        );
+      expect(provider.requests).toHaveLength(5);
+      expect(
+        resumed.messages.filter(({ role }) => role === 'user').map(({ text }) => text),
+      ).toEqual([
+        'Initial request',
+        'Independent new request',
+        'Request killed during streaming',
+        'Keep me pending after stop',
+        'Keep me pending after crash',
+      ]);
+      const retry = await send(
+        second,
+        'Keep me pending after stop',
+        'paused-follow-up',
+        'follow-up',
+      );
+      expect(retry.snapshotSeq).toBe(resumed.snapshotSeq);
+      expect(provider.requests).toHaveLength(5);
+      expect(await second.stop()).toEqual({ code: 0, signal: null });
+    } finally {
+      for (const daemon of daemons) await daemon.stop();
+      for (const child of children)
+        if (child.exitCode === null && child.signalCode === null) {
+          const exited = new Promise<void>((resolve) => child.once('exit', () => resolve()));
+          child.kill('SIGKILL');
+          await deadline(exited, 'Fixture cleanup did not stop a child');
+        }
+      const ownedProvider = provider;
+      if (ownedProvider)
+        await new Promise<void>((resolve, reject) => {
+          ownedProvider.server.close((error) => (error ? reject(error) : resolve()));
+          ownedProvider.server.closeAllConnections();
+        });
+      await rm(profile, { recursive: true, force: true });
+    }
+  }, 45_000);
+});

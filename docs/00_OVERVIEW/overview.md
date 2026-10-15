@@ -17,7 +17,7 @@ My Pi Harness 是独立开发的本地优先 PC Agent 应用。用户在浏览�
 | [02_DESIGN](../02_DESIGN/overview.md)               | UI、状态呈现与交互规范                 | 界面与交互变更     |
 | [03_API](../03_API/overview.md)                     | HTTP、SSE、桌面桥与共享协议            | 协议变更           |
 | [04_FEATURES](../04_FEATURES/overview.md)           | Spec、UseCase、Tasks、Issues、验证证据 | 需求到交付         |
-| [05_CONSTRAINTS](../05_CONSTRAINTS/overview.md)     | 类型、前后端、安全、存储与测试约束     | 编码与审查         |
+| [05_CONSTRAINTS](../05_CONSTRAINTS/overview.md)     | 前端、后端、Desktop 与 Testing 规范    | 编码与审查         |
 | [06_RELEASES](../06_RELEASES/overview.md)           | 产品版本与发布记录                     | 提交与发布         |
 | [07_USER_GUIDE](../07_USER_GUIDE/overview.md)       | 用户操作与启动指南                     | 使用与体验验证     |
 | [08_COLLABORATION](../08_COLLABORATION/overview.md) | 提交、分支与协作                       | 用户要求提交或协作 |

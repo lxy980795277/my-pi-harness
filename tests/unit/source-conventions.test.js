@@ -83,10 +83,9 @@ describe('source file conventions', () => {
 
   it('allows component-family exports, independent component directories and main.tsx', async () => {
     const root = await fixture({
-      'apps/web/src/main.tsx': "import { App } from './app/index.js'; import './styles/index.css';",
+      'apps/web/src/main.tsx': "import { App } from './app'; import './styles/index.css';",
       'apps/web/src/app/index.tsx': 'export const App = () => <main />;',
-      'apps/web/src/components/ui/card/index.tsx':
-        "export { CardTitle } from './card-title/index.js';",
+      'apps/web/src/components/ui/card/index.tsx': "export { CardTitle } from './card-title';",
       'apps/web/src/components/ui/card/card-title/index.tsx':
         'export const CardTitle = () => <h2>状态</h2>;',
     });
@@ -167,5 +166,90 @@ describe('source file conventions', () => {
     });
 
     await expect(checkSourceConventions(root)).resolves.toBe(3);
+  });
+
+  it.each([
+    "import { Button } from '@/components/ui/button/index.js';",
+    "export { Button } from './button.tsx';",
+    "type State = import('./state.js').State;",
+    "const module = await import('@/utils/owned.ts');",
+  ])('rejects Web module extensions: %s', async (content) => {
+    const root = await fixture({ 'apps/web/src/app/index.tsx': content });
+    await expect(checkSourceConventions(root)).rejects.toThrow(
+      'Web 模块 import 不写源码或编译扩展',
+    );
+  });
+
+  it('allows Bundler module imports while preserving resource extensions', async () => {
+    const root = await fixture({
+      'apps/web/src/app/index.tsx': [
+        "import { Button } from '@/components/ui/button';",
+        "import { State } from './state';",
+        "import icon from '@lobehub/icons-static-svg/icons/openai.svg?url';",
+        "import ownIcon from '@/assets/provider.svg';",
+        "import data from './data.json';",
+        "import './index.css';",
+      ].join('\n'),
+    });
+    await expect(checkSourceConventions(root)).resolves.toBe(1);
+  });
+
+  it('uses extensionless imports for the independent Web test program', async () => {
+    const valid = await fixture({
+      'apps/web/test/owned.test.ts': "import { owned } from '../src/utils/owned';",
+    });
+    await expect(checkSourceConventions(valid)).resolves.toBe(1);
+    const invalid = await fixture({
+      'apps/web/test/owned.test.ts': "import { owned } from '../src/utils/owned.js';",
+    });
+    await expect(checkSourceConventions(invalid)).rejects.toThrow(
+      'Web 模块 import 不写源码或编译扩展',
+    );
+  });
+
+  it.each([
+    '// eslint-disable-next-line @typescript-eslint/no-floating-promises\nsave();',
+    '/* eslint-disable @typescript-eslint/no-floating-promises */\nsave();',
+    '// eslint-disable-next-line no-restricted-syntax\nvoid save();',
+  ])('rejects business lint suppression', async (content) => {
+    const root = await fixture({ 'apps/web/src/features/auth/hooks/use-login.ts': content });
+    await expect(checkSourceConventions(root)).rejects.toThrow('Web 禁止局部关闭 ESLint');
+  });
+
+  const waiver =
+    '// eslint-disable-next-line @typescript-eslint/no-floating-promises -- execute handles failures and cancellation.';
+  it('allows only the documented async event launch waiver', async () => {
+    const root = await fixture({
+      'apps/web/src/hooks/use-async-event.ts': `${waiver}\nexecute(...arguments_);\n`,
+    });
+    await expect(checkSourceConventions(root)).resolves.toBe(1);
+  });
+
+  it.each([
+    `${waiver}\nother();\n`,
+    `${waiver}\nexecute(...arguments_);\n${waiver}\nexecute(...arguments_);\n`,
+    '// eslint-disable-next-line @typescript-eslint/no-floating-promises\nexecute(...arguments_);\n',
+  ])('rejects expanded or unexplained async bridge waivers', async (content) => {
+    const root = await fixture({ 'apps/web/src/hooks/use-async-event.ts': content });
+    await expect(checkSourceConventions(root)).rejects.toThrow('Web 禁止局部关闭 ESLint');
+  });
+
+  it.each([
+    ['quoted string', 'export const example = "eslint-disable-next-line";'],
+    ['template tail', 'export const example = `text ${1} // eslint-disable-next-line`;'],
+    ['JSX text', 'export const example = <span>// eslint-disable-next-line</span>;'],
+  ])('does not interpret %s as a lint directive', async (_name, content) => {
+    const root = await fixture({
+      'apps/web/src/components/example/index.tsx': content,
+    });
+    await expect(checkSourceConventions(root)).resolves.toBe(1);
+  });
+
+  it('rejects a real lint directive inside a template expression', async () => {
+    const root = await fixture({
+      'apps/web/src/utils/describe.ts':
+        'const value = `text ${\n// eslint-disable-next-line no-restricted-syntax\noperation()\n}`;',
+    });
+    await expect(checkSourceConventions(root)).rejects.toThrow('Web 禁止局部关闭 ESLint');
   });
 });

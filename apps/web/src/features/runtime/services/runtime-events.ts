@@ -1,8 +1,8 @@
 import { RuntimeReadyEventSchema, type HealthResponse } from '@my-pi-harness/protocol';
 import { Value } from 'typebox/value';
 
-import type { RuntimeSubscription } from '@/features/runtime/types/runtime-subscription.js';
-import { subscribeSse } from '@/services/base-sse.js';
+import type { RuntimeSubscription } from '@/features/runtime/types/runtime-subscription';
+import { subscribeSse } from '@/services/base-sse';
 
 /** Validates SSE payloads and ensures health and events describe the same daemon. */
 export const subscribeToRuntime = (

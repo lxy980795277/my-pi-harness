@@ -1,9 +1,95 @@
 import { type Static, Type } from 'typebox';
 
+export {
+  CustomProtocolSchema,
+  ThinkingLevelSchema,
+  CompatOptionsSchema,
+  ModelDefinitionSchema,
+  ModelInfoSchema,
+  DefaultModelSchema,
+  AppSettingsSchema,
+  AppSettingsInputSchema,
+  ProviderConfigSchema,
+  ProviderInputSchema,
+  NativeProviderInfoSchema,
+  ConnectionResultSchema,
+} from './models.js';
+export type {
+  CustomProtocol,
+  ThinkingLevel,
+  CompatOptions,
+  ModelDefinition,
+  ModelInfo,
+  DefaultModel,
+  AppSettings,
+  AppSettingsInput,
+  ProviderConfig,
+  ProviderInput,
+  NativeProviderInfo,
+  ConnectionResult,
+} from './models.js';
+export {
+  SessionSummarySchema,
+  MessageViewSchema,
+  RunViewSchema,
+  QueueInputSchema,
+  BranchViewSchema,
+  SessionSnapshotSchema,
+  HarnessEventSchema,
+  SessionCreateInputSchema,
+  ResolvedSessionCreateInputSchema,
+  SessionPatchInputSchema,
+  InputRequestSchema,
+  EditInputSchema,
+  QueuePatchInputSchema,
+} from './sessions.js';
+export type {
+  SessionSummary,
+  MessageView,
+  RunView,
+  QueueInput,
+  BranchView,
+  SessionSnapshot,
+  HarnessEvent,
+  SessionCreateInput,
+  ResolvedSessionCreateInput,
+  SessionPatchInput,
+  InputRequest,
+  EditInput,
+  QueuePatchInput,
+} from './sessions.js';
+export {
+  AuthStatusSchema,
+  AuthFlowSchema,
+  PairingCodeResponseSchema,
+  AuthUrlResponseSchema,
+} from './auth.js';
+export type { AuthStatus, AuthFlow, PairingCodeResponse, AuthUrlResponse } from './auth.js';
+
 export { APP_VERSION } from './version.js';
+export {
+  WORKSPACE_ICONS,
+  WorkspaceIconSchema,
+  WorkspaceSchema,
+  WorkspaceCreateInputSchema,
+  WorkspaceRenameInputSchema,
+} from './workspaces.js';
+export type {
+  WorkspaceIcon,
+  Workspace,
+  WorkspaceCreateInput,
+  WorkspaceRenameInput,
+} from './workspaces.js';
+export {
+  ApprovalModeSchema,
+  ToolCallRecordSchema,
+  ToolCallViewSchema,
+  ToolDecisionInputSchema,
+} from './tools.js';
+export type { ApprovalMode, ToolCallRecord, ToolCallView, ToolDecisionInput } from './tools.js';
 
 /** 跨端应用协议版本；不等同于产品版本。 */
-export const PROTOCOL_VERSION = 1;
+export const PROTOCOL_VERSION = 5;
 
 /** 本机服务完成监听后的可公开状态，不包含配置、路径或凭据。 */
 export const HealthResponseSchema = Type.Object(
@@ -69,4 +155,10 @@ export type DesktopInfo = Static<typeof DesktopInfoSchema>;
 export interface DesktopBridge {
   /** 返回产品版本和平台。 */
   getInfo(): Promise<DesktopInfo>;
+  /** Open the URL of an active daemon-owned authentication flow. */
+  openAuth(flowId: string): Promise<void>;
+  /** Choose a local workspace directory; cancellation returns null. */
+  chooseWorkspaceDirectory(): Promise<string | null>;
+  /** Resolve one actual dropped directory; synthetic files and regular files are rejected. */
+  getDroppedWorkspaceDirectory(file: unknown): Promise<string>;
 }

@@ -43,6 +43,7 @@ const pluginConfig = [
       'project-react/component-declaration': 'error',
       'project-react/zustand-selector': 'error',
       'project-react/transport-owner': 'error',
+      'project-react/presentation-only': 'error',
     },
   },
 ];
@@ -274,7 +275,13 @@ describe('configured Renderer syntax rules', () => {
       'export const App: FC = () => { return <main style={{ color: "red" }} />; };',
       'no-restricted-syntax',
     ],
-    ['nested conditional', 'const value = ready ? active ? 1 : 2 : 3;', 'no-nested-ternary'],
+    ['plain conditional', 'const value = ready ? 1 : 2;', 'no-restricted-syntax'],
+    ['nested conditional', 'const value = ready ? active ? 1 : 2 : 3;', 'no-restricted-syntax'],
+    ['void operator', 'void save();', 'no-restricted-syntax'],
+    ['then chain', 'save().then(receive);', 'no-restricted-syntax'],
+    ['catch chain', 'save().catch(report);', 'no-restricted-syntax'],
+    ['finally chain', 'save().finally(clear);', 'no-restricted-syntax'],
+    ['computed chain', 'save()["catch"](report);', 'no-restricted-syntax'],
     ['explicit any', 'type State = { value: any };', '@typescript-eslint/no-explicit-any'],
     ['double unknown cast', 'const state = value as unknown as State;', 'no-restricted-syntax'],
     ['non-null assertion', 'const state = value!;', '@typescript-eslint/no-non-null-assertion'],
@@ -336,7 +343,7 @@ describe('configured Renderer syntax rules', () => {
     ],
     [
       'subscribed action',
-      'export const App: FC = () => { const select = useSessionStore((state: State): State["selectSession"] => { return state.selectSession; }); return <button onClick={select} />; };',
+      'export const App: FC = () => { const select = useSessionStore((state: State): State["selectSession"] => { return state.selectSession; }); return <Button onClick={select} />; };',
     ],
   ])('accepts %s with the configured callback exceptions', (_name, source) => {
     expect(lint(source, webFixtureConfig)).toEqual([]);
@@ -362,5 +369,97 @@ describe('configured Renderer syntax rules', () => {
     ).toContainEqual(
       expect.objectContaining({ ruleId: 'project-react/component-declaration', severity: 2 }),
     );
+  });
+});
+
+describe('TSX presentation ownership', () => {
+  it.each([
+    [
+      'service call import',
+      'import { fetchProviders } from "@/features/models/services/providers";',
+      'service',
+    ],
+    [
+      'relative service import',
+      'import { fetchProviders } from "../../services/providers";',
+      'service',
+    ],
+    ['common client import', 'import { requestJson } from "@/services/base-request";', 'service'],
+    ['side-effect service import', 'import "@/services/base-request";', 'service'],
+    ['query hook alias', 'import { useQuery as query } from "@tanstack/react-query";', 'service'],
+    [
+      'query client construction',
+      'import { QueryClient } from "@tanstack/react-query";',
+      'service',
+    ],
+    ['query namespace', 'import * as Query from "@tanstack/react-query";', 'service'],
+    ['native button', 'const content = <button type="button">保存</button>;', 'control'],
+    ['native input', 'const content = <input />;', 'control'],
+    ['native option', 'const content = <option value="one">一</option>;', 'control'],
+    ['native label', 'const content = <label htmlFor="one">一</label>;', 'control'],
+    ['inline event arrow', 'const content = <Button onClick={() => { save(); }} />;', 'handler'],
+    [
+      'inline event function',
+      'const content = <Button onClick={function () { save(); }} />;',
+      'handler',
+    ],
+    [
+      'map transformation',
+      'const content = <div>{items.map((item) => { const label = describe(item); return <span>{label}</span>; })}</div>;',
+      'transform',
+    ],
+  ])('rejects %s', (_name, source, messageId) => {
+    expectViolation(source, 'project-react/presentation-only', messageId);
+  });
+
+  it.each([
+    ['provider composition', 'import { QueryClientProvider } from "@tanstack/react-query";'],
+    ['query type', 'import type { QueryClient } from "@tanstack/react-query";'],
+    [
+      'inline query type',
+      'import { type QueryClient, QueryClientProvider } from "@tanstack/react-query";',
+    ],
+    ['service type', 'import type { Input } from "@/features/models/services/providers";'],
+    ['type specifier', 'import { type Input } from "@/features/models/services/providers";'],
+    [
+      'semantic markup',
+      'const content = <main><form onSubmit={submit}><a href="https://example.com">文档</a><details><summary>详情</summary><span>内容</span></details></form></main>;',
+    ],
+    ['named handler', 'const content = <Button onClick={save}>保存</Button>;'],
+    [
+      'pure render map',
+      'const content = <div>{items.map((item) => { return <span key={item.id}>{item.name}</span>; })}</div>;',
+    ],
+  ])('allows %s', (_name, source) => {
+    expect(lint(source)).toEqual([]);
+  });
+
+  it('allows native controls only inside owned UI primitives', () => {
+    expect(
+      lint(
+        'const content = <button type="button">保存</button>;',
+        pluginConfig,
+        'apps/web/src/components/ui/button/index.tsx',
+      ),
+    ).toEqual([]);
+  });
+
+  it('allows request orchestration in a typed Hook module', () => {
+    expect(
+      lint(
+        'import { useQuery } from "@tanstack/react-query"; import { fetchProviders } from "@/features/models/services/providers";',
+        pluginConfig,
+        'apps/web/src/features/models/hooks/use-providers.ts',
+      ),
+    ).toEqual([]);
+  });
+
+  it('preserves void return types and async/await error handling', () => {
+    expect(
+      lint(
+        'const save = async (): Promise<void> => { try { await persist(); } catch (failure: unknown) { report(failure); } finally { clear(); } };',
+        webFixtureConfig,
+      ),
+    ).toEqual([]);
   });
 });

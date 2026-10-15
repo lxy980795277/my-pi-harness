@@ -6,7 +6,10 @@
     "lib": ["ES2023"],
     "types": ["node"],
     "paths": {
-      "@my-pi-harness/protocol": ["../../packages/protocol/src/index.ts"]
+      "@my-pi-harness/protocol": ["../../packages/protocol/src/index.ts"],
+      "@my-pi-harness/storage": ["../../packages/storage/src/index.ts"],
+      "@my-pi-harness/agent-runtime": ["../../packages/agent-runtime/src/index.ts"],
+      "@my-pi-harness/execution": ["../../packages/execution/src/index.ts"]
     }
   },
   "include": ["src/**/*.ts", "test/**/*.ts", "vitest*.config.ts"]

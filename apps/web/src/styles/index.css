@@ -19,6 +19,7 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-border: var(--border);
   --color-ring: var(--ring);
+  --color-workspace-folder: var(--workspace-folder);
   --color-success: var(--success);
   --color-success-foreground: var(--success-foreground);
   --color-success-solid: var(--success-solid);

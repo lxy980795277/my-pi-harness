@@ -1,6 +1,6 @@
 # 依赖版本审计
 
-审计日期：2026-10-13。本页记录本轮M0依赖选择及依据；实际版本由根 `package.json`、`.node-version`、`pnpm-workspace.yaml` 和lockfile拥有。后续更新这些文件时同步本页，不把本页作为另一份安装配置。
+审计日期：2026-10-13。本页记录M0基线与M1新增依赖选择及依据；实际版本由根 `package.json`、`.node-version`、`pnpm-workspace.yaml` 和lockfile拥有。后续更新这些文件时同步本页，不把本页作为另一份安装配置。
 
 采用仍受支持、已有使用观察期且满足整套工具peer范围的版本线；不统一追随latest，也不因版本发布日期较早就认定过时。稳定tag、发布时间、支持政策和本仓库运行检查分别提供证据，任何一项都不能单独保证稳定。
 
@@ -8,7 +8,7 @@
 
 版本、npm tag、发布时间、engines与peer来自npm官方Registry，本轮摘录位于 `output/audit/dependencies.json` 与 `output/audit/candidates.json`。表内日期是所选版本的npm发布时间（UTC日期），不是GitHub发布日、安装日或功能线最初发布日期。ESLint与pnpm补充读取完整Registry元数据；Node日期来自官方发行索引。
 
-下表列出全部37项catalog及两项根运行工具。链接指向原始包元数据，`time[版本]` 可复查发布时间，`versions[版本]` 可复查engines与peer；dist-tags会变化，因此本页结论限定审计日期。
+下表列出M0的37项catalog及两项根运行工具；M1新增项见后文。链接指向原始包元数据，`time[版本]` 可复查发布时间，`versions[版本]` 可复查engines与peer；dist-tags会变化，因此本页结论限定审计日期。
 
 ## Node、包管理与桌面
 
@@ -96,10 +96,32 @@ Fastify5.12和static10.1已有早期补丁观察记录，本轮保留所选线�
 
 CI的checkout、pnpm/action-setup与setup-node分别采用正式7.0.1、6.0.10和7.1.0，均用Node24 action runtime，支持当前Node/pnpm输入。workflow固定完整commit SHA并标注对应版本，更新时同时核对正式tag、源码manifest和使用说明；不以浮动major tag推断它已经指向最新minor。[checkout发行](https://github.com/actions/checkout/releases/tag/v7.0.1)、[pnpm发行](https://github.com/pnpm/action-setup/releases/tag/v6.0.10)、[setup-node发行](https://github.com/actions/setup-node/releases/tag/v7.1.0)
 
-本页不记录检查通过结果。strict peer解析、静态规则、源码单测、构建、真实产物、桌面smoke及npm audit由本轮 [Spec](../04_FEATURES/20261013_refactor_m0-standards-audit/spec.md) 和验证记录承担；审计文件、安装成功或版本可解析不能代替运行验收。npm audit未执行前不得预写“无漏洞”，有报告时区分生产/开发、可达性和实际修复。
+本页不记录检查通过结果。strict peer解析、静态规则、源码单测、构建、真实产物、桌面smoke及npm audit由本轮 [Spec](../04_FEATURES/202610131000_refactor_m0-standards-audit/spec.md) 和验证记录承担；审计文件、安装成功或版本可解析不能代替运行验收。npm audit未执行前不得预写“无漏洞”，有报告时区分生产/开发、可达性和实际修复。
 
-Pi、Zustand、SQLite及embedding等后续模块不在本轮catalog审计范围；选型确定不等于已安装或已实现。功能状态由里程碑与所属Spec管理。
+M1新增依赖于2026-10-14按稳定线锁定并进入lockfile，Pi core/ai均为1.1.0，以定向override阻止core的范围依赖自动拉入ai1.2；1.2刚发布，不因latest直接迁移。原生SQLite面向独立Node24，Drizzle采用0.45稳定线，避免1.0 rc。
+
+| 新增catalog                                                                                                                         | 所选版本      | 依据                                                           |
+| ----------------------------------------------------------------------------------------------------------------------------------- | ------------- | -------------------------------------------------------------- |
+| [Pi core](https://registry.npmjs.org/@earendil-works%2fpi-agent-core) / [Pi ai](https://registry.npmjs.org/@earendil-works%2fpi-ai) | 1.1.0 / 1.1.0 | 同线公开Agent/Models/auth hooks，核心对象不作为公开存储格式    |
+| [better-sqlite3](https://registry.npmjs.org/better-sqlite3)                                                                         | 13.0.3        | Node24兼容，真实VFS锁及WAL事务                                 |
+| [drizzle-orm](https://registry.npmjs.org/drizzle-orm)                                                                               | 0.45.3        | 稳定0.45线，显式迁移而不追rc                                   |
+| [keyring](https://registry.npmjs.org/@napi-rs%2fkeyring)                                                                            | 2.1.0         | Async原生Keychain/Windows Credential Manager，缺项与不可用分开 |
+| [SQLite types](https://registry.npmjs.org/@types%2fbetter-sqlite3)                                                                  | 9.6.0         | 对齐实际公开API并执行严格类型检查                              |
+| [zustand](https://registry.npmjs.org/zustand)                                                                                       | 5.0.14        | 稳定5，只拥有UI状态                                            |
+| [react-virtual](https://registry.npmjs.org/@tanstack%2freact-virtual)                                                               | 3.14.19       | 稳定3，可变行高长历史时间线                                    |
+
+@google/genai的安装脚本为no-op，protobufjs postinstall仅检查版本声明；npm包已携带运行产物。本仓库显式ignoredBuiltDependencies记录这两项，不为它们额外执行安装脚本。实际生产依赖native脚本白名单为Electron、esbuild与better-sqlite3。原生keyring由平台N-API optional依赖携带资源。
+
+M1.6设置组件采用2026-07-24发布的同批Radix稳定版本，和已有slot1.3.3一致，未追随10月刚发布的新minor。Dialog/AlertDialog为1.1.23、Select为2.3.7、Tabs为1.1.21、Switch为1.3.7、Label为2.1.15、ScrollArea为1.2.18；这些版本的peer均包含React19。[Dialog元数据](https://registry.npmjs.org/@radix-ui%2freact-dialog)、[Select元数据](https://registry.npmjs.org/@radix-ui%2freact-select)、[其余原语](https://www.radix-ui.com/primitives/docs/components)
+
+M2工作区图标面板新增Popover1.1.23，与现有Dialog和Popper依赖保持同线；2026-10-15核对Registry后沿用该稳定线，不追随1.3.1。复用Radix的定位、焦点和关闭行为，包装为本仓库shadcn组件。[Popover元数据](https://registry.npmjs.org/@radix-ui%2freact-popover/1.1.23)
+
+Provider品牌使用无运行依赖的@lobehub/icons-static-svg1.95.1（2026-09-21），由Vite将所需SVG打入本地产物；动作图标仍为lucide。未引入需要Ant Design和@lobehub/ui peer的React图标包。get-nonce1.0.1是react-style-singleton已使用的公开nonce协调器，显式声明直接依赖以调用setNonce，供Radix弹窗滚动锁样式使用；Select/ScrollArea的Viewport使用相同页面nonce。[品牌资源元数据](https://registry.npmjs.org/@lobehub%2ficons-static-svg)、[nonce协调器](https://registry.npmjs.org/get-nonce/1.0.1)
 
 维护采用本地人工审查：约每月及发布前核对支持/EOL、安全公告、npm tags、peer和lockfile；遇到已确认安全修复或支持线结束提前处理。Electron每次发布核对最近三条支持线，不让观察期策略拖到EOL。
 
 同线patch先看变更与安全影响再更新，不固定等待天数阻止必要修复；新minor/major先确认需求、迁移与观察证据。按Node/Electron、Vite测试工具、ESLint工具、React样式等兼容组更新，保留可复查选择依据和对应检查。不引入更新机器人或额外服务，不自动提交升级。
+
+M2执行包新增diff8.0.4和pdfjs-dist6.2.108，采用独立文件Diff和PDF文本解析职责，不引入第二套Agent内核。PDF解析在有内存/时间/页数限制的worker运行，关闭动态求值与外部资源加载；实际限制和未提供的OCR见[execution](../../packages/execution/README.md)。版本由catalog/lockfile固定，验证结果属于M2记录。
+
+PDF选择已修复版本6.2.108（2026-07-28），仍在Node24支持范围。初选5.7.284被生产audit识别为GHSA-hq66-cqwq-w95j影响版本，不能用解析worker或isEvalSupported:false替代升级；不启用viewer脚本，也不为观察期保留已知告警。[官方安全公告](https://github.com/mozilla/pdf.js/security/advisories/GHSA-hq66-cqwq-w95j)

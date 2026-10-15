@@ -21,6 +21,9 @@ const ignoredDirectories = new Set([
 const generatedSources = new Set(['packages/protocol/src/version.ts']);
 const helperDirectories = new Set(['config', 'services', 'stores', 'constants', 'hooks', 'utils']);
 const sourceExtension = /\.(?:[cm]?[jt]sx?)$/;
+const asyncBridge = 'apps/web/src/hooks/use-async-event.ts';
+const asyncBridgeWaiver =
+  '// eslint-disable-next-line @typescript-eslint/no-floating-promises -- execute handles failures and cancellation.';
 
 async function sourceFiles(directory) {
   const entries = await readdir(directory, { withFileTypes: true });
@@ -68,6 +71,53 @@ function isKebabFilename(name) {
 
 function isStyleSpecifier(specifier) {
   return /\.(?:css|scss)(?:\?.*)?$/.test(specifier);
+}
+
+function lintDirectives(content, source) {
+  const literals = [];
+  function collect(node) {
+    if (
+      ts.isStringLiteralLike(node) ||
+      ts.isRegularExpressionLiteral(node) ||
+      ts.isJsxText(node) ||
+      [
+        ts.SyntaxKind.TemplateHead,
+        ts.SyntaxKind.TemplateMiddle,
+        ts.SyntaxKind.TemplateTail,
+      ].includes(node.kind)
+    ) {
+      literals.push({ start: node.getStart(source), end: node.end });
+      return;
+    }
+    ts.forEachChild(node, collect);
+  }
+  collect(source);
+  literals.sort((left, right) => left.start - right.start);
+  const scanner = ts.createScanner(ts.ScriptTarget.Latest, false, ts.LanguageVariant.JSX, content);
+  const directives = [];
+  let literalIndex = 0;
+  let token = scanner.scan();
+  while (token !== ts.SyntaxKind.EndOfFileToken) {
+    const position = scanner.getTokenPos();
+    while (literals[literalIndex]?.end <= position) literalIndex += 1;
+    const literal = literals[literalIndex];
+    if (literal && literal.start <= position) {
+      scanner.setTextPos(literal.end);
+      token = scanner.scan();
+      continue;
+    }
+    if (
+      token === ts.SyntaxKind.SingleLineCommentTrivia ||
+      token === ts.SyntaxKind.MultiLineCommentTrivia
+    ) {
+      const text = scanner.getTokenText();
+      if (/eslint-(?:disable|enable)/.test(text)) {
+        directives.push({ text, end: scanner.getTextPos() });
+      }
+    }
+    token = scanner.scan();
+  }
+  return directives;
 }
 
 function importedNames(source) {
@@ -127,11 +177,31 @@ export async function checkSourceConventions(repoRoot = defaultRoot) {
     if (!isKebabFilename(basename(file))) report('源文件名必须使用 kebab-case');
 
     const webSource = path.startsWith('apps/web/src/');
+    const webModule = webSource || path.startsWith('apps/web/test/');
+    const source = ts.createSourceFile(file, content, ts.ScriptTarget.Latest, true);
+    if (webSource) {
+      const directives = lintDirectives(content, source);
+      for (const directive of directives) {
+        const nextLine = content
+          .slice(directive.end)
+          .match(/^\r?\n([^\r\n]*)/)?.[1]
+          ?.trim();
+        if (
+          path !== asyncBridge ||
+          directives.length !== 1 ||
+          directive.text !== asyncBridgeWaiver ||
+          nextLine !== 'execute(...arguments_);'
+        ) {
+          report(
+            'Web 禁止局部关闭 ESLint；只允许 use-async-event.ts 的单条已处理 Promise 启动例外',
+          );
+        }
+      }
+    }
     if (webSource && path.endsWith('.tsx') && path !== 'apps/web/src/main.tsx') {
       if (basename(file) !== 'index.tsx') report('Web 组件必须使用独立目录中的 index.tsx');
     }
 
-    const source = ts.createSourceFile(file, content, ts.ScriptTarget.Latest, true);
     let sawStyle = false;
     const imports = importedNames(source);
     for (const statement of source.statements) {
@@ -147,7 +217,14 @@ export async function checkSourceConventions(repoRoot = defaultRoot) {
 
     function inspect(node) {
       const specifier = esmSpecifier(node);
-      if (specifier?.startsWith('.') && !/\.(?:[cm]?js|json|css|scss)(?:\?.*)?$/.test(specifier)) {
+      const localModule = specifier?.startsWith('.') || specifier?.startsWith('@/');
+      if (webModule && localModule && /\.[cm]?[jt]sx?(?:\?.*)?$/.test(specifier)) {
+        report(`Web 模块 import 不写源码或编译扩展；样式和静态资源保留实际扩展 (${specifier})`);
+      } else if (
+        !webModule &&
+        specifier?.startsWith('.') &&
+        !/\.(?:[cm]?js|json|css|scss)(?:\?.*)?$/.test(specifier)
+      ) {
         report(
           `相对 ESM import 必须写 .js 扩展；原生 .mjs/.cjs、JSON 和样式保留显式扩展 (${specifier})`,
         );

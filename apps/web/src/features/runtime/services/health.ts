@@ -1,7 +1,7 @@
 import { HealthResponseSchema, type HealthResponse } from '@my-pi-harness/protocol';
 import { Value } from 'typebox/value';
 
-import { getJson } from '@/services/base-request.js';
+import { getJson } from '@/services/base-request';
 
 /** Reads and validates daemon health through the same origin in both entry points. */
 export const fetchHealth = async (signal: AbortSignal): Promise<HealthResponse> => {

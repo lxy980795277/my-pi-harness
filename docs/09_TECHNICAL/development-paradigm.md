@@ -14,9 +14,9 @@
 | `02_DESIGN/overview.md`、`design.md`、`component.md`           | [设计](../02_DESIGN/overview.md)、[设计语言](../02_DESIGN/design-language.md)                                               | 保留克制、语义token、组件统一和状态；不复制旧产品字号、字体、业务组件和Tiptap专项                    |
 | `03_API/overview.md`及接口叶文档                               | [API](../03_API/overview.md)                                                                                                | 保留接口语义与共享DTO；使用TypeBox、SSE、有限桌面IPC，不复制统一traceId包装或禁204                   |
 | `04_FEATURES/overview.md`、功能目录结构                        | [功能文档](../04_FEATURES/overview.md)                                                                                      | 沿用Spec / UseCase / Tasks / Issues，实际验证后生成verify；不迁移历史功能                            |
-| `05_CONSTRAINTS/overview.md`、`forbidden.md`                   | [约束](../05_CONSTRAINTS/overview.md)、[禁止事项](../05_CONSTRAINTS/forbidden.md)                                           | 保留复用、命名、类型和交付红线；明确外部校验与同进程类型，不复制绝对禁止Map或typeof                  |
+| `05_CONSTRAINTS/overview.md`、`forbidden.md`                   | [四份规范](../05_CONSTRAINTS/overview.md)、[交付证据](../05_CONSTRAINTS/testing.md)                                         | 保留复用、命名、类型和交付红线；明确外部校验与同进程类型，不复制绝对禁止Map或typeof                  |
 | `05_CONSTRAINTS/frontend.md`及React/Zustand规则                | [前端](../05_CONSTRAINTS/frontend.md)                                                                                       | 按用户明确要求沿用React、Zustand、样式和组件细则；移除Next/SSR与旧编辑器业务，生成shadcn保留官方惯例 |
-| `05_CONSTRAINTS/backend.md`、`database.md`、`testing.md`       | [后端](../05_CONSTRAINTS/backend.md)、[存储](../05_CONSTRAINTS/storage.md)、[测试](../05_CONSTRAINTS/testing.md)            | 分层、事务、日志和Mock思想保留；框架、数据库与验证方式按下表调整                                     |
+| `05_CONSTRAINTS/backend.md`、`database.md`、`testing.md`       | [后端与存储](../05_CONSTRAINTS/backend.md)、[测试](../05_CONSTRAINTS/testing.md)                                            | 分层、事务、日志和Mock思想保留；框架、数据库与验证方式按下表调整                                     |
 | `06_RELEASES/overview.md`与Release Note                        | [发布](../06_RELEASES/overview.md)                                                                                          | 保留版本与新增/改进/修复记录；产品根版本同步桌面和protocol，内部包不独立升版                         |
 | `07_USER_GUIDE/overview.md`                                    | [使用指南](../07_USER_GUIDE/overview.md)                                                                                    | 保留用户视角，只描述实际已实现操作                                                                   |
 | `08_COLLABORATION/commit.md`、`collaboration.md`、`pruning.md` | [提交](../08_COLLABORATION/commit.md)、[协作](../08_COLLABORATION/collaboration.md)、[裁剪](../08_COLLABORATION/pruning.md) | 保留八步、精确暂存、Review与裁剪；不自动commit/push或创建分支，不擅自删除用户数据                    |
@@ -46,6 +46,6 @@
 
 ## PC专项补充
 
-Magic Book的远端Web服务规范不能覆盖桌面特权。新增 [Electron/PC](../05_CONSTRAINTS/desktop.md) 与 [安全](../05_CONSTRAINTS/security.md) 规定main/preload来源检查、权限、独立Node、生命周期、原生模块与资源装配；Computer Use仍属于后续专项。
+Magic Book的远端Web服务规范不能覆盖桌面特权。新增 [Electron/PC](../05_CONSTRAINTS/desktop.md) 与 [后端安全](../05_CONSTRAINTS/backend.md) 规定main/preload来源检查、权限、独立Node、生命周期、原生模块与资源装配；Computer Use仍属于后续专项。
 
 Electron细则对照官方安全、IPC、session和生命周期文档；Fastify细则对照官方schema/hooks/logger；Node和SQLite细则对照其进程、权限、事务及备份文档，来源链接放在实际规则附近。依赖版本事实由单独版本记录拥有，不在本页重复固定版本号。

@@ -1,6 +1,6 @@
 import type { ComponentProps, FC } from 'react';
 
-import { cn } from '@/utils/cn.js';
+import { cn } from '@/utils/cn';
 
 /** Uses a real heading so callers can name each status region. */
 export const CardTitle: FC<ComponentProps<'h2'>> = ({ className, children, ...props }) => {

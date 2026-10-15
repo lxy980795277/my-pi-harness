@@ -35,10 +35,15 @@ export function createConfig(rootDirectory) {
             './tsconfig.json',
             './apps/daemon/tsconfig.json',
             './apps/web/tsconfig.json',
+            './apps/web/tsconfig.test.json',
             './apps/web/tsconfig.node.json',
+            './tests/e2e/tsconfig.json',
             './apps/desktop/tsconfig.main.json',
             './apps/desktop/tsconfig.preload.json',
             './packages/protocol/tsconfig.json',
+            './packages/agent-runtime/tsconfig.json',
+            './packages/storage/tsconfig.json',
+            './packages/execution/tsconfig.json',
           ],
           tsconfigRootDir: rootDirectory,
         },
@@ -76,13 +81,27 @@ export function createConfig(rootDirectory) {
         'project-react/component-declaration': 'error',
         'project-react/zustand-selector': 'error',
         'project-react/transport-owner': 'error',
-        'no-nested-ternary': 'error',
+        'project-react/presentation-only': 'error',
         'no-restricted-syntax': [
           'error',
           { selector: 'ExportDefaultDeclaration', message: 'Renderer 使用具名导出。' },
           {
-            selector: 'JSXExpressionContainer ConditionalExpression',
-            message: 'JSX 条件渲染使用 && 或有类型的映射。',
+            selector: 'ConditionalExpression',
+            message: 'Web 源码禁止三目运算符，使用 if、提前返回或明确映射。',
+          },
+          {
+            selector: 'UnaryExpression[operator="void"]',
+            message: '禁止 void 丢弃 Promise；使用 await 和有异常处理的具名函数。',
+          },
+          {
+            selector:
+              'CallExpression[callee.type="MemberExpression"][callee.computed=false][callee.property.name=/^(then|catch|finally)$/]',
+            message: '异步操作使用 async/await 与 try/catch/finally，不写 Promise 链。',
+          },
+          {
+            selector:
+              'CallExpression[callee.type="MemberExpression"][callee.computed=true][callee.property.value=/^(then|catch|finally)$/]',
+            message: '异步操作使用 async/await 与 try/catch/finally，不写 Promise 链。',
           },
           {
             selector: 'JSXAttribute[name.name="style"]',

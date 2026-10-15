@@ -1,3 +1,7 @@
+import { randomBytes } from 'node:crypto';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import assert from 'node:assert/strict';
@@ -8,20 +12,37 @@ import { Value } from 'typebox/value';
 
 interface RunningDaemon {
   origin: string;
+  token: string;
   stop: () => Promise<void>;
 }
 
 /** Starts built daemon exports and static Web with an isolated listener per test. */
 export const test = base.extend<{ daemon: RunningDaemon }>({
+  page: async ({ page, daemon }, use) => {
+    await page.context().addCookies([
+      {
+        name: 'my_pi_session',
+        value: daemon.token,
+        url: daemon.origin,
+        httpOnly: true,
+        sameSite: 'Strict',
+      },
+    ]);
+    await use(page);
+  },
   daemon: async ({}, use) => {
+    const profile = await mkdtemp(join(tmpdir(), 'my-pi-browser-'));
+    const ownerSecret = randomBytes(32).toString('base64url');
     const child = spawn(
       process.execPath,
-      [fileURLToPath(new URL('../../apps/daemon/dist/bootstrap.js', import.meta.url))],
+      [fileURLToPath(new URL('./start-daemon.mjs', import.meta.url))],
       {
         stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
         env: {
           ...process.env,
           MY_PI_HARNESS_PORT: '0',
+          MY_PI_HARNESS_PROFILE_DIRECTORY: profile,
+          MY_PI_HARNESS_DESKTOP_SECRET: ownerSecret,
           MY_PI_HARNESS_PARENT_PID: String(process.pid),
           MY_PI_HARNESS_WEB_DIST_PATH: fileURLToPath(
             new URL('../../apps/web/dist', import.meta.url),
@@ -91,9 +112,20 @@ export const test = base.extend<{ daemon: RunningDaemon }>({
         child.once('error', fail);
         child.once('exit', earlyExit);
       });
-      await use({ origin, stop });
+      const authorization = await fetch(`${origin}/api/auth/desktop`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ secret: ownerSecret }),
+        signal: AbortSignal.timeout(5000),
+      });
+      const token = /^my_pi_session=([A-Za-z0-9_-]+);/.exec(
+        authorization.headers.get('set-cookie') ?? '',
+      )?.[1];
+      if (!authorization.ok || !token) throw new Error('Fixture authorization failed');
+      await use({ origin, token, stop });
     } finally {
       await stop();
+      await rm(profile, { recursive: true, force: true });
     }
   },
 });

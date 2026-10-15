@@ -1,6 +1,8 @@
 # 功能文档
 
-每个功能、修复或重构使用 `YYYYMMDD_category_name/` 目录，category为 `feature`、`fix` 或 `refactor`。保留已确认的目录格式；普通文件使用kebab-case。
+每个功能、修复或重构使用 `YYYYMMDDHHmm_category_name/` 目录。前12位连续写日期与24小时制分钟，中间不加分隔符，采用北京时间 `Asia/Shanghai`；category为 `feature`、`fix` 或 `refactor`，name使用kebab-case，例如 `202610150930_feature_workspace-execution/`。分钟取建立Spec时的时间，不随修改或验收重命名；同一功能的后续小修更新原Spec，独立范围另建目录。
+
+已迁移历史目录的分钟是按任务先后补齐的排序估计，不代表已核实的开发开始时间；原有正文中的验证日期与证据保持原样。历史估时和本次迁移证据见[目录迁移Spec](202610151511_refactor_feature-document-timestamps/spec.md)。文档检查拒绝旧格式、非法日期/分钟或缺少spec.md的目录。
 
 目录先有 `spec.md`，验证结束后才有 `verify.md`。用户补充或调整需求时更新Spec及相关任务，不让后续实现依赖遗漏的口头约定。
 
@@ -8,12 +10,12 @@
 
 按以下顺序维护：
 
-| 部分    | 内容                                                             |
-| ------- | ---------------------------------------------------------------- |
-| Spec    | Intent、Constraints、Acceptance Criteria；状态、范围及已接受决定 |
-| UseCase | 每条UC的前置条件、操作步骤、预期结果和异常路径                   |
-| Tasks   | 按依赖顺序排列的可执行checkbox，与AC或UC关联                     |
-| Issues  | 已发生问题的根因、复现、解决方案和预防规则                       |
+| 部分    | 内容                                                                                |
+| ------- | ----------------------------------------------------------------------------------- |
+| Spec    | Roadmap Alignment、Intent、Constraints、Acceptance Criteria；状态、范围及已接受决定 |
+| UseCase | 每条UC的前置条件、操作步骤、预期结果和异常路径                                      |
+| Tasks   | 按依赖顺序排列的可执行checkbox，与AC或UC关联                                        |
+| Issues  | 已发生问题的根因、复现、解决方案和预防规则                                          |
 
 AC写可观察结果，不用「完善」「支持全部」代替具体条件。Task完成只表示工作已实施，不能代替AC验证通过。
 
@@ -25,5 +27,27 @@ AC写可观察结果，不用「完善」「支持全部」代替具体条件。
 
 ## 当前Spec
 
-- [M0 工程底座](20261013_feature_project-foundation/spec.md)
-- [M0 验证证据与平台限制](20261013_feature_project-foundation/verify.md)
+- [M0 工程底座](202610130900_feature_project-foundation/spec.md)
+- [M0 验证证据与平台限制](202610130900_feature_project-foundation/verify.md)
+- [M0 规范与架构审计](202610131000_refactor_m0-standards-audit/spec.md)
+- [M0 规范审计验证](202610131000_refactor_m0-standards-audit/verify.md)
+- [M1 模型与会话](202610131100_feature_model-session/spec.md)
+- [M1 验证证据与平台限制](202610131100_feature_model-session/verify.md)
+- [M1.6 模型设置与代码规范](202610140900_feature_model-settings/spec.md)
+- [M1.6 验证证据与平台限制](202610140900_feature_model-settings/verify.md)
+- [Provider与侧栏精简](202610150900_refactor_provider-navigation/spec.md)
+- [Provider与侧栏验证](202610150900_refactor_provider-navigation/verify.md)
+- [M2 工作区、交互基线与工具执行](202610150930_feature_workspace-execution/spec.md)
+- [M2 验证证据与平台限制](202610150930_feature_workspace-execution/verify.md)
+- [设置加载态与滚动条修复](202610151300_fix_settings-loading-scroll/spec.md)
+- [设置界面修复验证](202610151300_fix_settings-loading-scroll/verify.md)
+- [工作区导航密度与图标](202610151400_refactor_workspace-navigation/spec.md)
+- [工作区导航验证](202610151400_refactor_workspace-navigation/verify.md)
+- [功能文档分钟目录迁移](202610151511_refactor_feature-document-timestamps/spec.md)
+- [功能文档目录迁移验证](202610151511_refactor_feature-document-timestamps/verify.md)
+- [M2 剩余功能与执行收尾](202610151515_feature_m2-completion/spec.md)
+- [M2分步收尾验证](202610151515_feature_m2-completion/verify.md)
+- [工作区选择与自定义图标](202610151534_feature_workspace-creation/spec.md)
+- [工作区选择与图标验证](202610151534_feature_workspace-creation/verify.md)
+- [M2最终检查与提交](202610151555_refactor_m2-finalization/spec.md)
+- [M2最终验证与暂缓项](202610151555_refactor_m2-finalization/verify.md)

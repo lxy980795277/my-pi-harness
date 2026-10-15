@@ -1,10 +1,10 @@
 import type { ComponentProps, FC } from 'react';
 
-import { cn } from '@/utils/cn.js';
+import { cn } from '@/utils/cn';
 
-export { CardContent } from './card-content/index.js';
-export { CardHeader } from './card-header/index.js';
-export { CardTitle } from './card-title/index.js';
+export { CardContent } from './card-content/index';
+export { CardHeader } from './card-header/index';
+export { CardTitle } from './card-title/index';
 
 /** Neutral surface primitive shared by status and diagnostic panels. */
 export const Card: FC<ComponentProps<'section'>> = ({ className, ...props }) => {
