@@ -30,7 +30,7 @@ export const NavigationItem: FC<NavigationItemProps> = ({
       aria-current={current}
       onClick={select}
     >
-      <Icon width={14} height={14} aria-hidden />
+      <Icon width={18} height={18} aria-hidden />
       {label}
     </Button>
   );

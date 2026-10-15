@@ -1,9 +1,16 @@
 import type { KeyboardEvent } from 'react';
 
-/** Newlines remain ordinary input; the explicit command shortcut submits outside IME composition. */
+/** Enter follows the send button's disabled state; Shift/Alt and IME confirmation preserve input. */
 export const composerKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>): void => {
-  if (!event.nativeEvent.isComposing && (event.metaKey || event.ctrlKey) && event.key === 'Enter') {
-    event.preventDefault();
-    event.currentTarget.form?.requestSubmit();
+  if (
+    event.key !== 'Enter' ||
+    event.shiftKey ||
+    event.altKey ||
+    event.nativeEvent.isComposing ||
+    event.nativeEvent.keyCode === 229
+  ) {
+    return;
   }
+  event.preventDefault();
+  event.currentTarget.form?.querySelector<HTMLButtonElement>('button[type="submit"]')?.click();
 };

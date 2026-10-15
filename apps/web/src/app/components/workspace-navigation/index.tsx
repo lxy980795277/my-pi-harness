@@ -52,7 +52,7 @@ export const WorkspaceNavigation: FC<WorkspaceNavigationProps> = ({
           data-active={newConversation}
           aria-current={newConversation && 'page'}
         >
-          <MessageSquarePlus width={17} height={17} aria-hidden />
+          <MessageSquarePlus width={18} height={18} aria-hidden />
           新对话
         </Button>
         <NavigationItem

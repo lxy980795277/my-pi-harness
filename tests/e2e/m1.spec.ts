@@ -94,6 +94,85 @@ test('配置兼容 API、真实 Pi 流式请求、刷新与编辑分支', async 
   }
 });
 
+test('新对话与已有对话回车发送，换行和输入法确认不误发', async ({ page, daemon }) => {
+  const model = await startTestModel();
+  const inputRequests: string[] = [];
+  page.on('request', (request) => {
+    const path = new URL(request.url()).pathname;
+    if (request.method() === 'POST' && /^\/api\/sessions(?:$|\/[^/]+\/inputs$)/u.test(path)) {
+      inputRequests.push(path);
+    }
+  });
+  try {
+    await page.goto(daemon.origin);
+    const draft = page.getByLabel('消息', { exact: true });
+    const send = page.getByRole('button', { name: '发送', exact: true });
+    await draft.fill('尚未选择模型');
+    await expect(send).toBeDisabled();
+    await draft.press('Enter');
+    await expect(draft).toHaveValue('尚未选择模型');
+    expect(inputRequests).toHaveLength(0);
+    await configureTestProvider(page, model.origin);
+    await page.reload();
+    await chooseOption(
+      page,
+      page.getByRole('combobox', { name: '对话模型', exact: true }),
+      'Queue Model · Chat',
+    );
+    await draft.fill('   ');
+    await expect(send).toBeDisabled();
+    await draft.press('Enter');
+    await expect(draft).toHaveValue('   ');
+    expect(inputRequests).toHaveLength(0);
+
+    for (const context of ['新对话', '已有对话']) {
+      const before = inputRequests.length;
+      let text = `${context}第一行`;
+      await draft.fill(text);
+      await draft.press('Shift+Enter');
+      await page.keyboard.insertText('下一行');
+      text += '\n下一行';
+      await expect(draft).toHaveValue(text);
+      expect(inputRequests).toHaveLength(before);
+      await draft.dispatchEvent('keydown', {
+        key: 'Enter',
+        code: 'Enter',
+        keyCode: 13,
+        isComposing: true,
+      });
+      await expect(draft).toHaveValue(text);
+      expect(inputRequests).toHaveLength(before);
+      await draft.dispatchEvent('keydown', {
+        key: 'Enter',
+        code: 'Enter',
+        keyCode: 229,
+        isComposing: false,
+      });
+      await expect(draft).toHaveValue(text);
+      expect(inputRequests).toHaveLength(before);
+      await draft.press('Enter');
+      await expect(page.getByText(`响应：${text}`, { exact: true })).toBeVisible();
+      await expect(draft).toHaveValue('');
+      await expect(page.getByRole('button', { name: '停止', exact: true })).toHaveCount(0);
+    }
+
+    for (const shortcut of ['Control+Enter', 'Meta+Enter']) {
+      const text = `${shortcut}兼容发送`;
+      await draft.fill(text);
+      await draft.press(shortcut);
+      await expect(page.getByText(`响应：${text}`, { exact: true })).toBeVisible();
+      await expect(draft).toHaveValue('');
+      await expect(page.getByRole('button', { name: '停止', exact: true })).toHaveCount(0);
+    }
+    expect(inputRequests.filter((path) => path === '/api/sessions')).toHaveLength(1);
+    expect(inputRequests.filter((path) => path.endsWith('/inputs'))).toHaveLength(4);
+    expect(model.requests).toHaveLength(4);
+    await expect(page.getByRole('alert')).toHaveCount(0);
+  } finally {
+    await model.close();
+  }
+});
+
 test('停止保留队列，编辑后显式恢复；引导继续同一个 Run', async ({ page, daemon }) => {
   const model = await startTestModel();
   try {

@@ -33,3 +33,11 @@
 Windows Shell及Windows实机、浏览器新增目录按用户决定暂缓，仍属M2；浏览器可使用和编辑已有工作区。真实供应商API/OAuth及GitHub真实账号未验证。桌面证据仅覆盖本机macOS arm64未签名应用，正式安装器、签名、公证、自动更新与其他平台包未验收。本轮不开发M3。
 
 wire5增加工具快照的afterMessageId，客户端与daemon需同步升级；SQLite仍为4，历史工具记录与事件不改写。Session信封仍1，私有context codec新写2并读取1。历史verify保留原版本和当时结果，本记录说明当前补漏与最终产物。
+
+## 提交后的样式小修
+
+基线a0e961b已完成本地提交；正常hook的ESLint、类型检查与源码测试通过，源码测试578项通过、3项跳过，提交后工作区干净。以下为用户后续反馈的两个样式问题，尚未另行提交。
+
+AC-05 Pass：图标按钮清除基础Button继承的四边宽度，仅保留右侧1px分隔线；聚焦与面板打开时实测上/右/下/左宽度为0/1/0/0px。键盘Esc关闭面板恢复图标焦点，Tab进入名称后组合边框高亮，Shift+Tab回图标后组合阴影为none，独立焦点轮廓2px、内缩4px，不与外框重叠。侧栏新对话与运行状态均为18×18px，实测两个文字起点均为视口x=55px。
+
+实际检查：三个修改组件的定向ESLint和Prettier通过；`pnpm --filter @my-pi-harness/web build`通过，包含Web源码、构建配置和测试三个类型编译面。使用Playwright CLI在隔离临时profile和动态端口访问最终Web产物，完成上述尺寸、边框、键盘及截图检查；未新增测试文件或重跑全仓测试、桌面打包。截图位于忽略的`output/playwright/workspace-icon-border.png`及`workspace-icon-keyboard.png`，已实际查看；检查未创建工作区、调用模型或修改用户数据。

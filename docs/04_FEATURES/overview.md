@@ -51,3 +51,5 @@ AC写可观察结果，不用「完善」「支持全部」代替具体条件。
 - [工作区选择与图标验证](202610151534_feature_workspace-creation/verify.md)
 - [M2最终检查与提交](202610151555_refactor_m2-finalization/spec.md)
 - [M2最终验证与暂缓项](202610151555_refactor_m2-finalization/verify.md)
+- [输入框回车发送](202610151621_fix_composer-enter-send/spec.md)
+- [输入框回车发送验证](202610151621_fix_composer-enter-send/verify.md)

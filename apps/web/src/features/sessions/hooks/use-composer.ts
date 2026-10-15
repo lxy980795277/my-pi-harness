@@ -1,9 +1,10 @@
 import type { ComposerState } from '@/features/sessions/types/session-view';
 import type { InputRequest } from '@my-pi-harness/protocol';
-import { useCallback, useState, type ChangeEvent, type FormEvent, type KeyboardEvent } from 'react';
+import { useCallback, useState, type ChangeEvent, type FormEvent } from 'react';
 import { useWorkspaceStore } from '@/app/stores/workspace';
 import { useAsyncEvent } from '@/hooks/use-async-event';
 import { isRejectedInput } from '@/features/sessions/utils/input-outcome';
+import { composerKeyDown } from '@/features/sessions/utils/composer-key-down';
 
 const MODE_OPTIONS = [
   { value: 'follow-up', label: '排队 · 当前回复后继续' },
@@ -98,16 +99,6 @@ export const useComposer = (
     },
     [pendingInput, sessionId, setDraft],
   );
-  const keyDown = useCallback((event: KeyboardEvent<HTMLTextAreaElement>): void => {
-    if (
-      !event.nativeEvent.isComposing &&
-      (event.metaKey || event.ctrlKey) &&
-      event.key === 'Enter'
-    ) {
-      event.preventDefault();
-      event.currentTarget.form?.requestSubmit();
-    }
-  }, []);
   const changeMode = useCallback(
     (value: string): void => {
       if (pendingInput) {
@@ -126,7 +117,7 @@ export const useComposer = (
   return {
     draft,
     changeDraft,
-    keyDown,
+    keyDown: composerKeyDown,
     mode: pendingInput?.mode ?? mode,
     changeMode,
     modeOptions,

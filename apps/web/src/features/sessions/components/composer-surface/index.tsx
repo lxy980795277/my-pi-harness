@@ -71,7 +71,7 @@ export const ComposerSurface: FC<ComposerSurfaceProps> = ({
               className="h-9 w-9 rounded-full"
               disabled={disabled}
               aria-label="发送"
-              title="发送（⌘ / Ctrl + Enter）"
+              title="Enter 发送，Shift+Enter 换行"
             >
               <ArrowUp width={18} height={18} aria-hidden />
             </Button>
