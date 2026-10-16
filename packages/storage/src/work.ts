@@ -1,15 +1,13 @@
 import { isDeepStrictEqual } from 'node:util';
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, sql } from 'drizzle-orm';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import { Type } from 'typebox';
 import {
-  AttachmentContentSchema,
   BranchViewSchema,
   CheckpointSchema,
   ContextUsageSchema,
   WorkStateSchema,
   initialWorkState,
-  type AttachmentContent,
   type Checkpoint,
   type HarnessEvent,
   type WorkState,
@@ -96,7 +94,11 @@ export class WorkRepository {
       .where(eq(schema.workStates.sessionId, sessionId))
       .all()
       .map((row) => this.get(sessionId, row.branchId))
-      .filter((state) => state.questions.some((question) => question.status === 'pending'));
+      .filter(
+        (state) =>
+          state.plan?.review === 'pending' ||
+          state.questions.some((question) => question.status === 'pending'),
+      );
   }
 
   public listCheckpoints(sessionId: string): Checkpoint[] {
@@ -109,30 +111,49 @@ export class WorkRepository {
       .map((row) => checked(CheckpointSchema, row.data));
   }
 
-  public putAttachment(input: AttachmentContent): void {
-    const content = checked(AttachmentContentSchema, input);
-    this.db.insert(schema.attachments).values({ id: content.attachment.id, data: content }).run();
-  }
-
-  public getAttachment(id: string): AttachmentContent | undefined {
-    const row = this.db
-      .select()
-      .from(schema.attachments)
-      .where(eq(schema.attachments.id, id))
-      .get();
-    if (!row) return undefined;
-    const content = checked(AttachmentContentSchema, row.data);
-    if (content.attachment.id !== id)
-      throw new StorageError('INVALID_RECORD', 'Stored attachment identity is inconsistent');
-    return content;
-  }
-
   private validateState(sessionId: string, state: WorkState): void {
     this.requireBranch(sessionId, state.branchId);
     const ids = this.messageIds(state.branchId);
     for (const anchor of [state.contextStartAfterMessageId, state.compaction?.throughMessageId]) {
       if (anchor !== null && anchor !== undefined && !ids.includes(anchor))
         throw new StorageError('INVALID_EVENT', 'Context anchor is outside the work branch');
+    }
+    if (state.compaction !== null) {
+      const version = state.compaction;
+      const existing = this.db
+        .select({ data: schema.events.data })
+        .from(schema.events)
+        .where(
+          and(
+            eq(schema.events.sessionId, sessionId),
+            eq(schema.events.type, 'work.updated'),
+            sql`json_extract(${schema.events.data}, '$.state.compaction.id') = ${version.id}`,
+          ),
+        )
+        .get();
+      if (
+        existing &&
+        !isDeepStrictEqual(checked(WorkStateSchema, existing.data['state']).compaction, version)
+      )
+        throw new StorageError('CONFLICT', 'An existing compaction version cannot be rewritten');
+      if (!existing && version.parentId !== null) {
+        const parent = this.db
+          .select({ id: schema.events.eventId })
+          .from(schema.events)
+          .where(
+            and(
+              eq(schema.events.sessionId, sessionId),
+              eq(schema.events.type, 'work.updated'),
+              sql`json_extract(${schema.events.data}, '$.state.compaction.id') = ${version.parentId}`,
+            ),
+          )
+          .get();
+        if (!parent || version.parentId === version.id)
+          throw new StorageError(
+            'INVALID_EVENT',
+            'Compaction parent must name an earlier session version',
+          );
+      }
     }
     const questionIds = new Set<string>();
     for (const question of state.questions) {
@@ -264,7 +285,13 @@ export class WorkRepository {
       cursor = next;
     }
     for (const id of input.attachmentIds ?? []) {
-      if (!this.getAttachment(id))
+      if (
+        !this.db
+          .select({ id: schema.attachments.id })
+          .from(schema.attachments)
+          .where(eq(schema.attachments.id, id))
+          .get()
+      )
         throw new StorageError('INVALID_EVENT', 'Prepared attachment does not exist');
     }
     if (privateData === undefined)

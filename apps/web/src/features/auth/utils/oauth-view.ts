@@ -1,4 +1,5 @@
-import type { PromptPresentation } from '@/features/auth/types/auth-view';
+import type { SecretInputType } from '@/types/input';
+import type { PromptPresentation } from '@/features/auth/types/auth';
 import type { AuthFlow } from '@my-pi-harness/protocol';
 
 import type { SelectOption } from '@/components/ui/select-field';
@@ -17,7 +18,7 @@ export const getPromptPresentation = (
   let title = '补充登录信息';
   let label = prompt.message;
   let description = '请填写模型服务要求的登录信息。';
-  let inputType: 'text' | 'password' = 'text';
+  let inputType: SecretInputType = 'text';
   let canSubmitEmpty = false;
   if (prompt.type === 'text') {
     canSubmitEmpty = true;

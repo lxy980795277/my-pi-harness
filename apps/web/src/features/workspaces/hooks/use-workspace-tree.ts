@@ -7,7 +7,10 @@ import { useWorkspaces } from '@/features/workspaces/hooks/use-workspaces';
 import { removeWorkspace } from '@/features/workspaces/services/workspaces';
 import { buildWorkspaceGroups } from '@/features/workspaces/utils/workspace-tree';
 import { useAsyncEvent } from '@/hooks/use-async-event';
-import type { WorkspaceTreeState } from '@/features/workspaces/types/workspace-view';
+import type {
+  WorkspaceTreeState,
+  WorkspaceDialogSelection,
+} from '@/features/workspaces/types/workspace';
 
 /** One sidebar presents all durable conversations; no second list owns navigation. */
 export const useWorkspaceTree = (): WorkspaceTreeState => {
@@ -36,7 +39,7 @@ export const useWorkspaceTree = (): WorkspaceTreeState => {
     },
     [selectWorkspace, startNewConversation],
   );
-  const [dialog, setDialog] = useState<{ workspace: Workspace | null } | null>(null);
+  const [dialog, setDialog] = useState<WorkspaceDialogSelection | null>(null);
   const [removing, setRemoving] = useState<Workspace | null>(null);
   const remove = useAsyncEvent(
     useCallback(
@@ -98,6 +101,13 @@ export const useWorkspaceTree = (): WorkspaceTreeState => {
     },
     [selectSession, selectWorkspace, sessions.data],
   );
+  let error: string | null = null;
+  if (error === null && workspaces.error !== null) {
+    error = workspaces.error.message;
+  }
+  if (error === null && sessions.error !== null) {
+    error = sessions.error.message;
+  }
   return {
     groups: buildWorkspaceGroups(workspaces.data ?? [], sessions.data ?? []),
     activeId,
@@ -116,6 +126,6 @@ export const useWorkspaceTree = (): WorkspaceTreeState => {
     removingPending: remove.pending,
     removeError: remove.error,
     pending: workspaces.isPending || sessions.isPending,
-    error: workspaces.error?.message ?? sessions.error?.message ?? null,
+    error: error,
   };
 };

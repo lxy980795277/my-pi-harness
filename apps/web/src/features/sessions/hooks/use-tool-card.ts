@@ -2,7 +2,7 @@ import type { ToolCallView, ToolDecisionInput } from '@my-pi-harness/protocol';
 import { useCallback } from 'react';
 import { useAsyncEvent } from '@/hooks/use-async-event';
 import { toolNeedsApproval } from '@/features/sessions/utils/approval-options';
-import type { ToolCardState } from '@/features/sessions/types/composer-view';
+import type { ToolCardState } from '@/features/sessions/types/composer';
 
 const TOOL_STATUS_LABELS: Record<ToolCallView['status'], string> = {
   reviewing: 'AI 复核中',

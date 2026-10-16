@@ -21,7 +21,8 @@
   "dependencies": {
     "diff": "catalog:",
     "pdfjs-dist": "catalog:",
-    "typebox": "catalog:"
+    "typebox": "catalog:",
+    "officeparser": "catalog:"
   },
   "devDependencies": {
     "@types/node": "catalog:",

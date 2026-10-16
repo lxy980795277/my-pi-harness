@@ -22,7 +22,7 @@ export interface FittedContext {
 }
 
 /** Conservative Unicode/UTF-8 heuristic; this is not provider tokenization or billing usage. */
-function textTokens(text: string): number {
+export function textTokens(text: string): number {
   let ascii = 0;
   let nonAsciiBytes = 0;
   for (const character of text) {
@@ -32,7 +32,7 @@ function textTokens(text: string): number {
   return Math.ceil(ascii / 3 + nonAsciiBytes / 2);
 }
 
-function messageTokens(message: Message): number {
+export function messageTokens(message: Message): number {
   let tokens = 32;
   if (typeof message.content === 'string') tokens += textTokens(message.content);
   else {
@@ -93,6 +93,21 @@ export function estimateContextUsage(
     reservedOutput: maxOutput,
     inputBudget: contextWindow - maxOutput,
     trimmedMessages: 0,
+    prunedMessages: 0,
+    source: 'estimated',
+    providerInputTokens: null,
+    categories: {
+      system: 256 + textTokens(systemPrompt),
+      rules: 0,
+      tools:
+        toolDefinitions.length === 0
+          ? 0
+          : textTokens(JSON.stringify(toolDefinitions)) + 32 * toolDefinitions.length,
+      messages: messages.reduce((total, message) => total + messageTokens(message), 0),
+      attachments: 0,
+      summary: 0,
+      workingState: 0,
+    },
   };
 }
 

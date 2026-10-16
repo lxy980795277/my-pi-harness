@@ -1,3 +1,4 @@
+import { extname } from 'node:path';
 import { RuntimeError } from '@my-pi-harness/agent-runtime';
 
 export const TEXT_LIMIT = 256_000;
@@ -44,4 +45,43 @@ export function safeName(value: string): string {
 
 export function checkAborted(signal?: AbortSignal): void {
   if (signal?.aborted) throw new RuntimeError('CANCELLED', '附件处理已取消。');
+}
+
+const documentFormats: Readonly<Record<string, { format: string; mediaType: string }>> = {
+  '.docx': {
+    format: 'docx',
+    mediaType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  },
+  '.docm': { format: 'docx', mediaType: 'application/vnd.ms-word.document.macroEnabled.12' },
+  '.xlsx': {
+    format: 'xlsx',
+    mediaType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  },
+  '.xlsm': { format: 'xlsx', mediaType: 'application/vnd.ms-excel.sheet.macroEnabled.12' },
+  '.pptx': {
+    format: 'pptx',
+    mediaType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  },
+  '.pptm': {
+    format: 'pptx',
+    mediaType: 'application/vnd.ms-powerpoint.presentation.macroEnabled.12',
+  },
+  '.odt': { format: 'odt', mediaType: 'application/vnd.oasis.opendocument.text' },
+  '.ods': { format: 'ods', mediaType: 'application/vnd.oasis.opendocument.spreadsheet' },
+  '.odp': { format: 'odp', mediaType: 'application/vnd.oasis.opendocument.presentation' },
+  '.rtf': { format: 'rtf', mediaType: 'application/rtf' },
+  '.epub': { format: 'epub', mediaType: 'application/epub+zip' },
+};
+
+/** Filename and MIME select a supported parser; the parser validates the archive contents. */
+export function documentFormat(name: string, mediaType: string): string | undefined {
+  const entry = documentFormats[extname(name).toLowerCase()];
+  if (!entry) return undefined;
+  if (
+    mediaType.toLowerCase() !== entry.mediaType.toLowerCase() &&
+    mediaType !== 'application/octet-stream' &&
+    !(entry.format === 'rtf' && mediaType === 'text/rtf')
+  )
+    throw new RuntimeError('ATTACHMENT_TYPE', '文档类型与文件扩展名不符。');
+  return entry.format;
 }

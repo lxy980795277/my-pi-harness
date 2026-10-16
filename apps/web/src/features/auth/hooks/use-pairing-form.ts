@@ -1,5 +1,5 @@
-import type { PairingFormState } from '@/features/auth/types/auth-view';
-import { useCallback, useState, type ChangeEvent, type FormEvent } from 'react';
+import type { PairingFormState } from '@/features/auth/types/auth';
+import { useCallback, useState, type ChangeEvent, type SubmitEvent } from 'react';
 import { useAsyncEvent } from '@/hooks/use-async-event';
 
 /** One-time codes are cleared before the private async operation starts. */
@@ -18,7 +18,7 @@ export const usePairingForm = (onPair: (code: string) => Promise<void>): Pairing
     setCode(event.target.value);
   }, []);
   const submit = useCallback(
-    (event: FormEvent<HTMLFormElement>): void => {
+    (event: SubmitEvent<HTMLFormElement>): void => {
       event.preventDefault();
       const submitted = code;
       setCode('');

@@ -166,10 +166,12 @@ export class AuthFlows {
         flow.view.url = event.verificationUri;
         flow.view.deviceCode = event.userCode;
         break;
-      case 'info':
+      case 'info': {
         flow.view.message = event.message;
-        flow.view.url = event.links?.[0]?.url ?? flow.view.url;
+        const firstLink = event.links?.[0];
+        if (firstLink !== undefined) flow.view.url = firstLink.url;
         break;
+      }
       case 'progress':
         flow.view.message = event.message;
         break;

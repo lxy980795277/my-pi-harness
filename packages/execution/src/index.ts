@@ -23,7 +23,10 @@ export type {
   ExecutionContent,
   ExecutionContext,
   ExecutionResult,
+  FileMutationToolName,
+  ShellAccess,
   ToolDescription,
+  WorkspacePathPlatform,
 } from './types.js';
 
 /** Execute only after the caller has persisted intent and obtained any required approval. */
@@ -64,3 +67,4 @@ export async function executeTool(
     );
   }
 }
+export { extractDocument } from './document.js';

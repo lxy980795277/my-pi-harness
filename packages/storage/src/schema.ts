@@ -11,7 +11,7 @@ import type {
   Workspace,
   ToolCallRecord,
   WorkState,
-  AttachmentContent,
+  Attachment,
   Checkpoint,
 } from '@my-pi-harness/protocol';
 
@@ -152,10 +152,10 @@ export const workStates = sqliteTable(
   (table) => [primaryKey({ columns: [table.sessionId, table.branchId] })],
 );
 
-/** Original bytes are private host records and never part of public event streams. */
+/** Attachment metadata is a rebuildable index; frozen content lives in immutable private files. */
 export const attachments = sqliteTable('attachments', {
   id: text('id').primaryKey(),
-  data: text('data', { mode: 'json' }).$type<AttachmentContent>().notNull(),
+  data: text('data', { mode: 'json' }).$type<Attachment>().notNull(),
 });
 
 export const checkpoints = sqliteTable('checkpoints', {

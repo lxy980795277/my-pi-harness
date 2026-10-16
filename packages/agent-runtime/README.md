@@ -2,9 +2,9 @@
 
 Node端的模型接入与持久会话运行层，使用固定的Pi core/ai 1.1.0公开接口。HTTP、SQLite、OS凭据和页面由宿主提供；本包不导入Fastify、Electron、React或SQL驱动。源码测试通过paths消费protocol/storage，生产仅导出dist。
 
-`ModelGateway`装配账户实例、模型清单、连接探测与认证。OpenAI（Codex）、Anthropic、Google、DeepSeek、MiniMax、Kimi六个内置Provider按公开factory固定为单例入口，名称、端点和模型目录只读；旧重复账户及代理配置由具体ID继续兼容会话。自定义Provider允许空模型列表，模型Dialog草稿一次提交整个Provider，保留未提交的同ID模型headers/compat，切换协议同步已有模型API。自定义Provider使用Pi的Chat Completions、Responses或Anthropic lazy API。请求HTTP与模型SSE解析由Pi负责。OpenAI兼容Base URL通常含`/v1`；Anthropic SDK会追加`/v1/messages`，通常配置不含`/v1`的服务根地址。HTTPS及显式回环HTTP可用，地址不得含用户信息、query或fragment。
+`ModelGateway`装配账户实例、模型清单、连接探测与认证。OpenAI（Codex）、Anthropic、Google、DeepSeek、MiniMax、Kimi六个内置Provider按公开factory固定为单例入口，名称、端点和模型目录只读；自定义Provider允许空模型列表，模型Dialog草稿一次提交整个Provider，保留未提交的同ID模型headers/compat，切换协议同步已有模型API。自定义Provider使用Pi的Chat Completions、Responses或Anthropic lazy API。请求HTTP与模型SSE解析由Pi负责。OpenAI兼容Base URL通常含`/v1`；Anthropic SDK会追加`/v1/messages`，通常配置不含`/v1`的服务根地址。HTTPS及显式回环HTTP可用，地址不得含用户信息、query或fragment。
 
-公开providerKind、配置实例ID与credentialRef分别表示协议/厂商、账户配置和秘密存储引用。不同实例使用独立Pi注册ID与凭据；旧代理凭据不会转移到新的官方入口。生产默认AuthContext不读取供应商环境变量或其他应用认证文件。requiresApiKey=false跳过保存及环境凭据，通过Pi公开fetch注入剥除SDK认证头；恢复Key要求可继续使用原保存凭据。模型定义显式指定真实modelId、能力、上下文和compat，保存配置不证明远端可用。`testConnection`发起有超时的真实请求，可能产生供应商用量；它返回脱敏结果。
+公开providerKind、配置实例ID与credentialRef分别表示协议/厂商、账户配置和秘密存储引用。不同实例使用独立Pi注册ID与凭据；生产默认AuthContext不读取供应商环境变量或其他应用认证文件。requiresApiKey=false跳过保存及环境凭据，通过Pi公开fetch注入剥除SDK认证头；恢复Key要求可继续使用原保存凭据。模型定义显式指定真实modelId、能力、上下文和compat，保存配置不证明远端可用。`testConnection`发起有超时的真实请求，可能产生供应商用量；它返回脱敏结果。
 
 `resolve()`返回Model、绑定的streamFn及必须调用的`release()`。该lease从认证检查前开始，阻止运行期间修改Provider和凭据；调用者在失败或SDK真正结算后释放。本包的SessionRuntime与连接探测负责这些释放，外部调用者须遵守相同规则。
 
@@ -22,13 +22,23 @@ Node端的模型接入与持久会话运行层，使用固定的Pi core/ai 1.1.0
 
 输入接受后若Agent初始化或首次队列读取失败，运行层清理订阅与临时所有权、释放模型lease并停用Session；不会遗留可继续工作的假Agent，也不补写假完成。下一次启动将已接受但未结算的事实恢复为interrupted。
 
-SQLite事件与投影始终由RuntimeStore拥有。公开MessageView与私有模型codec分离，完整成功消息保留Provider签名、responseId等重放字段；错误/取消的SDK错误文本不进入公开事件。codec新写version2且读取version1/2；工具结果按assistant消息锚点进入私有上下文和分支前缀，未完成工具周期不伪造结果。公开工具记录ID按Run、assistant消息ID与SDK调用ID派生，兼容网关可在不同assistant轮次复用SDK调用ID；读取旧历史始终使用已存记录ID。存储写入失败会中止并停用该Session，不广播假完成或继续使用未提交Pi state；修复后重启从已提交事实恢复为interrupted。
+RuntimeStore拥有会话日志与投影。公开MessageView与宿主模型codec分离，成功消息保留Provider签名、responseId、system工具声明及工具结果；codec统一写入并读取version1，不兼容旧开发格式。工具结果按assistant消息锚点进入分支前缀，未完成周期不会伪造结果。工具记录ID按Run、assistant消息ID与SDK调用ID派生，允许网关在不同assistant轮次复用调用ID。持久化失败中止并停用Session，不广播假完成或继续使用未提交状态。
 
-宿主storage在SQLite提交后追加公开JSONL镜像；镜像失败可能发生在数据库已经提交之后，调用者不能因此自动重试模型或副作用。JSONL不含上述私有codec，也不是独立恢复来源，具体补齐及失败语义见[storage](../storage/README.md#会话jsonl镜像)。
+JSONL批记录是会话执行事实来源，完整批次fsync后才更新SQLite投影和发布事件；SQLite继续保存产品配置及可重建查询投影。宿主私有模型输入与公开事件分开保存，HTTP/SSE不暴露privateData。附件内容由宿主独立冻结保存，日志引用不等于附件文件备份。记录格式、回放及索引修复由[storage](../storage/README.md)拥有。
 
 `context`模块在每次Run开始时读取工作区根`AGENTS.md`及显式引用文件祖先目录中的规则，按目录深度及路径确定顺序，不扫描其他目录。已冻结的引用不依赖源文件继续存在；仍存在的祖先目录继续检查，缺失目录不提供规则。规则保存工作区相对来源、原始字节SHA-256与文本；下次Run重新读取，旧快照保持原样。最多16个文件、合计64 KiB，非UTF-8、符号/硬链接、敏感路径、越界及取消均拒绝；读取复用execution的真实路径和受检文件句柄，父目录并发改名仍受底层文件策略与OS隔离限制。项目规则只影响所属目录，不能覆盖应用策略或扩大工具权限。Plan、Todos和历史摘要按明确标识的工作数据加入模型上下文。
 
-上下文用量采用ASCII/Unicode UTF-8启发式、每条消息的协议余量及每张图片4096 token的固定估算，并计入规则、思考签名和工具定义，预留调用方指定的输出空间。这些数值不等于供应商分词、计费或高分辨率图片的真实用量。`fitContext`仅移除最早完整用户轮次，保留所有system更新和最新用户整轮；工具调用及其唯一结果必须配对，否则明确失败。最新输入、规则或当前工具结果仍超预算时拒绝，不截断其内容。压缩选择器保留最近两轮用户输入，在完整轮次处返回摘要前缀及原始索引；摘要模型调用、覆盖锚点、失败保护和持久化由SessionRuntime拥有。
+`WorkContext`在每次模型请求前重建当前工作状态与冻结规则对应的system内容。估算覆盖system、规则、工具定义、消息、附件、摘要和工作状态；ASCII/Unicode UTF-8启发式及每张图片4096 token均是估算。前次实际请求与后续assistant的input/cacheRead/cacheWrite共同校准下一次总量；摘要或上下文起点改变时基线失效，类别拆分始终保持估算。模型输出空间完整预留，最终仍超限则拒绝请求。
+
+投影仅缩短模型可见副本：长工具结果保留首尾，旧附件正文有界，早先图片转换为附件保留提示；原始消息、完整结果和附件不被改写。达到输入预算80%时，按完整assistant/tool组选择旧前缀，保留约16%的近期内容，支持同一Run内多次自动压缩。当前任务从有效消息中移除后会加入system以保证连续性，已批准计划和任务状态每次请求重新加入。工具调用和结果必须成组，不能把孤立结果交模型。
+
+摘要模型无工具、输出有界、总等待90秒。结构摘要记录目标、约束、决策、观察与完成、待办、阻塞及下一步；模型错误、无效JSON或自身超时使用保守本地摘要，调用方取消和持久化失败继续传播。全部结构字段合计受JSON序列化24000字符和渲染30000字符的预算限制，连续降级不会因局部数组累计变长而中断持久化。每个摘要版本保存父版本、覆盖消息、触发原因、策略及同口径前后token估算。手动压缩保留最近两轮用户对话；自动压缩可以在单个长任务的工具组之间进行。最终真正请求的system和消息先保存为context.prepared。
+
+`WorkInteractions`让ask_user和update_plan工具等待所属Run的用户响应，最长24小时；停止Run会结束等待。ask_user支持多题、选项说明、单选/多选和显式自由输入，答案逐题验证；取消提问返回工具错误，模型可以继续。update_plan提交带唯一ID的结构化步骤并进入只读规划模式；feedback结果返回原Run修订，approve切换执行模式并继续原Run，工具审批仍独立生效。update_plan_steps只修改已批准计划的步骤进度，不修改正文或授予批准。
+
+update_todos保存稳定ID、计划步骤关联和五种任务状态。完成任务需要本Run成功工具的已核验记录ID，或纯文本分析的明确completionNote；伪造、失败或为新增完成项引用其他Run证据被拒绝；既有完成项的未变证据在后续Run和继承分支中保留有效，校验以当前分支可见工具为准。最多一项任务处于进行中。用户手动完成同样需要依据或完成结论。reset_working_state/reset-tasks只清Plan/Todos；reset-context保留模式与Plan/Todos，清规则快照、用量、摘要、问题和未消费队列，并重置有效历史起点，旧历史仍可读。
+
+自动摘要版本是“上下文检查点”：选择旧版本保留当前Session及所有历史，但仅旧摘要和选择后新消息进入模型。restore_context_checkpoint支持指定版本或回退1至10个父版本。search_session_history有界检索当前分支原始消息、工具结果及可见消息绑定的文本附件，包括被模型投影缩短的附件尾部；最多检查10000条消息、2000条工具和128个附件，总扫描100万字符，最多返回20个各2000字符的片段，不跨Session，不代替M6长期记忆。手动checkpoints是“会话快照”：冻结消息前缀和工作状态，恢复时创建新分支，保留旧分支。两者都不回滚文件、命令或外部请求。
 
 本包测试使用真实临时SQLite、真实Pi Agent与受控faux Provider、动态端口HTTP/SSE和显式内存凭据适配器。它们不调用真实供应商账号或用户keyring，不能替代真实API、系统凭据和macOS/Windows发布验收。
 

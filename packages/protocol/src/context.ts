@@ -14,6 +14,7 @@ export const AttachmentSchema = Type.Object(
       Type.Literal('text'),
       Type.Literal('image'),
       Type.Literal('pdf'),
+      Type.Literal('document'),
       Type.Literal('reference'),
     ]),
     byteLength: Type.Integer({ minimum: 0, maximum: 8_388_608 }),
@@ -72,63 +73,154 @@ export const ContextUsageSchema = Type.Object(
     reservedOutput: Type.Integer({ minimum: 0 }),
     inputBudget: Type.Integer({ minimum: 1 }),
     trimmedMessages: Type.Integer({ minimum: 0 }),
+    prunedMessages: Type.Integer({ minimum: 0 }),
+    source: Type.Union([Type.Literal('estimated'), Type.Literal('provider')]),
+    providerInputTokens: Type.Union([Type.Integer({ minimum: 0 }), Type.Null()]),
+    categories: Type.Object(
+      {
+        system: Type.Integer({ minimum: 0 }),
+        rules: Type.Integer({ minimum: 0 }),
+        tools: Type.Integer({ minimum: 0 }),
+        messages: Type.Integer({ minimum: 0 }),
+        attachments: Type.Integer({ minimum: 0 }),
+        summary: Type.Integer({ minimum: 0 }),
+        workingState: Type.Integer({ minimum: 0 }),
+      },
+      { additionalProperties: false },
+    ),
   },
   { additionalProperties: false },
 );
 export type ContextUsage = Static<typeof ContextUsageSchema>;
+
+const summaryItems = Type.Array(Type.String({ minLength: 1, maxLength: 4000 }), { maxItems: 50 });
+/** Semantic facts retained when earlier model messages leave the active context. */
+export const ContextSummarySchema = Type.Object(
+  {
+    objective: Type.String({ maxLength: 4000 }),
+    constraints: summaryItems,
+    decisions: summaryItems,
+    completed: summaryItems,
+    pending: summaryItems,
+    blockers: summaryItems,
+    nextAction: Type.String({ maxLength: 4000 }),
+  },
+  { additionalProperties: false },
+);
+export type ContextSummary = Static<typeof ContextSummarySchema>;
 export const CompactionSchema = Type.Object(
   {
     id,
     throughMessageId: id,
     summary: Type.String({ minLength: 1, maxLength: 32_000 }),
+    structured: ContextSummarySchema,
+    parentId: nullableId,
+    strategy: Type.Union([Type.Literal('model'), Type.Literal('fallback')]),
+    beforeTokens: Type.Integer({ minimum: 0 }),
+    afterTokens: Type.Integer({ minimum: 0 }),
+    sourceMessages: Type.Integer({ minimum: 1 }),
+    runId: nullableId,
     createdAt: timestamp,
     reason: Type.Union([Type.Literal('manual'), Type.Literal('automatic')]),
   },
   { additionalProperties: false },
 );
 export type Compaction = Static<typeof CompactionSchema>;
+const progress = Type.Union([
+  Type.Literal('pending'),
+  Type.Literal('in_progress'),
+  Type.Literal('completed'),
+]);
+export const PlanStepSchema = Type.Object(
+  { id, title: Type.String({ minLength: 1, maxLength: 1000 }), status: progress },
+  { additionalProperties: false },
+);
+export type PlanStep = Static<typeof PlanStepSchema>;
 export const TodoSchema = Type.Object(
   {
     id,
     title: Type.String({ minLength: 1, maxLength: 1000 }),
-    status: Type.Union([
-      Type.Literal('pending'),
-      Type.Literal('in_progress'),
-      Type.Literal('completed'),
-    ]),
+    status: Type.Union([progress, Type.Literal('blocked'), Type.Literal('cancelled')]),
+    planStepId: nullableId,
+    evidenceToolCallIds: Type.Array(id, { maxItems: 20 }),
+    completionNote: Type.Union([Type.String({ minLength: 1, maxLength: 4000 }), Type.Null()]),
   },
   { additionalProperties: false },
 );
 export type Todo = Static<typeof TodoSchema>;
 export const PlanSchema = Type.Object(
   {
+    id,
+    runId: nullableId,
     title: Type.String({ minLength: 1, maxLength: 200 }),
     content: Type.String({ minLength: 1, maxLength: 32_000 }),
+    steps: Type.Array(PlanStepSchema, { maxItems: 100 }),
     status: Type.Union([
       Type.Literal('draft'),
       Type.Literal('approved'),
       Type.Literal('completed'),
     ]),
+    review: Type.Union([
+      Type.Null(),
+      Type.Literal('pending'),
+      Type.Literal('approved'),
+      Type.Literal('feedback'),
+      Type.Literal('cancelled'),
+      Type.Literal('interrupted'),
+    ]),
+    feedback: Type.Union([Type.String({ maxLength: 4000 }), Type.Null()]),
     updatedAt: timestamp,
   },
   { additionalProperties: false },
 );
 export type Plan = Static<typeof PlanSchema>;
+export const QuestionOptionSchema = Type.Object(
+  {
+    id,
+    label: Type.String({ minLength: 1, maxLength: 500 }),
+    description: Type.String({ maxLength: 2000 }),
+  },
+  { additionalProperties: false },
+);
+export type QuestionOption = Static<typeof QuestionOptionSchema>;
+export const QuestionItemSchema = Type.Object(
+  {
+    id,
+    header: Type.String({ minLength: 1, maxLength: 100 }),
+    prompt: Type.String({ minLength: 1, maxLength: 4000 }),
+    options: Type.Array(QuestionOptionSchema, { maxItems: 12 }),
+    multiSelect: Type.Boolean(),
+    allowCustomInput: Type.Boolean(),
+  },
+  { additionalProperties: false },
+);
+export type QuestionItem = Static<typeof QuestionItemSchema>;
+export const QuestionResponseSchema = Type.Object(
+  {
+    questionId: id,
+    optionIds: Type.Array(id, { maxItems: 12 }),
+    text: Type.String({ maxLength: 4000 }),
+  },
+  { additionalProperties: false },
+);
+export type QuestionResponse = Static<typeof QuestionResponseSchema>;
 export const QuestionSchema = Type.Object(
   {
     id,
     runId: id,
     branchId: id,
     toolCallId: id,
-    prompt: Type.String({ minLength: 1, maxLength: 4000 }),
-    options: Type.Array(Type.String({ minLength: 1, maxLength: 500 }), { maxItems: 8 }),
+    questions: Type.Array(QuestionItemSchema, { minItems: 1, maxItems: 12 }),
     status: Type.Union([
       Type.Literal('pending'),
       Type.Literal('answered'),
       Type.Literal('cancelled'),
       Type.Literal('interrupted'),
     ]),
-    answer: Type.Union([Type.String({ maxLength: 4000 }), Type.Null()]),
+    answers: Type.Union([
+      Type.Array(QuestionResponseSchema, { minItems: 1, maxItems: 12 }),
+      Type.Null(),
+    ]),
     createdAt: timestamp,
   },
   { additionalProperties: false },
@@ -169,6 +261,7 @@ export const WorkSnapshotSchema = Type.Object(
   {
     state: WorkStateSchema,
     checkpoints: Type.Array(CheckpointSchema, { maxItems: 100 }),
+    compactions: Type.Array(CompactionSchema),
   },
   { additionalProperties: false },
 );
@@ -178,18 +271,30 @@ export const WorkPatchSchema = Type.Object(
     expectedBranchId: id,
     revision: Type.Integer({ minimum: 0 }),
     mode: Type.Optional(Type.Union([Type.Literal('execute'), Type.Literal('plan')])),
-    plan: Type.Optional(Type.Union([PlanSchema, Type.Null()])),
     todos: Type.Optional(Type.Array(TodoSchema, { maxItems: 100 })),
   },
   { additionalProperties: false },
 );
 export type WorkPatch = Static<typeof WorkPatchSchema>;
 export const QuestionAnswerSchema = Type.Object(
+  { answers: Type.Array(QuestionResponseSchema, { minItems: 1, maxItems: 12 }) },
+  { additionalProperties: false },
+);
+export type QuestionAnswer = Static<typeof QuestionAnswerSchema>;
+export const PlanReviewSchema = Type.Object(
   {
-    answer: Type.String({ minLength: 1, maxLength: 4000 }),
+    expectedBranchId: id,
+    revision: Type.Integer({ minimum: 0 }),
+    decision: Type.Union([
+      Type.Literal('approve'),
+      Type.Literal('feedback'),
+      Type.Literal('cancel'),
+    ]),
+    feedback: Type.String({ maxLength: 4000 }),
   },
   { additionalProperties: false },
 );
+export type PlanReview = Static<typeof PlanReviewSchema>;
 export const CheckpointCreateSchema = Type.Object(
   {
     expectedBranchId: id,

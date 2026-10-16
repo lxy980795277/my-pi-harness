@@ -3,15 +3,10 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
 import { fetchWork, patchWork } from '@/features/work/services/work';
 import { retainWorkSnapshot } from '@/features/work/utils/work-view';
+import type { ComposerWorkMode } from '@/features/work/types/work';
+import type { WorkMode } from '@/features/sessions/types/composer';
 import { useAsyncEvent } from '@/hooks/use-async-event';
 
-interface ComposerWorkMode {
-  mode: 'execute' | 'plan';
-  disabled: boolean;
-  sendingBlocked: boolean;
-  change: (value: string) => void;
-  error: string | null;
-}
 /** The input bar and work dialog share the same branch-local server query. */
 export const useComposerWorkMode = (session: SessionSummary): ComposerWorkMode => {
   const client = useQueryClient();
@@ -26,7 +21,7 @@ export const useComposerWorkMode = (session: SessionSummary): ComposerWorkMode =
   const state = query.data?.state;
   const update = useAsyncEvent(
     useCallback(
-      async (signal: AbortSignal, mode: 'execute' | 'plan'): Promise<void> => {
+      async (signal: AbortSignal, mode: WorkMode): Promise<void> => {
         if (!state || session.activeRunId !== null) {
           return;
         }
@@ -53,11 +48,19 @@ export const useComposerWorkMode = (session: SessionSummary): ComposerWorkMode =
     },
     [run],
   );
+  let error = update.error;
+  if (error === null && query.error !== null) {
+    error = query.error.message;
+  }
+  let mode: WorkMode = 'execute';
+  if (state) {
+    mode = state.mode;
+  }
   return {
     sendingBlocked: query.isPending || update.pending,
-    mode: state?.mode ?? 'execute',
+    mode,
     disabled: !state || session.activeRunId !== null || update.pending,
     change,
-    error: update.error ?? query.error?.message ?? null,
+    error,
   };
 };

@@ -17,7 +17,7 @@ import {
   type HarnessEvent,
   type SessionSnapshot,
 } from '@my-pi-harness/protocol';
-import { sessionLogDirectory } from '@my-pi-harness/storage';
+import { sessionLogDirectory, SessionBatchSchema } from '@my-pi-harness/storage';
 import type { Static, TSchema } from 'typebox';
 import { Value } from 'typebox/value';
 import { describe, expect, it } from 'vitest';
@@ -476,7 +476,7 @@ describe('built daemon recovery with real Pi HTTP streaming', () => {
 });
 
 describe('built daemon M3 work recovery', () => {
-  it('preserves frozen attachments, plans, tasks and restored checkpoint branches after a normal restart', async () => {
+  it('preserves frozen attachments, tasks and restored session snapshot branches through authoritative journal replay', async () => {
     const profile = await mkdtemp(join(tmpdir(), 'my-pi-built-work-recovery-'));
     const children: ChildProcess[] = [];
     const daemons: Daemon[] = [];
@@ -529,17 +529,19 @@ describe('built daemon M3 work recovery', () => {
       });
       const initialWork = await readWork(first, originalBranchId);
       expect(initialWork.state).toMatchObject({ revision: 1, mode: 'plan' });
-      const plan = {
-        title: 'Original plan',
-        content: 'Inspect context before execution.',
-        status: 'draft',
-        updatedAt: 2,
-      };
-      const todos = [{ id: 'inspect', title: 'Inspect context', status: 'pending' }];
+      const todos = [
+        {
+          id: 'inspect',
+          title: 'Inspect context',
+          status: 'pending',
+          planStepId: null,
+          evidenceToolCallIds: [],
+          completionNote: null,
+        },
+      ];
       await api(first, `/sessions/${sessionId}/work`, WorkSnapshotSchema, 'PATCH', {
         expectedBranchId: originalBranchId,
         revision: initialWork.state.revision,
-        plan,
         todos,
       });
       await api(first, `/sessions/${sessionId}/inputs`, SessionSnapshotSchema, 'POST', {
@@ -566,20 +568,27 @@ describe('built daemon M3 work recovery', () => {
         'POST',
         {
           expectedBranchId: originalBranchId,
-          label: 'Plan and context',
+          label: 'Tasks and context',
         },
       );
       const checkpoint = saved.checkpoints[0];
       if (!checkpoint) throw new Error('Checkpoint was not saved');
-      expect(checkpoint.state.plan).toEqual(plan);
+      expect(checkpoint.state.plan).toBeNull();
       expect(checkpoint.state.todos).toEqual(todos);
       expect(checkpoint.messageIds).toEqual(stopped.messages.map(({ id }) => id));
       await api(first, `/sessions/${sessionId}/work`, WorkSnapshotSchema, 'PATCH', {
         expectedBranchId: originalBranchId,
         revision: saved.state.revision,
         mode: 'execute',
-        plan: { ...plan, title: 'Later approved plan', status: 'approved', updatedAt: 3 },
-        todos: [{ ...todos[0], id: 'inspect', title: 'Inspect context', status: 'completed' }],
+        todos: [
+          {
+            ...todos[0],
+            id: 'inspect',
+            title: 'Inspect context',
+            status: 'completed',
+            completionNote: 'The supplied context was inspected.',
+          },
+        ],
       });
       await api(first, `/sessions/${sessionId}/inputs`, SessionSnapshotSchema, 'POST', {
         text: 'Continue after the checkpoint.',
@@ -608,7 +617,7 @@ describe('built daemon M3 work recovery', () => {
       );
       const restoredBranchId = restoredWork.state.branchId;
       expect(restoredBranchId).not.toBe(originalBranchId);
-      expect(restoredWork.state).toMatchObject({ mode: 'plan', plan, todos });
+      expect(restoredWork.state).toMatchObject({ mode: 'plan', plan: null, todos });
       const restoredHistory = await api(first, `/sessions/${sessionId}`, SessionSnapshotSchema);
       expect(restoredHistory.messages).toEqual(stopped.messages);
       expect(restoredHistory.queue).toEqual([]);
@@ -638,16 +647,22 @@ describe('built daemon M3 work recovery', () => {
       const replayed = await replay(second, sessionId);
       const jsonl = await readFile(log, 'utf8');
       expect(jsonl.endsWith('\n')).toBe(true);
-      const mirrored = jsonl
+      const diskBatches = jsonl
         .slice(0, -1)
         .split('\n')
         .map((line) => {
           const value: unknown = JSON.parse(line);
-          return checked(HarnessEventSchema, value);
+          return checked(SessionBatchSchema, value);
         });
-      expect(mirrored).toEqual(replayed.events);
+      expect(diskBatches.flatMap((batch) => batch.records.map((record) => record.event))).toEqual(
+        replayed.events,
+      );
+      expect(
+        diskBatches.some((batch) => batch.records.some((record) => record.privateData !== null)),
+      ).toBe(true);
       expect(jsonl).not.toContain('crash-tail');
-      expect(jsonl).not.toContain('privateData');
+      expect(jsonl).toContain('privateData');
+      expect(JSON.stringify(replayed)).not.toContain('privateData');
       expect(jsonl).not.toContain(Buffer.from(frozenText).toString('base64'));
 
       expect(replayed.events.filter(({ type }) => type === 'checkpoint.created')).toHaveLength(1);

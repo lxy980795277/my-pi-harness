@@ -1,3 +1,4 @@
+import type { SessionCommandMethod } from '@/features/sessions/types/session';
 import {
   SessionSnapshotSchema,
   SessionSummarySchema,
@@ -26,7 +27,7 @@ const pathFor = (id: string): string => {
 
 const snapshotCommand = async (
   path: string,
-  method: 'POST' | 'PUT' | 'DELETE',
+  method: SessionCommandMethod,
   input: unknown,
   signal: AbortSignal,
 ): Promise<SessionSnapshot> => {

@@ -1,4 +1,4 @@
-import type { ModelRowState } from '@/features/models/types/model-view';
+import type { ModelRowState } from '@/features/models/types/model';
 import type { ModelDefinition } from '@my-pi-harness/protocol';
 import { useCallback, type ChangeEvent } from 'react';
 

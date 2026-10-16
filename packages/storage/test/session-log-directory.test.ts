@@ -4,6 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { openProfileStore, sessionLogDirectory, type ProfileStore } from '../src/index.js';
+import { SessionBatchSchema } from '../src/session-jsonl.js';
+import { checked } from '../src/validation.js';
 
 vi.mock('node:fs', async (importOriginal) => ({ ...(await importOriginal<typeof fs>()) }));
 
@@ -38,11 +40,14 @@ function createSession(store: ProfileStore, title: string): void {
 function file(profile: string, root: string): string {
   return join(sessionLogDirectory(profile, root), 'same-session.jsonl');
 }
-function expectedLog(store: ProfileStore): string {
-  return store
-    .readEvents('same-session')
-    .map((event) => `${JSON.stringify(event)}\n`)
-    .join('');
+async function logged(profile: string, root: string) {
+  const text = await readFile(file(profile, root), 'utf8');
+  return text
+    .trimEnd()
+    .split('\n')
+    .flatMap((line) =>
+      checked(SessionBatchSchema, JSON.parse(line)).records.map((record) => record.event),
+    );
 }
 afterEach(async () => {
   vi.restoreAllMocks();
@@ -52,29 +57,16 @@ afterEach(async () => {
 });
 
 describe('profile-isolated hidden session log roots', () => {
-  it('rebuilds a new root from SQLite while preserving both legacy and previous-root logs', async () => {
+  it('rejects switching to an empty root while SQLite still indexes authoritative session history', async () => {
     const base = await temporaryDirectory();
     const profile = join(base, 'profile');
-    const previousRoot = join(profile, '.my-pi-harness');
     const store = await open(profile);
-    createSession(store, 'Archived history');
-    store.append('same-session', [{ type: 'session.deleted', data: {}, runId: null, at: 2 }]);
-    const history = expectedLog(store);
-    const events = store.readEvents('same-session');
+    createSession(store, 'Saved history');
     store.close();
-    await mkdir(join(profile, 'sessions'));
-    const legacyPath = join(profile, 'sessions', 'same-session.jsonl');
-    await writeFile(legacyPath, 'legacy mirror retained unchanged\n');
     const nextRoot = join(base, '.my-pi-harness');
-    const reopened = await open(profile, nextRoot);
-    expect(await readFile(file(profile, nextRoot), 'utf8')).toBe(history);
-    expect(await readFile(file(profile, previousRoot), 'utf8')).toBe(history);
-    expect(await readFile(legacyPath, 'utf8')).toBe('legacy mirror retained unchanged\n');
-    expect(reopened.listSessions()).toEqual([]);
-    expect(reopened.readEvents('same-session')).toEqual(events);
-    reopened.close();
-    const repeated = await open(profile, nextRoot);
-    expect(await readFile(file(profile, nextRoot), 'utf8')).toBe(expectedLog(repeated));
+    await expect(openProfileStore(profile, { sessionLogRoot: nextRoot })).rejects.toThrow(
+      'authoritative session journal is missing',
+    );
   });
 
   it('keeps identical session IDs separate for two independently owned profiles sharing one root', async () => {
@@ -89,16 +81,16 @@ describe('profile-isolated hidden session log roots', () => {
     expect(sessionLogDirectory(firstProfile, root)).not.toBe(
       sessionLogDirectory(secondProfile, root),
     );
-    expect(await readFile(file(firstProfile, root), 'utf8')).toBe(expectedLog(first));
-    expect(await readFile(file(secondProfile, root), 'utf8')).toBe(expectedLog(second));
+    expect(await logged(firstProfile, root)).toEqual(first.readEvents('same-session'));
+    expect(await logged(secondProfile, root)).toEqual(second.readEvents('same-session'));
     await expect(openProfileStore(firstProfile, { sessionLogRoot: root })).rejects.toMatchObject({
       code: 'PROFILE_LOCKED',
     });
     first.close();
     const reopened = await open(firstProfile, root);
-    expect(await readFile(file(firstProfile, root), 'utf8')).toBe(expectedLog(reopened));
+    expect(await logged(firstProfile, root)).toEqual(reopened.readEvents('same-session'));
     second.append('same-session', [{ type: 'audit.saved', data: {}, runId: null, at: 2 }]);
-    expect(await readFile(file(secondProfile, root), 'utf8')).toBe(expectedLog(second));
+    expect(await logged(secondProfile, root)).toEqual(second.readEvents('same-session'));
     expect(reopened.readEvents('same-session')).toHaveLength(1);
   });
 
@@ -162,7 +154,7 @@ describe('profile-isolated hidden session log roots', () => {
       await rm(linkPath);
       const reopened = await open(profile, root);
       createSession(reopened, 'Recovered ownership');
-      expect(await readFile(file(profile, root), 'utf8')).toBe(expectedLog(reopened));
+      expect(await logged(profile, root)).toEqual(reopened.readEvents('same-session'));
     },
   );
 });

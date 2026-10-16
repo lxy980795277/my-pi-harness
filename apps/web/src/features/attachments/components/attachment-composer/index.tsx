@@ -6,15 +6,14 @@ import { Popover } from '@/components/ui/popover';
 import { PopoverTrigger } from '@/components/ui/popover/popover-trigger';
 import { PopoverContent } from '@/components/ui/popover/popover-content';
 import { Notice } from '@/components/ui/notice';
-import { useAttachmentComposer } from '@/features/attachments/hooks/use-attachment-composer';
+import type { AttachmentComposerState } from '@/features/attachments/types/attachment';
 
 export interface AttachmentComposerProps {
-  draftKey: string;
+  state: AttachmentComposerState;
   locked: boolean;
 }
 /** Both composers share uploads and disabled MCP/Skill placeholders. */
-export const AttachmentComposer: FC<AttachmentComposerProps> = ({ draftKey, locked }) => {
-  const state = useAttachmentComposer(draftKey, locked);
+export const AttachmentComposer: FC<AttachmentComposerProps> = ({ state, locked }) => {
   return (
     <>
       <Input
@@ -22,7 +21,7 @@ export const AttachmentComposer: FC<AttachmentComposerProps> = ({ draftKey, lock
         type="file"
         multiple
         className="hidden"
-        accept="text/*,.md,.json,.csv,.ts,.tsx,.js,.jsx,.py,.yaml,.yml,image/png,image/jpeg,image/webp,image/gif,application/pdf"
+        accept="text/*,.md,.json,.csv,.ts,.tsx,.js,.jsx,.py,.yaml,.yml,image/png,image/jpeg,image/webp,image/gif,application/pdf,.docx,.docm,.xlsx,.xlsm,.pptx,.pptm,.odt,.ods,.odp,.rtf,.epub"
         onChange={state.changeFiles}
         aria-label="上传附件"
         disabled={locked || state.upload.pending}

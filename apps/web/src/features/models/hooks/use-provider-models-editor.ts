@@ -1,7 +1,7 @@
-import type { ProviderModelsEditorState } from '@/features/models/types/model-view';
+import type { ProviderModelsEditorState } from '@/features/models/types/model';
 import type { ConnectionResult, ModelDefinition, ProviderConfig } from '@my-pi-harness/protocol';
 import { useQueryClient } from '@tanstack/react-query';
-import { useCallback, useState, type ChangeEvent, type FormEvent } from 'react';
+import { useCallback, useState, type ChangeEvent, type SubmitEvent } from 'react';
 import { useWorkspaceStore } from '@/app/stores/workspace';
 import { useProviderModels } from '@/features/models/hooks/use-model-catalog';
 import { saveProvider, testProvider } from '@/features/models/services/providers';
@@ -93,7 +93,7 @@ export const useProviderModelsEditor = (provider: ProviderConfig): ProviderModel
   );
   const { run: saveRun } = save;
   const submit = useCallback(
-    (event: FormEvent<HTMLFormElement>): void => {
+    (event: SubmitEvent<HTMLFormElement>): void => {
       event.preventDefault();
       saveRun();
     },
@@ -116,6 +116,16 @@ export const useProviderModelsEditor = (provider: ProviderConfig): ProviderModel
       return model.id;
     }),
   );
+  let error = validationError;
+  if (error === null) {
+    error = save.error;
+  }
+  if (error === null) {
+    error = test.error;
+  }
+  if (error === null && query.error !== null) {
+    error = query.error.message;
+  }
   return {
     models,
     custom,
@@ -131,6 +141,6 @@ export const useProviderModelsEditor = (provider: ProviderConfig): ProviderModel
     testing: test.pending,
     persistedIds,
     results,
-    error: validationError ?? save.error ?? test.error ?? query.error?.message ?? null,
+    error: error,
   };
 };

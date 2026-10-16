@@ -1,4 +1,4 @@
-import type { ModelSettingsState } from '@/features/models/types/model-view';
+import type { ModelSettingsState } from '@/features/models/types/model';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
 import { useWorkspaceStore } from '@/app/stores/workspace';
@@ -46,29 +46,28 @@ export const useModelSettings = (): ModelSettingsState => {
       [client],
     ),
   );
+  const providers = catalog.providers.data ?? [];
   const provider =
-    catalog.providers.data?.find((item) => {
+    providers.find((item) => {
       return item.id === providerId;
     }) ?? null;
   const modelsProvider =
-    catalog.providers.data?.find((item) => {
+    providers.find((item) => {
       return item.id === modelsId;
     }) ?? null;
   const native = catalog.nativeProviders.data?.find((item) => {
     return item.id === provider?.builtinId;
   });
-  const configuredCount =
-    catalog.providers.data?.filter((item) => {
-      return item.configured;
-    }).length ?? 0;
-  const availableModelCount =
-    catalog.providers.data
-      ?.filter((item) => {
-        return item.enabled && item.configured;
-      })
-      .reduce((count, item) => {
-        return count + item.models.length;
-      }, 0) ?? 0;
+  const configuredCount = providers.filter((item) => {
+    return item.configured;
+  }).length;
+  const availableModelCount = providers
+    .filter((item) => {
+      return item.enabled && item.configured;
+    })
+    .reduce((count, item) => {
+      return count + item.models.length;
+    }, 0);
   const providerMissing =
     providerId !== null && providerId !== 'new' && provider === null && catalog.providers.isSuccess;
   return {

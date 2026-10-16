@@ -16,15 +16,17 @@
 - Renderer 不访问 Node、凭据、数据库、daemon 源码或 Pi 内部对象；preload 只提供 [协议](docs/03_API/overview.md) 中声明的有限桌面能力。
 - HTTP、IPC、模型工具参数、配置、文件和持久化数据在进入业务层前校验；同进程已声明类型的值不重复做无依据的运行时防御。
 - 本地副作用必须经过统一策略、真实路径检查与取消/超时管理。安全规则见 [安全约束](docs/05_CONSTRAINTS/backend.md)。
+- 当前所有迭代处于开发阶段，不要求旧API、数据库、日志或codec兼容；允许重建schema和删除本项目旧开发数据，不触碰工作区源文件或其他项目数据。
 - 临时运行状态可保存在内存；持久事实和派生索引按 [存储约束](docs/05_CONSTRAINTS/backend.md) 管理。
-- 当前实现模型、授权、SQLite会话与公开JSONL镜像、队列/分支、M2工作区与三种审批策略，以及M3规则/附件上下文、预算/压缩、人工提问、计划任务和会话检查点；检查点不回滚磁盘或外部副作用。Computer Use属于后续里程碑。后续范围见[里程碑](docs/00_OVERVIEW/roadmap.md)。
+- 当前实现模型、授权、JSONL会话事实与SQLite配置/投影、队列/分支、M2工作区与三种审批策略，以及M3规则/附件上下文、预算/压缩、人工提问、计划任务和会话检查点；检查点不回滚磁盘或外部副作用。Computer Use属于后续里程碑。后续范围见[里程碑](docs/00_OVERVIEW/roadmap.md)。
 
 ## 质量与交付
 
 - TypeScript 使用 strict；包间用 `@my-pi-harness/*`。Web 模块无后缀，NodeNext 宿主相对导入保留 `.js`；类型与外部校验见对应规范。
 - 前端、daemon、Electron和测试分别遵守 [前端](docs/05_CONSTRAINTS/frontend.md)、[后端](docs/05_CONSTRAINTS/backend.md)、[桌面](docs/05_CONSTRAINTS/desktop.md)、[测试](docs/05_CONSTRAINTS/testing.md)；交付证据与硬规则检查统一见测试规范。
+- 存量代码按[代码治理](docs/10_GOVERNANCE/code.md)审查领域类型命名、业务联合、弃用API、空值可读性及真实死代码；不机械禁用所有空值语法或删除动态入口。
 - 变更同步更新实际受影响的架构、协议、约束或功能文档；一个事实保留一个权威位置，其他文档链接引用。
 - 只报告实际运行的检查、实际观察到的结果及未验证项。局部检查与 CI 分工见测试约束。
 - 不擅自提交、推送、创建分支、重写历史或处理无关改动。用户明确要求提交时才执行 [八步提交流程](docs/08_COLLABORATION/commit.md)。
 - 产品版本唯一来源为根 `package.json`；发布记录与桌面产物版本按 [发布规范](docs/06_RELEASES/overview.md) 同步。
-- 参考范式的逐目录采用与取舍见 [范式映射](docs/09_TECHNICAL/development-paradigm.md)，不将参考项目的远端部署或历史业务规则直接套用本仓库。
+- 核心机制与取舍见 [技术设计](docs/09_TECHNICAL/技术文档总览.md)；只沉淀关键设计并随实现更新，迭代过程留在Spec/verify，不将参考项目的远端部署或历史业务规则直接套用本仓库。

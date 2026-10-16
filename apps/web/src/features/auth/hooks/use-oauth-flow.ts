@@ -1,4 +1,4 @@
-import type { OAuthFlowState } from '@/features/auth/types/auth-view';
+import type { OAuthFlowState } from '@/features/auth/types/auth';
 import type { AuthFlow } from '@my-pi-harness/protocol';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect } from 'react';
@@ -81,6 +81,13 @@ export const useOAuthFlow = (flowId: string, onCompleted?: () => void): OAuthFlo
   if (query.data) {
     statusLabel = AUTH_STATUS_LABELS[query.data.status];
   }
+  let actionError = cancel.error;
+  if (actionError === null) {
+    actionError = open.error;
+  }
+  if (actionError === null) {
+    actionError = complete.error;
+  }
   return {
     query,
     flow: query.data,
@@ -89,7 +96,7 @@ export const useOAuthFlow = (flowId: string, onCompleted?: () => void): OAuthFlo
     statusLabel,
     cancel: cancel.run,
     cancelPending: cancel.pending,
-    actionError: cancel.error ?? open.error ?? complete.error,
+    actionError: actionError,
     openDesktop: open.run,
     desktop: window.desktop !== undefined,
     receive,

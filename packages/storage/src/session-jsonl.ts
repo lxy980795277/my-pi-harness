@@ -1,191 +1,98 @@
+import { createHash, randomUUID } from 'node:crypto';
 import {
-  constants,
   closeSync,
+  constants,
   fchmodSync,
-  fstatSync,
   fsyncSync,
   ftruncateSync,
-  lstatSync,
-  mkdirSync,
   openSync,
   readSync,
-  realpathSync,
   writeSync,
   type Stats,
 } from 'node:fs';
-import { basename, dirname, join, resolve } from 'node:path';
-import { isDeepStrictEqual } from 'node:util';
-import type { HarnessEvent } from '@my-pi-harness/protocol';
+import { join } from 'node:path';
+import { Type, type Static } from 'typebox';
+import { HarnessEventSchema } from '@my-pi-harness/protocol';
 import { StorageError } from './errors.js';
-import { sessionLogDirectory } from './session-log-directory.js';
+import type { PrivateSessionFiles } from './private-files.js';
+import { checked } from './validation.js';
 
-interface MirrorCursor {
+const StoredEventSchema = Type.Object(
+  {
+    event: HarnessEventSchema,
+    privateData: Type.Union([Type.String(), Type.Null()]),
+  },
+  { additionalProperties: false },
+);
+/** Exact disk batch format; public event readers never expose its private records. */
+export const SessionBatchSchema = Type.Object(
+  {
+    version: Type.Literal(1),
+    batchId: Type.String({ minLength: 1 }),
+    previousBatchId: Type.Union([Type.String({ minLength: 1 }), Type.Null()]),
+    sessionId: Type.String({ minLength: 1 }),
+    firstSeq: Type.Integer({ minimum: 1 }),
+    records: Type.Array(StoredEventSchema, { minItems: 1, maxItems: 10000 }),
+    checksum: Type.String({ pattern: '^[a-f0-9]{64}$' }),
+  },
+  { additionalProperties: false },
+);
+/** One command's complete public envelopes and private replay material. */
+export type StoredSessionEvent = Static<typeof StoredEventSchema>;
+/** An indivisible journal line; a torn tail never replays a partial command. */
+export type SessionBatch = Static<typeof SessionBatchSchema>;
+interface Cursor {
   seq: number;
-  size: number;
-  dev: number;
-  ino: number;
-  mtimeMs: number;
-  ctimeMs: number;
+  batchId: string | null;
+  signature: string;
 }
-type EventsAfter = (afterSeq: number) => Iterable<HarnessEvent>;
 const MAXIMUM_LINE_BYTES = 32 * 1024 * 1024;
-
+function signature(value: Stats): string {
+  return [value.dev, value.ino, value.size, value.mtimeMs, value.ctimeMs].join(':');
+}
+function checksum(batch: Omit<SessionBatch, 'checksum'>): string {
+  return createHash('sha256').update(JSON.stringify(batch)).digest('hex');
+}
 function missing(error: unknown): boolean {
   return error instanceof Error && 'code' in error && error.code === 'ENOENT';
 }
-function sameFile(left: Stats, right: Stats): boolean {
-  return left.dev === right.dev && left.ino === right.ino;
-}
-function requireOwner(entry: Stats): void {
-  if (process.getuid && entry.uid !== process.getuid())
-    throw new StorageError('SESSION_LOG_INVALID', 'Session logs must belong to the current user');
-}
-function decodedLine(bytes: Buffer): unknown {
-  return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
-}
 
-interface OwnedDirectory {
-  path: string;
-  identity: Stats;
-  fd: number | undefined;
-}
+/** Authoritative host journal; appends are durable before the SQLite projection commits. */
+export class SessionJournal {
+  private readonly cursors = new Map<string, Cursor>();
+  public constructor(private readonly files: PrivateSessionFiles) {}
 
-/** Synchronous public-event mirror; SQLite remains authoritative and owns transaction outcomes. */
-export class SessionJsonlMirror {
-  private readonly directory: string;
-  private readonly directories: OwnedDirectory[] = [];
-  private readonly cursors = new Map<string, MirrorCursor>();
-  private closed = false;
-
-  public constructor(
-    profileDirectory: string,
-    sessionLogRoot = join(profileDirectory, '.my-pi-harness'),
-  ) {
-    sessionLogDirectory(profileDirectory, sessionLogRoot);
-    const requestedRoot = resolve(sessionLogRoot);
-    const parent = dirname(requestedRoot);
-    if (lstatSync(parent).isSymbolicLink())
-      throw new StorageError(
-        'SESSION_LOG_INVALID',
-        'Session log parent must not be a symbolic link',
-      );
-    const canonicalParent = realpathSync(parent);
-    const root = join(canonicalParent, basename(requestedRoot));
-    this.directory = sessionLogDirectory(profileDirectory, root);
-    try {
-      this.holdDirectory(profileDirectory);
-      this.holdDirectory(canonicalParent);
-      for (const path of [root, join(root, 'sessions'), this.directory]) {
-        this.checkDirectories();
-        try {
-          mkdirSync(path, { mode: 0o700 });
-        } catch (error) {
-          if (!(error instanceof Error && 'code' in error && error.code === 'EEXIST')) throw error;
-        }
-        this.holdDirectory(path, true);
-      }
-      for (const directory of this.directories)
-        if (directory.fd !== undefined) fsyncSync(directory.fd);
-    } catch (error) {
-      try {
-        this.close();
-      } catch (cleanupError) {
-        throw new AggregateError([error, cleanupError], 'Session log setup and cleanup failed');
-      }
-      throw error;
-    }
+  public sessionIds(): string[] {
+    return this.files
+      .names(this.files.directory)
+      .filter((name) => name.endsWith('.jsonl'))
+      .map((name) => {
+        const id = name.slice(0, -6);
+        this.files.validateId(id);
+        return id;
+      });
   }
 
-  public validateSessionId(id: string): void {
-    if (!/^[A-Za-z0-9_-]{1,160}$/.test(id))
-      throw new StorageError(
-        'INVALID_RECORD',
-        'Session ID cannot be used as a private log filename',
-      );
-  }
-
-  public close(): void {
-    if (this.closed) return;
-    this.closed = true;
-    const failures: unknown[] = [];
-    for (const directory of [...this.directories].reverse()) {
-      if (directory.fd === undefined) continue;
-      try {
-        closeSync(directory.fd);
-      } catch (error) {
-        failures.push(error);
-      }
-    }
-    if (failures.length > 0)
-      throw new AggregateError(failures, 'Session log directory cleanup failed');
-  }
-
-  private holdDirectory(path: string, privateDirectory = false): void {
-    if (this.directories.some((entry) => entry.path === path)) return;
-    const identity = lstatSync(path);
-    if (!identity.isDirectory() || identity.isSymbolicLink() || realpathSync(path) !== path)
-      throw new StorageError('SESSION_LOG_INVALID', 'Session log paths must be real directories');
-    requireOwner(identity);
-    const fd =
-      process.platform === 'win32'
-        ? undefined
-        : openSync(path, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
-    this.directories.push({ path, identity, fd });
-    this.checkDirectories();
-    if (privateDirectory && fd !== undefined) fchmodSync(fd, 0o700);
-  }
-
-  private checkDirectories(): void {
-    for (const directory of this.directories) {
-      const current = lstatSync(directory.path);
-      if (
-        !current.isDirectory() ||
-        current.isSymbolicLink() ||
-        !sameFile(current, directory.identity) ||
-        (directory.fd !== undefined && !sameFile(current, fstatSync(directory.fd))) ||
-        realpathSync(directory.path) !== directory.path
-      )
-        throw new StorageError('SESSION_LOG_INVALID', 'Session log directory identity changed');
-      requireOwner(current);
-    }
-  }
-
-  private checkFile(fd: number, path: string): Stats {
-    this.checkDirectories();
-    const opened = fstatSync(fd);
-    const current = lstatSync(path);
-    if (
-      !opened.isFile() ||
-      opened.nlink !== 1 ||
-      current.isSymbolicLink() ||
-      !sameFile(opened, current)
-    )
-      throw new StorageError(
-        'SESSION_LOG_INVALID',
-        'Session logs must be regular files without links',
-      );
-    requireOwner(opened);
-    return opened;
-  }
-
-  private open(path: string): { fd: number; created: boolean } {
-    this.checkDirectories();
+  private open(sessionId: string, create: boolean): { fd: number; path: string; created: boolean } {
+    this.files.validateId(sessionId);
+    this.files.checkDirectories();
+    const path = join(this.files.directory, `${sessionId}.jsonl`);
     const flags =
       constants.O_RDWR | constants.O_APPEND | constants.O_NOFOLLOW | constants.O_NONBLOCK;
     try {
-      return { fd: openSync(path, flags), created: false };
+      return { fd: openSync(path, flags), path, created: false };
     } catch (error) {
-      if (!missing(error)) throw error;
+      if (!create || !missing(error)) throw error;
       return {
         fd: openSync(path, flags | constants.O_CREAT | constants.O_EXCL, 0o600),
+        path,
         created: true,
       };
     }
   }
 
-  private append(fd: number, path: string, value: string): void {
-    this.checkFile(fd, path);
-    const bytes = Buffer.from(value);
+  private write(fd: number, path: string, bytes: Buffer): void {
+    this.files.checkFile(fd, path);
     let offset = 0;
     while (offset < bytes.length) {
       const written = writeSync(fd, bytes, offset, bytes.length - offset);
@@ -195,138 +102,136 @@ export class SessionJsonlMirror {
     }
   }
 
-  private reconcile(
-    fd: number,
-    path: string,
-    events: Iterator<HarnessEvent>,
-  ): { seq: number; changed: boolean } {
+  /** Validate checksums and sequence while streaming; only a final incomplete JSON fragment is removed. */
+  public *read(sessionId: string): Generator<SessionBatch> {
+    const { fd, path } = this.open(sessionId, false);
     let seq = 0;
-    let position = 0;
+    let previousBatchId: string | null = null;
     let validBytes = 0;
-    let size = 0;
+    let position = 0;
+    let lineLength = 0;
     let parts: Buffer[] = [];
     let changed = false;
-    const consume = (line: Buffer): void => {
-      const value: unknown = decodedLine(line);
-      const expected = events.next();
+    const decode = (bytes: Buffer): SessionBatch => {
+      const decoded: unknown = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
+      const value = checked(SessionBatchSchema, decoded);
+      const { checksum: digest, ...body } = value;
       if (
-        expected.done ||
-        expected.value.seq !== seq + 1 ||
-        !isDeepStrictEqual(value, expected.value)
+        value.sessionId !== sessionId ||
+        value.firstSeq !== seq + 1 ||
+        value.previousBatchId !== previousBatchId ||
+        checksum(body) !== digest
       )
         throw new StorageError(
           'SESSION_LOG_INVALID',
-          'A complete session log record disagrees with SQLite',
+          'Session batch identity, checksum or sequence is invalid',
         );
-      seq += 1;
+      for (const record of value.records) {
+        if (record.event.sessionId !== sessionId || record.event.seq !== seq + 1)
+          throw new StorageError('SESSION_LOG_INVALID', 'Session event sequence is invalid');
+        seq += 1;
+      }
+      previousBatchId = value.batchId;
+      return value;
     };
-    const buffer = Buffer.alloc(64 * 1024);
-    while (true) {
-      const length = readSync(fd, buffer, 0, buffer.length, position);
-      if (length === 0) break;
-      let start = 0;
-      for (let index = 0; index < length; index += 1) {
-        if (buffer[index] !== 10) continue;
-        const segment = Buffer.from(buffer.subarray(start, index));
-        size += segment.length;
-        if (size > MAXIMUM_LINE_BYTES)
-          throw new StorageError('SESSION_LOG_INVALID', 'Session log line is too large');
-        parts.push(segment);
-        consume(Buffer.concat(parts, size));
-        parts = [];
-        size = 0;
-        validBytes = position + index + 1;
-        start = index + 1;
-      }
-      const tail = Buffer.from(buffer.subarray(start, length));
-      size += tail.length;
-      if (size > MAXIMUM_LINE_BYTES)
-        throw new StorageError('SESSION_LOG_INVALID', 'Session log line is too large');
-      if (tail.length > 0) parts.push(tail);
-      position += length;
-    }
-    if (size > 0) {
-      const tail = Buffer.concat(parts, size);
-      let complete = true;
-      try {
-        decodedLine(tail);
-      } catch {
-        complete = false; /* A crash may leave only the final JSON fragment incomplete. */
-      }
-      if (complete) {
-        consume(tail);
-        this.append(fd, path, '\n');
-      } else {
-        this.checkFile(fd, path);
-        ftruncateSync(fd, validBytes);
-      }
-      changed = true;
-    }
-    return { seq, changed };
-  }
-
-  /** Reconcile changed files, then append each newly committed event once and fsync one batch. */
-  public sync(sessionId: string, source: EventsAfter): void {
     try {
-      this.syncFile(sessionId, source);
-    } catch (cause) {
-      if (cause instanceof StorageError) throw cause;
-      throw new StorageError(
-        'SESSION_LOG_INVALID',
-        'Session JSONL could not be reconciled safely',
-        { cause },
-      );
-    }
-  }
-
-  private syncFile(sessionId: string, source: EventsAfter): void {
-    this.validateSessionId(sessionId);
-    const path = join(this.directory, `${sessionId}.jsonl`);
-    const { fd, created } = this.open(path);
-    try {
-      const before = this.checkFile(fd, path);
+      this.files.checkFile(fd, path);
       fchmodSync(fd, 0o600);
-      const cached = this.cursors.get(sessionId);
-      const trusted =
-        cached &&
-        cached.dev === before.dev &&
-        cached.ino === before.ino &&
-        cached.size === before.size &&
-        cached.mtimeMs === before.mtimeMs &&
-        cached.ctimeMs === before.ctimeMs;
-      let seq = trusted ? cached.seq : 0;
-      let changed = created || (before.mode & 0o777) !== 0o600;
-      const iterator = source(seq)[Symbol.iterator]();
-      if (!trusted) {
-        const result = this.reconcile(fd, path, iterator);
-        seq = result.seq;
-        changed ||= result.changed;
+      const buffer = Buffer.alloc(64 * 1024);
+      while (true) {
+        const length = readSync(fd, buffer, 0, buffer.length, position);
+        if (length === 0) break;
+        let start = 0;
+        for (let index = 0; index < length; index += 1) {
+          if (buffer[index] !== 10) continue;
+          const segment = Buffer.from(buffer.subarray(start, index));
+          lineLength += segment.length;
+          if (lineLength > MAXIMUM_LINE_BYTES)
+            throw new StorageError('SESSION_LOG_INVALID', 'Session batch is too large');
+          parts.push(segment);
+          yield decode(Buffer.concat(parts, lineLength));
+          parts = [];
+          lineLength = 0;
+          validBytes = position + index + 1;
+          start = index + 1;
+        }
+        const tail = Buffer.from(buffer.subarray(start, length));
+        lineLength += tail.length;
+        if (lineLength > MAXIMUM_LINE_BYTES)
+          throw new StorageError('SESSION_LOG_INVALID', 'Session batch is too large');
+        if (tail.length > 0) parts.push(tail);
+        position += length;
       }
-      for (let next = iterator.next(); !next.done; next = iterator.next()) {
-        const event = next.value;
-        if (event.seq !== seq + 1 || event.sessionId !== sessionId)
-          throw new StorageError(
-            'SESSION_LOG_INVALID',
-            'SQLite session log sequence is inconsistent',
-          );
-        this.append(fd, path, `${JSON.stringify(event)}\n`);
-        seq = event.seq;
+      if (lineLength > 0) {
+        const bytes = Buffer.concat(parts, lineLength);
+        let complete = true;
+        try {
+          JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
+        } catch {
+          complete = false; /* A crash may leave only the last command's JSON incomplete. */
+        }
+        if (complete) {
+          yield decode(bytes);
+          this.write(fd, path, Buffer.from('\n'));
+        } else {
+          this.files.checkFile(fd, path);
+          ftruncateSync(fd, validBytes);
+        }
         changed = true;
       }
-      this.checkFile(fd, path);
       if (changed) fsyncSync(fd);
-      if (created) {
-        const directory = this.directories.find((entry) => entry.path === this.directory);
-        if (directory?.fd !== undefined) fsyncSync(directory.fd);
-      }
-      const after = this.checkFile(fd, path);
       this.cursors.set(sessionId, {
         seq,
-        size: after.size,
-        dev: after.dev,
-        ino: after.ino,
-        mtimeMs: after.mtimeMs,
-        ctimeMs: after.ctimeMs,
+        batchId: previousBatchId,
+        signature: signature(this.files.checkFile(fd, path)),
+      });
+    } catch (cause) {
+      if (cause instanceof StorageError && cause.code === 'SESSION_LOG_INVALID') throw cause;
+      throw new StorageError(
+        'SESSION_LOG_INVALID',
+        'Session journal could not be replayed safely',
+        { cause },
+      );
+    } finally {
+      closeSync(fd);
+    }
+  }
+
+  /** Commit one fully validated command; callers freeze writes after every uncertain failure. */
+  public append(sessionId: string, records: readonly StoredSessionEvent[]): void {
+    if (records.length === 0) return;
+    const cursor = this.cursors.get(sessionId);
+    const body: Omit<SessionBatch, 'checksum'> = {
+      version: 1,
+      batchId: randomUUID(),
+      previousBatchId: cursor?.batchId ?? null,
+      sessionId,
+      firstSeq: (cursor?.seq ?? 0) + 1,
+      records: [...records],
+    };
+    const batch = checked(SessionBatchSchema, { ...body, checksum: checksum(body) });
+    for (const [index, record] of records.entries())
+      if (record.event.sessionId !== sessionId || record.event.seq !== batch.firstSeq + index)
+        throw new StorageError('INVALID_RECORD', 'Session command sequence is invalid');
+    const bytes = Buffer.from(`${JSON.stringify(batch)}\n`);
+    if (bytes.length > MAXIMUM_LINE_BYTES)
+      throw new StorageError('INVALID_RECORD', 'Session command exceeds the journal batch limit');
+    const { fd, path, created } = this.open(sessionId, true);
+    try {
+      const before = this.files.checkFile(fd, path);
+      if (
+        (cursor && (created || cursor.signature !== signature(before))) ||
+        (!cursor && before.size !== 0)
+      )
+        throw new StorageError('SESSION_LOG_INVALID', 'Session journal changed outside its owner');
+      fchmodSync(fd, 0o600);
+      this.write(fd, path, bytes);
+      fsyncSync(fd);
+      if (created) this.files.syncDirectory(this.files.directory);
+      this.cursors.set(sessionId, {
+        seq: batch.firstSeq + batch.records.length - 1,
+        batchId: batch.batchId,
+        signature: signature(this.files.checkFile(fd, path)),
       });
     } finally {
       closeSync(fd);

@@ -2,6 +2,7 @@ import {
   RuleSourceSchema,
   WorkSnapshotSchema,
   type RuleSource,
+  type QuestionResponse,
   type WorkPatch,
   type WorkSnapshot,
 } from '@my-pi-harness/protocol';
@@ -58,14 +59,14 @@ export const commandWork = async (
 export const answerQuestion = async (
   id: string,
   questionId: string,
-  answer: string | null,
+  answers: QuestionResponse[] | null,
   signal: AbortSignal,
 ): Promise<WorkSnapshot> => {
   let action = 'cancel';
-  let body: { answer?: string } = {};
-  if (answer !== null) {
+  let body: { answers?: QuestionResponse[] } = {};
+  if (answers !== null) {
     action = 'answer';
-    body = { answer };
+    body = { answers };
   }
   return parseResponse(
     WorkSnapshotSchema,

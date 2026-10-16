@@ -3,7 +3,7 @@ import { access, lstat, open, realpath, stat, type FileHandle } from 'node:fs/pr
 import { homedir } from 'node:os';
 import { isAbsolute, parse, posix, relative, resolve, sep, win32 } from 'node:path';
 import { ExecutionError, checkCancelled, isMissing } from './errors.js';
-import type { ExecutionContext } from './types.js';
+import type { ExecutionContext, WorkspacePathPlatform } from './types.js';
 
 const sensitiveNames = new Set([
   '.ssh',
@@ -105,7 +105,7 @@ export async function canonicalWorkspace(context: ExecutionContext): Promise<str
 export function toWorkspaceRelativePath(
   root: string,
   target: string,
-  platform: 'posix' | 'win32' = process.platform === 'win32' ? 'win32' : 'posix',
+  platform: WorkspacePathPlatform = process.platform === 'win32' ? 'win32' : 'posix',
 ): string {
   const api = platform === 'win32' ? win32 : posix;
   return api.relative(root, target).split(api.sep).join('/') || '.';

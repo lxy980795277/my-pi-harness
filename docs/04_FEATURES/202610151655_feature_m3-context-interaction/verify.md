@@ -1,5 +1,61 @@
 # M3 上下文与交互验证
 
+日期：2026-10-16，北京时间。应用0.3.0、wire8、SQLite fresh schema1、宿主JSONL批格式1、私有codec1；macOS arm64、Node24.20.0、pnpm10.34.6、Electron43.7.9。本轮完整设计和实现已完成，本机自动化通过，待用户统一体验；没有提交、推送或进入M4。下方折叠内容仅为第一轮历史证据。
+
+进入M4前已对照当前代码、测试和roadmap逐项复核M3.1–M3.8，未发现功能遗漏；结论、文档修正及本轮检查见[收尾复核](../202610161259_refactor_m3-review-technical-docs/verify.md)。此前测试计数仍是各轮实际执行记录，未因本轮文档整理重复执行。
+
+## 本轮验收
+
+| 条件         | 结果与证据                                                                                                                                                                                                                               |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| AC-00 / 存储 | Pass；JSONL完整批先落盘，再提交SQLite投影。真实SQLite/文件测试覆盖非法批回滚、截断末批、完整坏行、未知格式、索引提交失败、缺失日志、附件hash和投影重建。配置独立保留，公开流不返回privateData。                                          |
+| AC-01 / M3.1 | Pass；既有规则作用域/冻结/优先级/取消回归通过，浏览器验证根与引用祖先规则进入Pi请求，刷新来源可读。                                                                                                                                      |
+| AC-02 / M3.2 | Pass；文本/图片/PDF原有边界与新DOCX/RTF解析、宏文档MIME大小写校验通过；浏览器验证仅附件首发、图片粘贴、真实多模态请求和历史预览。桌面包实际解析RTF证明新依赖随包可用。                                                                   |
+| AC-03 / M3.3 | Pass；每请求预算/输出预留/分类、provider Usage基线及摘要后失效由实际Pi合成请求观察；工具结果只裁剪模型副本，原历史保留。最后before/after统计口径修正定向8项复验通过。                                                                    |
+| AC-04 / M3.4 | Pass；单user/单Run连续20次实际read_file，至少两次自动压缩并经历无效摘要fallback后完成；后续真实模型请求仍有原任务、已批准计划、Shanghai修正事实及missing.txt失败记录。大前摘要和20条长失败结果连续fallback通过全局长度预算与实际持久化。 |
+| AC-05 / M3.5 | Pass；HTTP和浏览器验证多题、单选/多选/自由答、非法答案拒绝、取消及原Run继续；停止、重启中断待答状态，不自动续跑。                                                                                                                        |
+| AC-06 / M3.6 | Pass；浏览器经真实合成工具调用完成计划反馈、修订、批准、Todo和步骤完成，主模型5次请求仍只有一个Run。PATCH不能直接批准计划，过期/错Session审核拒绝；Plan工具限制和审批回归通过。                                                          |
+| AC-07 / M3.7 | Pass；两个摘要版本在UI比较七字段并选择旧版本，不生成消息分支；手动会话快照恢复新分支。任务和上下文重置效果分离；继承工具正文与附件后半部canary可检索，未绑定附件不命中，旧完成证据可随分支保留但新增伪造证据拒绝。                       |
+| AC-08 / M3.8 | Pass（本机自动化）；全仓格式/lint/类型、731项源码、33项浏览器、6项构建daemon、最新macOS应用目录及桌面smoke通过。用户体验、真实供应商与其他平台单列未验证。                                                                               |
+
+## 实际检查
+
+全部测试使用临时profile/工作区、明确内存凭据和合成模型，无真实供应商调用或费用。源码和产物分别验证，以下不以一个命令替代另一类证据。
+
+| 命令                                                                                                                                     | 结果                                                                                                                                 |
+| ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| pnpm format:check                                                                                                                        | Pass；WIP期间两份源码/Spec格式警告已修，最终全仓通过。收尾文档随后定向检查。                                                         |
+| pnpm lint                                                                                                                                | Pass；ESLint、Oxlint、377源码依赖、415源码约定、80文档和版本检查通过。                                                               |
+| pnpm typecheck                                                                                                                           | Pass；根工具/E2E与7个workspace任务通过；最后内部计量修正由runtime类型/定向回归及最终build覆盖。                                      |
+| pnpm test                                                                                                                                | Pass；72文件通过、1文件跳过，731项通过、2项跳过。跳过为未配置显式真实Provider及当前macOS不执行的Windows进程用例。                    |
+| pnpm exec vitest run packages/agent-runtime/test/context-pipeline.test.ts packages/agent-runtime/test/context-review-regressions.test.ts | Pass；最后计量修正后8项通过，不重复全仓源码。                                                                                        |
+| pnpm test:e2e                                                                                                                            | Pass；33项Chromium，覆盖M1/M2/M3、设置、权限、目录交互及来源隔离。                                                                   |
+| pnpm exec playwright test tests/e2e/m3.spec.ts                                                                                           | Pass；后续runtime审查修复重建后6项再验，通过问答/计划/附件/摘要/快照链路。                                                           |
+| pnpm test:artifact                                                                                                                       | Pass；2文件6项，包含构建daemon正常停止/强杀、队列/Run恢复、附件、任务、会话快照分支及JSONL公开投影。                                 |
+| pnpm build                                                                                                                               | Pass；最终打包命令内7项构建成功，所有消费者为wire8。                                                                                 |
+| pnpm package:desktop                                                                                                                     | Pass；最终0.3.0 macOS arm64未签名应用目录，包含最新Web/runtime/daemon和文档解析依赖。                                                |
+| pnpm smoke:desktop                                                                                                                       | Pass；最终包从临时cwd与隔离profile启动，独立Node24、实际RTF上传/提取/预览、设置、目录桥、CSP、Renderer隔离、资源链接和退出回收通过。 |
+| git diff --check                                                                                                                         | Pass；未提交/推送。                                                                                                                  |
+
+组合test:m3已补新pipeline、审查回归、JSONL/blob、问答/摘要/附件前端用例；没有额外重复执行组合，相关用例已由以上源码与浏览器命令覆盖。
+
+## 实际观察与数据清理
+
+已实际查看output/playwright/m3-plan-review.png、m3-question.png、m3-context-versions.png：审核与问答卡位于输入框上方，按钮未遮挡，摘要左右比较可滚动。M3浏览器用例生成的截图来自本轮真实本机服务和合成模型，不是静态样图。
+
+本轮先停止本仓库原开发Electron/Web/daemon，再按用户授权删除仓库.my-pi-harness及My Pi Harness、@my-pi-harness/desktop两处应用profiles。没有备份或迁移旧数据，没有删除.workspace或其源文件；用户下次启动需重新配置模型和添加工作区。测试及桌面smoke的临时数据自行清理。
+
+## 未验证与边界
+
+- 用户统一体验验收与真实供应商API/OAuth未执行；合成Provider的事实保持与Usage流程不等于真实供应商摘要质量或账单精度。
+- Windows/Linux桌面、安装器、签名/公证未验证。Windows Shell和浏览器新增工作区继续按用户决定留M2；本轮不将其标完成。
+- Office/PDF仅提取文本，无OCR和宏执行；当前冻结提取正文及图片，未承诺归档Office/PDF原始二进制。预算及分类仍为估算。
+- JSONL是含宿主私有模型数据的权威日志，不作为脱敏共享文件。配置仍由SQLite拥有，删除整个SQLite不等于能恢复全部产品配置；完整导入导出仍属M7。
+- 自动上下文检查点与手动会话快照都不撤销文件、Shell或外部请求。MCP/Skill仍仅占位，长期记忆和跨会话搜索仍属后续里程碑。
+
+<details>
+<summary>历史：2026-10-15第一轮及后续局部验证</summary>
+
 日期：2026-10-15，北京时间。当前应用0.2.1，M3改动尚未提交；wire协议6、SQLite迁移5，Session事件信封仍1，私有消息codec写2/读1与2。环境为macOS arm64、Node24.20.0、pnpm10.34.6、Electron43.7.9。本文记录本机自动化与实际截图观察，用户体验验收待执行；未进入M4。
 
 ## 验收结果
@@ -60,3 +116,5 @@
 本次定向ESLint、Web三编译面及E2E类型检查通过；`pnpm --filter @my-pi-harness/web build`通过；`pnpm exec vitest run apps/web/test/context-work.test.ts`4项通过。`pnpm exec playwright test tests/e2e/m3.spec.ts tests/e2e/workspace-creation.spec.ts`8项通过，验证菜单顺序/禁用占位、上传按钮触发文件选择、附件发送与历史预览、引用API冻结与规则展示、目录空白不调用桥、按钮选择/取消/更换及拖入目录。引用浏览器用例按已移除入口调整为API准备数据，不将其称为前端添加引用验证。
 
 已实际查看`output/playwright/m3-attachment-menu.png`和目录按钮截图，菜单紧凑且居中目录按钮布局正常。未重跑全仓测试或重打桌面包；目录浏览器用例仍使用既有受控bridge，不替代原生目录对话框人工验收。
+
+</details>

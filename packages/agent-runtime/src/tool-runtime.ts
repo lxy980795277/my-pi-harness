@@ -1,40 +1,19 @@
 import { createHash } from 'node:crypto';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 import { TOOL_DEFINITIONS, describeTool, executeTool } from '@my-pi-harness/execution';
-import type {
-  RunView,
-  SessionSummary,
-  ToolCallRecord,
-  ToolDecisionInput,
-  Workspace,
-} from '@my-pi-harness/protocol';
+import type { ToolCallRecord, ToolDecisionInput } from '@my-pi-harness/protocol';
 import { Type, type TSchema } from 'typebox';
 import { Value } from 'typebox/value';
 import { RuntimeError } from './errors.js';
-import type { EventInput } from './runtime-ports.js';
-import type { WorkRuntime } from './work-runtime.js';
 import { SESSION_TOOL_DEFINITIONS, executeSessionTool } from './session-tools.js';
-import type { ApprovalReviewer } from './approval-review.js';
-
-interface ToolRunContext {
-  session: SessionSummary;
-  run: RunView;
-  signal: AbortSignal;
-  recorded: Set<string>;
-  assistantMessageId(): string;
-  commit(events: readonly EventInput[]): void;
-}
-interface PendingApproval {
-  sessionId: string;
-  decide(decision: ToolDecisionInput['decision']): void;
-}
-export interface ToolRuntimeOptions {
-  profileDirectory: string;
-  resolveWorkspace(id: string): Promise<Workspace>;
-  approvalTimeoutMs?: number;
-  work?: WorkRuntime;
-  reviewer?: ApprovalReviewer;
-}
+import type { ApprovalReviewResult } from './approval-review.js';
+import type {
+  PendingApproval,
+  ToolEventType,
+  ToolExecutionResult,
+  ToolRunContext,
+  ToolRuntimeOptions,
+} from './tool-types.js';
 
 /** Provider call IDs pair within one assistant message, not across every turn of a run. */
 export function toolCallRecordId(
@@ -85,11 +64,7 @@ export class ToolRuntime {
     name: string,
     args: Record<string, unknown>,
     sdkSignal?: AbortSignal,
-  ): Promise<{
-    content: ({ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string })[];
-    details: undefined;
-    isError?: boolean;
-  }> {
+  ): Promise<ToolExecutionResult> {
     const signal = sdkSignal ? AbortSignal.any([sdkSignal, context.signal]) : context.signal;
     signal.throwIfAborted();
     if (context.recorded.size >= 64)
@@ -127,7 +102,7 @@ export class ToolRuntime {
       createdAt: at,
       updatedAt: at,
     };
-    const commit = (type: 'tool.requested' | 'tool.updated'): void => {
+    const commit = (type: ToolEventType): void => {
       tool.updatedAt = Date.now();
       context.commit([
         { type, runId: context.run.id, at: tool.updatedAt, data: { tool: structuredClone(tool) } },
@@ -167,7 +142,7 @@ export class ToolRuntime {
         throw new RuntimeError('TOOL_READ_ONLY', '当前会话为只读模式，禁止此操作。');
       }
       if (policy.approvalRequired) {
-        let decision: 'allow' | 'deny' | 'ask' = 'ask';
+        let decision: ApprovalReviewResult['decision'] = 'ask';
         if (context.session.approvalMode === 'full-access') {
           decision = 'allow';
           tool.approval = { source: 'full-access', decision, reason: null };

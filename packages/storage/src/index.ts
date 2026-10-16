@@ -11,3 +11,4 @@ export type { CredentialStore, CredentialBackend, SecretUpdate } from './credent
 export type { CreateSessionInput, EventInput, RequestAcceptance } from './types.js';
 
 export { sessionLogDirectory, type ProfileStoreOptions } from './session-log-directory.js';
+export { SessionBatchSchema, type SessionBatch } from './session-jsonl.js';

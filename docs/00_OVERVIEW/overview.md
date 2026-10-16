@@ -21,7 +21,7 @@ My Pi Harness 是独立开发的本地优先 PC Agent 应用。用户在浏览�
 | [06_RELEASES](../06_RELEASES/overview.md)           | 产品版本与发布记录                     | 提交与发布         |
 | [07_USER_GUIDE](../07_USER_GUIDE/overview.md)       | 用户操作与启动指南                     | 使用与体验验证     |
 | [08_COLLABORATION](../08_COLLABORATION/overview.md) | 提交、分支与协作                       | 用户要求提交或协作 |
-| [09_TECHNICAL](../09_TECHNICAL/overview.md)         | 决策理由与已核实问题                   | 选型与问题复盘     |
+| [09_TECHNICAL](../09_TECHNICAL/技术文档总览.md)     | 核心技术设计、关键机制与取舍           | 理解核心流程与维护 |
 | [10_GOVERNANCE](../10_GOVERNANCE/overview.md)       | 定期代码与文档治理                     | 专项审查           |
 
 `AGENTS.md` 是简短入口；具体约定由以上文档负责。用户当前指令优先于仓库默认约定，已接受的范围调整应同步到对应 Spec。

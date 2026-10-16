@@ -1,4 +1,4 @@
-import type { Todo } from '@my-pi-harness/protocol';
+import type { PlanStep, Todo, ToolCallView } from '@my-pi-harness/protocol';
 import { Pencil, Trash2 } from 'lucide-react';
 import type { FC } from 'react';
 import { Button } from '@/components/ui/button';
@@ -6,17 +6,21 @@ import { Input } from '@/components/ui/input';
 import { Notice } from '@/components/ui/notice';
 import { SelectField } from '@/components/ui/select-field';
 import { useTodoRow } from '@/features/work/hooks/use-todo-row';
+import { todoEvidence } from '@/features/work/utils/todo-evidence';
 import { TODO_STATUS_OPTIONS } from '@/features/work/utils/work-view';
 
 interface TodoRowProps {
   todo: Todo;
+  tools: ToolCallView[];
+  steps: PlanStep[];
   disabled: boolean;
   onSave: (todo: Todo) => Promise<void>;
   onRemove: (id: string) => Promise<void>;
 }
 /** A compact task row supports title edits, state changes and removal. */
-export const TodoRow: FC<TodoRowProps> = ({ todo, disabled, onSave, onRemove }) => {
+export const TodoRow: FC<TodoRowProps> = ({ todo, tools, steps, disabled, onSave, onRemove }) => {
   const state = useTodoRow(todo, onSave, onRemove);
+  const evidence = todoEvidence(todo, tools, steps);
   return (
     <div className="space-y-2 rounded-xl border border-border p-3">
       <div className="flex items-center gap-2">
@@ -64,6 +68,25 @@ export const TodoRow: FC<TodoRowProps> = ({ todo, disabled, onSave, onRemove }) 
           <Trash2 width={14} height={14} aria-hidden />
         </Button>
       </div>
+      {evidence.step && <div className="text-xs text-muted-foreground">阶段：{evidence.step}</div>}
+      {todo.completionNote && (
+        <div className="text-xs text-muted-foreground">{todo.completionNote}</div>
+      )}
+      {evidence.tools.length > 0 && (
+        <details className="text-xs text-muted-foreground">
+          <summary className="cursor-pointer">执行依据 · {evidence.tools.length}</summary>
+          <div className="mt-2 space-y-2">
+            {evidence.tools.map((tool) => {
+              return (
+                <div key={tool.id} className="rounded-lg bg-muted p-2 leading-5">
+                  <span className="font-medium">{tool.name}</span>
+                  <div className="whitespace-pre-wrap">{tool.summary}</div>
+                </div>
+              );
+            })}
+          </div>
+        </details>
+      )}
       {state.editing && (
         <div className="flex justify-end gap-2">
           <Button type="button" variant="ghost" onClick={state.cancel}>

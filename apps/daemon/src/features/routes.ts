@@ -73,7 +73,7 @@ export function registerM1Routes(server: FastifyInstance, services: ApplicationS
                 : 422;
       let message = status === 500 ? '持久化服务不可用。' : error.message;
       if (error.code === 'SESSION_LOG_UNAVAILABLE')
-        message = '会话已保存，但日志文件写入失败。请重启应用后继续，勿重复执行操作。';
+        message = '会话存储异常，写入结果需重启后确认。请勿重复执行操作。';
       void reply.code(status).send({ code: error.code, message });
       return;
     }

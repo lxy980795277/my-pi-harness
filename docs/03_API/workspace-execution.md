@@ -1,6 +1,6 @@
 # 工作区与工具协议
 
-wire协议7；Session事件信封仍为1，0004为旧工作区补默认图标，M3追加0005保存上下文和工作状态，旧事件和已发布迁移不重写。所有接口复用本机授权、Host/Origin和写请求CSRF校验，公开DTO由protocol/workspaces.ts、tools.ts与sessions.ts拥有。
+wire协议8；Session公开事件信封为1，宿主JSONL批格式与fresh SQLite schema分别管理版本。当前开发阶段不保留旧格式兼容。所有接口复用本机授权、Host/Origin和写请求CSRF校验，公开DTO由protocol/workspaces.ts、tools.ts与sessions.ts拥有。
 
 ## 工作区与会话
 

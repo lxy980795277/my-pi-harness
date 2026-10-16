@@ -6,7 +6,7 @@ import { createPatch } from 'diff';
 import { stringArgument } from './catalog.js';
 import { ExecutionError, checkCancelled, isMissing } from './errors.js';
 import { extractPdf } from './pdf.js';
-import type { ExecutionContext, ExecutionResult } from './types.js';
+import type { ExecutionContext, ExecutionResult, FileMutationToolName } from './types.js';
 import {
   isPortableFileName,
   isSensitiveName,
@@ -290,7 +290,7 @@ async function replaceFile(
 }
 
 export async function writeFileTool(
-  name: 'write_file' | 'edit_file',
+  name: FileMutationToolName,
   args: Record<string, unknown>,
   root: string,
   context: ExecutionContext,

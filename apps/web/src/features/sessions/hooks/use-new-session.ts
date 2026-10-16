@@ -1,6 +1,6 @@
 import type { DefaultModel, ProviderConfig, SessionSnapshot } from '@my-pi-harness/protocol';
 import { useQueryClient } from '@tanstack/react-query';
-import { useCallback, type ChangeEvent, type FormEvent } from 'react';
+import { useCallback, type ChangeEvent, type SubmitEvent } from 'react';
 import {
   useAttachmentDrafts,
   EMPTY_ATTACHMENTS,
@@ -15,7 +15,7 @@ import {
 } from '@/features/models/utils/model-options';
 import { mergeSessionSnapshot } from '@/features/sessions/queries/projection';
 import { createSession, submitInput } from '@/features/sessions/services/sessions';
-import type { ComposerChoices, NewSessionState } from '@/features/sessions/types/composer-view';
+import type { ComposerChoices, NewSessionState } from '@/features/sessions/types/composer';
 import {
   buildComposerModelOptions,
   buildWorkspaceOptions,
@@ -23,7 +23,6 @@ import {
   readApprovalMode,
   titleFromFirstMessage,
 } from '@/features/sessions/utils/composer-options';
-import { composerKeyDown } from '@/features/sessions/utils/composer-key-down';
 import { isRejectedInput } from '@/features/sessions/utils/input-outcome';
 import { useWorkspaces } from '@/features/workspaces/hooks/use-workspaces';
 import { useAsyncEvent } from '@/hooks/use-async-event';
@@ -109,11 +108,25 @@ export const useNewSession = (
   const clearPendingInput = useWorkspaceStore((state) => {
     return state.clearPendingInput;
   });
-  const selection = attempt?.model ?? selectedModel ?? catalog.settings.data?.defaultModel ?? null;
-  const draft = attempt?.input.text ?? storedDraft;
+  let selection = selectedModel;
+  if (attempt !== null) {
+    selection = attempt.model;
+  } else if (selection === null && catalog.settings.data !== undefined) {
+    selection = catalog.settings.data.defaultModel;
+  }
+  let draft = storedDraft;
+  let selectedWorkMode = workMode;
+  let attachmentIds = attachments.map((attachment) => {
+    return attachment.id;
+  });
   let selectedWorkspaceId = workspaceId;
   let selectedApprovalMode = approvalMode;
   if (attempt) {
+    draft = attempt.input.text;
+    selectedWorkMode = attempt.workMode;
+    if (attempt.input.attachmentIds !== undefined) {
+      attachmentIds = attempt.input.attachmentIds;
+    }
     selectedWorkspaceId = attempt.workspaceId;
     selectedApprovalMode = attempt.approvalMode;
   }
@@ -142,7 +155,7 @@ export const useNewSession = (
         let current = attempt;
         if (!current) {
           const text = draft.trim();
-          if (text.length === 0) {
+          if (text.length === 0 && attachments.length === 0) {
             return;
           }
           current = beginAttempt(generation, {
@@ -171,7 +184,7 @@ export const useNewSession = (
           try {
             snapshot = await createSession(
               {
-                title: titleFromFirstMessage(current.input.text),
+                title: titleFromFirstMessage(current.input.text, attachments),
                 ...current.model,
                 workspaceId: current.workspaceId,
                 approvalMode: current.approvalMode,
@@ -238,7 +251,7 @@ export const useNewSession = (
   );
   const { run: sendRun } = send;
   const submit = useCallback(
-    (event: FormEvent<HTMLFormElement>): void => {
+    (event: SubmitEvent<HTMLFormElement>): void => {
       event.preventDefault();
       sendRun();
     },
@@ -314,7 +327,7 @@ export const useNewSession = (
     workspaceLabel: workspace?.name ?? '不使用工作区',
     workspaceIcon: workspace?.icon ?? 'folder',
     changeWorkspace,
-    workMode: attempt?.workMode ?? workMode,
+    workMode: selectedWorkMode,
     changeWorkMode,
     workModeDisabled: send.pending || attempt !== null,
     approvalMode: selectedApprovalMode,
@@ -340,19 +353,24 @@ export const useNewSession = (
     },
     [attachmentBusy, attachmentDraftKey, attempt, removeDraftAttachment],
   );
+  let error = send.error;
+  if (error === null) {
+    error = creationWarning;
+  }
+  if (error === null && catalog.settings.error !== null) {
+    error = catalog.settings.error.message;
+  }
+  if (error === null && workspaces.error !== null) {
+    error = workspaces.error.message;
+  }
   return {
     attachmentDraftKey,
-    attachmentIds:
-      attempt?.input.attachmentIds ??
-      attachments.map((attachment) => {
-        return attachment.id;
-      }),
+    attachmentIds,
     removeAttachment,
     draft,
     changeDraft,
     submit,
     choices,
-    keyDown: composerKeyDown,
     pending: send.pending,
     draftLocked: attempt !== null,
     disabled:
@@ -361,13 +379,8 @@ export const useNewSession = (
       attempt?.phase === 'unknown' ||
       attempt?.phase === 'creating' ||
       (!attempt && valid === null) ||
-      draft.trim().length === 0,
-    error:
-      send.error ??
-      creationWarning ??
-      catalog.settings.error?.message ??
-      workspaces.error?.message ??
-      null,
+      (draft.trim().length === 0 && attachments.length === 0),
+    error: error,
     invalid: selection !== null && valid === null && attempt === null,
     uncertain: attempt?.phase === 'created' && !send.pending,
   };

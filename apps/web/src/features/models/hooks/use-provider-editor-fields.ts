@@ -1,4 +1,4 @@
-import type { ProviderEditorFields } from '@/features/models/types/model-view';
+import type { ProviderEditorFields } from '@/features/models/types/model';
 import { useCallback, type ChangeEvent } from 'react';
 import type { SelectOption } from '@/components/ui/select-field';
 import type { useProviderEditor } from '@/features/models/hooks/use-provider-editor';

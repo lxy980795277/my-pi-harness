@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fetchWork, patchWork } from '../src/features/work/services/work';
 
 const snapshot = (branchId: string): WorkSnapshot => {
-  return { state: initialWorkState(branchId), checkpoints: [] };
+  return { state: initialWorkState(branchId), checkpoints: [], compactions: [] };
 };
 afterEach(() => {
   vi.unstubAllGlobals();

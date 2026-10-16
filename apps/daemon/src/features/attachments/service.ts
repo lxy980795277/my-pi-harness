@@ -5,6 +5,7 @@ import { RuntimeError } from '@my-pi-harness/agent-runtime';
 import {
   ExecutionError,
   extractPdf,
+  extractDocument,
   isPortableFileName,
   isSensitiveName,
   openRegular,
@@ -22,6 +23,7 @@ import type { ProfileStore } from '@my-pi-harness/storage';
 import {
   checkAborted,
   decodeText,
+  documentFormat,
   decodeUpload,
   imageMediaType,
   safeName,
@@ -83,11 +85,23 @@ export class AttachmentService {
   ): Promise<Attachment> {
     checkAborted(signal);
     const imageType = imageMediaType(bytes);
+    const format = documentFormat(name, mediaType);
     let kind: Attachment['kind'] = 'text';
     let text: string | null = null;
     let imageData: string | null = null;
 
-    if (mediaType.startsWith('image/')) {
+    if (format) {
+      if (bytes.length > PDF_LIMIT)
+        throw new RuntimeError('ATTACHMENT_TOO_LARGE', '文档不能超过8MiB。');
+      if (format === 'rtf') {
+        if (!bytes.subarray(0, 5).equals(Buffer.from('{\\rtf')))
+          throw new RuntimeError('ATTACHMENT_TYPE', 'RTF文档内容无效。');
+      } else if (bytes[0] !== 80 || bytes[1] !== 75) {
+        throw new RuntimeError('ATTACHMENT_TYPE', '文档内容无效。');
+      }
+      kind = 'document';
+      text = await extractDocument(bytes, format, signal ?? new AbortController().signal);
+    } else if (mediaType.startsWith('image/')) {
       if (bytes.length > IMAGE_LIMIT)
         throw new RuntimeError('ATTACHMENT_TOO_LARGE', '图片不能超过2MiB。');
       if (imageType !== mediaType)
@@ -111,7 +125,7 @@ export class AttachmentService {
       ].includes(mediaType)
     ) {
       text = decodeText(bytes);
-    } else throw new RuntimeError('ATTACHMENT_TYPE', '仅支持文本、图片和PDF。');
+    } else throw new RuntimeError('ATTACHMENT_TYPE', '不支持此附件格式。');
     if (range && text === null)
       throw new RuntimeError('ATTACHMENT_RANGE', '只有文本文件支持行范围。');
     if (range && text !== null) {
@@ -197,9 +211,11 @@ export class AttachmentService {
       } finally {
         await handle.close();
       }
-      const mediaType =
-        imageMediaType(bytes) ??
-        (bytes.subarray(0, 5).toString() === '%PDF-' ? 'application/pdf' : 'text/plain');
+      let mediaType = imageMediaType(bytes);
+      if (mediaType === undefined) {
+        mediaType = 'text/plain';
+        if (bytes.subarray(0, 5).toString() === '%PDF-') mediaType = 'application/pdf';
+      }
       const hasRange = input.startLine !== undefined || input.endLine !== undefined;
       return await this.freeze(
         basename(path),

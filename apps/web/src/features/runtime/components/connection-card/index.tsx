@@ -1,3 +1,4 @@
+import type { RuntimeConnectionStatus } from '@/features/runtime/types/runtime';
 import { CheckCircle2, CircleAlert, LoaderCircle, RefreshCw } from 'lucide-react';
 import type { FC } from 'react';
 
@@ -6,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 interface ConnectionCardProps {
-  status: 'loading' | 'error' | 'ready';
+  status: RuntimeConnectionStatus;
   message: string;
   onRetry: () => void;
 }

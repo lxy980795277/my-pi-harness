@@ -1,4 +1,4 @@
-import type { SessionNavigationState } from '@/features/sessions/types/session-view';
+import type { SessionNavigationState } from '@/features/sessions/types/session';
 import { useCallback } from 'react';
 import type { SessionSummary } from '@my-pi-harness/protocol';
 import {

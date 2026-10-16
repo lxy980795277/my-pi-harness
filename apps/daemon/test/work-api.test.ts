@@ -103,7 +103,7 @@ afterEach(async () => {
 });
 
 describe('M3 protected work commands', () => {
-  it('reports committed database changes when session JSONL cannot be written', async () => {
+  it('rolls back the SQLite projection and freezes writes when the authoritative log cannot be written', async () => {
     const value = await fixture();
     const profile = await realpath(join(value.directory, 'profile'));
     const journal = join(
@@ -116,12 +116,12 @@ describe('M3 protected work commands', () => {
     expect(response.status).toBe(503);
     const body: unknown = await response.json();
     expect(body).toMatchObject({ code: 'SESSION_LOG_UNAVAILABLE' });
-    expect(body).toHaveProperty('message', expect.stringContaining('会话已保存'));
-    expect(value.services.store.getSession('first')?.title).toBe('Already committed');
+    expect(body).toHaveProperty('message', expect.stringContaining('重启后确认'));
+    expect(value.services.store.getSession('first')?.title).toBe('first');
     const read = await value.send('/api/sessions/first');
     expect(read.status).toBe(200);
     const snapshot: unknown = await read.json();
-    expect(snapshot).toMatchObject({ session: { title: 'Already committed' } });
+    expect(snapshot).toMatchObject({ session: { title: 'first' } });
   });
 
   it('rejects missing branch expectations and stale work requests after switching equal revisions', async () => {
@@ -132,7 +132,7 @@ describe('M3 protected work commands', () => {
     );
     const missingBranch = [
       { path: '', method: 'PATCH', body: { revision: 0, mode: 'plan' } },
-      { path: '/reset', method: 'POST', body: { revision: 0 } },
+      { path: '/reset-context', method: 'POST', body: { revision: 0 } },
       { path: '/compact', method: 'POST', body: { revision: 0 } },
       { path: '/checkpoints/missing/restore', method: 'POST', body: { revision: 0 } },
       { path: '/checkpoints', method: 'POST', body: { label: 'Missing branch' } },
@@ -166,7 +166,7 @@ describe('M3 protected work commands', () => {
     const before = f.services.store.getSnapshot('first');
     const requests = [
       { path: '', method: 'PATCH', body: { ...stale, mode: 'execute' } },
-      { path: '/reset', method: 'POST', body: stale },
+      { path: '/reset-context', method: 'POST', body: stale },
       { path: '/compact', method: 'POST', body: stale },
       { path: `/checkpoints/${checkpoint.id}/restore`, method: 'POST', body: stale },
       {
@@ -294,7 +294,16 @@ describe('M3 protected work commands', () => {
         expectedBranchId: 'first-main',
         revision: 0,
         mode: 'plan',
-        todos: [{ id: 'task', title: 'Inspect', status: 'pending' }],
+        todos: [
+          {
+            id: 'task',
+            title: 'Inspect',
+            status: 'pending',
+            planStepId: null,
+            evidenceToolCallIds: [],
+            completionNote: null,
+          },
+        ],
       }),
     );
     expect(updated.state).toMatchObject({
@@ -320,7 +329,7 @@ describe('M3 protected work commands', () => {
     ).toBe(400);
     expect(
       (
-        await f.send('/api/sessions/first/work/reset', 'POST', {
+        await f.send('/api/sessions/first/work/reset-context', 'POST', {
           expectedBranchId: 'first-main',
           revision: 1,
           extra: true,
@@ -357,9 +366,23 @@ describe('M3 protected work commands', () => {
         expectedBranchId: 'first-main',
         revision: 0,
         mode: 'plan',
-        plan: { title: 'Plan', content: 'Read then implement', status: 'draft', updatedAt: 2 },
       }),
     );
+    const seeded = f.services.work.snapshot('first').state;
+    f.services.work.save('first', {
+      ...seeded,
+      plan: {
+        id: 'saved-plan',
+        runId: null,
+        title: 'Plan',
+        content: 'Read then implement',
+        steps: [{ id: 'step', title: 'Inspect', status: 'pending' }],
+        status: 'draft',
+        review: null,
+        feedback: null,
+        updatedAt: 2,
+      },
+    });
     const saved = await work(
       await f.send('/api/sessions/first/work/checkpoints', 'POST', {
         expectedBranchId: 'first-main',
@@ -375,12 +398,12 @@ describe('M3 protected work commands', () => {
     );
     expect(wrong.status).toBe(404);
     const reset = await work(
-      await f.send('/api/sessions/first/work/reset', 'POST', {
+      await f.send('/api/sessions/first/work/reset-context', 'POST', {
         expectedBranchId: saved.state.branchId,
         revision: saved.state.revision,
       }),
     );
-    expect(reset.state.plan).toBeNull();
+    expect(reset.state.plan).toEqual(saved.state.plan);
     const restored = await work(
       await f.send(`/api/sessions/first/work/checkpoints/${checkpoint.id}/restore`, 'POST', {
         expectedBranchId: reset.state.branchId,
@@ -390,7 +413,7 @@ describe('M3 protected work commands', () => {
     expect(restored.state.branchId).not.toBe('first-main');
     expect(restored.state.plan?.title).toBe('Plan');
     expect(f.services.store.getSnapshot('first').branches).toHaveLength(2);
-    expect(f.services.store.getWorkState('first', 'first-main').plan).toBeNull();
+    expect(f.services.store.getWorkState('first', 'first-main').plan).toEqual(saved.state.plan);
     expect(
       f.services.store.readEvents('first').some((event) => event.type === 'branch.restored'),
     ).toBe(true);
@@ -469,8 +492,19 @@ describe('M3 protected work commands', () => {
       'first',
       runId,
       'question-call',
-      'Which path?',
-      ['A', 'B'],
+      [
+        {
+          id: 'path',
+          header: 'Path',
+          prompt: 'Which path?',
+          options: [
+            { id: 'a', label: 'A', description: '' },
+            { id: 'b', label: 'B', description: '' },
+          ],
+          multiSelect: false,
+          allowCustomInput: false,
+        },
+      ],
       controller.signal,
     );
     try {
@@ -480,21 +514,24 @@ describe('M3 protected work commands', () => {
       expect(
         (
           await f.send(`/api/sessions/second/questions/${question.id}/answer`, 'POST', {
-            answer: 'A',
+            answers: [{ questionId: 'path', optionIds: ['a'], text: '' }],
           })
         ).status,
       ).toBe(409);
       const answered = await work(
         await f.send(`/api/sessions/first/questions/${question.id}/answer`, 'POST', {
-          answer: 'A',
+          answers: [{ questionId: 'path', optionIds: ['a'], text: '' }],
         }),
       );
-      expect(answered.state.questions[0]).toMatchObject({ status: 'answered', answer: 'A' });
-      await expect(pending).resolves.toBe('A');
+      expect(answered.state.questions[0]).toMatchObject({
+        status: 'answered',
+        answers: [{ questionId: 'path', optionIds: ['a'], text: '' }],
+      });
+      await expect(pending).resolves.toContain('a');
       expect(
         (
           await f.send(`/api/sessions/first/questions/${question.id}/answer`, 'POST', {
-            answer: 'B',
+            answers: [{ questionId: 'path', optionIds: ['b'], text: '' }],
           })
         ).status,
       ).toBe(409);
@@ -502,8 +539,16 @@ describe('M3 protected work commands', () => {
         'first',
         runId,
         'second-call',
-        'Continue?',
-        [],
+        [
+          {
+            id: 'continue',
+            header: 'Continue',
+            prompt: 'Continue?',
+            options: [],
+            multiSelect: false,
+            allowCustomInput: true,
+          },
+        ],
         controller.signal,
       );
       const expectation = expect(cancelled).rejects.toMatchObject({ code: 'QUESTION_CANCELLED' });
@@ -511,6 +556,98 @@ describe('M3 protected work commands', () => {
       if (!second) throw new Error('Second question not pending');
       await work(await f.send(`/api/sessions/first/questions/${second.id}/cancel`, 'POST', {}));
       await expectation;
+    } finally {
+      controller.abort();
+      await Promise.allSettled([pending]);
+    }
+  });
+
+  it('reviews only the matching pending plan with a current branch revision and keeps the original run', async () => {
+    const f = await fixture();
+    const runId = 'plan-review-run';
+    f.services.store.append('first', [
+      {
+        type: 'run.accepted',
+        at: 2,
+        runId,
+        data: {
+          requestId: 'plan-review-request',
+          run: {
+            id: runId,
+            sessionId: 'first',
+            branchId: 'first-main',
+            providerId: 'fixture',
+            modelId: 'model',
+            status: 'running',
+            createdAt: 2,
+            finishedAt: null,
+            error: null,
+          },
+        },
+      },
+    ]);
+    const controller = new AbortController();
+    const pending = f.services.work.proposePlan(
+      'first',
+      runId,
+      'Inspect then implement',
+      'Read before editing.',
+      [{ id: 'inspect', title: 'Inspect', status: 'pending' }],
+      controller.signal,
+    );
+    try {
+      const initial = f.services.work.snapshot('first');
+      const planId = initial.state.plan?.id;
+      if (!planId) throw new Error('No review plan');
+      const input = {
+        expectedBranchId: 'first-main',
+        revision: initial.state.revision,
+        decision: 'approve',
+        feedback: '',
+      };
+      expect(
+        (
+          await f.send(`/api/sessions/first/work/plans/${planId}/review`, 'POST', {
+            ...input,
+            revision: input.revision - 1,
+          })
+        ).status,
+      ).toBe(409);
+      expect(
+        (
+          await f.send(`/api/sessions/second/work/plans/${planId}/review`, 'POST', {
+            ...input,
+            expectedBranchId: 'second-main',
+            revision: 0,
+          })
+        ).status,
+      ).toBe(409);
+      expect(
+        (
+          await f.send('/api/sessions/first/work', 'PATCH', {
+            expectedBranchId: 'first-main',
+            revision: input.revision,
+            plan: { ...initial.state.plan, status: 'approved' },
+          })
+        ).status,
+      ).toBe(400);
+      const approved = await work(
+        await f.send(`/api/sessions/first/work/plans/${planId}/review`, 'POST', input),
+      );
+      expect(approved.state).toMatchObject({
+        mode: 'execute',
+        plan: { id: planId, runId, status: 'approved', review: 'approved' },
+      });
+      await expect(pending).resolves.toContain('同一次运行');
+      expect(f.services.store.getSession('first')?.activeRunId).toBe(runId);
+      expect(
+        (
+          await f.send(`/api/sessions/first/work/plans/${planId}/review`, 'POST', {
+            ...input,
+            revision: approved.state.revision,
+          })
+        ).status,
+      ).toBe(409);
     } finally {
       controller.abort();
       await Promise.allSettled([pending]);
@@ -570,7 +707,7 @@ describe('M3 protected work commands', () => {
       ).toBe(409);
       expect(
         (
-          await f.send('/api/sessions/first/work/reset', 'POST', {
+          await f.send('/api/sessions/first/work/reset-context', 'POST', {
             expectedBranchId: state.branchId,
             revision: state.revision,
           })

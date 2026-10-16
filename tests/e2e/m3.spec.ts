@@ -129,7 +129,7 @@ test('M3 上传文本随首发进入真实模型请求，刷新后可预览历�
     await page.keyboard.press('Escape');
     const chip = page.getByRole('button', { name: '预览附件 context.txt', exact: true });
     await expect(chip).toBeVisible();
-    const id = await firstSend(page, '附件首发，请读取附件');
+    const id = await firstSend(page, '');
     await expect(
       page.getByText('已读取附件：ATTACHMENT-CONTENT-M3', { exact: true }),
     ).toBeVisible();
@@ -141,7 +141,7 @@ test('M3 上传文本随首发进入真实模型请求，刷新后可预览历�
     ).toHaveLength(1);
     expect(JSON.stringify(model.requests[0]?.body['messages'])).toContain('ATTACHMENT-CONTENT-M3');
     await page.reload();
-    await page.getByRole('button', { name: /^附件首发，请读取附件 / }).click();
+    await page.getByRole('button', { name: /^context.txt / }).click();
     await expect(chip).toBeVisible();
     await chip.click();
     const preview = page.getByRole('dialog', { name: 'context.txt', exact: true });
@@ -193,7 +193,7 @@ test('M3 宿主文件引用冻结规则和片段，并在界面显示上下文�
         modelId: 'chat-model',
         thinkingLevel: 'off',
         workspaceId: workspace.id,
-        approvalMode: 'read-only',
+        approvalMode: 'ask',
       },
     });
     const snapshot: unknown = await created.json();
@@ -241,10 +241,7 @@ test('M3 宿主文件引用冻结规则和片段，并在界面显示上下文�
   }
 });
 
-test('M3 计划批准和任务持久化，检查点比较恢复保留原分支，重置不删历史', async ({
-  page,
-  daemon,
-}) => {
+test('M3 计划反馈与批准保持同一次运行，快照恢复和两类重置保留历史', async ({ page, daemon }) => {
   const model = await startM3Model();
   try {
     await setupModel(page, daemon.origin, model.origin);
@@ -253,65 +250,62 @@ test('M3 计划批准和任务持久化，检查点比较恢复保留原分支�
       page.getByRole('combobox', { name: '输入栏工作模式', exact: true }),
       'Plan · 只规划',
     );
-    const id = await firstSend(page, '计划与检查点验收');
-    await expect(page.getByText('M3 会话已完成。', { exact: true })).toBeVisible();
+    const id = await firstSend(page, '计划与检查点验收 [plan:review]');
+    const review = page.getByLabel('计划审核', { exact: true });
+    await expect(review).toContainText('第一份计划');
+    await mkdir(join(process.cwd(), 'output', 'playwright'), { recursive: true });
+    await page.screenshot({ path: 'output/playwright/m3-plan-review.png' });
+    const pending = await readSession(page, daemon.origin, id);
+    const runId = pending.session.activeRunId;
+    expect(runId).not.toBeNull();
+    await review.getByLabel('计划修改意见', { exact: true }).fill('请先核对来源，并记录依据');
+    await review.getByRole('button', { name: '提交修改意见', exact: true }).click();
+    await expect(review).toContainText('修订后的计划');
+    expect((await readSession(page, daemon.origin, id)).session.activeRunId).toBe(runId);
+    await review.getByRole('button', { name: '批准并执行', exact: true }).click();
+    await expect(page.getByText('M3 计划已在同一次运行中完成。', { exact: true })).toBeVisible();
     const original = await readSession(page, daemon.origin, id);
-    expect((await readWork(page, daemon.origin, id)).state.mode).toBe('plan');
-    const messages = model.requests[0]?.body['messages'];
-    if (!Array.isArray(messages)) throw new Error('The first model request must contain messages');
-    const system = messages.find((entry: unknown): entry is { role: 'system'; content: string } => {
-      return (
-        typeof entry === 'object' &&
-        entry !== null &&
-        'role' in entry &&
-        entry.role === 'system' &&
-        'content' in entry &&
-        typeof entry.content === 'string'
-      );
-    });
-    expect(system?.content).toContain('"workingData":{"mode":"plan"');
+    expect(original.runs).toHaveLength(1);
+    expect(original.runs[0]?.id).toBe(runId);
+    const completed = await readWork(page, daemon.origin, id);
+    expect(completed.state.mode).toBe('execute');
+    expect(completed.state.plan?.status).toBe('completed');
+    expect(completed.state.plan?.review).toBe('approved');
+    expect(completed.state.plan?.content).toContain('核对来源');
+    expect(completed.state.todos[0]?.completionNote).toContain('纯文本资料整理');
+    expect(JSON.stringify(model.requests[1]?.body['messages'])).toContain(
+      '请先核对来源，并记录依据',
+    );
     const openWork = page.getByRole('button', { name: '上下文与工作状态', exact: true });
     await openWork.click();
     let dialog = page.getByRole('dialog', { name: '上下文与工作状态', exact: true });
     await dialog.getByRole('tab', { name: '计划与任务', exact: true }).click();
-    await expect(dialog.getByRole('combobox', { name: '工作模式', exact: true })).toContainText(
-      'Plan',
-    );
-    await dialog.getByRole('button', { name: '编辑计划', exact: true }).click();
-    await dialog.getByLabel('计划标题', { exact: true }).fill('第一份计划');
-    await dialog.getByLabel('计划内容', { exact: true }).fill('先读取资料，再整理结果。');
-    await dialog.getByRole('button', { name: '保存计划', exact: true }).click();
-    await dialog.getByRole('button', { name: '批准计划并切换执行', exact: true }).click();
-    await expect(dialog.getByRole('combobox', { name: '工作模式', exact: true })).toContainText(
-      '执行',
-    );
-    await dialog.getByRole('textbox', { name: '新任务', exact: true }).fill('整理资料');
-    await dialog.getByRole('button', { name: '添加', exact: true }).click();
-    await chooseOption(
-      page,
-      dialog.getByRole('combobox', { name: '任务状态 整理资料', exact: true }),
-      '已完成',
-    );
-    await expect(
-      dialog.getByRole('combobox', { name: '任务状态 整理资料', exact: true }),
-    ).toContainText('已完成');
+    await expect(dialog).toContainText('修订后的计划');
+    await expect(dialog).toContainText('纯文本资料整理');
     await mkdir(join(process.cwd(), 'output', 'playwright'), { recursive: true });
     await page.screenshot({ path: 'output/playwright/m3-plan.png' });
-    await dialog.getByRole('tab', { name: '检查点', exact: true }).click();
-    await dialog.getByRole('textbox', { name: '检查点名称', exact: true }).fill('计划已批准');
-    await dialog.getByRole('button', { name: '创建检查点', exact: true }).click();
+    await dialog.getByRole('tab', { name: '会话快照', exact: true }).click();
+    await dialog.getByRole('textbox', { name: '快照名称', exact: true }).fill('计划已批准');
+    await dialog.getByRole('button', { name: '创建会话快照', exact: true }).click();
     await expect
       .poll(async () => {
         return (await readWork(page, daemon.origin, id)).checkpoints.length;
       })
       .toBe(1);
     await dialog.getByRole('tab', { name: '计划与任务', exact: true }).click();
-    await dialog.getByRole('button', { name: '编辑计划', exact: true }).click();
-    await dialog.getByLabel('计划内容', { exact: true }).fill('第二份计划内容，需要重新确认。');
-    await dialog.getByRole('button', { name: '保存计划', exact: true }).click();
-    await dialog.getByRole('tab', { name: '检查点', exact: true }).click();
-    await dialog.getByRole('textbox', { name: '检查点名称', exact: true }).fill('计划已修改');
-    await dialog.getByRole('button', { name: '创建检查点', exact: true }).click();
+    await dialog.getByRole('textbox', { name: '新任务', exact: true }).fill('补充核验');
+    await dialog.getByRole('button', { name: '添加', exact: true }).click();
+    await chooseOption(
+      page,
+      dialog.getByRole('combobox', { name: '任务状态 补充核验', exact: true }),
+      '受阻',
+    );
+    await expect(
+      dialog.getByRole('combobox', { name: '任务状态 补充核验', exact: true }),
+    ).toContainText('受阻');
+    await dialog.getByRole('tab', { name: '会话快照', exact: true }).click();
+    await dialog.getByRole('textbox', { name: '快照名称', exact: true }).fill('任务已补充');
+    await dialog.getByRole('button', { name: '创建会话快照', exact: true }).click();
     await expect
       .poll(async () => {
         return (await readWork(page, daemon.origin, id)).checkpoints.length;
@@ -320,18 +314,18 @@ test('M3 计划批准和任务持久化，检查点比较恢复保留原分支�
     await chooseOption(
       page,
       dialog.getByRole('combobox', { name: '比较基准', exact: true }),
-      '计划已修改',
+      '任务已补充',
     );
     await chooseOption(
       page,
       dialog.getByRole('combobox', { name: '比较目标', exact: true }),
       '计划已批准',
     );
-    await expect(dialog.getByText('有变化', { exact: true })).toBeVisible();
+    await expect(dialog.getByText('有变化', { exact: true }).first()).toBeVisible();
     await page.screenshot({ path: 'output/playwright/m3-checkpoints.png' });
-    await dialog.getByRole('button', { name: '恢复目标检查点', exact: true }).click();
+    await dialog.getByRole('button', { name: '恢复目标快照', exact: true }).click();
     await page
-      .getByRole('alertdialog', { name: '恢复检查点', exact: true })
+      .getByRole('alertdialog', { name: '恢复会话快照', exact: true })
       .getByRole('button', { name: '创建分支并恢复', exact: true })
       .click();
     await expect
@@ -342,9 +336,7 @@ test('M3 计划批准和任务持久化，检查点比较恢复保留原分支�
     const restored = await readSession(page, daemon.origin, id);
     expect(restored.messages).toEqual(original.messages);
     expect(restored.session.activeBranchId).not.toBe(original.session.activeBranchId);
-    expect((await readWork(page, daemon.origin, id)).state.plan?.content).toBe(
-      '先读取资料，再整理结果。',
-    );
+    expect((await readWork(page, daemon.origin, id)).state.todos).toHaveLength(1);
     await chooseOption(
       page,
       page.getByRole('combobox', { name: '历史分支', exact: true }),
@@ -352,9 +344,9 @@ test('M3 计划批准和任务持久化，检查点比较恢复保留原分支�
     );
     await expect
       .poll(async () => {
-        return (await readWork(page, daemon.origin, id)).state.plan?.content;
+        return (await readWork(page, daemon.origin, id)).state.todos.length;
       })
-      .toBe('第二份计划内容，需要重新确认。');
+      .toBe(2);
     await chooseOption(
       page,
       page.getByRole('combobox', { name: '历史分支', exact: true }),
@@ -362,11 +354,23 @@ test('M3 计划批准和任务持久化，检查点比较恢复保留原分支�
     );
     await openWork.click();
     dialog = page.getByRole('dialog', { name: '上下文与工作状态', exact: true });
-    await dialog.getByRole('tab', { name: '检查点', exact: true }).click();
-    await dialog.getByRole('button', { name: '重置工作状态', exact: true }).click();
-    const confirmation = page.getByRole('alertdialog', { name: '重置工作状态', exact: true });
-    await expect(confirmation).toContainText('不会回滚');
-    await confirmation.getByRole('button', { name: '确认重置', exact: true }).click();
+    await dialog.getByRole('tab', { name: '会话快照', exact: true }).click();
+    await dialog.getByRole('button', { name: '重新开始上下文', exact: true }).click();
+    await page
+      .getByRole('alertdialog', { name: '重新开始上下文', exact: true })
+      .getByRole('button', { name: '确认重置', exact: true })
+      .click();
+    await expect
+      .poll(async () => {
+        return (await readWork(page, daemon.origin, id)).state.contextStartAfterMessageId;
+      })
+      .not.toBeNull();
+    expect((await readWork(page, daemon.origin, id)).state.todos).toHaveLength(1);
+    await dialog.getByRole('button', { name: '重置任务状态', exact: true }).click();
+    await page
+      .getByRole('alertdialog', { name: '重置任务状态', exact: true })
+      .getByRole('button', { name: '确认重置', exact: true })
+      .click();
     await expect
       .poll(async () => {
         return (await readWork(page, daemon.origin, id)).state.todos.length;
@@ -374,7 +378,7 @@ test('M3 计划批准和任务持久化，检查点比较恢复保留原分支�
       .toBe(0);
     expect((await readWork(page, daemon.origin, id)).state.plan).toBeNull();
     expect((await readSession(page, daemon.origin, id)).messages).toEqual(original.messages);
-    expect(model.requests).toHaveLength(1);
+    expect(model.requests).toHaveLength(5);
   } finally {
     await daemon.stop();
     await model.close();
@@ -388,8 +392,19 @@ test('M3 无工作区时 Agent 可等待用户回答，并支持取消后继续'
     const id = await firstSend(page, '请询问我 [ask:answer]');
     const question = page.getByLabel('Agent 提问', { exact: true });
     await expect(question).toBeVisible();
-    await question.getByRole('button', { name: '方案 A', exact: true }).click();
+    await question.getByRole('button', { name: /^方案 A/ }).click();
     await question.getByLabel('回答 Agent', { exact: true }).fill('方案 A，先读资料');
+    await question.getByRole('button', { name: '下一题', exact: true }).click();
+    await question.getByRole('button', { name: '速度', exact: true }).click();
+    await question.getByRole('button', { name: '质量', exact: true }).click();
+    await mkdir(join(process.cwd(), 'output', 'playwright'), { recursive: true });
+    await page.screenshot({ path: 'output/playwright/m3-question.png' });
+    await question.getByRole('button', { name: '上一题', exact: true }).click();
+    await expect(question.getByRole('button', { name: /^方案 A/ })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await question.getByRole('button', { name: '下一题', exact: true }).click();
     await question.getByRole('button', { name: '提交回答', exact: true }).click();
     await expect(page.getByText(/Agent 收到回答：.*方案 A，先读资料/)).toBeVisible();
     await page.getByLabel('消息', { exact: true }).fill('请询问我 [ask:cancel]');
@@ -403,7 +418,10 @@ test('M3 无工作区时 Agent 可等待用户回答，并支持取消后继续'
         return entry.status;
       }),
     ).toEqual(['answered', 'cancelled']);
-    expect(work.state.questions[0]?.answer).toBe('方案 A，先读资料');
+    expect(work.state.questions[0]?.answers).toEqual([
+      { questionId: 'approach', optionIds: ['a'], text: '方案 A，先读资料' },
+      { questionId: 'priorities', optionIds: ['speed', 'quality'], text: '' },
+    ]);
     expect((await readSession(page, daemon.origin, id)).session.workspaceId).toBeNull();
     expect(model.requests).toHaveLength(4);
   } finally {
@@ -445,6 +463,137 @@ test('M3 图片可上传预览，并以真实Pi多模态请求发送给支持图
     expect((await readSession(page, daemon.origin, id)).messages[0]?.attachmentIds).toHaveLength(1);
     await chip.click();
     await expect(preview.getByRole('img', { name: 'pixel.png', exact: true })).toBeVisible();
+    await preview.getByRole('button', { name: '关闭', exact: true }).click();
+    await page
+      .getByLabel('消息', { exact: true })
+      .evaluate((element: HTMLTextAreaElement, encoded: string) => {
+        const bytes = Uint8Array.from(atob(encoded), (character) => {
+          return character.charCodeAt(0);
+        });
+        const data = new DataTransfer();
+        data.items.add(new File([bytes], 'clipboard.png', { type: 'image/png' }));
+        element.dispatchEvent(
+          new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: data }),
+        );
+      }, png.toString('base64'));
+    await expect(
+      page.getByRole('button', { name: '预览附件 clipboard.png', exact: true }),
+    ).toBeVisible();
+    await expect(page.getByLabel('消息', { exact: true })).toHaveValue('');
+    await page.getByRole('button', { name: '发送', exact: true }).click();
+    await expect
+      .poll(async () => {
+        return (await readSession(page, daemon.origin, id)).runs.length;
+      })
+      .toBe(2);
+    await expect
+      .poll(async () => {
+        return (await readSession(page, daemon.origin, id)).session.activeRunId;
+      })
+      .toBeNull();
+    const pasted = await readSession(page, daemon.origin, id);
+    expect(
+      pasted.messages.filter((message) => {
+        return message.role === 'user';
+      })[1]?.attachmentIds,
+    ).toHaveLength(1);
+    const mainRequests = model.requests.filter((request) => {
+      return Array.isArray(request.body['tools']);
+    });
+    expect(mainRequests).toHaveLength(2);
+    expect(JSON.stringify(mainRequests[1]?.body['messages'])).toContain('image_url');
+    const imageWork = await readWork(page, daemon.origin, id);
+    const summaryRequests = model.requests.filter((request) => {
+      return !Array.isArray(request.body['tools']);
+    });
+    expect(summaryRequests).toHaveLength(imageWork.compactions.length);
+  } finally {
+    await daemon.stop();
+    await model.close();
+  }
+});
+
+test('M3 上下文摘要版本可比较与选择，历史快照独立保留', async ({ page, daemon }) => {
+  const model = await startM3Model();
+  try {
+    await setupModel(page, daemon.origin, model.origin);
+    const id = await firstSend(page, '上下文版本验收第1轮');
+    const sendRound = async (round: number): Promise<void> => {
+      await expect
+        .poll(async () => {
+          return (await readSession(page, daemon.origin, id)).session.activeRunId;
+        })
+        .toBeNull();
+      await page.getByLabel('消息', { exact: true }).fill(`上下文版本验收第${round}轮`);
+      await page.getByRole('button', { name: '发送', exact: true }).click();
+      await expect
+        .poll(async () => {
+          return (await readSession(page, daemon.origin, id)).runs.length;
+        })
+        .toBe(round);
+      await expect
+        .poll(async () => {
+          return (await readSession(page, daemon.origin, id)).session.activeRunId;
+        })
+        .toBeNull();
+    };
+    await expect(page.getByText('M3 会话已完成。', { exact: true })).toBeVisible();
+    await sendRound(2);
+    await sendRound(3);
+    const openWork = page.getByRole('button', { name: '上下文与工作状态', exact: true });
+    await openWork.click();
+    let dialog = page.getByRole('dialog', { name: '上下文与工作状态', exact: true });
+    await dialog.getByRole('button', { name: '压缩上下文', exact: true }).click();
+    await expect
+      .poll(async () => {
+        return (await readWork(page, daemon.origin, id)).compactions.length;
+      })
+      .toBe(1);
+    await expect(dialog).toContainText('M3 摘要目标');
+    await dialog.getByRole('button', { name: '关闭', exact: true }).click();
+    await sendRound(4);
+    await sendRound(5);
+    const before = await readSession(page, daemon.origin, id);
+    await openWork.click();
+    dialog = page.getByRole('dialog', { name: '上下文与工作状态', exact: true });
+    await dialog.getByRole('button', { name: '压缩上下文', exact: true }).click();
+    await expect
+      .poll(async () => {
+        return (await readWork(page, daemon.origin, id)).compactions.length;
+      })
+      .toBe(2);
+    const versions = await readWork(page, daemon.origin, id);
+    expect(versions.compactions[1]?.parentId).toBe(versions.compactions[0]?.id);
+    const firstOption = dialog.getByRole('combobox', { name: '上下文查看版本', exact: true });
+    await firstOption.click();
+    await page.getByRole('option', { name: /^版本 1 ·/ }).click();
+    await expect(dialog.getByText('有变化', { exact: true }).first()).toBeVisible();
+    await mkdir(join(process.cwd(), 'output', 'playwright'), { recursive: true });
+    await page.screenshot({ path: 'output/playwright/m3-context-versions.png' });
+    await dialog.getByRole('button', { name: '使用所选版本', exact: true }).click();
+    await page
+      .getByRole('alertdialog', { name: '使用上下文检查点', exact: true })
+      .getByRole('button', { name: '使用此版本', exact: true })
+      .click();
+    await expect
+      .poll(async () => {
+        return (await readWork(page, daemon.origin, id)).state.compaction?.id;
+      })
+      .toBe(versions.compactions[0]?.id);
+    const selected = await readSession(page, daemon.origin, id);
+    expect(selected.messages).toEqual(before.messages);
+    expect(selected.branches).toHaveLength(1);
+    expect((await readWork(page, daemon.origin, id)).checkpoints).toHaveLength(0);
+    expect(
+      model.requests.filter((request) => {
+        return Array.isArray(request.body['tools']);
+      }),
+    ).toHaveLength(5);
+    expect(
+      model.requests.filter((request) => {
+        return !Array.isArray(request.body['tools']);
+      }),
+    ).toHaveLength(2);
   } finally {
     await daemon.stop();
     await model.close();

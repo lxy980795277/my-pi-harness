@@ -1,4 +1,4 @@
-import type { TodoRowState } from '@/features/work/types/work-view';
+import type { TodoRowState } from '@/features/work/types/work';
 import type { Todo } from '@my-pi-harness/protocol';
 import { useCallback, useState, type ChangeEvent } from 'react';
 import { useAsyncEvent } from '@/hooks/use-async-event';
@@ -45,8 +45,18 @@ export const useTodoRow = (
   }, [run]);
   const status = useCallback(
     (value: string): void => {
-      if (value === 'pending' || value === 'in_progress' || value === 'completed') {
-        run({ ...todo, status: value });
+      if (
+        value === 'pending' ||
+        value === 'in_progress' ||
+        value === 'completed' ||
+        value === 'blocked' ||
+        value === 'cancelled'
+      ) {
+        let completionNote = todo.completionNote;
+        if (value === 'completed' && !completionNote) {
+          completionNote = '用户确认完成';
+        }
+        run({ ...todo, status: value, completionNote });
       }
     },
     [run, todo],

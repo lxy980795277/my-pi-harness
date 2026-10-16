@@ -1,3 +1,4 @@
+import type { HttpMethod } from '@/types/http';
 import { API_PREFIX } from '@/constants/api';
 
 let csrfToken: string | null = null;
@@ -30,7 +31,7 @@ export class RequestError extends Error {
 /** Sends same-origin JSON with cancellation, cookie auth and bounded response wait. */
 export const requestJson = async (
   path: string,
-  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE',
+  method: HttpMethod,
   body: unknown,
   signal: AbortSignal,
   timeoutMs = 8_000,

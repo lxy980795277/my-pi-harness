@@ -176,6 +176,9 @@ export async function checkSourceConventions(repoRoot = defaultRoot) {
 
     if (lineCount(content) > 1_000) report('源码文件超过 1000 行，必须按职责拆分');
     if (!isKebabFilename(basename(file))) report('源文件名必须使用 kebab-case');
+    if (path.split('/').includes('types') && /-view\.[cm]?[jt]sx?$/.test(basename(file))) {
+      report('types 文件使用领域名，不添加冗余 -view 后缀');
+    }
 
     const webSource = path.startsWith('apps/web/src/');
     const webModule = webSource || path.startsWith('apps/web/test/');

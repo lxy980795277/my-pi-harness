@@ -1,8 +1,9 @@
-import type { ApplicationShellState } from '@/app/types/application-view';
+import type { ApplicationShellState } from '@/app/types/application';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
 import { useTheme } from '@/app/hooks/use-theme';
-import { useWorkspaceStore, type WorkspacePage } from '@/app/stores/workspace';
+import { useWorkspaceStore } from '@/app/stores/workspace';
+import type { WorkspacePage } from '@/app/types/application';
 import { useAuthorization } from '@/features/auth/hooks/use-authorization';
 import {
   createPairingCode,
@@ -88,6 +89,16 @@ export const useApplicationShell = (): ApplicationShellState => {
   const settings = useCallback((): void => {
     openSettings('models');
   }, [openSettings]);
+  let actionError = signOut.error;
+  if (actionError === null) {
+    actionError = pairing.error;
+  }
+  if (actionError === null) {
+    actionError = github.error;
+  }
+  if (actionError === null) {
+    actionError = reconnect.error;
+  }
   return {
     settingsOpen,
     startNewConversation,
@@ -109,6 +120,6 @@ export const useApplicationShell = (): ApplicationShellState => {
     pairing: pairing.run,
     github: github.run,
     reconnect: reconnect.run,
-    actionError: signOut.error ?? pairing.error ?? github.error ?? reconnect.error,
+    actionError: actionError,
   };
 };

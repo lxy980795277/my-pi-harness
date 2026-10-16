@@ -1,12 +1,12 @@
 import type { Workspace, WorkspaceIcon } from '@my-pi-harness/protocol';
 import { useQueryClient } from '@tanstack/react-query';
-import { useCallback, useState, type ChangeEvent, type FormEvent } from 'react';
+import { useCallback, useState, type ChangeEvent, type SubmitEvent } from 'react';
 import { useWorkspaceStore } from '@/app/stores/workspace';
 import { useWorkspaceDirectory } from '@/features/workspaces/hooks/use-workspace-directory';
 import { createWorkspace, renameWorkspace } from '@/features/workspaces/services/workspaces';
 import { workspaceDirectoryName } from '@/features/workspaces/utils/workspace-directory';
 import { useAsyncEvent } from '@/hooks/use-async-event';
-import type { WorkspaceDialogState } from '@/features/workspaces/types/workspace-view';
+import type { WorkspaceDialogState } from '@/features/workspaces/types/workspace';
 
 /** Registration edits keep their icon and selected directory separate from the conversation draft. */
 export const useWorkspaceDialog = (
@@ -58,7 +58,7 @@ export const useWorkspaceDialog = (
     setName(event.target.value);
   }, []);
   const submit = useCallback(
-    (event: FormEvent<HTMLFormElement>): void => {
+    (event: SubmitEvent<HTMLFormElement>): void => {
       event.preventDefault();
       if (!directory.pending) {
         saveRun();
@@ -79,6 +79,10 @@ export const useWorkspaceDialog = (
   if (workspace) {
     title = '编辑工作区';
     disabled = name.trim().length === 0;
+  }
+  let error = save.error;
+  if (error === null) {
+    error = directory.error;
   }
   return {
     title,
@@ -102,6 +106,6 @@ export const useWorkspaceDialog = (
     pending: save.pending || directory.pending,
     saving: save.pending,
     disabled: disabled || save.pending || directory.pending,
-    error: save.error ?? directory.error,
+    error: error,
   };
 };

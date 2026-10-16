@@ -4,12 +4,15 @@ import {
   CheckpointCreateSchema,
   ContextResetSchema,
   QuestionAnswerSchema,
+  PlanReviewSchema,
   RuleSourceSchema,
   WorkPatchSchema,
   WorkSnapshotSchema,
   type CheckpointCreate,
   type ContextReset,
   type WorkPatch,
+  type QuestionAnswer,
+  type PlanReview,
 } from '@my-pi-harness/protocol';
 import type { WorkRuntime } from '@my-pi-harness/agent-runtime';
 
@@ -110,7 +113,7 @@ export function registerWorkRoutes(server: FastifyInstance, work: WorkRuntime): 
     (request) => work.restore(request.params.sessionId, request.params.checkpointId, request.body),
   );
   server.post<{ Params: SessionParams; Body: ContextReset }>(
-    '/api/sessions/:sessionId/work/reset',
+    '/api/sessions/:sessionId/work/reset-context',
     {
       schema: {
         params: sessionParams,
@@ -120,7 +123,53 @@ export function registerWorkRoutes(server: FastifyInstance, work: WorkRuntime): 
     },
     (request) => work.reset(request.params.sessionId, request.body),
   );
-  server.post<{ Params: SessionParams & { questionId: string }; Body: { answer: string } }>(
+  server.post<{ Params: SessionParams; Body: ContextReset }>(
+    '/api/sessions/:sessionId/work/reset-tasks',
+    {
+      schema: {
+        params: sessionParams,
+        body: ContextResetSchema,
+        response: { 200: WorkSnapshotSchema },
+      },
+    },
+    (request) => work.resetTasks(request.params.sessionId, request.body),
+  );
+  server.post<{ Params: SessionParams & { planId: string }; Body: PlanReview }>(
+    '/api/sessions/:sessionId/work/plans/:planId/review',
+    {
+      schema: {
+        params: Type.Object(
+          {
+            sessionId: Type.String({ minLength: 1, maxLength: 160 }),
+            planId: Type.String({ minLength: 1, maxLength: 160 }),
+          },
+          { additionalProperties: false },
+        ),
+        body: PlanReviewSchema,
+        response: { 200: WorkSnapshotSchema },
+      },
+    },
+    (request) => work.reviewPlan(request.params.sessionId, request.params.planId, request.body),
+  );
+  server.post<{ Params: SessionParams & { compactionId: string }; Body: ContextReset }>(
+    '/api/sessions/:sessionId/work/compactions/:compactionId/select',
+    {
+      schema: {
+        params: Type.Object(
+          {
+            sessionId: Type.String({ minLength: 1, maxLength: 160 }),
+            compactionId: Type.String({ minLength: 1, maxLength: 160 }),
+          },
+          { additionalProperties: false },
+        ),
+        body: ContextResetSchema,
+        response: { 200: WorkSnapshotSchema },
+      },
+    },
+    (request) =>
+      work.selectCompaction(request.params.sessionId, request.params.compactionId, request.body),
+  );
+  server.post<{ Params: SessionParams & { questionId: string }; Body: QuestionAnswer }>(
     '/api/sessions/:sessionId/questions/:questionId/answer',
     {
       schema: {
@@ -130,7 +179,7 @@ export function registerWorkRoutes(server: FastifyInstance, work: WorkRuntime): 
       },
     },
     (request) =>
-      work.answer(request.params.sessionId, request.params.questionId, request.body.answer),
+      work.answer(request.params.sessionId, request.params.questionId, request.body.answers),
   );
   server.post<{ Params: SessionParams & { questionId: string } }>(
     '/api/sessions/:sessionId/questions/:questionId/cancel',

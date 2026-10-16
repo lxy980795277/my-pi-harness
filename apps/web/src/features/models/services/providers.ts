@@ -1,3 +1,4 @@
+import type { ProviderSaveMethod } from '@/features/models/types/model';
 import {
   AuthFlowSchema,
   ModelInfoSchema,
@@ -38,7 +39,7 @@ export const saveProvider = async (
   signal: AbortSignal,
 ): Promise<ProviderConfig> => {
   let path = '/providers';
-  let method: 'POST' | 'PUT' = 'POST';
+  let method: ProviderSaveMethod = 'POST';
   if (input.id) {
     path = `/providers/${encodeURIComponent(input.id)}`;
     method = 'PUT';

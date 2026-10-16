@@ -24,6 +24,7 @@
 
 ## 机械规则与审查
 
+- 类型感知no-deprecated拒绝实际弃用使用，源码gate拒绝types目录冗余-view文件名；合法/非法fixture必须实际运行。
 - ESLint 对所有 TS/TSX/CTS/MTS 配置明确编译面，no-floating-promises/no-misused-promises 保持类型感知；JS/MJS/CJS 也执行实际规则。测试和构建配置不排除在检查外。
 - Web 全禁三目、void 运算符和 then/catch/finally 调用；检查 TSX Service/Query 编排、裸交互控件、内联事件、组件声明、Hook 与 Store 选择器。唯一 use-async-event.ts 启动豁免由源码 gate 限定路径、单条说明和对应调用，不开放全局 Promise 例外。
 - 源码 gate 检查命名、组件目录、helper 聚合、样式 import 顺序、1000 行上限，以及 Web 无后缀/Node 显式 .js。生成代码例外必须登记具体路径，不整片排除手写目录。
@@ -39,7 +40,7 @@
 | 状态/权限/工具 | 主路径、拒绝、取消、结果未知         | 实际副作用边界与用户结果            |
 | 连接/子进程    | 分片、启动失败、重复关闭、所有者失联 | 构建 CLI 与所属进程退出             |
 | 页面/交互      | 复杂纯逻辑、Hook 状态、秘密清理      | Playwright、键盘与视觉观察          |
-| SQLite/迁移    | 旧版本、顺序、重复、事务失败、损坏   | 真实临时库与恢复                    |
+| 日志/SQLite    | 批提交、顺序、重复、损坏、投影重建   | 真实临时JSONL/SQLite、附件与恢复    |
 | 桌面/发布      | 资源、来源和桥拒绝                   | 临时 cwd 启动、无源码依赖、目标平台 |
 
 不机械为纯 DTO、转发函数或简单布局建镜像测试；修复 bug 建立可复现回归，重构优先沿用行为测试。存储使用真实临时 SQLite，HTTP/SSE/IPC/进程保留真实边界，不全 mock 后称集成通过。普通单测可替换模型和不确定网络，真实 Provider 独立测试且标明未配置原因。

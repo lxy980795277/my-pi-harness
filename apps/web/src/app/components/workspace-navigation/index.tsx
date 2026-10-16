@@ -5,7 +5,7 @@ import type { FC } from 'react';
 import { NavigationItem } from '@/app/components/navigation-item';
 import { UserProfileCard } from '@/app/components/user-profile-card';
 import { Button } from '@/components/ui/button';
-import type { WorkspacePage } from '@/app/stores/workspace';
+import type { WorkspacePage } from '@/app/types/application';
 import { WorkspaceTree } from '@/features/workspaces/components/workspace-tree';
 
 interface WorkspaceNavigationProps {

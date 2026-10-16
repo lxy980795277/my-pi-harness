@@ -1,4 +1,6 @@
-import type { ProviderEditorState } from '@/features/models/types/model-view';
+import type { AuthenticationMethod } from '@/features/models/types/model';
+import type { SecretInputType } from '@/types/input';
+import type { ProviderEditorState } from '@/features/models/types/model';
 import type {
   AuthFlow,
   CustomProtocol,
@@ -7,7 +9,7 @@ import type {
   ProviderInput,
 } from '@my-pi-harness/protocol';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type SubmitEvent } from 'react';
 
 import { useWorkspaceStore } from '@/app/stores/workspace';
 import { fetchAuthFlow, fetchAuthFlows } from '@/features/auth/services/auth';
@@ -19,10 +21,7 @@ import {
   deleteProviderKey,
   logoutProvider,
 } from '@/features/models/services/providers';
-import {
-  getProviderAuthentication,
-  type AuthenticationMethod,
-} from '@/features/models/utils/provider-authentication';
+import { getProviderAuthentication } from '@/features/models/utils/provider-authentication';
 import { providerToInput } from '@/features/models/utils/model-options';
 import { useAsyncEvent } from '@/hooks/use-async-event';
 
@@ -168,7 +167,7 @@ export const useProviderEditor = (
   const { run: saveRun } = save;
 
   const submit = useCallback(
-    (event: FormEvent<HTMLFormElement>): void => {
+    (event: SubmitEvent<HTMLFormElement>): void => {
       event.preventDefault();
       const submittedKey = key.trim();
       setKey('');
@@ -266,7 +265,7 @@ export const useProviderEditor = (
   const openDelete = useCallback((): void => {
     setConfirmDelete(true);
   }, []);
-  let inputType: 'text' | 'password' = 'password';
+  let inputType: SecretInputType = 'password';
   if (keyVisible) {
     inputType = 'text';
   }
@@ -291,6 +290,16 @@ export const useProviderEditor = (
   const oauthActive =
     flowId !== null && flow.data?.status !== 'cancelled' && flow.data?.status !== 'failed';
   const busy = save.pending || startAuth.pending || removeCredential.pending || remove.pending;
+  let error = save.error;
+  if (error === null) {
+    error = startAuth.error;
+  }
+  if (error === null) {
+    error = removeCredential.error;
+  }
+  if (error === null) {
+    error = remove.error;
+  }
   return {
     name,
     setName,
@@ -328,7 +337,7 @@ export const useProviderEditor = (
     openDelete,
     complete,
     partialSaved,
-    error: save.error ?? startAuth.error ?? removeCredential.error ?? remove.error,
+    error: error,
     saveDisabled:
       busy ||
       oauthActive ||

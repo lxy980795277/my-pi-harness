@@ -98,6 +98,25 @@ try {
   );
   const status = await page.evaluate(async () => (await fetch('/api/auth/status')).json());
   assert.equal(status.authenticated, true);
+  const documentResult = await page.evaluate(async (csrfToken) => {
+    const uploaded = await fetch('/api/attachments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+      body: JSON.stringify({
+        name: 'packaged.rtf',
+        mediaType: 'application/rtf',
+        data: btoa('{\\rtf1\\ansi Packaged document parser works}'),
+      }),
+    });
+    if (!uploaded.ok) throw new Error(`Packaged document upload failed: ${uploaded.status}`);
+    const attachment = await uploaded.json();
+    const content = await fetch(`/api/attachments/${encodeURIComponent(attachment.id)}/content`);
+    if (!content.ok) throw new Error('Packaged document preview failed');
+    return await content.json();
+  }, status.csrfToken);
+  assert.equal(documentResult.attachment.kind, 'document');
+  assert.match(documentResult.text, /Packaged document parser works/);
+
   const providers = await page.evaluate(async () => (await fetch('/api/providers/catalog')).json());
   assert.equal(
     providers.length,

@@ -2,7 +2,7 @@ import { fileURLToPath } from 'node:url';
 
 import { createConfig } from '@my-pi-harness/eslint-config';
 import { frontendPlugin } from '@my-pi-harness/eslint-config/frontend-rules';
-import { Linter } from 'eslint';
+import { ESLint, Linter } from 'eslint';
 import { describe, expect, it } from 'vitest';
 
 const rootDirectory = fileURLToPath(new URL('../../', import.meta.url));
@@ -78,6 +78,27 @@ function expectViolation(source, ruleId, messageId, filename = defaultFilename) 
     expect.objectContaining({ ruleId, messageId, severity: 2 }),
   ]);
 }
+
+describe('type-aware React deprecation checks', () => {
+  it('rejects the installed deprecated FormEvent type and accepts SubmitEvent for forms', async () => {
+    const eslint = new ESLint({ cwd: rootDirectory });
+    const filePath = fileURLToPath(
+      new URL('../../apps/web/src/features/work/hooks/use-checkpoints.ts', import.meta.url),
+    );
+    const rejected = await eslint.lintText(
+      "import type { FormEvent } from 'react';\nexport const submit = (event: FormEvent<HTMLFormElement>): void => { event.preventDefault(); };",
+      { filePath },
+    );
+    expect(rejected[0].messages).toEqual([
+      expect.objectContaining({ ruleId: '@typescript-eslint/no-deprecated', severity: 2 }),
+    ]);
+    const accepted = await eslint.lintText(
+      "import type { SubmitEvent } from 'react';\nexport const submit = (event: SubmitEvent<HTMLFormElement>): void => { event.preventDefault(); };",
+      { filePath },
+    );
+    expect(accepted[0].messages).toEqual([]);
+  });
+});
 
 describe('handwritten React component declarations', () => {
   it.each([

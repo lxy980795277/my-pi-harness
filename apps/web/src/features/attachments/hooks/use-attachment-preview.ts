@@ -1,4 +1,4 @@
-import type { AttachmentPreviewState } from '@/features/attachments/types/attachment-view';
+import type { AttachmentPreviewState } from '@/features/attachments/types/attachment';
 import { useCallback, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {

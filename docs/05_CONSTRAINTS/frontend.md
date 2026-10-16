@@ -60,3 +60,5 @@
 - 注释只说明非显然行为、失败、时间和所有权，不逐行翻译或保留开发过程。公共 Hook/函数提供调用者需要的 JSDoc；删除注释掉实现与无职责副本。
 
 机械检查的范围和人工判断见 [测试规范](testing.md)。库行为参考 [React Effect](https://react.dev/reference/react/useEffect)、[useCallback](https://react.dev/reference/react/useCallback)、[Zustand useShallow](https://zustand.docs.pmnd.rs/learn/guides/prevent-rerenders-with-use-shallow.html)；具名 FC、无三目和 TSX 分工属于本仓库约定。
+
+领域类型命名、业务联合抽离、弃用API和空值表达式可读性统一遵守[代码治理](../10_GOVERNANCE/code.md)；不在此维护第二份通用规则。

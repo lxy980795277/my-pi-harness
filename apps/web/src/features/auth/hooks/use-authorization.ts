@@ -75,7 +75,7 @@ export const useAuthorization = (): Authorization => {
       throw failure;
     }
     queryClient.clear();
-    await queryClient.fetchQuery({
+    await queryClient.query({
       queryKey: ['auth-status'],
       queryFn: ({ signal }): Promise<AuthStatus> => {
         return fetchAuthStatus(signal);

@@ -1,4 +1,4 @@
-import type { DefaultModelState } from '@/features/models/types/model-view';
+import type { DefaultModelState } from '@/features/models/types/model';
 import type { DefaultModel } from '@my-pi-harness/protocol';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo } from 'react';
@@ -67,6 +67,13 @@ export const useDefaultModel = (): DefaultModelState => {
     selectedKey = modelSelectionKey(selection.providerId, selection.modelId);
     invalid = findModelSelection(providers, selectedKey) === null;
   }
+  let error = save.error;
+  if (error === null && catalog.settings.error !== null) {
+    error = catalog.settings.error.message;
+  }
+  if (error === null && models.error !== null) {
+    error = models.error.message;
+  }
   return {
     options: buildAvailableModelOptions(providers),
     selectedKey,
@@ -76,6 +83,6 @@ export const useDefaultModel = (): DefaultModelState => {
     changeThinking,
     invalid,
     pending: save.pending || catalog.settings.isPending,
-    error: save.error ?? catalog.settings.error?.message ?? models.error?.message ?? null,
+    error: error,
   };
 };

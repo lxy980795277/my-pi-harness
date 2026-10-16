@@ -4,7 +4,7 @@ import { compareWork, retainWorkSnapshot } from '../src/features/work/utils/work
 import { fileToUpload } from '../src/features/attachments/utils/attachment-upload';
 
 const work = (revision: number): WorkSnapshot => {
-  return { state: { ...initialWorkState('branch'), revision }, checkpoints: [] };
+  return { state: { ...initialWorkState('branch'), revision }, checkpoints: [], compactions: [] };
 };
 
 describe('context and checkpoint presentation', () => {

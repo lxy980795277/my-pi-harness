@@ -1,4 +1,4 @@
-import type { QueueItemState } from '@/features/sessions/types/session-view';
+import type { QueueItemState } from '@/features/sessions/types/session';
 import type { QueueInput, QueuePatchInput } from '@my-pi-harness/protocol';
 import { useCallback, useState, type ChangeEvent } from 'react';
 import { useAsyncEvent } from '@/hooks/use-async-event';
@@ -38,6 +38,10 @@ export const useQueueItem = (
   const changeText = useCallback((event: ChangeEvent<HTMLTextAreaElement>): void => {
     setText(event.target.value);
   }, []);
+  let error = update.error;
+  if (error === null) {
+    error = remove.error;
+  }
   return {
     editing,
     text,
@@ -47,6 +51,6 @@ export const useQueueItem = (
     update: update.run,
     remove: remove.run,
     pending: update.pending || remove.pending,
-    error: update.error ?? remove.error,
+    error: error,
   };
 };

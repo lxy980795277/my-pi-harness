@@ -106,7 +106,6 @@ export const ConversationPanel: FC<ConversationPanelProps> = memo(
               providers={providers}
               onPatch={commands.patch}
             />
-            <WorkPanel key={`${sessionId}:${snapshot.session.activeBranchId}`} session={snapshot} />
             {confirmDelete && (
               <div className="px-4 pt-3">
                 <Notice>
@@ -171,6 +170,7 @@ export const ConversationPanel: FC<ConversationPanelProps> = memo(
                 onResume={commands.resume}
               />
             )}
+            <WorkPanel key={`${sessionId}:${snapshot.session.activeBranchId}`} session={snapshot} />
             <Composer
               session={snapshot.session}
               providers={providers}

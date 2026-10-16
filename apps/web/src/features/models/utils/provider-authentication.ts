@@ -1,11 +1,6 @@
 import type { NativeProviderInfo, ProviderConfig } from '@my-pi-harness/protocol';
 
-export type AuthenticationMethod = 'api_key' | 'oauth';
-interface ProviderAuthentication {
-  supportsApiKey: boolean;
-  supportsOAuth: boolean;
-  initialMethod: AuthenticationMethod;
-}
+import type { AuthenticationMethod, ProviderAuthentication } from '@/features/models/types/model';
 
 /** A native provider exposes only the authentication kinds declared by Pi. */
 export const getProviderAuthentication = (

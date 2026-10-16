@@ -53,6 +53,7 @@ export function createConfig(rootDirectory) {
         '@typescript-eslint/no-explicit-any': 'error',
         '@typescript-eslint/no-floating-promises': 'error',
         '@typescript-eslint/no-misused-promises': 'error',
+        '@typescript-eslint/no-deprecated': 'error',
         '@typescript-eslint/consistent-type-imports': ['error', { prefer: 'type-imports' }],
         '@typescript-eslint/explicit-module-boundary-types': 'error',
         '@typescript-eslint/no-non-null-assertion': 'error',

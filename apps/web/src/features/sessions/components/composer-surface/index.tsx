@@ -5,16 +5,17 @@ import { Label } from '@/components/ui/label';
 import { Notice } from '@/components/ui/notice';
 import { SelectField } from '@/components/ui/select-field';
 import { Textarea } from '@/components/ui/textarea';
+import { useComposerKeyboard } from '@/features/sessions/hooks/use-composer-keyboard';
+import { useAttachmentComposer } from '@/features/attachments/hooks/use-attachment-composer';
 import { AttachmentList } from '@/features/attachments/components/attachment-list';
 import { ComposerControls } from '@/features/sessions/components/composer-controls';
-import type { ComposerSurfaceProps } from '@/features/sessions/types/composer-view';
+import type { ComposerSurfaceProps } from '@/features/sessions/types/composer';
 
 /** A shared rounded surface keeps the empty and ongoing conversation controls consistent. */
 export const ComposerSurface: FC<ComposerSurfaceProps> = ({
   id,
   draft,
   changeDraft,
-  keyDown,
   submit,
   choices,
   pending,
@@ -32,6 +33,8 @@ export const ComposerSurface: FC<ComposerSurfaceProps> = ({
   attachmentIds,
   removeAttachment,
 }) => {
+  const keyboard = useComposerKeyboard();
+  const attachment = useAttachmentComposer(attachmentDraftKey, pending || draftLocked);
   return (
     <form onSubmit={submit} className="w-full space-y-3">
       {error && <Notice tone="error">{error}</Notice>}
@@ -49,7 +52,11 @@ export const ComposerSurface: FC<ComposerSurfaceProps> = ({
           maxLength={64000}
           disabled={pending || draftLocked}
           onChange={changeDraft}
-          onKeyDown={keyDown}
+          onKeyDown={keyboard.keyDown}
+          onKeyUp={keyboard.keyUp}
+          onCompositionStart={keyboard.compositionStart}
+          onCompositionEnd={keyboard.compositionEnd}
+          onPaste={attachment.paste}
           className="max-h-64 min-h-28 resize-none rounded-xl border-0 bg-transparent px-2 py-1 text-sm focus-visible:border-transparent focus-visible:ring-0"
         />
         {attachmentIds.length > 0 && (
@@ -66,7 +73,7 @@ export const ComposerSurface: FC<ComposerSurfaceProps> = ({
             id={id}
             choices={choices}
             attachment={{
-              draftKey: attachmentDraftKey,
+              state: attachment,
               locked: pending || draftLocked,
             }}
           />

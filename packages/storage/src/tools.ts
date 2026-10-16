@@ -98,9 +98,12 @@ export class ToolProjection {
       .orderBy(asc(schema.toolContexts.seq))
       .all();
     for (const row of rows) {
-      const previous = output.get(row.anchor) ?? [];
+      let previous = output.get(row.anchor);
+      if (previous === undefined) {
+        previous = [];
+        output.set(row.anchor, previous);
+      }
       previous.push(row.value);
-      output.set(row.anchor, previous);
     }
     return output;
   }

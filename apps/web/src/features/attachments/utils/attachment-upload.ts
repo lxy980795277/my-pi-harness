@@ -15,12 +15,38 @@ const EXTENSION_TYPES: Readonly<Record<string, string>> = {
   css: 'text/plain',
   html: 'text/plain',
   pdf: 'application/pdf',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  docm: 'application/vnd.ms-word.document.macroEnabled.12',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  xlsm: 'application/vnd.ms-excel.sheet.macroEnabled.12',
+  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  pptm: 'application/vnd.ms-powerpoint.presentation.macroEnabled.12',
+  odt: 'application/vnd.oasis.opendocument.text',
+  ods: 'application/vnd.oasis.opendocument.spreadsheet',
+  odp: 'application/vnd.oasis.opendocument.presentation',
+  rtf: 'application/rtf',
+  epub: 'application/epub+zip',
   png: 'image/png',
   jpg: 'image/jpeg',
   jpeg: 'image/jpeg',
   webp: 'image/webp',
   gif: 'image/gif',
 };
+const DOCUMENT_EXTENSIONS = new Set([
+  'pdf',
+  'docx',
+  'docm',
+  'xlsx',
+  'xlsm',
+  'pptx',
+  'pptm',
+  'odt',
+  'ods',
+  'odp',
+  'rtf',
+  'epub',
+]);
+
 /** Encodes one file locally; its bytes are retained only until the upload completes. */
 export const fileToUpload = async (file: File, signal: AbortSignal): Promise<AttachmentUpload> => {
   const extension = file.name.split('.').at(-1)?.toLowerCase() ?? '';
@@ -29,11 +55,11 @@ export const fileToUpload = async (file: File, signal: AbortSignal): Promise<Att
   if (mediaType.startsWith('image/')) {
     limit = 2_097_152;
   }
-  if (mediaType === 'application/pdf') {
+  if (DOCUMENT_EXTENSIONS.has(extension) || mediaType === 'application/pdf') {
     limit = 8_388_608;
   }
   if (file.size > limit) {
-    throw new Error(`“${file.name}”超过大小限制。文本限 256 KB，图片限 2 MB，PDF 限 8 MB。`);
+    throw new Error(`“${file.name}”超过大小限制。文本限 256 KB，图片限 2 MB，文档限 8 MB。`);
   }
   signal.throwIfAborted();
   const bytes = new Uint8Array(await file.arrayBuffer());

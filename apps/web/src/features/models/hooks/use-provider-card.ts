@@ -1,4 +1,4 @@
-import type { ProviderCardState } from '@/features/models/types/model-view';
+import type { ProviderCardState } from '@/features/models/types/model';
 import type { ProviderConfig } from '@my-pi-harness/protocol';
 import { useCallback } from 'react';
 

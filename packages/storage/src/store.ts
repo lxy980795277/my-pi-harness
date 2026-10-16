@@ -14,6 +14,8 @@ import {
   SessionSnapshotSchema,
   SessionSummarySchema,
   initialWorkState,
+  WorkStateSchema,
+  type Compaction,
   type HarnessEvent,
   type AppSettings,
   type AppSettingsInput,
@@ -33,7 +35,10 @@ import { ProjectionWriter } from './projector.js';
 import { WorkspaceRepository } from './workspaces.js';
 import { ToolProjection } from './tools.js';
 import { WorkRepository } from './work.js';
-import { SessionJsonlMirror } from './session-jsonl.js';
+import { SessionJournal, type StoredSessionEvent } from './session-jsonl.js';
+import { PrivateSessionFiles } from './private-files.js';
+import { AttachmentBlobs } from './attachment-blobs.js';
+import { interruptionEvents } from './interruption.js';
 import { sessionLogDirectory, type ProfileStoreOptions } from './session-log-directory.js';
 import * as schema from './schema.js';
 import type { CreateSessionInput, EventInput, RequestAcceptance } from './types.js';
@@ -45,7 +50,7 @@ import {
   RunAcceptedSchema,
 } from './validation.js';
 
-/** SQLite facts and reconstructable projections owned by one profile daemon. */
+/** JSONL session facts, immutable attachments and SQLite configuration/projections for one daemon. */
 export class ProfileStore {
   private readonly db: BetterSQLite3Database<typeof schema>;
   private readonly projector: ProjectionWriter;
@@ -53,10 +58,12 @@ export class ProfileStore {
   private readonly tools: ToolProjection;
   private readonly work: WorkRepository;
   private closed = false;
-  private readonly mirror: SessionJsonlMirror;
-  private readonly dirtySessions = new Set<string>();
+  private readonly files: PrivateSessionFiles;
+  private readonly journal: SessionJournal;
+  private readonly blobs: AttachmentBlobs;
+  private pendingRecords: StoredSessionEvent[] = [];
   private transactionDepth = 0;
-  private mirrorFailure: StorageError | undefined;
+  private writeFailure: StorageError | undefined;
 
   public constructor(
     private readonly sqlite: Database.Database,
@@ -68,12 +75,13 @@ export class ProfileStore {
     this.workspaces = new WorkspaceRepository(this.db);
     this.tools = new ToolProjection(this.db);
     this.work = new WorkRepository(this.db);
-    this.mirror = new SessionJsonlMirror(lock.directory, options.sessionLogRoot);
+    this.files = new PrivateSessionFiles(lock.directory, options.sessionLogRoot);
+    this.journal = new SessionJournal(this.files);
+    this.blobs = new AttachmentBlobs(this.files);
     try {
-      for (const { id } of this.db.select({ id: schema.sessions.id }).from(schema.sessions).all())
-        this.mirror.sync(id, (after) => this.mirrorEvents(id, after));
+      this.rebuildProjections();
     } catch (error) {
-      this.mirror.close();
+      this.files.close();
       throw error;
     }
   }
@@ -82,28 +90,180 @@ export class ProfileStore {
     if (this.closed) throw new StorageError('STORAGE_CLOSED', 'Storage is closed');
   }
 
-  private *mirrorEvents(sessionId: string, afterSeq: number): Generator<HarnessEvent> {
-    let cursor = afterSeq;
-    while (true) {
-      const page = this.readEvents(sessionId, cursor, 500);
-      if (page.length === 0) return;
-      yield* page;
-      cursor = page.at(-1)?.seq ?? cursor;
-    }
+  private createProjection(event: HarnessEvent): void {
+    const session = checked(SessionSummarySchema, event.data['session']);
+    const branch = checked(BranchViewSchema, event.data['branch']);
+    if (
+      event.seq !== 1 ||
+      event.runId !== null ||
+      session.id !== event.sessionId ||
+      session.snapshotSeq !== 1 ||
+      session.activeRunId !== null ||
+      session.activeBranchId !== branch.id ||
+      branch.sessionId !== session.id ||
+      branch.parentId !== null ||
+      branch.forkMessageId !== null
+    )
+      throw new StorageError(
+        'SESSION_LOG_INVALID',
+        'Initial session and branch identities are invalid',
+      );
+    this.db
+      .insert(schema.sessions)
+      .values({
+        id: session.id,
+        data: session,
+        snapshotSeq: 1,
+        activeRunId: null,
+        workspaceId: session.workspaceId,
+      })
+      .run();
+    this.db
+      .insert(schema.branches)
+      .values({ id: branch.id, sessionId: session.id, data: branch })
+      .run();
+  }
+
+  private rebuildProjections(): void {
+    const ids = this.journal.sessionIds();
+    const available = new Set(ids);
+    const previousIds = this.db.select({ id: schema.sessions.id }).from(schema.sessions).all();
+    for (const { id } of previousIds)
+      if (!available.has(id))
+        throw new StorageError(
+          'SESSION_LOG_INVALID',
+          'An authoritative session journal is missing; SQLite cannot replace it',
+        );
+    this.sqlite
+      .transaction(() => {
+        for (const table of [
+          schema.toolContexts,
+          schema.toolCalls,
+          schema.branchMessages,
+          schema.workStates,
+          schema.checkpoints,
+          schema.requests,
+          schema.queue,
+          schema.events,
+          schema.messages,
+          schema.runs,
+          schema.branches,
+          schema.sessions,
+          schema.attachments,
+        ])
+          this.db.delete(table).run();
+        for (const id of this.blobs.ids()) {
+          const content = this.blobs.read(id);
+          if (!content)
+            throw new StorageError(
+              'SESSION_LOG_INVALID',
+              'Attachment blob disappeared during recovery',
+            );
+          this.db.insert(schema.attachments).values({ id, data: content.attachment }).run();
+        }
+        for (const id of ids) {
+          for (const batch of this.journal.read(id)) {
+            for (const { event, privateData } of batch.records) {
+              if (event.type === 'session.created') this.createProjection(event);
+              else this.projector.apply(event, privateData ?? undefined);
+              this.db
+                .insert(schema.events)
+                .values({ ...event, privateData })
+                .run();
+            }
+          }
+        }
+        for (const { id } of previousIds)
+          if (
+            !this.db
+              .select({ id: schema.sessions.id })
+              .from(schema.sessions)
+              .where(eq(schema.sessions.id, id))
+              .get()
+          )
+            throw new StorageError(
+              'SESSION_LOG_INVALID',
+              'An indexed session journal contains no committed creation record',
+            );
+        const attachmentIds = new Set<string>();
+        for (const { data } of this.db
+          .select({ data: schema.messages.data })
+          .from(schema.messages)
+          .all()) {
+          const message = checked(MessageViewSchema, data);
+          if (message.attachmentIds === undefined) continue;
+          for (const id of message.attachmentIds) attachmentIds.add(id);
+        }
+        for (const { data } of this.db
+          .select({ data: schema.queue.data })
+          .from(schema.queue)
+          .all()) {
+          const queued = checked(QueueInputSchema, data);
+          if (queued.attachmentIds === undefined) continue;
+          for (const id of queued.attachmentIds) attachmentIds.add(id);
+        }
+        for (const id of attachmentIds)
+          if (
+            !this.db
+              .select({ id: schema.attachments.id })
+              .from(schema.attachments)
+              .where(eq(schema.attachments.id, id))
+              .get()
+          )
+            throw new StorageError(
+              'SESSION_LOG_INVALID',
+              'A committed message or queued input attachment blob is missing',
+            );
+      })
+      .immediate();
   }
 
   private transaction<T>(operation: () => T, readOnly = false): T {
     this.assertOpen();
-    if (!readOnly && this.mirrorFailure) throw this.mirrorFailure;
+    if (!readOnly && this.writeFailure) throw this.writeFailure;
     const outer = this.transactionDepth === 0;
-    const previousDirty = new Set(this.dirtySessions);
+    const previousLength = this.pendingRecords.length;
+    let logged = false;
     this.transactionDepth += 1;
-    let result: T;
     try {
-      result = this.sqlite.transaction(operation).immediate();
+      return this.sqlite
+        .transaction(() => {
+          const result = operation();
+          if (outer && !readOnly && this.pendingRecords.length > 0) {
+            const sessionId = this.pendingRecords[0]?.event.sessionId;
+            if (
+              !sessionId ||
+              this.pendingRecords.some((record) => record.event.sessionId !== sessionId)
+            )
+              throw new StorageError(
+                'INVALID_RECORD',
+                'One command transaction must belong to one session',
+              );
+            try {
+              this.journal.append(sessionId, this.pendingRecords);
+            } catch (cause) {
+              this.writeFailure = new StorageError(
+                'SESSION_LOG_UNAVAILABLE',
+                'Session journal write failed and its commit outcome may be unknown. Restart before retrying; uncertain operations must not be repeated.',
+                { cause },
+              );
+              throw this.writeFailure;
+            }
+            logged = true;
+          }
+          return result;
+        })
+        .immediate();
     } catch (error: unknown) {
-      this.dirtySessions.clear();
-      for (const id of previousDirty) this.dirtySessions.add(id);
+      this.pendingRecords.length = previousLength;
+      if (logged) {
+        this.writeFailure = new StorageError(
+          'SESSION_LOG_UNAVAILABLE',
+          'Session journal is committed but its SQLite projection failed. Restart before retrying; committed operations must not be repeated.',
+          { cause: error },
+        );
+        throw this.writeFailure;
+      }
       if (error instanceof StorageError) throw error;
       if (
         error instanceof Error &&
@@ -117,22 +277,8 @@ export class ProfileStore {
       throw error;
     } finally {
       this.transactionDepth -= 1;
+      if (outer) this.pendingRecords.length = previousLength;
     }
-    if (outer && !readOnly && this.dirtySessions.size > 0) {
-      try {
-        for (const id of this.dirtySessions)
-          this.mirror.sync(id, (after) => this.mirrorEvents(id, after));
-        this.dirtySessions.clear();
-      } catch (cause) {
-        this.mirrorFailure = new StorageError(
-          'SESSION_LOG_UNAVAILABLE',
-          'SQLite changes are committed, but the session log could not be synchronized. Restart before retrying; committed operations must not be repeated.',
-          { cause },
-        );
-        throw this.mirrorFailure;
-      }
-    }
-    return result;
   }
 
   /** Close the business database before releasing profile ownership; repeated close is safe. */
@@ -141,7 +287,7 @@ export class ProfileStore {
     this.closed = true;
     try {
       try {
-        this.mirror.close();
+        this.files.close();
       } finally {
         this.sqlite.close();
       }
@@ -272,7 +418,7 @@ export class ProfileStore {
 
   /** Create the initial branch and session event in one transaction. */
   public createSession(input: CreateSessionInput): SessionSummary {
-    this.mirror.validateSessionId(input.id);
+    this.files.validateId(input.id);
     return this.transaction(() => {
       if (input.workspaceId !== null && this.workspaces.get(input.workspaceId) === undefined)
         throw new StorageError('WORKSPACE_NOT_FOUND', 'Workspace does not exist');
@@ -325,7 +471,7 @@ export class ProfileStore {
         .insert(schema.events)
         .values({ ...event, privateData: null })
         .run();
-      this.dirtySessions.add(session.id);
+      this.pendingRecords.push({ event, privateData: null });
       if (input.workMode === 'plan') {
         this.append(session.id, [
           {
@@ -442,14 +588,86 @@ export class ProfileStore {
     return this.work.listCheckpoints(sessionId);
   }
 
+  /** All recorded summary versions for one branch, independent of the currently selected summary. */
+  public listCompactions(sessionId: string, branchId?: string): Compaction[] {
+    this.assertOpen();
+    const session = this.getSession(sessionId);
+    if (!session)
+      throw new StorageError('SESSION_NOT_FOUND', 'Session does not exist or is archived');
+    const selectedBranch = branchId ?? session.activeBranchId;
+    const selectedState = this.work.get(sessionId, selectedBranch);
+    const versions = new Map<string, Compaction>();
+    const selected = new Set<string>();
+    if (selectedState.compaction) selected.add(selectedState.compaction.id);
+    const rows = this.db
+      .select({ data: schema.events.data })
+      .from(schema.events)
+      .where(and(eq(schema.events.sessionId, sessionId), eq(schema.events.type, 'work.updated')))
+      .orderBy(asc(schema.events.seq))
+      .all();
+    for (const row of rows) {
+      const state = checked(WorkStateSchema, row.data['state']);
+      if (state.compaction !== null) {
+        versions.set(state.compaction.id, state.compaction);
+        if (state.branchId === selectedBranch) selected.add(state.compaction.id);
+      }
+    }
+    for (const id of selected) {
+      const parentId = versions.get(id)?.parentId;
+      if (parentId !== null && parentId !== undefined) selected.add(parentId);
+    }
+    const messageIds = new Set(
+      this.db
+        .select({ id: schema.branchMessages.messageId })
+        .from(schema.branchMessages)
+        .where(eq(schema.branchMessages.branchId, selectedBranch))
+        .all()
+        .map((row) => row.id),
+    );
+    return [...versions.values()].filter(
+      (version) => selected.has(version.id) && messageIds.has(version.throughMessageId),
+    );
+  }
+
   /** Store frozen content privately; replacing an existing attachment ID is rejected. */
   public putAttachment(input: AttachmentContent): void {
-    this.transaction(() => this.work.putAttachment(input));
+    this.assertOpen();
+    if (this.writeFailure) throw this.writeFailure;
+    try {
+      this.blobs.put(input);
+    } catch (cause) {
+      if (
+        cause instanceof StorageError &&
+        (cause.code === 'CONFLICT' || cause.code === 'INVALID_RECORD')
+      )
+        throw cause;
+      this.writeFailure = new StorageError(
+        'SESSION_LOG_UNAVAILABLE',
+        'Attachment persistence failed; restart before another write',
+        { cause },
+      );
+      throw this.writeFailure;
+    }
+    try {
+      this.transaction(() =>
+        this.db
+          .insert(schema.attachments)
+          .values({ id: input.attachment.id, data: input.attachment })
+          .run(),
+      );
+    } catch (cause) {
+      this.writeFailure = new StorageError(
+        'SESSION_LOG_UNAVAILABLE',
+        'Attachment blob is committed but its SQLite index failed; restart before another write',
+        { cause },
+      );
+      throw this.writeFailure;
+    }
   }
 
   public getAttachment(id: string): AttachmentContent | undefined {
     this.assertOpen();
-    return this.work.getAttachment(id);
+    return this.blobs.read(id);
   }
 
   /** An acceptance remains queryable after its queue item is consumed or removed. */
@@ -631,9 +849,10 @@ export class ProfileStore {
           .insert(schema.events)
           .values({ ...event, privateData: input.privateData ?? null })
           .run();
+        this.pendingRecords.push({ event, privateData: input.privateData ?? null });
         accepted.push(event);
       }
-      if (accepted.length > 0) this.dirtySessions.add(sessionId);
+
       return accepted;
     });
   }
@@ -690,73 +909,28 @@ export class ProfileStore {
           'INVALID_RECORD',
           'Replayable message is missing its provider codec',
         );
-      return replayable && row.privateData !== null
-        ? [row.privateData, ...(contexts.get(message.id) ?? [])]
-        : [];
+      if (!replayable || row.privateData === null) return [];
+      const toolContexts = contexts.get(message.id);
+      if (toolContexts === undefined) return [row.privateData];
+      return [row.privateData, ...toolContexts];
     });
   }
 
-  /** Preserve partial output and queue; stale running records become interrupted, never retried. */
+  /** Preserve partial output and queue; stale resources become interrupted, never retried. */
   public recoverInterrupted(): HarnessEvent[] {
-    return this.transaction(() => {
-      const output: HarnessEvent[] = [];
-      for (const session of this.listSessions()) {
-        const at = Date.now();
-        const workEvents: EventInput[] = [];
-        for (const state of this.work.interruptedStates(session.id)) {
-          workEvents.push({
-            type: 'work.updated',
-            runId: null,
-            at,
-            data: {
-              state: {
-                ...state,
-                revision: state.revision + 1,
-                questions: state.questions.map((question) =>
-                  question.status === 'pending' ? { ...question, status: 'interrupted' } : question,
-                ),
-              },
-            },
-          });
-        }
-        if (session.activeRunId === null) {
-          if (workEvents.length > 0) output.push(...this.append(session.id, workEvents));
-          continue;
-        }
-        const tools: EventInput[] = this.tools
-          .unfinished(session.id, session.activeRunId)
-          .map((tool) => ({
-            type: 'tool.updated',
-            runId: session.activeRunId,
-            at,
-            data: {
-              tool: {
-                ...tool,
-                status: 'interrupted',
-                updatedAt: at,
-                summary: 'Daemon stopped before the tool completed',
-              },
-            },
-          }));
-        output.push(
-          ...this.append(session.id, [
-            ...tools,
-            ...workEvents,
-            {
-              type: 'run.finished',
-              runId: session.activeRunId,
-              at: Date.now(),
-              data: {
-                status: 'interrupted',
-                finishedAt: Date.now(),
-                error: 'Daemon stopped before a durable terminal outcome',
-              },
-            },
-          ]),
-        );
-      }
-      return output;
-    });
+    const output: HarnessEvent[] = [];
+    for (const session of this.listSessions()) {
+      const tools =
+        session.activeRunId === null ? [] : this.tools.unfinished(session.id, session.activeRunId);
+      const inputs = interruptionEvents(
+        session,
+        this.work.interruptedStates(session.id),
+        tools,
+        Date.now(),
+      );
+      if (inputs.length > 0) output.push(...this.append(session.id, inputs));
+    }
+    return output;
   }
 }
 

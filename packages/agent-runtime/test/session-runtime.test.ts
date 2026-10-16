@@ -350,7 +350,7 @@ describe('SessionRuntime durable execution', () => {
       ).toBe(false);
       expect(() =>
         f.runtime.send(f.session.id, { text: 'Retry', mode: 'send', requestId: 'retry' }),
-      ).toThrowError('Session persistence failed');
+      ).toThrow('Session persistence failed');
       expect(f.errors.length).toBeGreaterThan(0);
     } finally {
       await f.close();
@@ -391,7 +391,7 @@ describe('SessionRuntime durable execution', () => {
       ).rejects.toMatchObject({ code: 'SESSION_UNAVAILABLE' });
       expect(f.runtime.isProviderActive(f.faux.provider.id)).toBe(false);
       expect(f.faux.state.callCount).toBe(0);
-      expect(() => f.runtime.getSnapshot(f.session.id)).toThrowError('Session persistence failed');
+      expect(() => f.runtime.getSnapshot(f.session.id)).toThrow('Session persistence failed');
       expect(f.store.getSnapshot(f.session.id).runs[0]?.status).toBe('running');
       expect(
         f.store.readEvents(f.session.id, 0, 1000).some(({ type }) => type === 'run.finished'),

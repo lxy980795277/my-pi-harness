@@ -8,7 +8,8 @@ export {
 } from './credential-adapter.js';
 export { encodeContextMessage, decodeContextMessage } from './context-codec.js';
 export { BUILTIN_PROVIDER_IDS, loadBuiltinProvider } from './provider-loader.js';
-export { ToolRuntime, type ToolRuntimeOptions } from './tool-runtime.js';
+export { ToolRuntime } from './tool-runtime.js';
+export type { ToolRuntimeOptions } from './tool-types.js';
 export type { EventInput, InputAcceptance, ProviderStore, RuntimeStore } from './runtime-ports.js';
 export { WorkRuntime } from './work-runtime.js';
 export type { WorkRuntimeOptions, WorkStore } from './work-ports.js';

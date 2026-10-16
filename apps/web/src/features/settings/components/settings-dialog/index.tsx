@@ -1,4 +1,4 @@
-import type { SettingsDialogProps } from '@/features/settings/types/settings-view';
+import type { SettingsDialogProps } from '@/features/settings/types/settings';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Suspense, type FC } from 'react';

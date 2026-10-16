@@ -2,7 +2,7 @@ import type { Workspace } from '@my-pi-harness/protocol';
 import { useCallback, useRef, useState } from 'react';
 import type { WorkspaceGroup } from '@/features/workspaces/utils/workspace-tree';
 import { cn } from '@/utils/cn';
-import type { WorkspaceGroupState } from '@/features/workspaces/types/workspace-view';
+import type { WorkspaceGroupState } from '@/features/workspaces/types/workspace';
 
 /** Expansion changes presentation only; the explicit plus action chooses a fresh conversation target. */
 export const useWorkspaceGroup = (

@@ -4,25 +4,14 @@ import { Type } from 'typebox';
 import { Value } from 'typebox/value';
 import { StorageError } from './errors.js';
 import { FOUNDATION_SQL } from './migrations/0001-foundation.js';
-import { MODEL_SETTINGS_SQL } from './migrations/0002-model-settings.js';
-import { WORKSPACES_SQL } from './migrations/0003-workspaces.js';
-import { WORKSPACE_ICONS_SQL } from './migrations/0004-workspace-icons.js';
-import { CONTEXT_WORK_SQL } from './migrations/0005-context-work.js';
-
-const migrations = [
-  { version: 1, sql: FOUNDATION_SQL },
-  { version: 2, sql: MODEL_SETTINGS_SQL },
-  { version: 3, sql: WORKSPACES_SQL },
-  { version: 4, sql: WORKSPACE_ICONS_SQL },
-  { version: 5, sql: CONTEXT_WORK_SQL },
-];
 const MigrationRowSchema = Type.Object({ version: Type.Integer(), checksum: Type.String() });
 
 /** Highest installed schema version understood by this build. */
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 1;
+const migrations = [{ version: SCHEMA_VERSION, sql: FOUNDATION_SQL }];
 
 /**
- * Apply ordered migrations atomically and reject newer or edited committed generations.
+ * Install the fresh development schema and reject incompatible existing profiles.
  * @param database The business database opened after profile ownership was acquired.
  */
 export function applyMigrations(database: Database.Database): void {

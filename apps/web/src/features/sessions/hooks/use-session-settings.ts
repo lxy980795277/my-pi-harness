@@ -1,4 +1,4 @@
-import type { SessionSettingsState } from '@/features/sessions/types/session-view';
+import type { SessionSettingsState } from '@/features/sessions/types/session';
 import type {
   ModelInfo,
   ProviderConfig,
@@ -7,7 +7,7 @@ import type {
   ThinkingLevel,
 } from '@my-pi-harness/protocol';
 import { useQuery } from '@tanstack/react-query';
-import { useCallback, useState, type ChangeEvent, type FormEvent } from 'react';
+import { useCallback, useState, type ChangeEvent, type SubmitEvent } from 'react';
 import { fetchProvider } from '@/features/models/services/providers';
 import { useProviderModels } from '@/features/models/hooks/use-model-catalog';
 import { buildThinkingOptions, resolveThinkingLevel } from '@/features/models/utils/model-options';
@@ -45,7 +45,7 @@ export const useSessionSettings = (
   );
   const { run: saveRun } = save;
   const submit = useCallback(
-    (event: FormEvent<HTMLFormElement>): void => {
+    (event: SubmitEvent<HTMLFormElement>): void => {
       event.preventDefault();
       saveRun();
     },
@@ -80,10 +80,17 @@ export const useSessionSettings = (
     }
     return { value: item.id, label, disabled: !item.enabled };
   });
-  const modelOptions =
-    models.data?.map((item) => {
-      return { value: item.id, label: item.name };
-    }) ?? [];
+  const availableModels = models.data ?? [];
+  const modelOptions = availableModels.map((item) => {
+    return { value: item.id, label: item.name };
+  });
+  let error = save.error;
+  if (error === null && models.error !== null) {
+    error = models.error.message;
+  }
+  if (error === null && legacy.error !== null) {
+    error = legacy.error.message;
+  }
   return {
     title,
     providerId,
@@ -101,6 +108,6 @@ export const useSessionSettings = (
     modelsReady: models.isSuccess,
     legacy: provider?.legacy === true,
     disabled: save.pending || modelId.length === 0 || !provider?.enabled,
-    error: save.error ?? models.error?.message ?? legacy.error?.message ?? null,
+    error: error,
   };
 };

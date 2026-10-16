@@ -6,6 +6,7 @@ import type {
   WorkSnapshot,
   WorkState,
 } from '@my-pi-harness/protocol';
+import type { WorkDifference, ComparisonState } from '@/features/work/types/work';
 import type { SelectOption } from '@/components/ui/select-field';
 
 export const WORK_MODE_OPTIONS: SelectOption[] = [
@@ -16,6 +17,8 @@ export const TODO_STATUS_OPTIONS: SelectOption[] = [
   { value: 'pending', label: '待处理' },
   { value: 'in_progress', label: '进行中' },
   { value: 'completed', label: '已完成' },
+  { value: 'blocked', label: '受阻' },
+  { value: 'cancelled', label: '已取消' },
 ];
 export const PLAN_STATUS_LABELS = {
   draft: '待确认',
@@ -46,21 +49,27 @@ export const checkpointOptions = (checkpoints: Checkpoint[]): SelectOption[] => 
     }),
   ];
 };
-export interface WorkDifference {
-  label: string;
-  left: string;
-  right: string;
-  changed: boolean;
-}
-interface ComparisonState {
-  state: WorkState;
-  messageIds: string[];
-}
 const formatPlan = (plan: Plan | null): string => {
   if (!plan) {
     return '暂无计划';
   }
-  return `${plan.title} · ${PLAN_STATUS_LABELS[plan.status]}\n${plan.content}`;
+  let review = '无审核';
+  if (plan.review !== null) {
+    review = plan.review;
+  }
+  let feedback = '';
+  if (plan.feedback !== null) {
+    feedback = plan.feedback;
+  }
+  const steps = plan.steps.map((step) => {
+    return `${step.status} · ${step.title}`;
+  });
+  return [
+    `${plan.title} · ${PLAN_STATUS_LABELS[plan.status]} · ${review}`,
+    plan.content,
+    feedback,
+    steps.join('\n'),
+  ].join('\n');
 };
 const formatTodos = (todos: Todo[]): string => {
   return todos
@@ -68,7 +77,23 @@ const formatTodos = (todos: Todo[]): string => {
       const status = TODO_STATUS_OPTIONS.find((option) => {
         return option.value === todo.status;
       });
-      return `${status?.label ?? todo.status} · ${todo.title}`;
+      let statusLabel: string = todo.status;
+      if (status) {
+        statusLabel = status.label;
+      }
+      let stepLabel = '独立任务';
+      if (todo.planStepId !== null) {
+        stepLabel = todo.planStepId;
+      }
+      let completionNote = '';
+      if (todo.completionNote !== null) {
+        completionNote = todo.completionNote;
+      }
+      return [
+        `${statusLabel} · ${todo.title} · ${stepLabel}`,
+        completionNote,
+        todo.evidenceToolCallIds.join(', '),
+      ].join('\n');
     })
     .join('\n');
 };
@@ -142,7 +167,8 @@ export const retainWorkSnapshot = (previous: unknown, next: unknown): WorkSnapsh
     current &&
     current.state.branchId === candidate.state.branchId &&
     current.state.revision === candidate.state.revision &&
-    current.checkpoints.length > candidate.checkpoints.length
+    (current.checkpoints.length > candidate.checkpoints.length ||
+      current.compactions.length > candidate.compactions.length)
   ) {
     return current;
   }

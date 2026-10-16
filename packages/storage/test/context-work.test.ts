@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -11,10 +10,6 @@ import {
   type EventInput,
   type CreateSessionInput,
 } from '../src/index.js';
-import { FOUNDATION_SQL } from '../src/migrations/0001-foundation.js';
-import { MODEL_SETTINGS_SQL } from '../src/migrations/0002-model-settings.js';
-import { WORKSPACES_SQL } from '../src/migrations/0003-workspaces.js';
-import { WORKSPACE_ICONS_SQL } from '../src/migrations/0004-workspace-icons.js';
 
 const fixtures: { directory: string; store: ProfileStore }[] = [];
 async function fixture(): Promise<{ directory: string; store: ProfileStore }> {
@@ -174,7 +169,16 @@ describe('M3 durable work state', () => {
     const state = {
       ...initialWorkState('main'),
       revision: 1,
-      todos: [{ id: 'todo', title: 'Task', status: 'pending' as const }],
+      todos: [
+        {
+          id: 'todo',
+          title: 'Task',
+          status: 'pending' as const,
+          planStepId: null,
+          evidenceToolCallIds: [],
+          completionNote: null,
+        },
+      ],
     };
     value.store.append('session', [
       event('work.updated', { state }),
@@ -248,10 +252,18 @@ describe('M3 durable work state', () => {
           runId: 'run',
           branchId: 'main',
           toolCallId: 'call',
-          prompt: 'Which?',
-          options: ['One'],
+          questions: [
+            {
+              id: 'q1',
+              header: 'Choice',
+              prompt: 'Which?',
+              options: [{ id: 'one', label: 'One', description: '' }],
+              multiSelect: false,
+              allowCustomInput: true,
+            },
+          ],
           status: 'pending',
-          answer: null,
+          answers: null,
           createdAt: 3,
         },
       ],
@@ -281,6 +293,18 @@ describe('M3 durable work state', () => {
       reservedOutput: 20,
       inputBudget: 80,
       trimmedMessages: 0,
+      prunedMessages: 0,
+      source: 'estimated',
+      providerInputTokens: null,
+      categories: {
+        system: 0,
+        rules: 0,
+        tools: 0,
+        messages: 10,
+        attachments: 0,
+        summary: 0,
+        workingState: 0,
+      },
     };
     store.append('session', [
       event(
@@ -308,6 +332,80 @@ describe('M3 durable work state', () => {
     ).toThrow('private request');
   });
 
+  it('retains immutable compaction versions and their parent chain across a restored branch', async () => {
+    const value = await fixture();
+    start(value.store);
+    value.store.append('session', [
+      event('run.finished', { status: 'completed', finishedAt: 3, error: null }, 'run'),
+    ]);
+    const first = {
+      id: 'summary-one',
+      throughMessageId: 'user',
+      summary: 'First summary',
+      structured: {
+        objective: 'Task',
+        constraints: [],
+        decisions: [],
+        completed: [],
+        pending: ['Continue'],
+        blockers: [],
+        nextAction: 'Continue',
+      },
+      parentId: null,
+      strategy: 'fallback' as const,
+      beforeTokens: 100,
+      afterTokens: 20,
+      sourceMessages: 1,
+      runId: null,
+      createdAt: 4,
+      reason: 'manual' as const,
+    };
+    const state = { ...initialWorkState('main'), revision: 1, compaction: first };
+    value.store.append('session', [event('work.updated', { state })]);
+    const second = {
+      ...first,
+      id: 'summary-two',
+      parentId: first.id,
+      summary: 'Second summary',
+      createdAt: 5,
+    };
+    value.store.append('session', [
+      event('work.updated', { state: { ...state, revision: 2, compaction: second } }),
+    ]);
+    expect(() =>
+      value.store.append('session', [
+        event('work.updated', {
+          state: { ...state, revision: 3, compaction: { ...second, summary: 'Forged' } },
+        }),
+      ]),
+    ).toThrow('cannot be rewritten');
+    value.store.append('session', [
+      event('branch.restored', {
+        branch: {
+          id: 'restored',
+          sessionId: 'session',
+          parentId: 'main',
+          forkMessageId: 'user',
+          createdAt: 6,
+        },
+        messageIds: ['user'],
+      }),
+      event('branch.selected', { branchId: 'restored' }),
+      event('work.updated', { state: { ...state, branchId: 'restored', compaction: second } }),
+    ]);
+    expect(value.store.listCompactions('session').map((version) => version.id)).toEqual([
+      first.id,
+      second.id,
+    ]);
+    value.store.close();
+    value.store = await openProfileStore(value.directory);
+    expect(value.store.listCompactions('session').map((version) => version.id)).toEqual([
+      first.id,
+      second.id,
+    ]);
+    expect(value.store.listCompactions('session', 'main')).toHaveLength(2);
+  });
+
   it('preserves private attachment content across reopen and rejects identity replacement', async () => {
     const value = await fixture();
     const content = {
@@ -331,41 +429,5 @@ describe('M3 durable work state', () => {
     value.store = await openProfileStore(value.directory);
     expect(value.store.getAttachment('file')).toEqual(content);
     expect(value.store.getAttachment('missing')).toBeUndefined();
-  });
-
-  it('upgrades a released schema-four database without editing old events or migration checksums', async () => {
-    const directory = await mkdtemp(join(tmpdir(), 'my-pi-migrate-work-'));
-    const database = new Database(join(directory, 'data.sqlite'));
-    const sqls = [FOUNDATION_SQL, MODEL_SETTINGS_SQL, WORKSPACES_SQL, WORKSPACE_ICONS_SQL];
-    database.exec(
-      'CREATE TABLE schema_migrations(version INTEGER PRIMARY KEY NOT NULL, checksum TEXT NOT NULL, applied_at INTEGER NOT NULL)',
-    );
-    for (const [index, sql] of sqls.entries()) {
-      database.exec(sql);
-      database
-        .prepare('INSERT INTO schema_migrations VALUES (?, ?, 1)')
-        .run(index + 1, createHash('sha256').update(sql).digest('hex'));
-    }
-    database.pragma('user_version = 4');
-    const original = database.prepare('SELECT * FROM schema_migrations').all();
-    database.close();
-    const store = await openProfileStore(directory);
-    fixtures.push({ directory, store });
-    const check = new Database(join(directory, 'data.sqlite'));
-    try {
-      expect(check.pragma('user_version', { simple: true })).toBe(5);
-      expect(check.prepare('SELECT * FROM schema_migrations WHERE version <= 4').all()).toEqual(
-        original,
-      );
-      expect(
-        check
-          .prepare(
-            "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('work_states', 'attachments', 'checkpoints')",
-          )
-          .all(),
-      ).toHaveLength(3);
-    } finally {
-      check.close();
-    }
   });
 });

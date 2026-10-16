@@ -1,183 +1,21 @@
-import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import {
-  createModels,
-  fauxAssistantMessage,
-  type AssistantMessage,
-  type ToolCall,
-  type TranscriptContext,
-} from '@earendil-works/pi-ai';
-import { fauxProvider } from '@earendil-works/pi-ai';
-import type { SessionSnapshot } from '@my-pi-harness/protocol';
-import { openProfileStore } from '@my-pi-harness/storage';
+import { fauxAssistantMessage, type TranscriptContext } from '@earendil-works/pi-ai';
 import { describe, expect, it } from 'vitest';
-import { RuntimeError } from '../src/errors.js';
-import { SessionRuntime } from '../src/session-runtime.js';
-import { ToolRuntime } from '../src/tool-runtime.js';
-import { WorkRuntime } from '../src/work-runtime.js';
-
-async function fixture(withWorkspace = false) {
-  const temporary = await mkdtemp(join(tmpdir(), 'my-pi-work-runtime-'));
-  const directory = await realpath(temporary);
-  const profile = join(directory, 'profile');
-  const root = join(directory, 'workspace');
-  await mkdir(root);
-  const store = await openProfileStore(profile);
-  try {
-    const faux = fauxProvider({ tokensPerSecond: 0, tokenSize: { min: 64, max: 64 } });
-    const models = createModels();
-    models.setProvider(faux.provider);
-    const errors: unknown[] = [];
-    let releases = 0;
-    const gateway = {
-      resolve: () =>
-        Promise.resolve({
-          model: faux.models[0],
-          streamFn: models.streamSimple.bind(models),
-          release: () => {
-            releases += 1;
-          },
-        }),
-    };
-    const workspace = store.createWorkspace({
-      id: 'workspace',
-      name: 'Project',
-      icon: 'folder',
-      rootPath: root,
-      revision: 1,
-      createdAt: 1,
-      updatedAt: 1,
-    });
-    const resolveWorkspace = (id: string) => {
-      if (id !== workspace.id)
-        throw new RuntimeError('WORKSPACE_NOT_FOUND', 'Unknown test workspace');
-      return Promise.resolve(workspace);
-    };
-    const sessions = (): SessionRuntime => runtime;
-    const work = new WorkRuntime({
-      store,
-      gateway,
-      profileDirectory: profile,
-      resolveWorkspace,
-      command: (id, operation, allowActive) => sessions().workCommand(id, operation, allowActive),
-      commit: (id, events) => sessions().record(id, events),
-    });
-    const tools = new ToolRuntime({ profileDirectory: profile, resolveWorkspace, work });
-    const runtime = new SessionRuntime({
-      store,
-      gateway,
-      work,
-      tools,
-      onError: (error) => {
-        errors.push(error);
-      },
-    });
-    const session = runtime.createSession({
-      title: 'M3 work',
-      providerId: faux.provider.id,
-      modelId: faux.models[0].id,
-      thinkingLevel: 'off',
-      workspaceId: withWorkspace ? workspace.id : null,
-      approvalMode: 'ask',
-    });
-    return {
-      directory,
-      profile,
-      root,
-      store,
-      faux,
-      errors,
-      runtime,
-      work,
-      session,
-      releases: () => releases,
-      close: async (): Promise<void> => {
-        work.close();
-        await sessions().close();
-        store.close();
-        await rm(directory, { recursive: true, force: true });
-      },
-    };
-  } catch (error) {
-    store.close();
-    await rm(directory, { recursive: true, force: true });
-    throw error;
-  }
-}
-
-/** Wait for a committed runtime observation, with a deadline that fails the test. */
-async function observe(
-  runtime: SessionRuntime,
-  sessionId: string,
-  predicate: (snapshot: SessionSnapshot) => boolean,
-): Promise<void> {
-  if (predicate(runtime.getSnapshot(sessionId))) return;
-  await new Promise<void>((resolve, reject) => {
-    const timer = setTimeout(() => {
-      unsubscribe();
-      reject(new Error('Expected work runtime observation did not arrive'));
-    }, 5000);
-    const unsubscribe = runtime.subscribe(sessionId, () => {
-      if (!predicate(runtime.getSnapshot(sessionId))) return;
-      clearTimeout(timer);
-      unsubscribe();
-      resolve();
-    });
-  });
-}
-
-async function idle(f: Awaited<ReturnType<typeof fixture>>): Promise<void> {
-  await observe(f.runtime, f.session.id, (snapshot) => snapshot.session.activeRunId === null);
-  await f.runtime.cancel(f.session.id);
-}
-
-function call(name: string, args: ToolCall['arguments'], id = name): AssistantMessage {
-  return fauxAssistantMessage([{ type: 'toolCall', id, name, arguments: args }], {
-    stopReason: 'toolUse',
-  });
-}
-function pendingQuestion(f: Awaited<ReturnType<typeof fixture>>) {
-  const question = f.work
-    .snapshot(f.session.id)
-    .state.questions.find((entry) => entry.status === 'pending');
-  if (!question) throw new Error('Missing pending question');
-  return question;
-}
-
-async function sendTurn(
-  f: Awaited<ReturnType<typeof fixture>>,
-  text: string,
-  response: string,
-): Promise<void> {
-  f.faux.setResponses([fauxAssistantMessage(response)]);
-  await f.runtime.send(f.session.id, { text, mode: 'send', requestId: text });
-  await idle(f);
-}
-
-function gate(): { promise: Promise<void>; release(): void } {
-  let release = (): void => {
-    throw new Error('Gate not initialized');
-  };
-  const promise = new Promise<void>((resolve) => {
-    release = resolve;
-  });
-  return { promise, release };
-}
-
-async function withinDeadline<T>(pending: Promise<T>, failure: string): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  try {
-    return await Promise.race([
-      pending,
-      new Promise<never>((_resolve, reject) => {
-        timer = setTimeout(() => reject(new Error(failure)), 5000);
-      }),
-    ]);
-  } finally {
-    if (timer) clearTimeout(timer);
-  }
-}
+import {
+  fixture,
+  observe,
+  idle,
+  call,
+  questionArgs,
+  answerText,
+  summary,
+  todo,
+  pendingQuestion,
+  sendTurn,
+  gate,
+  withinDeadline,
+} from './support/work-fixture.js';
 
 describe('M3 durable session work through real Pi tools', () => {
   it('rejects stale branch work commands even when both branches have the same revision', async () => {
@@ -259,8 +97,16 @@ describe('M3 durable session work through real Pi tools', () => {
             context.messages.flatMap((message) =>
               message.role === 'system' ? (message.toolsAdded ?? []).map(({ name }) => name) : [],
             ),
-          ).toEqual(['ask_user', 'update_plan', 'update_todos']);
-          return call('ask_user', { prompt: 'Which format?', options: ['Markdown', 'Text'] });
+          ).toEqual([
+            'ask_user',
+            'update_plan',
+            'update_plan_steps',
+            'update_todos',
+            'search_session_history',
+            'restore_context_checkpoint',
+            'reset_working_state',
+          ]);
+          return call('ask_user', questionArgs('Which format?', ['Markdown', 'Text']));
         },
         (context) => {
           contexts.push(context);
@@ -284,22 +130,24 @@ describe('M3 durable session work through real Pi tools', () => {
         workspaceId: null,
         approvalMode: 'ask',
       });
-      await expect(f.work.answer(foreign.id, question.id, 'Bad session')).rejects.toMatchObject({
+      await expect(
+        f.work.answer(foreign.id, question.id, answerText('Bad session')),
+      ).rejects.toMatchObject({
         code: 'QUESTION_CONFLICT',
       });
-      await f.work.answer(f.session.id, question.id, 'JSON please');
-      await expect(f.work.answer(f.session.id, question.id, 'Second answer')).rejects.toMatchObject(
-        { code: 'QUESTION_CONFLICT' },
-      );
+      await f.work.answer(f.session.id, question.id, answerText('JSON please'));
+      await expect(
+        f.work.answer(f.session.id, question.id, answerText('Second answer')),
+      ).rejects.toMatchObject({ code: 'QUESTION_CONFLICT' });
       await idle(f);
       expect(f.work.snapshot(f.session.id).state.questions[0]).toMatchObject({
         status: 'answered',
-        answer: 'JSON please',
+        answers: answerText('JSON please'),
       });
       expect(contexts[0]?.messages.find((message) => message.role === 'toolResult')).toMatchObject({
         toolName: 'ask_user',
         isError: false,
-        content: [{ type: 'text', text: 'JSON please' }],
+        content: [{ type: 'text', text: JSON.stringify({ answers: answerText('JSON please') }) }],
       });
       expect(f.runtime.getSnapshot(f.session.id).runs[0]?.status).toBe('completed');
       expect(f.runtime.getSnapshot(f.session.id).tools[0]?.status).toBe('completed');
@@ -318,7 +166,7 @@ describe('M3 durable session work through real Pi tools', () => {
       const f = await fixture();
       try {
         f.faux.setResponses([
-          call('ask_user', { prompt: 'Proceed?' }),
+          call('ask_user', questionArgs('Proceed?')),
           fauxAssistantMessage('Question cancelled'),
         ]);
         await f.runtime.send(f.session.id, {
@@ -335,12 +183,14 @@ describe('M3 durable session work through real Pi tools', () => {
         await idle(f);
         expect(f.work.snapshot(f.session.id).state.questions[0]).toMatchObject({
           status: 'cancelled',
-          answer: null,
+          answers: null,
         });
         expect(f.runtime.getSnapshot(f.session.id).runs[0]?.status).toBe(
           action === 'stop' ? 'cancelled' : 'completed',
         );
-        await expect(f.work.answer(f.session.id, question.id, 'Too late')).rejects.toMatchObject({
+        await expect(
+          f.work.answer(f.session.id, question.id, answerText('Too late')),
+        ).rejects.toMatchObject({
           code: 'QUESTION_CONFLICT',
         });
         expect(f.errors).toEqual([]);
@@ -418,74 +268,86 @@ describe('M3 durable session work through real Pi tools', () => {
     },
   );
 
-  it('persists model plans and stable Todos, then requires fresh approval for a revised plan', async () => {
+  it('waits for plan feedback, then approves and executes in the same Run with task evidence', async () => {
     const f = await fixture();
     try {
+      const steps = [{ id: 'analysis', title: 'Analyze inputs', status: 'pending' }];
       f.faux.setResponses([
-        fauxAssistantMessage(
-          [
+        call('update_plan', { title: 'Report', content: 'Analyze input', steps }),
+        call('update_plan', {
+          title: 'Revised report',
+          content: 'Analyze input and explain assumptions',
+          steps,
+        }),
+        call('update_todos', {
+          todos: [
             {
-              type: 'toolCall',
-              id: 'plan',
-              name: 'update_plan',
-              arguments: { title: 'Report', content: 'Read, then summarize' },
-            },
-            {
-              type: 'toolCall',
-              id: 'todos',
-              name: 'update_todos',
-              arguments: {
-                todos: [
-                  { id: 'read', title: 'Read input', status: 'completed' },
-                  { id: 'write', title: 'Write output', status: 'in_progress' },
-                ],
-              },
+              ...todo('analysis', 'Analyze inputs', 'completed'),
+              planStepId: 'analysis',
+              completionNote: 'Compared the supplied facts and recorded the assumptions.',
             },
           ],
-          { stopReason: 'toolUse' },
-        ),
-        fauxAssistantMessage('Plan ready'),
+        }),
+        call('update_plan_steps', { steps: [{ id: 'analysis', status: 'completed' }] }),
+        fauxAssistantMessage('Report complete'),
       ]);
       await f.runtime.send(f.session.id, {
         text: 'Plan a report',
         mode: 'send',
-        requestId: 'planning-tools',
+        requestId: 'plan-review',
       });
-      await idle(f);
-      const state = f.work.snapshot(f.session.id).state;
-      expect(state.plan).toMatchObject({ title: 'Report', status: 'draft' });
-      expect(state.todos.map(({ id, status }) => ({ id, status }))).toEqual([
-        { id: 'read', status: 'completed' },
-        { id: 'write', status: 'in_progress' },
-      ]);
+      await observe(
+        f.runtime,
+        f.session.id,
+        () => f.work.snapshot(f.session.id).state.plan?.review === 'pending',
+      );
+      let state = f.work.snapshot(f.session.id).state;
+      const runId = f.runtime.getSnapshot(f.session.id).session.activeRunId;
       if (!state.plan) throw new Error('Missing plan');
-      await f.work.patch(f.session.id, {
+      expect(state.mode).toBe('plan');
+      await f.work.reviewPlan(f.session.id, state.plan.id, {
         expectedBranchId: state.branchId,
         revision: state.revision,
-        plan: { ...state.plan, status: 'approved' },
+        decision: 'feedback',
+        feedback: 'Explain assumptions',
       });
-      f.faux.setResponses([
-        call('update_plan', { title: 'Revised report', content: 'New scope' }),
-        fauxAssistantMessage('Revision ready'),
-      ]);
-      await f.runtime.send(f.session.id, {
-        text: 'Revise scope',
-        mode: 'send',
-        requestId: 'revised-plan',
+      await observe(
+        f.runtime,
+        f.session.id,
+        () =>
+          f.work.snapshot(f.session.id).state.plan?.title === 'Revised report' &&
+          f.work.snapshot(f.session.id).state.plan?.review === 'pending',
+      );
+      state = f.work.snapshot(f.session.id).state;
+      if (!state.plan) throw new Error('Missing revised plan');
+      await expect(
+        f.work.reviewPlan(f.session.id, state.plan.id, {
+          expectedBranchId: state.branchId,
+          revision: state.revision - 1,
+          decision: 'approve',
+          feedback: '',
+        }),
+      ).rejects.toMatchObject({ code: 'WORK_CONFLICT' });
+      await f.work.reviewPlan(f.session.id, state.plan.id, {
+        expectedBranchId: state.branchId,
+        revision: state.revision,
+        decision: 'approve',
+        feedback: '',
       });
       await idle(f);
-      const revised = f.work.snapshot(f.session.id).state;
-      expect(revised.plan).toMatchObject({ title: 'Revised report', status: 'draft' });
-      expect(revised.todos).toEqual(state.todos);
-      await f.runtime.close();
-      f.work.close();
-      f.store.close();
-      const reopened = await openProfileStore(f.profile);
-      try {
-        expect(reopened.getWorkState(f.session.id)).toEqual(revised);
-      } finally {
-        reopened.close();
-      }
+      const done = f.work.snapshot(f.session.id).state;
+      expect(done.mode).toBe('execute');
+      expect(done.plan).toMatchObject({
+        title: 'Revised report',
+        status: 'completed',
+        review: 'approved',
+      });
+      expect(done.todos[0]).toMatchObject({ status: 'completed', planStepId: 'analysis' });
+      expect(f.runtime.getSnapshot(f.session.id).runs).toHaveLength(1);
+      expect(f.runtime.getSnapshot(f.session.id).runs[0]?.id).toBe(runId);
+      expect(
+        f.runtime.getSnapshot(f.session.id).tools.every(({ status }) => status === 'completed'),
+      ).toBe(true);
       expect(f.errors).toEqual([]);
     } finally {
       await f.close();
@@ -497,11 +359,20 @@ describe('M3 durable session work through real Pi tools', () => {
     try {
       await sendTurn(f, 'First request', 'First answer');
       let state = f.work.snapshot(f.session.id).state;
-      await f.work.patch(f.session.id, {
-        expectedBranchId: state.branchId,
-        revision: state.revision,
-        plan: { title: 'Original plan', content: 'First scope', status: 'draft', updatedAt: 1 },
-        todos: [{ id: 'first', title: 'First task', status: 'pending' }],
+      f.work.save(f.session.id, {
+        ...state,
+        plan: {
+          id: 'original',
+          runId: null,
+          title: 'Original plan',
+          content: 'First scope',
+          steps: [],
+          status: 'draft',
+          review: null,
+          feedback: null,
+          updatedAt: 1,
+        },
+        todos: [todo('first', 'First task', 'pending')],
       });
       const saved = await f.work.createCheckpoint(f.session.id, {
         expectedBranchId: state.branchId,
@@ -511,12 +382,21 @@ describe('M3 durable session work through real Pi tools', () => {
       if (!checkpoint) throw new Error('Missing checkpoint');
       await sendTurn(f, 'Later request', 'Later answer');
       state = f.work.snapshot(f.session.id).state;
-      await f.work.patch(f.session.id, {
-        expectedBranchId: state.branchId,
-        revision: state.revision,
+      f.work.save(f.session.id, {
+        ...state,
         mode: 'plan',
-        plan: { title: 'Later plan', content: 'Expanded scope', status: 'draft', updatedAt: 2 },
-        todos: [{ id: 'later', title: 'Later task', status: 'completed' }],
+        plan: {
+          id: 'later',
+          runId: null,
+          title: 'Later plan',
+          content: 'Expanded scope',
+          steps: [],
+          status: 'draft',
+          review: null,
+          feedback: null,
+          updatedAt: 2,
+        },
+        todos: [todo('later', 'Later task', 'completed')],
       });
       const expanded = f.work.snapshot(f.session.id);
       const originalBranch = f.runtime.getSnapshot(f.session.id).session.activeBranchId;
@@ -553,7 +433,7 @@ describe('M3 durable session work through real Pi tools', () => {
     const f = await fixture();
     const contexts: TranscriptContext[] = [];
     try {
-      f.faux.setResponses([call('ask_user', { prompt: 'Choose next step' })]);
+      f.faux.setResponses([call('ask_user', questionArgs('Choose next step'))]);
       await f.runtime.send(f.session.id, {
         text: 'Old context',
         mode: 'send',
@@ -764,7 +644,9 @@ describe('M3 durable session work through real Pi tools', () => {
         f.faux.setResponses([
           (context) => {
             contexts.push(context);
-            return fauxAssistantMessage('The first task is complete; continue the pending work.');
+            return fauxAssistantMessage(
+              summary('The first task is complete; continue the pending work.'),
+            );
           },
           (context) => {
             contexts.push(context);
@@ -779,7 +661,7 @@ describe('M3 durable session work through real Pi tools', () => {
         await idle(f);
         expect(f.work.snapshot(f.session.id).state.compaction).toMatchObject({
           reason: 'automatic',
-          throughMessageId: before.at(-5)?.id,
+          strategy: 'model',
         });
         expect(contexts).toHaveLength(2);
         expect(contexts[1]?.messages.find(({ role }) => role === 'system')?.content).toContain(
@@ -790,7 +672,9 @@ describe('M3 durable session work through real Pi tools', () => {
         );
         expect(f.runtime.getSnapshot(f.session.id).runs.at(-1)?.status).toBe('completed');
         f.faux.setResponses([
-          fauxAssistantMessage('The first two tasks are complete; preserve the remaining work.'),
+          fauxAssistantMessage(
+            summary('The first two tasks are complete; preserve the remaining work.'),
+          ),
           (context) => {
             contexts.push(context);
             return fauxAssistantMessage('Fifth response');
@@ -804,7 +688,7 @@ describe('M3 durable session work through real Pi tools', () => {
         await idle(f);
         expect(f.work.snapshot(f.session.id).state.compaction).toMatchObject({
           reason: 'automatic',
-          throughMessageId: before.at(-3)?.id,
+          strategy: 'model',
         });
         expect(contexts.at(-1)?.messages.find(({ role }) => role === 'system')?.content).toContain(
           'The first two tasks are complete; preserve the remaining work.',
@@ -819,7 +703,7 @@ describe('M3 durable session work through real Pi tools', () => {
     },
   );
 
-  it('summarizes old complete turns and preserves the prior summary and raw history when a later summary fails', async () => {
+  it('summarizes complete turns and falls back conservatively while retaining raw history when a later model fails', async () => {
     const f = await fixture();
     const summaryContexts: TranscriptContext[] = [];
     try {
@@ -830,7 +714,7 @@ describe('M3 durable session work through real Pi tools', () => {
       f.faux.setResponses([
         (context) => {
           summaryContexts.push(context);
-          return fauxAssistantMessage('Completed turn one; keep the agreed goal.');
+          return fauxAssistantMessage(summary('Completed turn one; keep the agreed goal.'));
         },
       ]);
       let state = f.work.snapshot(f.session.id).state;
@@ -840,9 +724,11 @@ describe('M3 durable session work through real Pi tools', () => {
       });
       expect(compacted.state.compaction).toMatchObject({
         throughMessageId: history[1]?.id,
-        summary: 'Completed turn one; keep the agreed goal.',
         reason: 'manual',
       });
+      expect(compacted.state.compaction?.summary).toContain(
+        'Completed turn one; keep the agreed goal.',
+      );
       expect(summaryContexts[0]?.messages.find(({ role }) => role === 'user')?.content).toContain(
         'Turn one',
       );
@@ -876,13 +762,12 @@ describe('M3 durable session work through real Pi tools', () => {
           errorMessage: 'Synthetic summary failure',
         }),
       ]);
-      await expect(
-        f.work.compact(f.session.id, {
-          expectedBranchId: state.branchId,
-          revision: state.revision,
-        }),
-      ).rejects.toMatchObject({ code: 'COMPACTION_FAILED' });
-      expect(f.work.snapshot(f.session.id).state.compaction).toEqual(compacted.state.compaction);
+      const fallback = await f.work.compact(f.session.id, {
+        expectedBranchId: state.branchId,
+        revision: state.revision,
+      });
+      expect(fallback.state.compaction?.strategy).toBe('fallback');
+      expect(fallback.state.compaction?.parentId).toBe(compacted.state.compaction?.id);
       expect(f.runtime.getSnapshot(f.session.id).messages).toEqual(beforeFailure);
       expect(f.releases()).toBe(6);
       expect(f.errors).toEqual([]);
@@ -899,7 +784,7 @@ describe('M3 durable session work through real Pi tools', () => {
     try {
       for (let index = 1; index <= 3; index += 1)
         await sendTurn(f, `Before ${index}`, `Result ${index}`);
-      f.faux.setResponses([fauxAssistantMessage('Saved first-turn summary')]);
+      f.faux.setResponses([fauxAssistantMessage(summary('Saved first-turn summary'))]);
       const initial = f.work.snapshot(f.session.id).state;
       await f.work.compact(f.session.id, {
         expectedBranchId: initial.branchId,

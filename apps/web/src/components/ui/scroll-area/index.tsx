@@ -17,7 +17,7 @@ export const ScrollArea: FC<ScrollAreaProps> = ({
   viewportClassName,
   ...props
 }) => {
-  let orientation: 'horizontal' | 'vertical' = 'vertical';
+  let orientation: ComponentProps<typeof ScrollAreaPrimitive.Scrollbar>['orientation'] = 'vertical';
   if (horizontal) {
     orientation = 'horizontal';
   }

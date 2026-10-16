@@ -1,22 +1,9 @@
-import type { HealthResponse, RuntimeReadyEvent } from '@my-pi-harness/protocol';
+import type { EventConnection, RuntimeConnection } from '@/features/runtime/types/runtime';
 import { useCallback, useEffect, useState } from 'react';
 
 import { useHealth } from '@/features/runtime/queries/health';
 import { useAsyncEvent } from '@/hooks/use-async-event';
 import { subscribeToRuntime } from '@/features/runtime/services/runtime-events';
-
-type EventConnection =
-  | { status: 'loading' }
-  | { status: 'error'; message: string }
-  | { status: 'ready'; event: RuntimeReadyEvent };
-
-interface RuntimeConnection {
-  status: 'loading' | 'error' | 'ready';
-  message: string;
-  health: HealthResponse | undefined;
-  event: RuntimeReadyEvent | undefined;
-  retry: () => void;
-}
 
 const describeHealthError = (error: Error): string => {
   if (error.name === 'TimeoutError' || error.name === 'AbortError') {

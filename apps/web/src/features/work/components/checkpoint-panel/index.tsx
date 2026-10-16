@@ -1,12 +1,12 @@
 import type { SessionSnapshot, WorkSnapshot } from '@my-pi-harness/protocol';
 import type { FC } from 'react';
 import { ConfirmDialog } from '@/components/ui/alert-dialog';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Notice } from '@/components/ui/notice';
 import { SelectField } from '@/components/ui/select-field';
+import { WorkDifferences } from '@/features/work/components/work-differences';
 import { useCheckpoints } from '@/features/work/hooks/use-checkpoints';
 
 interface CheckpointPanelProps {
@@ -28,10 +28,10 @@ export const CheckpointPanel: FC<CheckpointPanelProps> = ({
     <div className="space-y-5">
       <form className="flex gap-2" onSubmit={state.create}>
         <Input
-          aria-label="检查点名称"
+          aria-label="快照名称"
           value={state.label}
           onChange={state.changeLabel}
-          placeholder="检查点名称"
+          placeholder="快照名称"
           maxLength={200}
           disabled={disabled || work.checkpoints.length >= 100}
         />
@@ -39,7 +39,7 @@ export const CheckpointPanel: FC<CheckpointPanelProps> = ({
           type="submit"
           disabled={disabled || !state.label.trim() || work.checkpoints.length >= 100}
         >
-          创建检查点
+          创建会话快照
         </Button>
       </form>
       {state.action.error && <Notice tone="error">{state.action.error}</Notice>}
@@ -65,39 +65,25 @@ export const CheckpointPanel: FC<CheckpointPanelProps> = ({
           />
         </div>
       </div>
-      <div className="space-y-3">
-        {state.differences.map((row) => {
-          return (
-            <div key={row.label} className="space-y-2 rounded-xl border border-border p-3">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-medium">{row.label}</span>
-                {row.changed && <Badge>有变化</Badge>}
-                {!row.changed && <span className="text-[11px] text-muted-foreground">相同</span>}
-              </div>
-              {row.changed && (
-                <div className="grid min-w-0 gap-2 sm:grid-cols-2">
-                  <div className="max-h-40 overflow-y-auto rounded-lg bg-muted p-2 text-xs break-words whitespace-pre-wrap">
-                    {row.left}
-                  </div>
-                  <div className="max-h-40 overflow-y-auto rounded-lg bg-muted p-2 text-xs break-words whitespace-pre-wrap">
-                    {row.right}
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-      <div className="flex flex-wrap justify-between gap-2">
-        <Button type="button" variant="outline" disabled={disabled} onClick={state.openReset}>
-          重置工作状态
+      <WorkDifferences rows={state.differences} />
+      <div className="flex flex-wrap gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          disabled={disabled}
+          onClick={state.openResetContext}
+        >
+          重新开始上下文
+        </Button>
+        <Button type="button" variant="outline" disabled={disabled} onClick={state.openResetTasks}>
+          重置任务状态
         </Button>
         <Button
           type="button"
           disabled={disabled || state.rightId === 'current'}
           onClick={state.openRestore}
         >
-          恢复目标检查点
+          恢复目标快照
         </Button>
       </div>
       <ConfirmDialog

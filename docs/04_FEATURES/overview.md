@@ -57,3 +57,6 @@ AC写可观察结果，不用「完善」「支持全部」代替具体条件。
 - [M3统一验证与平台限制](202610151655_feature_m3-context-interaction/verify.md)
 - [审批模式与会话JSONL镜像](202610151800_feature_approval-session-jsonl/spec.md)
 - [审批与JSONL验证](202610151800_feature_approval-session-jsonl/verify.md)
+
+- [代码治理与可读性](202610161244_refactor_code-governance/spec.md)
+- [M3收尾复核与核心技术文档](202610161259_refactor_m3-review-technical-docs/spec.md)

@@ -1,8 +1,9 @@
 import { app, dialog } from 'electron';
 import { DesktopApplication } from './application.js';
+import type { QuitState } from './types.js';
 
 const application = new DesktopApplication();
-let quitState: 'running' | 'stopping' | 'stopped' = 'running';
+let quitState: QuitState = 'running';
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();

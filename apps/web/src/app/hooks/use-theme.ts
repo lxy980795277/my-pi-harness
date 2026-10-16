@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 
-type Theme = 'light' | 'dark';
+import type { Theme } from '@/app/types/application';
 
 interface ThemeState {
   theme: Theme;

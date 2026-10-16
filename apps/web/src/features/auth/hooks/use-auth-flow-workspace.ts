@@ -1,4 +1,4 @@
-import type { AuthFlowWorkspaceState } from '@/features/auth/types/auth-view';
+import type { AuthFlowWorkspaceState } from '@/features/auth/types/auth';
 import type { AuthFlow } from '@my-pi-harness/protocol';
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo } from 'react';
@@ -37,11 +37,10 @@ export const useAuthFlowWorkspace = (): AuthFlowWorkspaceState => {
     },
   });
   const flows = useMemo(() => {
-    return (
-      query.data?.filter((flow) => {
-        return flow.providerId === 'application:github';
-      }) ?? []
-    );
+    const flows = query.data ?? [];
+    return flows.filter((flow) => {
+      return flow.providerId === 'application:github';
+    });
   }, [query.data]);
   const active = flows.find((flow) => {
     return flow.id === activeId;

@@ -1,6 +1,6 @@
 {
   "name": "my-pi-harness",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
   "description": "Local-first PC agent harness built independently on Pi",
@@ -23,7 +23,7 @@
     "test": "vitest run",
     "test:artifact": "pnpm --filter @my-pi-harness/daemon test:built",
     "test:e2e": "playwright test",
-    "test:m3": "vitest run packages/agent-runtime/test/context-budget.test.ts packages/agent-runtime/test/context-rules.test.ts packages/agent-runtime/test/start-cancellation.test.ts packages/agent-runtime/test/work-runtime.test.ts packages/storage/test/context-work.test.ts apps/daemon/test/attachments.test.ts apps/daemon/test/work-api.test.ts apps/web/test/context-work.test.ts apps/web/test/work-service.test.ts && playwright test tests/e2e/m3.spec.ts",
+    "test:m3": "vitest run packages/agent-runtime/test/context-budget.test.ts packages/agent-runtime/test/context-rules.test.ts packages/agent-runtime/test/start-cancellation.test.ts packages/agent-runtime/test/work-runtime.test.ts packages/agent-runtime/test/context-pipeline.test.ts packages/agent-runtime/test/context-review-regressions.test.ts packages/storage/test/context-work.test.ts packages/storage/test/session-jsonl.test.ts packages/storage/test/attachment-blobs.test.ts packages/storage/test/session-log-directory.test.ts apps/daemon/test/attachments.test.ts apps/daemon/test/work-api.test.ts apps/web/test/context-work.test.ts apps/web/test/question-answers.test.ts apps/web/test/context-versions.test.ts apps/web/test/attachment-input.test.ts apps/web/test/work-service.test.ts && playwright test tests/e2e/m3.spec.ts",
     "test:m2": "vitest run packages/execution/test packages/agent-runtime/test/tool-runtime.test.ts packages/storage/test/tools.test.ts packages/storage/test/workspaces.test.ts apps/daemon/test/workspaces.test.ts apps/daemon/test/workspaces-api.test.ts apps/desktop/test/security.test.ts apps/desktop/test/preload.test.ts apps/web/test/timeline-entries.test.ts apps/web/test/workspace-directory.test.ts apps/web/test/workspace-tree.test.ts && playwright test tests/e2e/m2.spec.ts tests/e2e/m2-completion.spec.ts tests/e2e/workspace-creation.spec.ts",
     "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test",
     "version:sync": "node scripts/version.mjs --write",

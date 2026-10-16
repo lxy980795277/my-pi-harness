@@ -3,10 +3,10 @@ import type { ApprovalMode, DefaultModel, InputRequest } from '@my-pi-harness/pr
 import type {
   NewConversationAttempt,
   NewConversationIntent,
-} from '@/features/sessions/types/composer-view';
+} from '@/features/sessions/types/composer';
 
-export type WorkspacePage = 'sessions' | 'runtime';
-export type SettingsSection = 'general' | 'models';
+import type { SettingsSection, WorkspacePage } from '@/app/types/application';
+import type { WorkMode } from '@/features/sessions/types/composer';
 
 interface WorkspaceState {
   page: WorkspacePage;
@@ -15,7 +15,7 @@ interface WorkspaceState {
   newConversationDraft: string;
   newConversationModel: DefaultModel | null;
   newConversationApproval: ApprovalMode;
-  newConversationWorkMode: 'execute' | 'plan';
+  newConversationWorkMode: WorkMode;
   newConversationGeneration: string;
   newConversationAttempt: NewConversationAttempt | null;
   pendingInputs: Readonly<Record<string, InputRequest>>;
@@ -35,7 +35,7 @@ interface WorkspaceState {
   setNewConversationDraft: (text: string) => void;
   setNewConversationModel: (model: DefaultModel) => void;
   setNewConversationApproval: (mode: ApprovalMode) => void;
-  setNewConversationWorkMode: (mode: 'execute' | 'plan') => void;
+  setNewConversationWorkMode: (mode: WorkMode) => void;
   prepareInput: (sessionId: string, input: InputRequest) => InputRequest;
   clearPendingInput: (sessionId: string, requestId: string) => void;
   confirmInput: (sessionId: string, requestId: string) => void;

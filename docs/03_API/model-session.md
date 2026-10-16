@@ -1,6 +1,6 @@
 # 模型、授权与会话协议
 
-本机wire协议版本为7，持久事件格式仍为version:1。M1的公开schema由 `packages/protocol/src/models.ts`、`auth.ts` 和 `sessions.ts` 拥有。HTTP返回公开DTO，SDK对象、模型上下文codec、凭据和数据库Entity不跨入Renderer。列表接口直接返回数组，写会话接口返回已提交的SessionSnapshot；失败返回 `{code,message}`。
+本机wire协议版本为8，持久事件格式仍为version:1。M1的公开schema由 `packages/protocol/src/models.ts`、`auth.ts` 和 `sessions.ts` 拥有。HTTP返回公开DTO，SDK对象、模型上下文codec、凭据和数据库Entity不跨入Renderer。列表接口直接返回数组，写会话接口返回已提交的SessionSnapshot；失败返回 `{code,message}`。
 
 ## 授权
 
@@ -49,7 +49,7 @@
 
 内置Provider由六个Pi factory拥有名称、端点和模型。正常列表每厂商仅有一个固定入口；只能启停与认证，不能新增、删除或改写目录。响应models包含完整Pi目录，不套用custom输入的100条上限。custom模型与Provider协议一致；已有模型切换Provider协议时，owner将旧API同步到新协议。模型Dialog维护ModelDefinition草稿，并通过PUT Provider一次提交整个models，使用同一expectedRevision保证原子更新。未提交的同ID模型headers/compat由owner保留，改ID草稿须携带原高级字段。ModelInfo的supportedThinkingLevels只读，不进入配置写入。
 
-Provider ID标识配置实例，credentialRef标识系统凭据项。v2迁移保留原ID与凭据引用；无端点覆盖且无模型覆盖的旧内置实例按启用优先、ID的SQLite BINARY升序选择正常入口，一旦绑定不会随启停变化。其余旧内置配置标为legacy，通过具体ID继续供旧会话读取、认证与运行；不出现在正常列表。缺少安全候选时建立新的官方入口，不将旧代理配置的凭据转移到官方端点。历史provider_versions和Session事件不重写。
+Provider ID标识配置实例，credentialRef标识系统凭据项；builtin_provider_slots保存每个原生厂商的正常入口绑定。Gateway初始化时复用该绑定；未绑定时从同厂商、无端点及模型覆盖的配置中按启用优先、ID字节升序选择，或新建官方配置和独立凭据引用。绑定不随启停变化，正常列表仅返回当前绑定的六个入口。legacy为未绑定或已不在当前目录内的内置配置的只读派生状态，不表示存在旧数据库升级支持；当前开发数据采用fresh schema，不保留旧格式兼容。
 
 requiresApiKey=false仅适用于custom：请求跳过保存凭据和环境认证，使用Pi HTTP/SSE实现并在最终fetch剥除SDK生成的认证与OpenAI租户头。daemon启动时一次清理已核实的OpenAI/Anthropic SDK环境认证、Base URL、custom headers和日志覆盖项，阻止SDK自行带入宿主组织/项目、任意环境头或调试日志；其余环境保留。切换标志保留原凭据。hasCredential/credentialType描述保存状态，authSource描述实际认证模式，configured描述认证配置是否齐备；这些字段不证明远端连接成功。credentialPreview仅为掩码，OAuth不返回Token预览。运行期间持有Provider lease，配置和认证变更返回冲突；探测不会静默改用其他模型。
 
@@ -77,7 +77,7 @@ AuthFlow.prompt.type区分text、secret、select和manual_code；可含placehold
 
 输入附件、消息/队列保留的attachmentIds与分支工作状态见[M3协议](context-interaction.md)。编辑用户消息重发继承原附件，队列文字修改保留原附件。
 
-同Session只允许一个活跃Run；不同Session可以并行。requestId保持幂等，同一请求重发不启动第二个Run。运行中的send返回409；follow-up在当前回复结束后消费，steer中断当前模型请求并继续同一个Run。接受、修改、删除和消费队列均有持久事务。用户停止、运行失败或重启后不会自动恢复收费请求，队列由用户明确继续；普通新消息或编辑重发不会自动消费旧暂停队列。恢复要求选择原分支，并按保存的Provider/model消费。
+同Session只允许一个活跃Run；不同Session可以并行。requestId保持幂等，同一请求重发不启动第二个Run。运行中的send返回409；steer在当前assistant回复及该轮工具处理完成后的下一轮注入，优先于follow-up，不中断正在进行的模型流或工具。follow-up在Agent本轮循环原本准备结束时消费；两者均可继续同一个Run。接受、修改、删除和消费队列均有持久事务。用户停止、运行失败或重启后不会自动恢复收费请求，队列由用户明确继续；普通新消息或编辑重发不会自动消费旧暂停队列。恢复要求选择原分支，并按保存的Provider/model消费。
 
 立即执行冻结模型、推理级别和system prompt；运行内队列使用所属Run的冻结模型，设置变更影响新Run。恢复旧队列时使用记录的provider/model，读取该配置当前已提交版本。编辑用户消息建立新分支并选择准确前缀，旧消息及旧分支回复保留；忙时禁止编辑与分支切换。
 
@@ -85,11 +85,11 @@ AuthFlow.prompt.type区分text、secret、select和manual_code；可含placehold
 
 HarnessEvent包含固定格式version:1、eventId、sessionId、可空runId、seq、type、at和公开data。seq在单Session事务中单调递增，事件追加和消息/Run/队列投影同时提交。SSE发送 `session.event` 重放事实，再发送 `session.snapshot`，data直接为SessionSnapshot，id为已提交seq。快照从同一数据库事务读取，snapshotSeq与内容一致。
 
-服务先订阅已提交事件，再同步读取和分页重放；随后将进度按32ms合并发送快照。客户端以Session和seq合并HTTP与SSE，较旧响应不能覆盖新快照。断线重连从已接受seq补读；超出当前高水位的游标返回409。15秒注释心跳、背压断开和8MiB单记录上限限制连接资源，慢客户端不阻塞模型或数据库。关闭连接清理定时器与订阅。
+服务先订阅已提交事件，再同步读取和分页重放；随后将进度按32ms合并发送快照。客户端以Session和seq合并HTTP与SSE，较旧响应不能覆盖新快照。新建订阅以缓存snapshotSeq构造afterSeq；EventSource自动重连复用原URL，服务不以Last-Event-ID覆盖游标，因此可能重放重复事件，客户端按快照序号去重并重新读取HTTP快照。超出当前高水位的游标返回409。15秒注释心跳、背压断开和8MiB单记录上限限制连接资源，慢客户端不阻塞模型或数据库。关闭连接清理定时器与订阅。
 
 终态区分completed、cancelled、failed和interrupted，SDK Promise resolve不等于成功。存储提交失败时取消模型并停用该会话，读取或再执行返回503/SESSION_UNAVAILABLE；不能广播未提交的完成。重启先取得profile所有权，再将遗留Run标记interrupted并保留已提交部分。
 
-每个会话另有`<logRoot>/sessions/<profileHash>/<sessionId>.jsonl`公开事件镜像，隐藏目录的开发/正式路径与配置由[架构](../01_ARCHITECTURE/overview.md#启动配置)定义。SQLite先提交，文件随后同步追加；JSONL不含privateData、私有模型codec或附件字节，不是独立恢复备份。文件失败返回503/SESSION_LOG_UNAVAILABLE，数据库事实可能已经提交，读取仍可用但后续写入暂停；先检查现有结果并修复文件问题、重启，不重复执行不确定操作。启动按SQLite补齐历史、缺失记录与崩溃末行；完整行冲突返回SESSION_LOG_INVALID，不静默覆盖。旧目录日志保留，不从其导入或覆盖数据库。详细持久化规则见[storage](../../packages/storage/README.md#会话jsonl镜像)。
+每个会话在<logRoot>/sessions/<profileHash>/<sessionId>.jsonl保存完整宿主批日志，作为会话执行事实源；路径由[架构](../01_ARCHITECTURE/overview.md#启动配置)定义。完整批次校验后先持久化JSONL，再提交SQLite投影和推送公开事件。宿主记录含恢复所需privateData，HTTP/SSE仅输出公开投影；附件内容保存在独立校验文件。写入或投影失败返回503/SESSION_LOG_UNAVAILABLE并冻结后续持久写入，重启校验日志并重建投影，不重复执行副作用。不能从SQLite回填或覆盖权威日志，完整坏行明确拒绝。存储规则见[storage](../../packages/storage/README.md)。
 
 ## 桌面桥
 

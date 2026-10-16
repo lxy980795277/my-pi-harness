@@ -8,9 +8,7 @@ import type { ResolvedModel } from './model-gateway.js';
 import type { EventInput } from './runtime-ports.js';
 import { toolCallRecordId, type ToolRuntime } from './tool-runtime.js';
 import type { WorkRuntime } from './work-runtime.js';
-import { fitContext } from './context/index.js';
 import { userWithAttachments } from './attachment-context.js';
-import { contextSourceIds } from './context-sources.js';
 
 export interface RunExecutionOptions {
   session: SessionSummary;
@@ -19,6 +17,7 @@ export interface RunExecutionOptions {
   history: Message[];
   user: UserMessage;
   systemPrompt: string;
+  basePrompt: string;
   eligibleInputIds: readonly string[];
   commit(events: readonly EventInput[]): void;
   queue(): QueueInput[];
@@ -76,49 +75,36 @@ export class RunExecution {
       toolExecution: 'sequential',
       ...(options.work
         ? {
-            transformContext: (messages: Message[], signal?: AbortSignal): Promise<Message[]> => {
-              signal?.throwIfAborted();
-              const fitted = fitContext({
-                messages,
-                systemPrompt: options.systemPrompt,
-                contextWindow: options.resolved.model.contextWindow,
-                maxOutput: options.resolved.model.maxTokens,
-                toolDefinitions: tools,
-              });
+            transformContext: async (
+              messages: Message[],
+              signal?: AbortSignal,
+            ): Promise<Message[]> => {
               const work = options.work;
-              if (work) {
-                const state = work.snapshot(options.session.id).state;
-                work.save(options.session.id, { ...state, usage: fitted.usage }, options.run.id);
-                const snapshot = work.options.store.getSnapshot(options.session.id);
-                const messageIds = contextSourceIds(fitted.messages, snapshot.messages);
-                const selected = new Set(messageIds);
-                const attachmentIds = [
-                  ...new Set(
-                    snapshot.messages
-                      .filter(({ id }) => selected.has(id))
-                      .flatMap((message) => message.attachmentIds ?? []),
-                  ),
-                ];
-                this.commit([
-                  {
-                    type: 'context.prepared',
-                    runId: options.run.id,
-                    at: Date.now(),
-                    data: {
-                      branchId: options.run.branchId,
-                      usage: fitted.usage,
-                      messageIds,
-                      attachmentIds,
-                    },
-                    privateData: JSON.stringify({
-                      version: 1,
-                      systemPrompt: options.systemPrompt,
-                      messages: fitted.messages.map(encodeContextMessage),
-                    }),
-                  },
-                ]);
+              if (!work) return messages;
+              try {
+                return await work.context.project({
+                  session: options.session,
+                  run: options.run,
+                  resolved: options.resolved,
+                  messages,
+                  basePrompt: options.basePrompt,
+                  currentTask:
+                    typeof options.user.content === 'string'
+                      ? options.user.content
+                      : options.user.content
+                          .filter((part) => part.type === 'text')
+                          .slice(0, 1)
+                          .map((part) => part.text)
+                          .join(''),
+                  toolDefinitions: tools,
+                  signal: signal
+                    ? AbortSignal.any([signal, this.toolAbort.signal])
+                    : this.toolAbort.signal,
+                });
+              } catch (error) {
+                this.failure = error;
+                throw error;
               }
-              return Promise.resolve(fitted.messages);
             },
           }
         : {}),
@@ -199,6 +185,7 @@ export class RunExecution {
     if (this.started)
       throw new RuntimeError('RUN_ALREADY_STARTED', 'Started runs must settle through their owner');
     this.unsubscribe();
+    this.options.work?.context.release(this.options.run.id);
     this.toolAbort.abort();
     this.agent.clearAllQueues();
     this.agent.abort();
@@ -213,6 +200,7 @@ export class RunExecution {
       this.options.onError(error);
     } finally {
       this.unsubscribe();
+      this.options.work?.context.release(this.options.run.id);
       this.agent.clearAllQueues();
     }
     if (this.persistenceFailed) return;

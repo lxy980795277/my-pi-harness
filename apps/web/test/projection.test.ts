@@ -57,7 +57,7 @@ describe('committed session projection cache', () => {
     let finishRead: (value: SessionSnapshot) => void = (): void => {
       throw new Error('HTTP read has not started');
     };
-    const read = client.fetchQuery({
+    const read = client.query({
       queryKey: ['session', 'session'],
       queryFn: (): Promise<SessionSnapshot> => {
         return new Promise((resolve) => {

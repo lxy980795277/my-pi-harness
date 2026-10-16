@@ -1,5 +1,6 @@
+import type { LiveSession, SessionConnectionStatus } from '@/features/sessions/types/session';
 import { SessionSnapshotSchema, type SessionSnapshot } from '@my-pi-harness/protocol';
-import { useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useState } from 'react';
 
 import { mergeSessionSnapshot, retainNewestSnapshot } from '@/features/sessions/queries/projection';
@@ -9,16 +10,10 @@ import { subscribeSse } from '@/services/base-sse';
 import { describeError } from '@/utils/describe-error';
 import { parseResponse } from '@/utils/parse-response';
 
-export interface LiveSession {
-  query: UseQueryResult<SessionSnapshot, Error>;
-  connection: 'connecting' | 'connected' | 'disconnected';
-  connectionError: string | null;
-}
-
 /** HTTP and batched SSE share one monotonic session cache; switching closes the old stream. */
 export const useSession = (id: string): LiveSession => {
   const queryClient = useQueryClient();
-  const [connection, setConnection] = useState<LiveSession['connection']>('connecting');
+  const [connection, setConnection] = useState<SessionConnectionStatus>('connecting');
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const query = useQuery({
     queryKey: ['session', id],

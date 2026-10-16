@@ -1,4 +1,4 @@
-import type { SettingsDialogState } from '@/features/settings/types/settings-view';
+import type { SettingsCloseTarget, SettingsDialogState } from '@/features/settings/types/settings';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
 
@@ -32,7 +32,7 @@ export const useSettingsDialog = (): SettingsDialogState => {
   });
   const close = useAsyncEvent(
     useCallback(
-      async (signal: AbortSignal, target: 'settings' | 'provider'): Promise<void> => {
+      async (signal: AbortSignal, target: SettingsCloseTarget): Promise<void> => {
         if (authStarting) {
           throw new Error('正在创建授权流程，请稍候再关闭。');
         }

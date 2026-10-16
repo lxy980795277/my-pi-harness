@@ -3,6 +3,10 @@ export type ExecutionContent =
   | { type: 'text'; text: string }
   | { type: 'image'; data: string; mimeType: string };
 
+export type ShellAccess = 'sandboxed' | 'full-access';
+export type WorkspacePathPlatform = 'posix' | 'win32';
+export type FileMutationToolName = 'write_file' | 'edit_file';
+
 /** Bounded result returned after the owned operation has settled. */
 export interface ExecutionResult {
   content: ExecutionContent[];
@@ -16,7 +20,7 @@ export interface ExecutionContext {
   profileDirectory: string;
   readOnly: boolean;
   /** Frozen by the run owner; omission keeps macOS Seatbelt isolation. */
-  shellAccess?: 'sandboxed' | 'full-access';
+  shellAccess?: ShellAccess;
   signal: AbortSignal;
 }
 

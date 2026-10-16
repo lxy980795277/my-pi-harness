@@ -1,3 +1,4 @@
+import type { RuntimeConnectionStatus } from '@/features/runtime/types/runtime';
 import type { RuntimeReadyEvent } from '@my-pi-harness/protocol';
 import { Radio } from 'lucide-react';
 import type { FC } from 'react';
@@ -7,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 interface RuntimeEventsProps {
   event: RuntimeReadyEvent | undefined;
-  status: 'loading' | 'error' | 'ready';
+  status: RuntimeConnectionStatus;
 }
 
 const EMPTY_MESSAGES: Record<RuntimeEventsProps['status'], string> = {

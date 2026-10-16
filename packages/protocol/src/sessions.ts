@@ -5,7 +5,7 @@ import { ApprovalModeSchema, ToolCallViewSchema } from './tools.js';
 const id = Type.String({ minLength: 1, maxLength: 160 });
 const nullableId = Type.Union([id, Type.Null()]);
 const timestamp = Type.Integer({ minimum: 0 });
-const text = Type.String({ minLength: 1, maxLength: 64_000 });
+const text = Type.String({ maxLength: 64_000 });
 
 /** Stable session navigation fields, including its committed projection cursor. */
 export const SessionSummarySchema = Type.Object(

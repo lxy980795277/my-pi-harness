@@ -1,7 +1,7 @@
 import type { LucideIcon } from 'lucide-react';
 import type { FC } from 'react';
 
-import type { WorkspacePage } from '@/app/stores/workspace';
+import type { WorkspacePage } from '@/app/types/application';
 import { Button } from '@/components/ui/button';
 import { useNavigationItem } from '@/app/hooks/use-navigation-item';
 

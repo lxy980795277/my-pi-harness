@@ -1,4 +1,4 @@
-import type { SessionsWorkspaceState } from '@/features/sessions/types/session-view';
+import type { SessionsWorkspaceState } from '@/features/sessions/types/session';
 import type { ProviderConfig, SessionSnapshot } from '@my-pi-harness/protocol';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';

@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Popover } from '@/components/ui/popover';
 import { PopoverContent } from '@/components/ui/popover/popover-content';
 import { PopoverTrigger } from '@/components/ui/popover/popover-trigger';
-import type { WorkspaceGroupState } from '@/features/workspaces/types/workspace-view';
+import type { WorkspaceGroupState } from '@/features/workspaces/types/workspace';
 
 interface WorkspaceActionsProps {
   name: string;

@@ -1,6 +1,6 @@
-import type { OAuthPromptState } from '@/features/auth/types/auth-view';
+import type { OAuthPromptState } from '@/features/auth/types/auth';
 import type { AuthFlow } from '@my-pi-harness/protocol';
-import { useCallback, useState, type ChangeEvent, type FormEvent } from 'react';
+import { useCallback, useState, type ChangeEvent, type SubmitEvent } from 'react';
 
 import { respondToAuthFlow } from '@/features/auth/services/auth';
 import { getPromptPresentation } from '@/features/auth/utils/oauth-view';
@@ -26,7 +26,7 @@ export const useOAuthPrompt = (
   );
   const { run: operationRun } = operation;
   const submit = useCallback(
-    (event: FormEvent<HTMLFormElement>): void => {
+    (event: SubmitEvent<HTMLFormElement>): void => {
       event.preventDefault();
       const submittedValue = value;
       setValue('');

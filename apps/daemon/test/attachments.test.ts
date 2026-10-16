@@ -27,6 +27,45 @@ afterEach(async () => {
 });
 
 describe('frozen attachments', () => {
+  it('extracts Office and RTF documents and rejects invalid archives or MIME combinations', async () => {
+    const { attachments } = await fixture();
+    const docxData =
+      'UEsDBBQAAAAIABksUF3mdcR+0gAAAIsBAAATAAAAW0NvbnRlbnRfVHlwZXNdLnhtbH2QvVLDMAzHX8XnlasVGBh6SToAKzD0BXSOkvjw11luad++Sls6cIVR+n/8ZLebQ/BqT4Vdip1+NI3e9O32mImVKJE7Pdea1wBsZwrIJmWKooypBKwylgky2i+cCJ6a5hlsipViXdWlQ/ftK42481W9HWR9oRTyrNXLxbiwOo05e2exig77OPyirK4EI8mzh2eX+UEMGu4SFuVvwDX3Ic8ubiD1iaW+YxAXfKcywJDsLkjS/F9z5840js7SLb+05ZIsMbs4BW9uSkAXf+6H83f3J1BLAwQUAAAACAAZLFBdXzOVUpUAAAAHAQAACwAAAF9yZWxzLy5yZWxzjc87DsIwDAbgq0Q+QJ0yMKCmXVi6Ii4QJW5T0TzkhNftycBAEQOjf//6LHfDw6/iRpyXGBS0jYSh70606lKD7JaURW2ErMCVkg6I2TjyOjcxUaibKbLXpY48Y9LmomfCnZR75E8DtqYYrQIebQvi/Ez0jx2naTF0jObqKZQfJ74aVdY8U1Fwj2zRvuOmsoB9h5sX+xdQSwMEFAAAAAgAGSxQXVabwWmMAAAAwQAAABEAAAB3b3JkL2RvY3VtZW50LnhtbEWOWw6CMBBFt9J0ARQ18YPwWIGLqGUEIjPTTAfB3Usx0Z9zMznJvVN3G87mBZImpsaeitJ2bb1WPYcFgdTsmlK1NnZUjZVzKYyAPhUcgXb3YEGv+ymDW1n6KBwgpYkGnN25LK8O/UQ2V965f+eMGZKh7e1ifkuBSWFTg16eILXLPlMOxoPfDvf/r/0AUEsBAhQDFAAAAAgAGSxQXeZ1xH7SAAAAiwEAABMAAAAAAAAAAAAAAIABAAAAAFtDb250ZW50X1R5cGVzXS54bWxQSwECFAMUAAAACAAZLFBdXzOVUpUAAAAHAQAACwAAAAAAAAAAAAAAgAEDAQAAX3JlbHMvLnJlbHNQSwECFAMUAAAACAAZLFBdVpvBaYwAAADBAAAAEQAAAAAAAAAAAAAAgAHBAQAAd29yZC9kb2N1bWVudC54bWxQSwUGAAAAAAMAAwC5AAAAfAIAAAAA';
+    const office = await attachments.upload({
+      name: 'report.docx',
+      mediaType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      data: docxData,
+    });
+    const macro = await attachments.upload({
+      name: 'report.docm',
+      mediaType: 'application/vnd.ms-word.document.macroenabled.12',
+      data: docxData,
+    });
+    expect(macro.kind).toBe('document');
+    expect(office.kind).toBe('document');
+    expect(attachments.get(office.id).text).toContain('M3 document context marker');
+    const rtf = await attachments.upload({
+      name: 'notes.rtf',
+      mediaType: 'application/rtf',
+      data: Buffer.from('{\\rtf1\\ansi M3 RTF context}').toString('base64'),
+    });
+    expect(attachments.get(rtf.id).text).toContain('M3 RTF context');
+    await expect(
+      attachments.upload({
+        name: 'invalid.docx',
+        mediaType: 'application/octet-stream',
+        data: Buffer.from('PK-invalid').toString('base64'),
+      }),
+    ).rejects.toThrow();
+    await expect(
+      attachments.upload({
+        name: 'invalid.docx',
+        mediaType: 'text/plain',
+        data: Buffer.from('text').toString('base64'),
+      }),
+    ).rejects.toThrow('不符');
+  });
+
   it('stores text and signed image content privately and rejects malformed/type-mismatched data', async () => {
     const { attachments } = await fixture();
     const text = await attachments.upload({

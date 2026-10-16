@@ -1,4 +1,4 @@
-import type { MessageTimelineState } from '@/features/sessions/types/session-view';
+import type { MessageTimelineState } from '@/features/sessions/types/session';
 import type { MessageView, ToolCallView } from '@my-pi-harness/protocol';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useCallback, useEffect, useMemo, useRef, useState, type UIEvent } from 'react';

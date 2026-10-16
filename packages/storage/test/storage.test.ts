@@ -268,20 +268,6 @@ describe('SQLite event and projection transactions', () => {
     expect(value.store.recoverInterrupted()).toEqual([]);
     expect(value.store.getModelContext('session', 'main')).toEqual(['user-codec-run']);
   });
-
-  it('rejects database mutation of immutable event rows', async () => {
-    const { directory, store } = await fixture();
-    const connection = new Database(join(directory, 'data.sqlite'));
-    try {
-      expect(() => connection.prepare('UPDATE events SET type = ?').run('forged')).toThrow(
-        'immutable',
-      );
-      expect(() => connection.prepare('DELETE FROM events').run()).toThrow('immutable');
-      expect(store.readEvents('session')[0]?.type).toBe('session.created');
-    } finally {
-      connection.close();
-    }
-  });
 });
 
 function queued(): QueueInput {

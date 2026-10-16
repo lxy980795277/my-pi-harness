@@ -1,14 +1,14 @@
+import type { QueuedInputMode } from '@/features/sessions/types/composer';
 import {
   useAttachmentDrafts,
   EMPTY_ATTACHMENTS,
 } from '@/features/attachments/stores/attachment-drafts';
-import type { ComposerState } from '@/features/sessions/types/session-view';
+import type { ComposerState } from '@/features/sessions/types/session';
 import type { InputRequest } from '@my-pi-harness/protocol';
-import { useCallback, useState, type ChangeEvent, type FormEvent } from 'react';
+import { useCallback, useState, type ChangeEvent, type SubmitEvent } from 'react';
 import { useWorkspaceStore } from '@/app/stores/workspace';
 import { useAsyncEvent } from '@/hooks/use-async-event';
 import { isRejectedInput } from '@/features/sessions/utils/input-outcome';
-import { composerKeyDown } from '@/features/sessions/utils/composer-key-down';
 
 const MODE_OPTIONS = [
   { value: 'follow-up', label: '排队 · 当前回复后继续' },
@@ -52,8 +52,17 @@ export const useComposer = (
   const clearPendingInput = useWorkspaceStore((state) => {
     return state.clearPendingInput;
   });
-  const draft = pendingInput?.text ?? storedDraft;
-  const [mode, setMode] = useState<'follow-up' | 'steer'>('follow-up');
+  let draft = storedDraft;
+  let attachmentIds = attachments.map((attachment) => {
+    return attachment.id;
+  });
+  if (pendingInput !== null) {
+    draft = pendingInput.text;
+    if (pendingInput.attachmentIds !== undefined) {
+      attachmentIds = pendingInput.attachmentIds;
+    }
+  }
+  const [mode, setMode] = useState<QueuedInputMode>('follow-up');
   const [stopRequestId, setStopRequestId] = useState<string | null>(null);
   const running = activeRunId !== null;
   const send = useAsyncEvent(
@@ -77,9 +86,13 @@ export const useComposer = (
   const { pending: sendPending } = send;
   const { run: sendRun } = send;
   const submit = useCallback(
-    (event: FormEvent<HTMLFormElement>): void => {
+    (event: SubmitEvent<HTMLFormElement>): void => {
       event.preventDefault();
-      if (sendPending || attachmentBusy || draft.trim().length === 0) {
+      if (
+        sendPending ||
+        attachmentBusy ||
+        (draft.trim().length === 0 && attachments.length === 0)
+      ) {
         return;
       }
       const text = draft.trim();
@@ -152,17 +165,16 @@ export const useComposer = (
     },
     [attachmentBusy, pendingInput, removeDraftAttachment, sessionId],
   );
+  let error = send.error;
+  if (error === null) {
+    error = stop.error;
+  }
   return {
     attachmentDraftKey: sessionId,
-    attachmentIds:
-      pendingInput?.attachmentIds ??
-      attachments.map((attachment) => {
-        return attachment.id;
-      }),
+    attachmentIds,
     removeAttachment,
     draft,
     changeDraft,
-    keyDown: composerKeyDown,
     mode: pendingInput?.mode ?? mode,
     changeMode,
     modeOptions,
@@ -171,8 +183,9 @@ export const useComposer = (
     running,
     stopping: running && stopRequestId === activeRunId,
     pending: sendPending,
-    disabled: sendPending || attachmentBusy || draft.trim().length === 0,
-    error: send.error ?? stop.error,
+    disabled:
+      sendPending || attachmentBusy || (draft.trim().length === 0 && attachments.length === 0),
+    error: error,
     draftLocked: pendingInput !== null,
     uncertain: pendingInput !== null && !sendPending,
   };

@@ -14,6 +14,7 @@ import type { ModelGateway } from '@my-pi-harness/agent-runtime';
 import type { FastifyInstance } from 'fastify';
 import { Type } from 'typebox';
 import type { GitHubAuth } from '../auth/github-auth.js';
+import type { ProviderAuthInput } from './types.js';
 
 const IdParams = Type.Object(
   { id: Type.String({ minLength: 1, maxLength: 160 }) },
@@ -153,7 +154,7 @@ export function registerModelRoutes(
       }
     },
   );
-  server.post<{ Params: { id: string }; Body: { kind: 'api_key' | 'oauth' } }>(
+  server.post<{ Params: { id: string }; Body: ProviderAuthInput }>(
     '/api/providers/:id/auth',
     {
       schema: {

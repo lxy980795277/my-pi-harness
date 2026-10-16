@@ -1,6 +1,6 @@
-import type { NavigationItemState } from '@/app/types/application-view';
+import type { NavigationItemState } from '@/app/types/application';
 import { useCallback } from 'react';
-import type { WorkspacePage } from '@/app/stores/workspace';
+import type { WorkspacePage } from '@/app/types/application';
 import { cn } from '@/utils/cn';
 
 /** Navigation adapters expose a synchronous click and semantic current-page state. */

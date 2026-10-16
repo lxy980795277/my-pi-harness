@@ -12,6 +12,8 @@ import { TabsTrigger } from '@/components/ui/tabs/tabs-trigger';
 import { TabsContent } from '@/components/ui/tabs/tabs-content';
 import { CheckpointPanel } from '@/features/work/components/checkpoint-panel';
 import { ContextPanel } from '@/features/work/components/context-panel';
+import { PlanReviewCard } from '@/features/work/components/plan-review-card';
+import { todoProgress } from '@/features/work/utils/context-view';
 import { PlanPanel } from '@/features/work/components/plan-panel';
 import { QuestionCard } from '@/features/work/components/question-card';
 import { useWork } from '@/features/work/hooks/use-work';
@@ -24,7 +26,7 @@ export const WorkPanel: FC<WorkPanelProps> = ({ session }) => {
   const state = useWork(session);
   const work = state.query.data;
   return (
-    <div className="shrink-0 space-y-2 px-6 pb-2">
+    <div className="max-h-[45svh] shrink-0 space-y-2 overflow-y-auto px-6 pb-2">
       <Button
         type="button"
         variant="ghost"
@@ -35,8 +37,16 @@ export const WorkPanel: FC<WorkPanelProps> = ({ session }) => {
         <Layers3 width={14} height={14} aria-hidden />
         {usageLabel(work?.state.usage ?? null)}
         {work?.state.mode === 'plan' && <span>· Plan</span>}
-        {work && work.state.todos.length > 0 && <span>· {work.state.todos.length} 个任务</span>}
+        {work && work.state.todos.length > 0 && (
+          <span className="max-w-96 truncate">· {todoProgress(work.state.todos)}</span>
+        )}
       </Button>
+      {work &&
+        state.running &&
+        work.state.plan?.review === 'pending' &&
+        work.state.plan.runId === session.session.activeRunId && (
+          <PlanReviewCard key={work.state.plan.id} state={work.state} onCommand={state.command} />
+        )}
       {work?.state.questions.map((question) => {
         return (
           <div key={question.id}>
@@ -57,18 +67,23 @@ export const WorkPanel: FC<WorkPanelProps> = ({ session }) => {
                 <TabsTrigger value="context">上下文</TabsTrigger>
                 <TabsTrigger value="plan">计划与任务</TabsTrigger>
                 <TabsTrigger value="questions">提问记录</TabsTrigger>
-                <TabsTrigger value="checkpoints">检查点</TabsTrigger>
+                <TabsTrigger value="checkpoints">会话快照</TabsTrigger>
               </TabsList>
               <TabsContent value="context">
                 <ContextPanel
-                  state={work.state}
+                  work={work}
                   workspaceId={session.session.workspaceId}
-                  running={state.running}
+                  running={state.running || state.query.isFetching}
                   onCommand={state.command}
                 />
               </TabsContent>
               <TabsContent value="plan">
-                <PlanPanel state={work.state} running={state.running} onPatch={state.patch} />
+                <PlanPanel
+                  state={work.state}
+                  tools={session.tools}
+                  running={state.running || state.query.isFetching}
+                  onPatch={state.patch}
+                />
               </TabsContent>
               <TabsContent value="questions">
                 <div className="space-y-3">
@@ -84,7 +99,7 @@ export const WorkPanel: FC<WorkPanelProps> = ({ session }) => {
                 <CheckpointPanel
                   work={work}
                   session={session}
-                  running={state.running}
+                  running={state.running || state.query.isFetching}
                   onCommand={state.command}
                 />
               </TabsContent>

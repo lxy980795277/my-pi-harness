@@ -145,7 +145,7 @@ export class ModelGateway {
     return Promise.all(
       BUILTIN_PROVIDER_IDS.map(async (id) => {
         const provider = await this.loader(id);
-        const authKinds: ('api_key' | 'oauth')[] = [];
+        const authKinds: NativeProviderInfo['authKinds'] = [];
         if (provider.auth.apiKey) authKinds.push('api_key');
         if (provider.auth.oauth) authKinds.push('oauth');
         return { id, name: provider.name, authKinds };

@@ -1,6 +1,6 @@
-import type { MessageEditorState } from '@/features/sessions/types/session-view';
+import type { MessageEditorState } from '@/features/sessions/types/session';
 import type { EditInput, MessageView } from '@my-pi-harness/protocol';
-import { useCallback, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
+import { useCallback, useRef, useState, type ChangeEvent, type SubmitEvent } from 'react';
 import { useAsyncEvent } from '@/hooks/use-async-event';
 
 /** Editing retries retain one request id until the branch creation is acknowledged. */
@@ -25,7 +25,7 @@ export const useMessageEditor = (
   const { clearError: editClearError } = edit;
   const { run: editRun } = edit;
   const submit = useCallback(
-    (event: FormEvent<HTMLFormElement>): void => {
+    (event: SubmitEvent<HTMLFormElement>): void => {
       event.preventDefault();
       const trimmed = text.trim();
       let requestId: string = crypto.randomUUID();

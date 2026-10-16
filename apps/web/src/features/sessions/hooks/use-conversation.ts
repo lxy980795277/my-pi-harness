@@ -1,4 +1,4 @@
-import type { ConversationState } from '@/features/sessions/types/session-view';
+import type { ConversationState } from '@/features/sessions/types/session';
 import { useCallback, useState } from 'react';
 import { useSession } from '@/features/sessions/hooks/use-session';
 import { useSessionCommands } from '@/features/sessions/hooks/use-session-commands';
@@ -42,14 +42,21 @@ export const useConversation = (sessionId: string, onDeleted: () => void): Conve
     setConfirmDelete(false);
   }, []);
   const snapshot = state.query.data;
-  const branchOptions =
-    snapshot?.branches.map((entry, index) => {
-      let label = `修订分支 ${index}`;
-      if (entry.parentId === null) {
-        label = '主分支';
-      }
-      return { value: entry.id, label };
-    }) ?? [];
+  const branches = snapshot?.branches ?? [];
+  const branchOptions = branches.map((entry, index) => {
+    let label = `修订分支 ${index}`;
+    if (entry.parentId === null) {
+      label = '主分支';
+    }
+    return { value: entry.id, label };
+  });
+  let branchError = branch.error;
+  if (branchError === null) {
+    branchError = remove.error;
+  }
+  if (branchError === null) {
+    branchError = reload.error;
+  }
   return {
     ...state,
     commands,
@@ -64,6 +71,6 @@ export const useConversation = (sessionId: string, onDeleted: () => void): Conve
     remove: remove.run,
     deletePending: remove.pending,
     reload: reload.run,
-    branchError: branch.error ?? remove.error ?? reload.error,
+    branchError: branchError,
   };
 };

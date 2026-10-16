@@ -49,6 +49,16 @@ const message = Type.Union([
     content: Type.Union([Type.String(), Type.Array(text)]),
     timestamp: Type.Number(),
     sections: Type.Optional(Type.Record(Type.String(), Type.Union([Type.String(), Type.Null()]))),
+    toolsAdded: Type.Optional(
+      Type.Array(
+        Type.Object({
+          name: Type.String(),
+          description: Type.String(),
+          parameters: Type.Record(Type.String(), Type.Unknown()),
+        }),
+      ),
+    ),
+    toolsRemoved: Type.Optional(Type.Array(Type.Object({ name: Type.String() }))),
   }),
   Type.Object({
     role: Type.Literal('user'),
@@ -75,11 +85,6 @@ const message = Type.Union([
     durationMs: Type.Optional(Type.Number()),
   }),
 ]);
-const envelope = Type.Object({
-  codecVersion: Type.Literal(1),
-  sdkVersion: Type.Literal('1.1.0'),
-  message,
-});
 const toolResult = Type.Object({
   role: Type.Literal('toolResult'),
   toolCallId: Type.String(),
@@ -91,15 +96,15 @@ const toolResult = Type.Object({
   structuredContent: Type.Optional(Type.Unknown()),
   usage: Type.Optional(usage),
 });
-const envelope2 = Type.Object({
-  codecVersion: Type.Literal(2),
+const envelope = Type.Object({
+  codecVersion: Type.Literal(1),
   sdkVersion: Type.Literal('1.1.0'),
   message: Type.Union([message, toolResult]),
 });
 
 /** Preserve final provider-native fields privately; this is not a client DTO. */
 export function encodeContextMessage(input: Message): string {
-  const serialized = JSON.stringify({ codecVersion: 2, sdkVersion: '1.1.0', message: input });
+  const serialized = JSON.stringify({ codecVersion: 1, sdkVersion: '1.1.0', message: input });
   decodeContextMessage(serialized);
   return serialized;
 }
@@ -112,7 +117,7 @@ export function decodeContextMessage(serialized: string): Message {
   } catch (cause) {
     throw new RuntimeError('CONTEXT_CORRUPT', 'Stored model context is not valid JSON', { cause });
   }
-  if (!Value.Check(envelope, input) && !Value.Check(envelope2, input)) {
+  if (!Value.Check(envelope, input)) {
     throw new RuntimeError('CONTEXT_CORRUPT', 'Stored model context has an unsupported format');
   }
   // JSON.parse guarantees JSON-only tool arguments; schema validates SDK-required fields.

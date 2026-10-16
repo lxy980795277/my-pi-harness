@@ -14,15 +14,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
-import {
-  HarnessEventSchema,
-  initialWorkState,
-  type HarnessEvent,
-  type MessageView,
-  type RunView,
-  type ToolCallRecord,
-} from '@my-pi-harness/protocol';
-import { Value } from 'typebox/value';
+import { initialWorkState, type MessageView, type RunView } from '@my-pi-harness/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   openProfileStore,
@@ -30,12 +22,10 @@ import {
   type EventInput,
   type ProfileStore,
 } from '../src/index.js';
+import { SessionBatchSchema, type SessionBatch } from '../src/session-jsonl.js';
+import { checked } from '../src/validation.js';
 
-vi.mock('node:fs', async (importOriginal) => {
-  const original = await importOriginal<typeof fs>();
-  return { ...original, fsyncSync: vi.fn(original.fsyncSync) };
-});
-
+vi.mock('node:fs', async (importOriginal) => ({ ...(await importOriginal<typeof fs>()) }));
 const fixtures: { directory: string; store: ProfileStore }[] = [];
 async function fixture() {
   const directory = await mkdtemp(join(tmpdir(), 'my-pi-session-log-'));
@@ -55,26 +45,20 @@ async function fixture() {
   });
   return value;
 }
-function logRoot(directory: string): string {
-  return join(fs.realpathSync(directory), '.my-pi-harness');
+function directory(profile: string): string {
+  const canonical = fs.realpathSync(profile);
+  return sessionLogDirectory(canonical, join(canonical, '.my-pi-harness'));
 }
-function logDirectory(directory: string, root = logRoot(directory)): string {
-  return sessionLogDirectory(fs.realpathSync(directory), root);
+function logPath(profile: string, id = 'session'): string {
+  return join(directory(profile), `${id}.jsonl`);
 }
-function logPath(directory: string, id = 'session'): string {
-  return join(logDirectory(directory), `${id}.jsonl`);
-}
-async function logged(directory: string, id = 'session'): Promise<HarnessEvent[]> {
-  const text = await readFile(logPath(directory, id), 'utf8');
+async function batches(profile: string): Promise<SessionBatch[]> {
+  const text = await readFile(logPath(profile), 'utf8');
   expect(text.endsWith('\n')).toBe(true);
   return text
     .trimEnd()
     .split('\n')
-    .map((line) => {
-      const value: unknown = JSON.parse(line);
-      if (!Value.Check(HarnessEventSchema, value)) throw new Error('Invalid public JSONL');
-      return value;
-    });
+    .map((line) => checked(SessionBatchSchema, JSON.parse(line)));
 }
 function event(
   type: string,
@@ -102,7 +86,6 @@ const user: MessageView = {
   runId: 'run',
   role: 'user',
   text: 'Question',
-  attachmentIds: ['attachment'],
   thinking: '',
   createdAt: 2,
   status: 'complete',
@@ -111,171 +94,62 @@ const user: MessageView = {
 function accept(): EventInput[] {
   return [
     event('run.accepted', { run, requestId: 'request' }, 'run', 'private-model-codec'),
-    event('message.started', user, 'run', 'private-image-base64'),
+    event('message.started', user, 'run', 'private-user-codec'),
   ];
 }
 afterEach(async () => {
   vi.restoreAllMocks();
-  for (const { directory, store } of fixtures.splice(0)) {
-    store.close();
-    await rm(directory, { recursive: true, force: true });
+  for (const value of fixtures.splice(0)) {
+    value.store.close();
+    await rm(value.directory, { recursive: true, force: true });
   }
 });
 
-describe('SQLite-owned session JSONL mirrors', () => {
-  it('mirrors stream, tools, queue, work, branches and archive in exact committed sequence without private codecs', async () => {
-    const { directory, store } = await fixture();
-    const attachmentBytes = Buffer.from('private-attachment-bytes').toString('base64');
-    store.putAttachment({
-      attachment: {
-        id: 'attachment',
-        name: 'image.png',
-        mediaType: 'image/png',
-        kind: 'image',
-        byteLength: 24,
-        preview: '',
-        sourcePath: null,
-        workspaceId: null,
-        createdAt: 1,
-      },
-      text: null,
-      imageData: attachmentBytes,
-    });
-    store.append('session', accept());
-    const assistant: MessageView = {
-      ...user,
-      id: 'assistant',
-      role: 'assistant',
-      text: '',
-      attachmentIds: [],
-      status: 'streaming',
-    };
-    store.append('session', [
-      event('message.started', assistant, 'run'),
-      event('message.delta', { messageId: assistant.id, text: 'Read files' }, 'run'),
-      event(
-        'message.completed',
-        {
-          message: { ...assistant, text: 'Read files', status: 'complete', stopReason: 'toolUse' },
-        },
-        'run',
-        'private-assistant-codec',
-      ),
-    ]);
-    const tool: ToolCallRecord = {
-      id: 'tool',
-      sessionId: 'session',
-      runId: 'run',
-      branchId: 'main',
-      name: 'read_file',
-      arguments: { path: 'notes.txt' },
-      status: 'running',
-      summary: 'Read file',
-      result: null,
-      diff: null,
-      createdAt: 2,
-      updatedAt: 2,
-    };
-    store.append('session', [
-      event('tool.requested', { tool }, 'run'),
-      event(
-        'tool.updated',
-        { tool: { ...tool, status: 'completed', result: 'Public result' } },
-        'run',
-      ),
-      event(
-        'tool.context',
-        { branchId: 'main', afterMessageId: 'assistant', toolCallId: 'tool' },
-        'run',
-        'private-tool-codec',
-      ),
-      event(
-        'queue.added',
-        {
-          id: 'queue',
-          sessionId: 'session',
-          text: 'Later',
-          mode: 'follow-up',
-          providerId: 'provider',
-          modelId: 'model',
-          createdAt: 2,
-          updatedAt: 2,
-          revision: 1,
-        },
-        'run',
-        JSON.stringify({ version: 1, requestId: 'queued' }),
-      ),
-      event(
-        'work.updated',
-        { state: { ...initialWorkState('main'), revision: 1, mode: 'plan' } },
-        'run',
-      ),
-      event('run.finished', { status: 'completed', finishedAt: 3, error: null }, 'run'),
-    ]);
-    store.append('session', [
-      event('branch.restored', {
-        branch: {
-          id: 'restored',
-          sessionId: 'session',
-          parentId: 'main',
-          forkMessageId: 'assistant',
-          createdAt: 4,
-        },
-        messageIds: ['user', 'assistant'],
-      }),
-      event('branch.selected', { branchId: 'restored' }),
-      event('session.deleted', {}),
-    ]);
-    const records = await logged(directory);
-    expect(records).toEqual(store.readEvents('session'));
-    expect(records.map(({ seq }) => seq)).toEqual(
-      Array.from({ length: records.length }, (_, index) => index + 1),
+describe('authoritative host session journals', () => {
+  it('persists one complete batch with private replay material while public APIs omit it', async () => {
+    const value = await fixture();
+    value.store.append('session', accept());
+    const logged = await batches(value.directory);
+    expect(logged).toHaveLength(2);
+    expect(logged[1]?.records).toHaveLength(2);
+    expect(logged[1]?.records[0]?.privateData).toBe('private-model-codec');
+    expect(logged.flatMap((batch) => batch.records.map((record) => record.event))).toEqual(
+      value.store.readEvents('session'),
     );
-    const text = await readFile(logPath(directory), 'utf8');
-    expect(text).not.toContain('private-');
-    expect(text).not.toContain('privateData');
-    expect(text).not.toContain(attachmentBytes);
-    expect(text).toContain('attachment');
-    expect(store.getSession('session')).toBeUndefined();
+    expect(JSON.stringify(value.store.readEvents('session'))).not.toContain('private-');
+    expect(JSON.stringify(value.store.getSnapshot('session'))).not.toContain('private-');
     if (process.platform !== 'win32') {
-      expect((await stat(logPath(directory))).mode & 0o777).toBe(0o600);
-      expect((await stat(logDirectory(directory))).mode & 0o777).toBe(0o700);
+      expect((await stat(logPath(value.directory))).mode & 0o777).toBe(0o600);
+      expect((await stat(directory(value.directory))).mode & 0o777).toBe(0o700);
     }
   });
 
-  it('reconciles multi-byte records crossing chunks and more than one SQLite event page', async () => {
+  it('validates the entire command before writing and deduplicates accepted requests', async () => {
     const value = await fixture();
-    value.store.append('session', [
-      event('audit.large', { text: '项目资料\n'.repeat(16_000) }),
-      ...Array.from({ length: 520 }, (_, index) => event('audit.row', { index })),
-    ]);
     const before = await readFile(logPath(value.directory), 'utf8');
-    value.store.close();
-    value.store = await openProfileStore(value.directory);
-    expect((await logged(value.directory)).map(({ seq }) => seq)).toEqual(
-      Array.from({ length: 522 }, (_, index) => index + 1),
-    );
-    expect(await readFile(logPath(value.directory), 'utf8')).toBe(before);
-    expect((await logged(value.directory))[1]?.data).toEqual({ text: '项目资料\n'.repeat(16_000) });
-  });
-
-  it('does not mirror a rolled-back batch or a failed nested Plan creation, and deduplicates accepted requests', async () => {
-    const { directory, store } = await fixture();
-    const initial = await readFile(logPath(directory), 'utf8');
     expect(() =>
-      store.append('session', [
+      value.store.append('session', [
         ...accept(),
         event('message.started', { ...user, id: 'bad', branchId: 'foreign' }, 'run'),
       ]),
     ).toThrow();
-    expect(await readFile(logPath(directory), 'utf8')).toBe(initial);
-    const database = new Database(join(directory, 'data.sqlite'));
+    expect(await readFile(logPath(value.directory), 'utf8')).toBe(before);
+    expect(value.store.findRequest('session', 'request')).toBeUndefined();
+    value.store.append('session', accept());
+    const accepted = await readFile(logPath(value.directory), 'utf8');
+    expect(value.store.append('session', accept())).toEqual([]);
+    expect(await readFile(logPath(value.directory), 'utf8')).toBe(accepted);
+  });
+
+  it('rolls back nested Plan creation without writing an initial partial session', async () => {
+    const value = await fixture();
+    const sql = new Database(join(value.directory, 'data.sqlite'));
     try {
-      database.exec(
+      sql.exec(
         "CREATE TRIGGER reject_work BEFORE INSERT ON work_states BEGIN SELECT RAISE(ABORT, 'reject mode'); END",
       );
       expect(() =>
-        store.createSession({
+        value.store.createSession({
           id: 'bad-plan',
           branchId: 'bad-main',
           title: 'Plan',
@@ -288,198 +162,214 @@ describe('SQLite-owned session JSONL mirrors', () => {
           at: 3,
         }),
       ).toThrow();
-      await expect(lstat(logPath(directory, 'bad-plan'))).rejects.toHaveProperty('code', 'ENOENT');
-      expect(store.getSession('bad-plan')).toBeUndefined();
+      await expect(lstat(logPath(value.directory, 'bad-plan'))).rejects.toHaveProperty(
+        'code',
+        'ENOENT',
+      );
+      expect(value.store.getSession('bad-plan')).toBeUndefined();
     } finally {
-      database.close();
+      sql.close();
     }
-    const inputs = accept();
-    store.append('session', inputs);
-    const before = await readFile(logPath(directory), 'utf8');
-    expect(store.append('session', inputs)).toEqual([]);
-    expect(await readFile(logPath(directory), 'utf8')).toBe(before);
   });
 
-  it('backfills missing logs including archived sessions and adds interruption facts without duplicates on restart', async () => {
+  it('rebuilds corrupted SQLite session projections and private codecs without changing configuration', async () => {
     const value = await fixture();
-    value.store.append('session', accept());
-    value.store.createSession({
-      id: 'archived',
-      branchId: 'archived-main',
-      title: 'Archived',
-      providerId: 'provider',
-      modelId: 'model',
-      thinkingLevel: 'off',
-      workspaceId: null,
-      approvalMode: 'ask',
-      at: 4,
+    value.store.putSettings({
+      expectedRevision: 1,
+      defaultModel: { providerId: 'provider', modelId: 'model', thinkingLevel: 'off' },
     });
-    value.store.append('archived', [event('session.deleted', {})]);
+    value.store.append('session', [
+      ...accept(),
+      event('run.finished', { status: 'completed', finishedAt: 3, error: null }, 'run'),
+    ]);
+    const events = value.store.readEvents('session');
     value.store.close();
-    await rm(logRoot(value.directory), { recursive: true });
+    const sql = new Database(join(value.directory, 'data.sqlite'));
+    try {
+      sql.prepare('UPDATE messages SET data = ?, private_data = ?').run('{}', 'forged-codec');
+      sql.prepare('UPDATE sessions SET snapshot_seq = 999, data = ?').run('{}');
+      sql.prepare('DELETE FROM events').run();
+    } finally {
+      sql.close();
+    }
     value.store = await openProfileStore(value.directory);
-    expect(await logged(value.directory)).toEqual(value.store.readEvents('session'));
-    expect((await logged(value.directory)).at(-1)).toMatchObject({
-      type: 'run.finished',
-      data: { status: 'interrupted' },
-    });
-    expect(await logged(value.directory, 'archived')).toEqual(value.store.readEvents('archived'));
-    const before = await readFile(logPath(value.directory), 'utf8');
-    value.store.close();
-    value.store = await openProfileStore(value.directory);
-    expect(await readFile(logPath(value.directory), 'utf8')).toBe(before);
+    expect(value.store.readEvents('session')).toEqual(events);
+    expect(value.store.getModelContext('session', 'main')).toEqual(['private-user-codec']);
+    expect(value.store.getSettings().revision).toBe(2);
+    expect(value.store.getSnapshot('session').messages[0]?.text).toBe('Question');
   });
 
-  it.each(['recovery-fsync', 'damaged-work-projection'])(
-    'closes owned directory descriptors when startup %s fails',
-    async (fault) => {
-      const value = await fixture();
-      const state = {
-        ...initialWorkState('main'),
-        revision: 1,
-        questions: [
-          {
-            id: 'question',
-            runId: 'run',
-            branchId: 'main',
-            toolCallId: 'call',
-            prompt: 'Continue?',
-            options: [],
-            status: 'pending' as const,
-            answer: null,
-            createdAt: 2,
-          },
-        ],
-      };
-      value.store.append('session', [...accept(), event('work.updated', { state }, 'run')]);
-      value.store.close();
-      const database = new Database(join(value.directory, 'data.sqlite'));
-      if (fault === 'damaged-work-projection')
-        database
-          .prepare('UPDATE work_states SET data = ?')
-          .run(JSON.stringify({ ...state, revision: 99 }));
-      database.close();
-      const openedDirectories: number[] = [];
-      const actual = await vi.importActual<typeof fs>('node:fs');
-      const originalOpen = actual.openSync;
-      const originalFsync = actual.fsyncSync;
-      const opening = vi.spyOn(fs, 'openSync').mockImplementation((path, flags, mode) => {
-        const fd = originalOpen(path, flags, mode);
-        if (fs.fstatSync(fd).isDirectory()) openedDirectories.push(fd);
-        return fd;
-      });
-      const syncing = vi.spyOn(fs, 'fsyncSync').mockImplementation((fd) => {
-        if (fault === 'recovery-fsync' && fs.fstatSync(fd).isFile())
-          throw new Error('Fixture recovery log synchronization failure');
-        return originalFsync(fd);
-      });
-      try {
-        await expect(openProfileStore(value.directory)).rejects.toMatchObject({
-          code: fault === 'recovery-fsync' ? 'SESSION_LOG_UNAVAILABLE' : 'INVALID_RECORD',
-        });
-        if (process.platform !== 'win32') expect(openedDirectories).toHaveLength(4);
-        for (const fd of openedDirectories)
-          expect(() => fs.fstatSync(fd)).toThrow(expect.objectContaining({ code: 'EBADF' }));
-      } finally {
-        syncing.mockRestore();
-        opening.mockRestore();
-      }
-      if (fault === 'damaged-work-projection') {
-        const repair = new Database(join(value.directory, 'data.sqlite'));
-        try {
-          repair.prepare('UPDATE work_states SET data = ?').run(JSON.stringify(state));
-        } finally {
-          repair.close();
-        }
-      }
-      value.store = await openProfileStore(value.directory);
-      expect(value.store.getSnapshot('session').session.activeRunId).toBeNull();
-      expect(await logged(value.directory)).toEqual(value.store.readEvents('session'));
-    },
-  );
-
-  it.each(['fragment', 'missing-newline'])(
-    'repairs a crash tail (%s) from SQLite without duplicating complete events',
-    async (tail) => {
-      const value = await fixture();
-      value.store.append('session', [event('audit.saved', { public: true })]);
-      const records = value.store.readEvents('session');
-      value.store.close();
-      const text =
-        tail === 'fragment'
-          ? `${JSON.stringify(records[0])}\n{"version":1,"eventId":"cut`
-          : `${JSON.stringify(records[0])}\n${JSON.stringify(records[1])}`;
-      await writeFile(logPath(value.directory), text, { mode: 0o600 });
-      value.store = await openProfileStore(value.directory);
-      expect(await logged(value.directory)).toEqual(records);
-    },
-  );
-
-  it.each(['changed-record', 'extra-complete-tail', 'invalid-complete-line'])(
-    'rejects %s without silently rewriting public history',
-    async (kind) => {
-      const value = await fixture();
-      const record = value.store.readEvents('session')[0];
-      value.store.close();
-      let content = `${JSON.stringify({ ...record, type: 'forged' })}\n`;
-      if (kind === 'extra-complete-tail')
-        content = `${JSON.stringify(record)}\n${JSON.stringify(record)}`;
-      if (kind === 'invalid-complete-line') content = '{not json}\n';
-      await writeFile(logPath(value.directory), content, { mode: 0o600 });
-      await expect(openProfileStore(value.directory)).rejects.toMatchObject({
-        code: 'SESSION_LOG_INVALID',
-      });
-      expect(await readFile(logPath(value.directory), 'utf8')).toBe(content);
-      await rm(logPath(value.directory));
-      value.store = await openProfileStore(value.directory);
-      expect(await logged(value.directory)).toEqual(value.store.readEvents('session'));
-    },
-  );
-
-  it('preserves committed SQLite facts after a file failure, rejects more writes and repairs them after restart', async () => {
+  it('recovers a durable journal after SQLite commit fails, and freezes writes until restart', async () => {
     const value = await fixture();
-    await rm(logPath(value.directory));
-    await mkdir(logPath(value.directory));
-    expect(() => value.store.append('session', accept())).toThrow('SQLite changes are committed');
-    expect(value.store.findRequest('session', 'request')).toEqual({ runId: 'run', inputId: null });
-    expect(value.store.getSnapshot('session').messages[0]?.attachmentIds).toEqual(['attachment']);
-    expect(value.store.readEvents('session')).toHaveLength(3);
+    // A deferred constraint is activated by a test-owned SQL trigger inside the event transaction.
+    const control = new Database(join(value.directory, 'data.sqlite'));
+    try {
+      control.exec(`CREATE TABLE deferred_parent(id TEXT PRIMARY KEY);
+        CREATE TABLE deferred_child(id TEXT REFERENCES deferred_parent(id) DEFERRABLE INITIALLY DEFERRED);
+        CREATE TRIGGER fail_commit AFTER INSERT ON events WHEN NEW.type = 'audit.commit-failure'
+        BEGIN INSERT INTO deferred_child(id) VALUES ('missing'); END;`);
+    } finally {
+      control.close();
+    }
+    expect(() =>
+      value.store.append('session', [event('audit.commit-failure', { committed: true })]),
+    ).toThrow('journal is committed');
+    expect(value.store.readEvents('session')).toHaveLength(1);
+    expect(await batches(value.directory)).toHaveLength(2);
     expect(() => value.store.append('session', [event('audit.retry', {})])).toThrow(
       'Restart before retrying',
     );
-    expect(value.store.readEvents('session')).toHaveLength(3);
     value.store.close();
-    await rm(logPath(value.directory), { recursive: true });
+    const repair = new Database(join(value.directory, 'data.sqlite'));
+    repair.exec('DROP TRIGGER fail_commit');
+    repair.close();
     value.store = await openProfileStore(value.directory);
-    expect(await logged(value.directory)).toEqual(value.store.readEvents('session'));
-    const recovered = await readFile(logPath(value.directory), 'utf8');
-    expect(value.store.append('session', accept())).toEqual([]);
-    expect(await readFile(logPath(value.directory), 'utf8')).toBe(recovered);
+    expect(value.store.readEvents('session').at(-1)?.type).toBe('audit.commit-failure');
   });
 
-  it('does not repeat committed events when fsync fails after the bytes were written', async () => {
+  it('freezes writes after uncertain fsync; restart replays the complete written batch once', async () => {
     const value = await fixture();
     const failure = vi.spyOn(fs, 'fsyncSync').mockImplementationOnce(() => {
-      throw new Error('Fixture disk synchronization failure');
+      throw new Error('Fixture fsync failure');
     });
     try {
       expect(() =>
         value.store.append('session', [event('audit.saved', { committed: true })]),
-      ).toThrow('SQLite changes are committed');
-      expect(value.store.getSnapshot('session').snapshotSeq).toBe(2);
-      expect(value.store.readEvents('session')).toHaveLength(2);
+      ).toThrow('commit outcome may be unknown');
+      expect(value.store.readEvents('session')).toHaveLength(1);
+      expect(() => value.store.append('session', [event('audit.retry', {})])).toThrow(
+        'Restart before retrying',
+      );
     } finally {
       failure.mockRestore();
     }
     const written = await readFile(logPath(value.directory), 'utf8');
     value.store.close();
     value.store = await openProfileStore(value.directory);
-    expect(await logged(value.directory)).toEqual(value.store.readEvents('session'));
+    expect(value.store.readEvents('session')).toHaveLength(2);
     expect(await readFile(logPath(value.directory), 'utf8')).toBe(written);
   });
 
+  it.each(['fragment', 'missing-newline'])(
+    'repairs only an incomplete final batch or its missing newline (%s)',
+    async (kind) => {
+      const value = await fixture();
+      value.store.append('session', [event('audit.one', {}), event('audit.two', {})]);
+      const full = await readFile(logPath(value.directory), 'utf8');
+      value.store.close();
+      await writeFile(
+        logPath(value.directory),
+        kind === 'fragment' ? `${full}{"version":1,"records":[` : full.trimEnd(),
+      );
+      value.store = await openProfileStore(value.directory);
+      expect(value.store.readEvents('session')).toHaveLength(3);
+      expect(await readFile(logPath(value.directory), 'utf8')).toBe(full);
+    },
+  );
+
+  it.each(['changed-record', 'duplicate-batch', 'invalid-line', 'unknown-version'])(
+    'rejects %s without rewriting journal history',
+    async (kind) => {
+      const value = await fixture();
+      const full = await readFile(logPath(value.directory), 'utf8');
+      value.store.close();
+      let damaged = full.replace('Logs', 'forged');
+      if (kind === 'duplicate-batch') damaged = full + full;
+      if (kind === 'invalid-line') damaged = '{not json}\n';
+      if (kind === 'unknown-version') damaged = full.replace('"version":1', '"version":99');
+      await writeFile(logPath(value.directory), damaged);
+      await expect(openProfileStore(value.directory)).rejects.toMatchObject({
+        code: 'SESSION_LOG_INVALID',
+      });
+      expect(await readFile(logPath(value.directory), 'utf8')).toBe(damaged);
+    },
+  );
+
+  it('rejects a missing authoritative journal instead of recreating facts from SQLite', async () => {
+    const value = await fixture();
+    value.store.close();
+    await rm(logPath(value.directory));
+    await expect(openProfileStore(value.directory)).rejects.toThrow(
+      'authoritative session journal is missing',
+    );
+  });
+
+  it('replays records spanning read chunks and interrupts active runs once', async () => {
+    const value = await fixture();
+    value.store.append('session', [
+      ...accept(),
+      event('audit.large', { text: '项目资料\n'.repeat(16000) }, 'run'),
+    ]);
+    value.store.close();
+    value.store = await openProfileStore(value.directory);
+    expect(value.store.getSnapshot('session').runs[0]?.status).toBe('interrupted');
+    const before = await readFile(logPath(value.directory), 'utf8');
+    value.store.close();
+    value.store = await openProfileStore(value.directory);
+    expect(await readFile(logPath(value.directory), 'utf8')).toBe(before);
+    expect(value.store.recoverInterrupted()).toEqual([]);
+  });
+
+  it('interrupts pending question and plan review in the same recovery command', async () => {
+    const value = await fixture();
+    value.store.append('session', [
+      ...accept(),
+      event(
+        'work.updated',
+        {
+          state: {
+            ...initialWorkState('main'),
+            revision: 1,
+            plan: {
+              id: 'plan',
+              runId: 'run',
+              title: 'Plan',
+              content: 'Do work',
+              steps: [],
+              status: 'draft',
+              review: 'pending',
+              feedback: null,
+              updatedAt: 2,
+            },
+            questions: [
+              {
+                id: 'question',
+                runId: 'run',
+                branchId: 'main',
+                toolCallId: 'call',
+                questions: [
+                  {
+                    id: 'q1',
+                    header: 'Continue',
+                    prompt: 'Continue?',
+                    options: [],
+                    multiSelect: false,
+                    allowCustomInput: true,
+                  },
+                ],
+                status: 'pending',
+                answers: null,
+                createdAt: 2,
+              },
+            ],
+          },
+        },
+        'run',
+      ),
+    ]);
+    value.store.close();
+    value.store = await openProfileStore(value.directory);
+    expect(value.store.getWorkState('session')).toMatchObject({
+      plan: { review: 'interrupted' },
+      questions: [{ status: 'interrupted' }],
+    });
+    expect(
+      (await batches(value.directory)).at(-1)?.records.map((record) => record.event.type),
+    ).toEqual(['work.updated', 'run.finished']);
+  });
+
   it.each(['directory-symlink', 'file-symlink', 'file-hardlink', 'directory-replaced'])(
-    'rejects %s before writing into an unowned target',
+    'rejects %s before committing SQL or modifying an unowned target',
     async (kind) => {
       const value = await fixture();
       const other = join(value.directory, 'other');
@@ -487,29 +377,29 @@ describe('SQLite-owned session JSONL mirrors', () => {
       const sentinel = join(other, 'sentinel');
       await writeFile(sentinel, 'keep');
       if (kind === 'directory-symlink' || kind === 'directory-replaced') {
-        await rename(logDirectory(value.directory), join(value.directory, 'original-sessions'));
-        if (kind === 'directory-symlink') await symlink(other, logDirectory(value.directory));
-        else await mkdir(logDirectory(value.directory));
+        await rename(directory(value.directory), join(value.directory, 'original-sessions'));
+        if (kind === 'directory-symlink') await symlink(other, directory(value.directory));
+        else await mkdir(directory(value.directory));
       } else {
         await rm(logPath(value.directory));
         if (kind === 'file-symlink') await symlink(sentinel, logPath(value.directory));
         else await link(sentinel, logPath(value.directory));
       }
       expect(() => value.store.append('session', [event('audit.new', {})])).toThrow(
-        'SQLite changes are committed',
+        'commit outcome may be unknown',
       );
       expect(await readFile(sentinel, 'utf8')).toBe('keep');
-      expect(value.store.readEvents('session')).toHaveLength(2);
+      expect(value.store.readEvents('session')).toHaveLength(1);
     },
   );
 
-  it('rejects path traversal IDs before creating any SQLite session or log file', async () => {
-    const { directory, store } = await fixture();
+  it('rejects path traversal before creating SQL projections or files', async () => {
+    const value = await fixture();
     expect(() =>
-      store.createSession({
+      value.store.createSession({
         id: '../escape',
-        branchId: 'escape-main',
-        title: 'Unsafe',
+        branchId: 'bad',
+        title: 'Bad',
         providerId: 'provider',
         modelId: 'model',
         thinkingLevel: 'off',
@@ -518,7 +408,6 @@ describe('SQLite-owned session JSONL mirrors', () => {
         at: 2,
       }),
     ).toThrow('filename');
-    expect(store.listSessions()).toHaveLength(1);
-    await expect(lstat(join(directory, 'escape.jsonl'))).rejects.toHaveProperty('code', 'ENOENT');
+    expect(value.store.listSessions()).toHaveLength(1);
   });
 });

@@ -1,4 +1,4 @@
-/** Frozen after release; future formats append another numbered migration. */
+/** Fresh development schema; session tables are rebuildable JSONL projections. */
 export const FOUNDATION_SQL = `
 CREATE TABLE provider_configs (
   id TEXT PRIMARY KEY NOT NULL,
@@ -10,6 +10,7 @@ CREATE TABLE sessions (
   snapshot_seq INTEGER NOT NULL DEFAULT 0,
   active_run_id TEXT,
   archived INTEGER NOT NULL DEFAULT 0,
+  workspace_id TEXT,
   data TEXT NOT NULL
 );
 CREATE TABLE provider_versions (
@@ -71,16 +72,69 @@ CREATE INDEX events_session_seq ON events(session_id, seq);
 CREATE INDEX runs_session ON runs(session_id);
 CREATE INDEX branches_session ON branches(session_id);
 CREATE INDEX queue_session ON queued_inputs(session_id);
-CREATE TRIGGER events_immutable_update BEFORE UPDATE ON events BEGIN
-  SELECT RAISE(ABORT, 'events are immutable');
-END;
-CREATE TRIGGER events_immutable_delete BEFORE DELETE ON events BEGIN
-  SELECT RAISE(ABORT, 'events are immutable');
-END;
 CREATE TRIGGER provider_versions_immutable_update BEFORE UPDATE ON provider_versions BEGIN
   SELECT RAISE(ABORT, 'provider versions are immutable');
 END;
 CREATE TRIGGER provider_versions_immutable_delete BEFORE DELETE ON provider_versions BEGIN
   SELECT RAISE(ABORT, 'provider versions are immutable');
 END;
+
+CREATE TABLE builtin_provider_slots (
+  builtin_id TEXT PRIMARY KEY NOT NULL,
+  provider_id TEXT NOT NULL UNIQUE REFERENCES provider_configs(id)
+);
+CREATE TABLE app_settings (
+  id INTEGER PRIMARY KEY NOT NULL CHECK (id = 1),
+  revision INTEGER NOT NULL,
+  data TEXT NOT NULL
+);
+INSERT INTO app_settings(id, revision, data) VALUES
+  (1, 1, '{"revision":1,"defaultModel":null}');
+
+CREATE TABLE workspaces (
+  id TEXT PRIMARY KEY NOT NULL,
+  root_path TEXT NOT NULL,
+  archived INTEGER NOT NULL DEFAULT 0,
+  data TEXT NOT NULL
+);
+CREATE UNIQUE INDEX workspaces_active_root ON workspaces(root_path) WHERE archived = 0;
+CREATE INDEX sessions_workspace ON sessions(workspace_id, archived);
+CREATE TABLE tool_calls (
+  id TEXT PRIMARY KEY NOT NULL,
+  session_id TEXT NOT NULL REFERENCES sessions(id),
+  branch_id TEXT NOT NULL REFERENCES branches(id),
+  run_id TEXT NOT NULL REFERENCES runs(id),
+  anchor_message_id TEXT NOT NULL REFERENCES messages(id),
+  data TEXT NOT NULL
+);
+CREATE INDEX tool_calls_session ON tool_calls(session_id, branch_id);
+CREATE TABLE tool_contexts (
+  tool_call_id TEXT PRIMARY KEY NOT NULL REFERENCES tool_calls(id),
+  session_id TEXT NOT NULL REFERENCES sessions(id),
+  run_id TEXT NOT NULL REFERENCES runs(id),
+  after_message_id TEXT NOT NULL REFERENCES messages(id),
+  seq INTEGER NOT NULL,
+  private_data TEXT NOT NULL
+);
+CREATE INDEX tool_contexts_anchor ON tool_contexts(after_message_id, seq);
+
+CREATE TABLE work_states (
+  session_id TEXT NOT NULL REFERENCES sessions(id),
+  branch_id TEXT NOT NULL REFERENCES branches(id),
+  revision INTEGER NOT NULL CHECK(revision > 0),
+  data TEXT NOT NULL,
+  PRIMARY KEY(session_id, branch_id)
+);
+CREATE TABLE attachments (
+  id TEXT PRIMARY KEY NOT NULL,
+  data TEXT NOT NULL
+);
+CREATE TABLE checkpoints (
+  id TEXT PRIMARY KEY NOT NULL,
+  session_id TEXT NOT NULL REFERENCES sessions(id),
+  branch_id TEXT NOT NULL REFERENCES branches(id),
+  created_at INTEGER NOT NULL,
+  data TEXT NOT NULL
+);
+CREATE INDEX checkpoints_session_order ON checkpoints(session_id, created_at, id);
 `;

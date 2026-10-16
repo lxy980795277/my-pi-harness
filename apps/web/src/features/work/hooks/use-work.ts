@@ -1,9 +1,15 @@
-import type { WorkView } from '@/features/work/types/work-view';
-import type { SessionSnapshot, WorkPatch, WorkSnapshot } from '@my-pi-harness/protocol';
+import type { WorkView } from '@/features/work/types/work';
+import type {
+  QuestionResponse,
+  SessionSnapshot,
+  WorkPatch,
+  WorkSnapshot,
+} from '@my-pi-harness/protocol';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
 import { answerQuestion, commandWork, fetchWork, patchWork } from '@/features/work/services/work';
 import { retainWorkSnapshot } from '@/features/work/utils/work-view';
+import { useAsyncEvent } from '@/hooks/use-async-event';
 import { useRequestTask } from '@/hooks/use-request-task';
 
 /** Branch-scoped Query owns work facts; active-run polling also recovers question events after reconnect. */
@@ -55,15 +61,21 @@ export const useWork = (session: SessionSnapshot): WorkView => {
     [execute, id],
   );
   const answer = useCallback(
-    async (questionId: string, value: string | null): Promise<void> => {
+    async (questionId: string, value: QuestionResponse[] | null): Promise<void> => {
       return execute((signal) => {
         return answerQuestion(id, questionId, value, signal);
       });
     },
     [execute, id],
   );
+  const { run: refresh } = useAsyncEvent(
+    useCallback(async (): Promise<void> => {
+      await client.invalidateQueries({ queryKey: ['work', id, branchId] });
+    }, [branchId, client, id]),
+  );
   const show = useCallback((): void => {
     setOpen(true);
-  }, []);
+    refresh();
+  }, [refresh]);
   return { query, running, open, setOpen, tab, setTab, show, patch, command, answer };
 };

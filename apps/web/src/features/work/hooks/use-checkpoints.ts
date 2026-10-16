@@ -1,6 +1,6 @@
-import type { CheckpointView } from '@/features/work/types/work-view';
-import type { Checkpoint, SessionSnapshot, WorkSnapshot } from '@my-pi-harness/protocol';
-import { useCallback, useState, type ChangeEvent, type FormEvent } from 'react';
+import type { CheckpointAction, CheckpointView, ComparisonState } from '@/features/work/types/work';
+import type { SessionSnapshot, WorkSnapshot } from '@my-pi-harness/protocol';
+import { useCallback, useState, type ChangeEvent, type SubmitEvent } from 'react';
 import { useAsyncEvent } from '@/hooks/use-async-event';
 import { checkpointOptions, compareWork } from '@/features/work/utils/work-view';
 
@@ -13,7 +13,7 @@ export const useCheckpoints = (
   const [label, setLabel] = useState('');
   const [leftId, setLeftId] = useState('current');
   const [rightId, setRightId] = useState('current');
-  const [confirmation, setConfirmation] = useState<'reset' | 'restore' | null>(null);
+  const [confirmation, setConfirmation] = useState<CheckpointAction | null>(null);
   const action = useAsyncEvent(
     useCallback(
       async (_signal: AbortSignal, name: string, input: unknown): Promise<void> => {
@@ -29,7 +29,7 @@ export const useCheckpoints = (
     setLabel(event.target.value);
   }, []);
   const create = useCallback(
-    (event: FormEvent<HTMLFormElement>): void => {
+    (event: SubmitEvent<HTMLFormElement>): void => {
       event.preventDefault();
       if (label.trim()) {
         run('checkpoints', { expectedBranchId: work.state.branchId, label: label.trim() });
@@ -37,8 +37,11 @@ export const useCheckpoints = (
     },
     [label, run, work.state.branchId],
   );
-  const openReset = useCallback((): void => {
-    setConfirmation('reset');
+  const openResetTasks = useCallback((): void => {
+    setConfirmation('reset-tasks');
+  }, []);
+  const openResetContext = useCallback((): void => {
+    setConfirmation('reset-context');
   }, []);
   const openRestore = useCallback((): void => {
     setConfirmation('restore');
@@ -49,8 +52,8 @@ export const useCheckpoints = (
     }
   }, []);
   const confirm = useCallback((): void => {
-    if (confirmation === 'reset') {
-      run('reset', { expectedBranchId: work.state.branchId, revision: work.state.revision });
+    if (confirmation === 'reset-tasks' || confirmation === 'reset-context') {
+      run(confirmation, { expectedBranchId: work.state.branchId, revision: work.state.revision });
     }
     if (confirmation === 'restore' && rightId !== 'current') {
       run(`checkpoints/${encodeURIComponent(rightId)}/restore`, {
@@ -65,7 +68,7 @@ export const useCheckpoints = (
       return message.id;
     }),
   };
-  const resolve = (id: string): typeof current | Checkpoint => {
+  const resolve = (id: string): ComparisonState => {
     const checkpoint = work.checkpoints.find((entry) => {
       return entry.id === id;
     });
@@ -75,12 +78,16 @@ export const useCheckpoints = (
     return current;
   };
   const differences = compareWork(resolve(leftId), resolve(rightId));
-  let confirmTitle = '重置工作状态';
-  let confirmDescription =
-    '将清理当前上下文选择、摘要、计划、任务和未消费队列，保留会话历史。磁盘文件、Shell 和外部请求不会回滚。';
+  let confirmTitle = '重置任务状态';
+  let confirmDescription = '将清理计划和任务，保留上下文摘要及会话历史。';
   let confirmLabel = '确认重置';
+  if (confirmation === 'reset-context') {
+    confirmTitle = '重新开始上下文';
+    confirmDescription =
+      '将从下一条消息重新开始上下文，保留计划、任务和历史记录。此操作不回滚文件或命令。';
+  }
   if (confirmation === 'restore') {
-    confirmTitle = '恢复检查点';
+    confirmTitle = '恢复会话快照';
     confirmDescription =
       '将在新分支恢复所选消息前缀和工作状态，保留原分支历史。不会自动执行队列，也不会回滚磁盘文件、Shell 和外部请求。';
     confirmLabel = '创建分支并恢复';
@@ -96,7 +103,8 @@ export const useCheckpoints = (
     options: checkpointOptions(work.checkpoints),
     differences,
     action,
-    openReset,
+    openResetTasks,
+    openResetContext,
     openRestore,
     confirmation,
     changeConfirmation,

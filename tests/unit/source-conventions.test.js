@@ -49,6 +49,26 @@ describe('source file conventions', () => {
     await expect(checkSourceConventions(root)).resolves.toBe(7);
   });
 
+  it.each([
+    'apps/web/src/features/workspaces/types/workspace-view.ts',
+    'apps/web/src/types/work/question-view.ts',
+    'packages/agent-runtime/src/types/context-view.ts',
+  ])('rejects redundant view suffixes in type modules at %s', async (path) => {
+    const root = await fixture({ [path]: 'export type Workspace = { id: string };' });
+    await expect(checkSourceConventions(root)).rejects.toThrow(
+      'types 文件使用领域名，不添加冗余 -view 后缀',
+    );
+  });
+
+  it('allows domain type names and view helpers outside type directories', async () => {
+    const root = await fixture({
+      'apps/web/src/features/workspaces/types/workspace.ts':
+        'export type Workspace = { id: string };',
+      'apps/web/src/features/work/utils/work-view.ts': 'export const value = 1;',
+    });
+    await expect(checkSourceConventions(root)).resolves.toBe(2);
+  });
+
   it('allows 1000 physical lines with a final newline', async () => {
     const root = await fixture({ 'apps/daemon/src/service.ts': '// line\n'.repeat(1_000) });
     await expect(checkSourceConventions(root)).resolves.toBe(1);

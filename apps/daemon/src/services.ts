@@ -14,6 +14,7 @@ import {
   type ProfileStore,
 } from '@my-pi-harness/storage';
 import type { DaemonConfig } from './config.js';
+import type { Question } from '@my-pi-harness/protocol';
 import { LocalAuth } from './features/auth/local-auth.js';
 import { GitHubAuth } from './features/auth/github-auth.js';
 import { WorkspaceService } from './features/workspaces/service.js';
@@ -96,9 +97,7 @@ export async function createApplicationServices(
             projectInstructions: state.rules.map(({ path, content }) => ({ path, content })),
             savedPlan: state.plan,
             savedSummary: state.compaction?.summary ?? null,
-            answeredQuestions: state.questions
-              .filter((question) => question.status === 'answered')
-              .map(({ prompt, answer }) => ({ prompt, answer })),
+            answeredQuestions: answeredQuestions(state.questions),
           };
         },
       }),
@@ -174,4 +173,20 @@ export async function createApplicationServices(
     }
     throw error;
   }
+}
+
+function answeredQuestions(questions: readonly Question[]) {
+  return questions
+    .filter((question) => question.status === 'answered')
+    .flatMap((request) =>
+      request.questions.map((question) => {
+        const response = request.answers?.find((answer) => answer.questionId === question.id);
+        if (response === undefined) return { prompt: question.prompt, answer: '' };
+        const parts = question.options
+          .filter((option) => response.optionIds.includes(option.id))
+          .map((option) => option.label);
+        if (response.text) parts.push(response.text);
+        return { prompt: question.prompt, answer: parts.filter(Boolean).join('；') };
+      }),
+    );
 }

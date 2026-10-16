@@ -7,7 +7,7 @@ import {
   AttachmentComposer,
   type AttachmentComposerProps,
 } from '@/features/attachments/components/attachment-composer';
-import type { ComposerChoices } from '@/features/sessions/types/composer-view';
+import type { ComposerChoices } from '@/features/sessions/types/composer';
 import { WORK_MODE_OPTIONS } from '@/features/work/utils/work-view';
 import { ApprovalSelect } from '@/features/sessions/components/approval-select';
 

@@ -1,11 +1,12 @@
-import type { AttachmentComposerState } from '@/features/attachments/types/attachment-view';
-import { useCallback, useRef, useState, type ChangeEvent } from 'react';
+import type { AttachmentComposerState } from '@/features/attachments/types/attachment';
+import { useCallback, useRef, useState, type ChangeEvent, type ClipboardEvent } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { uploadAttachment } from '@/features/attachments/services/attachments';
 import {
   useAttachmentDrafts,
   EMPTY_ATTACHMENTS,
 } from '@/features/attachments/stores/attachment-drafts';
+import { clipboardImages } from '@/features/attachments/utils/clipboard-images';
 import { fileToUpload } from '@/features/attachments/utils/attachment-upload';
 import { useAsyncEvent } from '@/hooks/use-async-event';
 
@@ -60,13 +61,30 @@ export const useAttachmentComposer = (
   }, []);
   const changeFiles = useCallback(
     (event: ChangeEvent<HTMLInputElement>): void => {
-      const files = Array.from(event.target.files ?? []);
+      const selectedFiles = event.target.files;
+      if (selectedFiles === null) {
+        return;
+      }
+      const files = Array.from(selectedFiles);
       event.target.value = '';
       if (files.length > 0) {
         run(files);
       }
     },
     [run],
+  );
+  const paste = useCallback(
+    (event: ClipboardEvent<HTMLTextAreaElement>): void => {
+      if (locked || upload.pending) {
+        return;
+      }
+      const files = clipboardImages(event.clipboardData.items);
+      if (files.length > 0) {
+        event.preventDefault();
+        run(files);
+      }
+    },
+    [locked, run, upload.pending],
   );
   const remove = useCallback(
     (id: string): void => {
@@ -82,6 +100,7 @@ export const useAttachmentComposer = (
     setOpen,
     choose,
     changeFiles,
+    paste,
     remove,
     upload,
   };

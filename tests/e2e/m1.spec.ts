@@ -137,16 +137,22 @@ test('新对话与已有对话回车发送，换行和输入法确认不误发',
       await draft.dispatchEvent('keydown', {
         key: 'Enter',
         code: 'Enter',
-        keyCode: 13,
         isComposing: true,
       });
       await expect(draft).toHaveValue(text);
       expect(inputRequests).toHaveLength(before);
-      await draft.dispatchEvent('keydown', {
-        key: 'Enter',
-        code: 'Enter',
-        keyCode: 229,
-        isComposing: false,
+      await draft.dispatchEvent('compositionstart', { data: '拼音' });
+      await draft.dispatchEvent('keydown', { key: 'Enter', code: 'Enter', isComposing: false });
+      await draft.evaluate((element): void => {
+        element.dispatchEvent(
+          new CompositionEvent('compositionend', { bubbles: true, data: '输入' }),
+        );
+        element.dispatchEvent(
+          new KeyboardEvent('keydown', { bubbles: true, key: 'Enter', code: 'Enter' }),
+        );
+        element.dispatchEvent(
+          new KeyboardEvent('keyup', { bubbles: true, key: 'Enter', code: 'Enter' }),
+        );
       });
       await expect(draft).toHaveValue(text);
       expect(inputRequests).toHaveLength(before);

@@ -1,9 +1,10 @@
+import type { NoticeTone } from '@/components/ui/notice/types';
 import type { FC, PropsWithChildren } from 'react';
 
 import { cn } from '@/utils/cn';
 
 interface NoticeProps extends PropsWithChildren {
-  tone?: 'info' | 'error' | 'success';
+  tone?: NoticeTone;
 }
 
 const TONE_CLASSES = {

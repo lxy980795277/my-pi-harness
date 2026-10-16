@@ -1,6 +1,7 @@
 import type {
   AttachmentContent,
   Checkpoint,
+  Compaction,
   SessionSnapshot,
   WorkState,
   Workspace,
@@ -12,6 +13,7 @@ import type { ModelGateway } from './model-gateway.js';
 export interface WorkStore extends RuntimeStore {
   getWorkState(sessionId: string, branchId?: string): WorkState;
   listCheckpoints(sessionId: string): Checkpoint[];
+  listCompactions(sessionId: string, branchId?: string): Compaction[];
   getAttachment(id: string): AttachmentContent | undefined;
 }
 

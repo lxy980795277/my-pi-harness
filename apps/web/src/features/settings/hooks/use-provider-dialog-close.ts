@@ -1,4 +1,4 @@
-import type { ProviderDialogCloseState } from '@/features/settings/types/settings-view';
+import type { ProviderDialogCloseState } from '@/features/settings/types/settings';
 import { useCallback } from 'react';
 import { useSettingsDialog } from '@/features/settings/hooks/use-settings-dialog';
 

@@ -45,6 +45,7 @@ function expectTypedConfig(config, path) {
   expect(config.languageOptions.parserOptions.tsconfigRootDir, path).toBe(root);
   expect(severity(config.rules['@typescript-eslint/no-floating-promises']), path).toBe(2);
   expect(severity(config.rules['@typescript-eslint/no-misused-promises']), path).toBe(2);
+  expect(severity(config.rules['@typescript-eslint/no-deprecated']), path).toBe(2);
 }
 
 describe('real ESLint configuration coverage', () => {
@@ -164,6 +165,28 @@ describe('real ESLint configuration coverage', () => {
     expect(rejected[0].messages).toContainEqual(
       expect.objectContaining({ ruleId: '@typescript-eslint/no-floating-promises', severity: 2 }),
     );
+  });
+
+  it.each([
+    'apps/daemon/src/bootstrap.ts',
+    'apps/desktop/src/main/index.ts',
+    'packages/protocol/src/index.ts',
+    'tests/e2e/settings.spec.ts',
+  ])('rejects deprecated symbols and permits their replacement through %s', async (path) => {
+    const eslint = new ESLint({ cwd: root });
+    const filePath = join(root, path);
+    const rejected = await eslint.lintText(
+      '/** @deprecated Use current instead. */\nconst previous = 1;\nexport const value: number = previous;',
+      { filePath },
+    );
+    expect(rejected[0].messages).toEqual([
+      expect.objectContaining({ ruleId: '@typescript-eslint/no-deprecated', severity: 2 }),
+    ]);
+    const accepted = await eslint.lintText(
+      'const current = 1;\nexport const value: number = current;',
+      { filePath },
+    );
+    expect(accepted[0].messages).toEqual([]);
   });
 
   it('resolves Renderer imports through the independent Bundler test program', async () => {

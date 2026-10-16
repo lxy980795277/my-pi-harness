@@ -1,61 +1,66 @@
 # 上下文与工作状态协议
 
-当前wire协议为7，DTO与schema由`packages/protocol/src/context.ts`和`sessions.ts`拥有。SQLite追加0005；Session事件信封仍为version:1，私有消息codec继续写2、读1/2。所有接口复用[本机授权](model-session.md#授权)、准确Host/Origin与写请求CSRF校验，未知字段拒绝；客户端与daemon同步升级。
+当前wire协议为8；DTO和schema由packages/protocol/src/context.ts及sessions.ts拥有。开发期不保留旧协议/日志/codec适配，全部消费者同步更新。接口复用[本机授权](model-session.md#授权)、Host/Origin与CSRF校验，未知字段拒绝。存储权威与恢复由[storage](../../packages/storage/README.md)说明。
 
-## 附件与引用
+## 附件与规则
 
-| 方法与路径                                      | 输入与结果                                                                                   |
-| ----------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| POST /api/attachments                           | `{name,mediaType,data}`，data为标准base64；返回Attachment元数据                              |
-| POST /api/attachments/reference                 | `{workspaceId,path,startLine?,endLine?}`；冻结工作区相对路径文件或文本行范围，返回Attachment |
-| GET /api/attachments/:attachmentId              | Attachment元数据，不返回原始图片                                                             |
-| GET /api/attachments/:attachmentId/content      | AttachmentContent：`{attachment,text,imageData}`，图片base64只由此显式读取                   |
-| GET /api/workspaces/:workspaceId/files?path=... | `{paths:string[]}`，path默认`.`；单目录最多500项，目录以`/`结尾                              |
-| GET /api/workspaces/:workspaceId/rules          | 当前根AGENTS.md的RuleSource数组预览，不改变最近Run的冻结规则                                 |
+| 方法与路径                                      | 输入与结果                                                       |
+| ----------------------------------------------- | ---------------------------------------------------------------- |
+| POST /api/attachments                           | name、mediaType、标准base64 data；返回Attachment元数据           |
+| POST /api/attachments/reference                 | workspaceId、相对path、可选startLine/endLine；冻结文件或文本片段 |
+| GET /api/attachments/:attachmentId              | Attachment元数据                                                 |
+| GET /api/attachments/:attachmentId/content      | AttachmentContent，显式读取提取文本或图片base64                  |
+| GET /api/workspaces/:workspaceId/files?path=... | 单目录有界路径列表                                               |
+| GET /api/workspaces/:workspaceId/rules          | 当前根AGENTS预览，不改旧Run冻结内容                              |
 
-Attachment包含id、name、mediaType、kind、byteLength、preview、sourcePath、workspaceId和createdAt；workspaceId为兼容字段，当前上传写null，引用写来源工作区ID。kind为text、image、pdf或reference，preview最多4000字符。AttachmentContent的text与imageData可为null，普通元数据、Session快照和SSE不携带图片base64。只有获得本机授权的调用方可以访问内容接口。
+Attachment包含id、name、mediaType、kind、byteLength、preview、sourcePath、workspaceId和createdAt；kind为text/image/pdf/document/reference。普通快照和SSE不包含imageData。宿主不可变附件文件保存冻结内容与校验摘要，SQLite保存可重建索引，预览不重新读取原始工作区文件。
 
-单次上传HTTP body上限12MiB，文本上限256000字节且必须为UTF-8；PNG/JPEG/GIF/WebP按签名与MIME核对，上限2MiB；PDF按签名核对，上限8MiB，提取最多20页、约100000字符，无OCR。PDF原始字节不持久保存，历史预览为已提取文本。解析在有内存与10秒时限的worker内执行；请求断连或服务关闭取消处理并等待资源回收。附件名不接受路径分隔符和控制字符。
+HTTP上传体上限12MiB；UTF-8文本最多256000字节，PNG/JPEG/GIF/WebP最多2MiB，PDF/文档最多8MiB。PDF提取最多20页、约100000字符；Office/开放文档提取最多约250000字符，均无OCR。支持DOCX/DOCM、XLSX/XLSM、PPTX/PPTM、ODT/ODS/ODP、RTF和EPUB；不执行宏。解析有独立worker、内存、解压与时间限制，请求断开及关闭取消并等待worker退出。限制在上传时验证，不常驻显示说明文案。
 
-引用复用M2真实路径、敏感目录和链接检查，拒绝越界、`.env*`、`.git`、profile以及非普通/多硬链接文件。行号从1开始并包含结束行，仅文本支持行范围；冻结后源文件修改或删除不改变附件正文。文件列表隐藏敏感项与链接，有界遍历不开放任意主机目录。
+输入text可以为空，但必须有非空文字或1–8个不重复附件ID。发送、排队和编辑重发保持冻结附件，缺失内容或不支持图片的模型明确拒绝。图片可从剪贴板上传；前端不恢复已移除的工作区引用入口，MCP/Skill继续仅禁用占位。
 
-`POST /api/sessions/:id/inputs`新增可选attachmentIds，最多8个且同条输入不得重复。MessageView与QueueInput保留ID，正文进入私有用户消息codec；发送、排队、恢复和分支使用冻结内容。队列文字编辑保留原附件，用户消息编辑重发也继承原附件。缺少附件或新上传图片与模型能力不符时明确失败，不能静默丢弃图片。未发送草稿移除只影响草稿，不删除历史内容。
+引用复用M2真实路径、敏感目录和链接检查；行号从1开始且含结束行。跨工作区显式复用冻结附件不授予原目录访问，仅同工作区引用参与祖先AGENTS发现。AGENTS最多16份、总量64KiB，按由浅到深冻结文本/hash，下一Run重载。
 
-已冻结附件可以由用户显式复用到另一工作区；它不授权重新读取来源目录。只有attachment.workspaceId与会话当前工作区一致的文件引用参与该Run的下级AGENTS发现，跨工作区引用只提供冻结正文。
+## 工作状态与命令
 
-## 分支工作状态与命令
+所有work命令前缀为/api/sessions/:sessionId。
 
-| 方法与路径                                                           | 输入与结果                                                                        |
-| -------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| GET /api/sessions/:sessionId/work?branchId=...                       | 预期当前分支WorkSnapshot：`{state,checkpoints}`                                   |
-| PATCH /api/sessions/:sessionId/work                                  | `{expectedBranchId,revision,mode?,plan?,todos?}`；返回提交后的WorkSnapshot        |
-| POST /api/sessions/:sessionId/work/compact                           | `{expectedBranchId,revision}`；手动调用当前模型摘要，返回WorkSnapshot             |
-| POST /api/sessions/:sessionId/work/checkpoints                       | `{expectedBranchId,label}`；保存消息前缀和工作状态，返回WorkSnapshot              |
-| POST /api/sessions/:sessionId/work/checkpoints/:checkpointId/restore | `{expectedBranchId,revision}`；新建恢复分支，返回WorkSnapshot                     |
-| POST /api/sessions/:sessionId/work/reset                             | `{expectedBranchId,revision}`；重置当前工作状态并清除未消费队列，返回WorkSnapshot |
-| POST /api/sessions/:sessionId/questions/:questionId/answer           | `{answer}`；一次回答当前会话的待答问题，返回WorkSnapshot                          |
-| POST /api/sessions/:sessionId/questions/:questionId/cancel           | `{}`；取消当前会话的待答问题，返回WorkSnapshot                                    |
+| 方法与路径                                   | 行为                                                                             |
+| -------------------------------------------- | -------------------------------------------------------------------------------- |
+| GET /work?branchId=...                       | 返回state、checkpoints手动会话快照、compactions摘要历史                          |
+| PATCH /work                                  | expectedBranchId、revision、可选mode/todos；不允许直接批准计划                   |
+| POST /work/compact                           | expectedBranchId、revision；手动压缩                                             |
+| POST /work/compactions/:compactionId/select  | expectedBranchId、revision；选择摘要版本，不创建分支                             |
+| POST /work/checkpoints                       | expectedBranchId、label；保存手动会话快照                                        |
+| POST /work/checkpoints/:checkpointId/restore | expectedBranchId、revision；恢复快照到新分支                                     |
+| POST /work/reset-tasks                       | expectedBranchId、revision；仅清Plan/Todos                                       |
+| POST /work/reset-context                     | expectedBranchId、revision；重新设置有效历史起点，清摘要/问题/队列，保留计划任务 |
+| POST /work/plans/:planId/review              | expectedBranchId、revision、decision及feedback；原Run审核                        |
+| POST /questions/:questionId/answer           | answers数组，一次提交该请求全部题目                                              |
+| POST /questions/:questionId/cancel           | 空对象，取消所属请求等待                                                         |
 
-`POST /api/sessions`可用workMode选择首个Run前的execute或plan模式，省略时为execute。选择plan时，session.created与初始revision:1的work.updated同事务提交，返回的Session快照游标为2；默认execute仍从revision:0、Session游标1开始。
+WorkState按Session和Branch隔离，包含revision、mode、rules、usage、当前compaction、contextStartAfterMessageId、plan、todos、questions。命令核对当前分支与revision，旧窗口不能写到新分支。普通编辑、压缩、快照及上下文重置要求空闲；回答和审核仅开放给所属活跃Run的待处理请求。
 
-WorkState按sessionId与branchId隔离，初始revision为0。GET必须携带预期当前branchId；工作状态修改、压缩、恢复、重置必须携带读取到的expectedBranchId和revision，检查点创建必须携带expectedBranchId。服务在执行命令时核对当前分支，再核对版本；分支已切换或版本过期均返回409 WORK_CONFLICT，即使两个分支的revision相同也不能将旧命令应用到新分支。成功修改追加递增版本。mode为execute或plan；状态还保存rules、usage、compaction、contextStartAfterMessageId、plan、todos及questions。除回答/取消当前等待问题外，工作状态修改、压缩、检查点与重置要求当前Run已停止。WorkSnapshot的checkpoints为该会话的历史检查点列表，每会话上限100个；没有独立的检查点比较写接口，客户端比较已读取的状态。
+## 结构化提问
 
-Plan包含title、content、draft/approved/completed状态和updatedAt；Todos最多100项，ID在同列表内唯一，status为pending/in_progress/completed。Plan模式允许读取与会话规划工具，禁止文件写入、编辑、Shell与Web POST；Web GET仍走原有审批。用户批准计划并切换execute只更新后续Run工作状态，不自动开始运行或代替逐次执行审批。模型重写计划保存为draft。
+Question容器保存id、runId、branchId、toolCallId、questions、answers、status、createdAt。questions最多12题，每题有id/header/prompt、最多12个带id/label/description选项、multiSelect和allowCustomInput；题目与选项ID各自唯一，禁止没有选项且不允许输入的不可回答问题。
 
-ask_user、update_plan和update_todos是无需工作区的会话工具，不取得文件权限。Question包含稳定id、runId、branchId、toolCallId、prompt、options、status、answer及createdAt；最多8个选项，也接受自由回答。只有所属会话内仍为pending且正在等待的问题可回答一次；重复、错会话或过期回答返回冲突。等待最多10分钟，停止Run取消等待；重启将遗留pending追加为interrupted，不自动恢复问答。
+答案为questionId、optionIds和text；必须覆盖全部题目，不允许重复选项、未知ID、多选越权或未授权自由输入。有效答案提交后原Run继续；重复、错Session/分支或已结束请求拒绝。取消结束当前提问，停止/重启将未完成等待收敛，不自动继续模型调用。
 
-## 规则、预算与压缩
+## 计划与任务
 
-运行加载工作区根AGENTS.md及同工作区显式引用路径的祖先规则，按浅到深顺序使用；下级规则只作用于对应目录，不能扩大应用权限。每次最多16份，总量64KiB，UTF-8文本。RuleSource保存path、SHA-256、content及byteLength，冻结到本次Run；修改文件在下一Run加载。规则预览接口只读取当前根规则，与最近Run已生效内容区分。
+Plan有稳定id、runId、title/content、结构化steps、status、review、feedback和updatedAt。步骤有id/title/status，最多一个in_progress。update_plan工具提交计划并等待审核；decision为approve、feedback或cancel。批准使原Run切换execute并继续，反馈交回原模型修订，取消结束审核。不能通过PATCH plan.status绕过审核，也不能从批准计划推导具体工具已获授权。
 
-ContextUsage公开estimatedTokens、windowTokens、reservedOutput、inputBudget和trimmedMessages。估算覆盖规则、消息、附件、工具结果及工具声明，预留模型输出；它不等于供应商tokenizer或账单。裁剪移除最旧完整用户轮次，保留最新轮次与工具调用/结果配对，原历史仍保存；最新输入、规则或当前工具结果本身超预算时明确拒绝。
+Todo有id/title/status、planStepId、evidenceToolCallIds和completionNote。状态为pending/in_progress/completed/blocked/cancelled；引用步骤必须存在，工具证据必须是实际成功的相关工具记录。完成也可填写明确文本结论，人工确认通过completionNote记录，纯分析任务不要求虚构工具。Plan模式继续禁止文件修改、Shell和Web POST。
 
-手动压缩至少需要三轮可用对话，保留最近两轮；自动压缩在下一Run预估达到输入预算85%时尝试。摘要使用当前配置模型，记录覆盖到的throughMessageId、summary、createdAt及manual/automatic原因，后续请求使用摘要与未覆盖历史。生成失败或取消保留旧摘要和原历史；停止命令与请求中断可以取消压缩。模型请求可能产生正常供应商费用，测试替身不证明真实供应商可用。
+会话工具包括ask_user、update_plan、update_plan_steps、update_todos、search_session_history、restore_context_checkpoint和reset_working_state；均不授予工作区权限。历史搜索仅限当前会话、有限匹配和有界片段，不实现M6跨会话索引。
 
-## 检查点、重置与持久事实
+## 每请求上下文与摘要
 
-Checkpoint保存id、sessionId、branchId、label、createdAt、messageIds及完整WorkState。恢复只接受本会话的检查点，通过新分支继承保存的有序消息前缀，恢复上下文起点、摘要、规则、Plan/Todos并清空旧待答问题；原分支与后续历史保留。下一Run仍按当时磁盘加载规则。恢复不自动执行队列；已有队列继续受原分支来源检查。
+每次模型请求前投影有效历史、处理附件和过长工具输出、估算预算、必要时压缩、检查完整工具调用/结果组及最终预算。ContextUsage记录estimatedTokens、windowTokens、reservedOutput、inputBudget、trimmedMessages、prunedMessages、source、providerInputTokens和categories。分类system/rules/tools/messages/attachments/summary/workingState为估算，真实Usage可用时仅辅助总量校准，不代表下一请求准确账单。
 
-重置保留全部会话历史，以当前最后消息作为新上下文起点，清除摘要、规则、用量、计划、任务、问题和未消费队列，mode回到execute。恢复与重置均不撤销磁盘文件、Shell或外部请求，不能用检查点作为文件回滚。
+Compaction保存id、parentId、throughMessageId、summary、structured、strategy、beforeTokens、afterTokens、sourceMessages、runId、createdAt和reason。structured保存objective、constraints、decisions、completed、pending、blockers和nextAction。自动摘要支持同Run连续工具循环；失败可用本地fallback，取消不提交半成品。最终仍超预算明确拒绝，不发残缺工具组。
 
-work.updated持久事件保存完整revision状态，checkpoint.created保存检查点，branch.restored保存新分支及继承消息ID；投影与事实同事务提交后发布。context.prepared公开分支、用量、实际参与请求的消息与附件ID，完整system prompt及消息codec仅存私有列；摘要模型请求也记录私有请求内容。GET不改写历史，内容接口不把base64广播到SSE。
+context.prepared公开模型请求关联、用量和附件ID，完整system/messages仅进入宿主日志私有记录。原历史不删除；压缩不是文件撤销。上下文检查点选择旧摘要并确定新的有效尾部，历史仍可检索；会话快照保存消息前缀及WorkState并恢复为新分支，两种恢复入口独立。
+
+reset-tasks保留摘要与历史，仅清计划任务；reset-context保留可读历史和手动快照，保留Plan/Todos和mode，但清规则、用量、摘要、问题及未消费队列。恢复不自动执行工具、Shell或外部请求。完整导入导出和文件撤销重做继续属于M7。

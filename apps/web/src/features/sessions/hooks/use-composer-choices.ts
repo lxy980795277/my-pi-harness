@@ -8,10 +8,7 @@ import {
   modelSelectionKey,
   resolveThinkingLevel,
 } from '@/features/models/utils/model-options';
-import type {
-  ComposerChoices,
-  ComposerChoicesState,
-} from '@/features/sessions/types/composer-view';
+import type { ComposerChoices, ComposerChoicesState } from '@/features/sessions/types/composer';
 import {
   buildComposerModelOptions,
   buildWorkspaceOptions,
@@ -109,9 +106,13 @@ export const useComposerChoices = (
     settings,
     disabled: save.pending || session.activeRunId !== null,
   };
+  let error = save.error;
+  if (error === null) {
+    error = workMode.error;
+  }
   return {
     submitBlocked: save.pending || workMode.sendingBlocked,
     choices,
-    error: save.error ?? workMode.error,
+    error: error,
   };
 };

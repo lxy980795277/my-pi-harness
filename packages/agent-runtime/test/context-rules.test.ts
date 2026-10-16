@@ -154,8 +154,33 @@ describe('workspace rule discovery', () => {
     const rules = await loadWorkspaceRules(f);
     const state = initialWorkState('branch');
     state.mode = 'plan';
-    state.plan = { title: 'Plan', content: 'Do work', status: 'approved', updatedAt: 1 };
+    state.plan = {
+      id: 'plan',
+      runId: null,
+      steps: [],
+      review: 'approved',
+      feedback: null,
+      title: 'Plan',
+      content: 'Do work',
+      status: 'approved',
+      updatedAt: 1,
+    };
     state.compaction = {
+      parentId: null,
+      structured: {
+        objective: '',
+        constraints: [],
+        decisions: [],
+        completed: [],
+        pending: [],
+        blockers: [],
+        nextAction: '',
+      },
+      strategy: 'model',
+      beforeTokens: 100,
+      afterTokens: 50,
+      sourceMessages: 2,
+      runId: null,
       id: 'summary',
       summary: 'Historical facts',
       throughMessageId: 'old',

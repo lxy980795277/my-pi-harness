@@ -1,4 +1,5 @@
 import type {
+  Attachment,
   ApprovalMode,
   DefaultModel,
   ProviderConfig,
@@ -47,8 +48,15 @@ export const buildComposerModelOptions = (
 };
 
 /** A short initial title is derived from the user's first message, not a separate creation form. */
-export const titleFromFirstMessage = (text: string): string => {
-  return text.trim().replace(/\s+/g, ' ').slice(0, 60);
+export const titleFromFirstMessage = (
+  text: string,
+  attachments: Pick<Attachment, 'name'>[] = [],
+): string => {
+  const title = text.trim().replace(/\s+/g, ' ').slice(0, 60);
+  if (title) {
+    return title;
+  }
+  return (attachments[0]?.name ?? '新对话').slice(0, 60);
 };
 
 /** Keeps legacy read-only records readable while accepting the three current execution policies. */

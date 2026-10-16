@@ -29,12 +29,12 @@ describe('private SDK persistence', () => {
     const serialized = encodeContextMessage(message);
     expect(decodeContextMessage(serialized)).toEqual(message);
     expect(() =>
-      decodeContextMessage(serialized.replace('"codecVersion":2', '"codecVersion":99')),
-    ).toThrowError('unsupported format');
-    expect(() => decodeContextMessage('{')).toThrowError('not valid JSON');
+      decodeContextMessage(serialized.replace('"codecVersion":1', '"codecVersion":99')),
+    ).toThrow('unsupported format');
+    expect(() => decodeContextMessage('{')).toThrow('not valid JSON');
     expect(() =>
       decodeCredential('{"version":1,"credential":{"type":"oauth","access":"only-access"}}'),
-    ).toThrowError('unsupported format');
+    ).toThrow('unsupported format');
   });
 
   it('continues an already-started Pi OAuth refresh after cancellation and drains its rotated token before close', async () => {
