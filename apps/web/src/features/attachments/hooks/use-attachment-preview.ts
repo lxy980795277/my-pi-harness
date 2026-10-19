@@ -1,12 +1,9 @@
 import type { AttachmentPreviewState } from '@/features/attachments/types/attachment';
 import { useCallback, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import {
-  fetchAttachment,
-  fetchAttachmentContent,
-} from '@/features/attachments/services/attachments';
+import { fetchAttachment } from '@/features/attachments/services/attachments';
 
-/** Original bytes are queried only while open and removed from cache after closing. */
+/** Owns the preview dialog and persistent metadata; original content has a dialog-scoped owner. */
 export const useAttachmentPreview = (id: string): AttachmentPreviewState => {
   const [open, setOpen] = useState(false);
   const metadata = useQuery({
@@ -15,16 +12,8 @@ export const useAttachmentPreview = (id: string): AttachmentPreviewState => {
       return fetchAttachment(id, signal);
     },
   });
-  const content = useQuery({
-    queryKey: ['attachment-content', id],
-    queryFn: ({ signal }) => {
-      return fetchAttachmentContent(id, signal);
-    },
-    enabled: open,
-    gcTime: 0,
-  });
   const show = useCallback((): void => {
     setOpen(true);
   }, []);
-  return { open, setOpen, show, metadata, content };
+  return { open, setOpen, show, metadata };
 };

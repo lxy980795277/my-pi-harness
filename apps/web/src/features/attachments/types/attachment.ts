@@ -1,4 +1,4 @@
-import type { Attachment, AttachmentContent } from '@my-pi-harness/protocol';
+import type { Attachment } from '@my-pi-harness/protocol';
 import type { UseQueryResult } from '@tanstack/react-query';
 import type { ClipboardEvent, RefObject } from 'react';
 import type { AsyncEvent } from '@/hooks/use-async-event';
@@ -19,5 +19,4 @@ export interface AttachmentPreviewState {
   setOpen: ValueChange<boolean>;
   show: Action;
   metadata: UseQueryResult<Attachment, Error>;
-  content: UseQueryResult<AttachmentContent, Error>;
 }

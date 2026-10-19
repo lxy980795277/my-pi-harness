@@ -16,8 +16,8 @@
     "node": ">=24.0.0"
   },
   "scripts": {
-    "dev": "tsx watch src/bootstrap.ts",
-    "start": "node dist/bootstrap.js",
+    "dev": "tsx watch --env-file-if-exists=../../.env src/bootstrap.ts",
+    "start": "node --env-file-if-exists=../../.env dist/bootstrap.js",
     "build": "tsc -p tsconfig.build.json",
     "lint": "eslint .",
     "typecheck": "tsc -p tsconfig.json --noEmit",

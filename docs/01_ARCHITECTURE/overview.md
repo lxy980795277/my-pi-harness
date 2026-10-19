@@ -23,7 +23,7 @@
 | 路径                     | 负责                                                              | 不负责                                 |
 | ------------------------ | ----------------------------------------------------------------- | -------------------------------------- |
 | `apps/web`               | 页面、交互、HTTP/SSE客户端、状态呈现                              | Node API、凭据与Agent实例              |
-| `apps/daemon`            | API装配、本机授权、事件重放、profile与服务生命周期                | 页面组件与桌面窗口                     |
+| `apps/daemon`            | API装配、本机信任与应用登录、事件重放、profile与服务生命周期      | 页面组件与桌面窗口                     |
 | `apps/desktop`           | Electron窗口、有限preload桥、daemon启动和退出、桌面资源与发布装配 | Agent Loop、业务数据库与工具实现       |
 | `packages/agent-runtime` | Pi模型、认证与Run编排、独立审批复核、取消、队列和分支             | Electron、React、Fastify与SQL实现      |
 | `packages/execution`     | 有界文件/PDF、Web与按策略隔离的macOS Shell执行                    | Pi Loop、审批拥有者、数据库与页面      |
@@ -69,6 +69,6 @@ NodeNext宿主与共享包的本地相对导入写 `.js`，让编译后的ESM在
 
 JSONL根与上述数据库位置独立：开发入口、仓库中的daemon源码和正式构建产物统一使用仓库根目录的`.my-pi-harness`，通过模块位置定位，不随cwd或自定义profile改变。独立安装包已脱离源码仓库，启动时必须通过`MY_PI_HARNESS_SESSION_LOG_ROOT`指定该仓库中的隐藏目录；缺失时明确报错。测试显式指定临时日志根。日志实际目录为`<logRoot>/sessions/<SHA256(canonicalProfilePath)>/`，避免Electron和独立daemon的不同profile混写；storage不猜测cwd或NODE_ENV。开发期旧数据按用户授权清理，不做旧格式兼容。JSONL是会话权威，新日志根不能从SQLite反向生成日志；缺失既有日志明确失败。运行数据不进入Git、发布资源或源码扫描。
 
-`MY_PI_HARNESS_DESKTOP_SECRET`仅由main私有启动链注入，不进入公开启动记录；`MY_PI_HARNESS_DEVELOPMENT_ORIGIN`只允许自有5174开发页面。可选GitHub身份使用`MY_PI_HARNESS_GITHUB_CLIENT_ID`及Web授权码所需client secret（Device Flow不需要secret）。字段与授权、恢复语义见[模型与会话协议](../03_API/model-session.md)。
+`MY_PI_HARNESS_DESKTOP_SECRET`仅由main私有启动链注入，不进入公开启动记录；`MY_PI_HARNESS_DEVELOPMENT_ORIGIN`只允许自有5174开发页面。GitHub登录配置来自仓库根`.env`，开发daemon启动时自动加载，进程环境优先。Web使用授权码+PKCE，桌面使用Device Flow；打包只提取Client ID至`desktop-oauth.env`，不分发根`.env`或Client Secret。字段、本机信任、profile归属与恢复语义见[应用登录协议](../03_API/application-auth.md)。
 
 Web开发的 `DAEMON_ORIGIN` 指定同源代理目标，缺省连接上述独立daemon地址。桌面开发入口注入 `MY_PI_HARNESS_NODE_PATH` 和 `MY_PI_HARNESS_RENDERER_URL`，分别选择独立Node与开发页面；发布版根据安装资源和实际daemon地址解析，不使用这些开发覆盖项。

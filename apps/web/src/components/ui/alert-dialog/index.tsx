@@ -1,9 +1,11 @@
 import * as AlertDialogPrimitive from '@radix-ui/react-alert-dialog';
 import type { FC } from 'react';
+import { TriangleAlert } from 'lucide-react';
 
 import { useDialogFocus } from '@/components/ui/dialog/use-dialog-focus';
 import { Notice } from '@/components/ui/notice';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/utils/cn';
 
 interface ConfirmDialogProps {
   open: boolean;
@@ -14,6 +16,7 @@ interface ConfirmDialogProps {
   pending: boolean;
   onConfirm: () => void;
   error?: string | null;
+  warning?: boolean;
 }
 
 /** Destructive confirmation keeps focus and Escape behavior inside a real alertdialog. */
@@ -26,6 +29,7 @@ export const ConfirmDialog: FC<ConfirmDialogProps> = ({
   pending,
   onConfirm,
   error,
+  warning = false,
 }) => {
   const focus = useDialogFocus(undefined, undefined);
   return (
@@ -37,6 +41,11 @@ export const ConfirmDialog: FC<ConfirmDialogProps> = ({
           onCloseAutoFocus={focus.close}
           className="fixed top-1/2 left-1/2 z-[70] w-[calc(100%_-_3rem)] max-w-md -translate-x-1/2 -translate-y-1/2 space-y-4 rounded-2xl bg-card p-6 text-card-foreground shadow-xl"
         >
+          {warning && (
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-warning text-warning-solid">
+              <TriangleAlert width={24} height={24} aria-hidden />
+            </div>
+          )}
           <AlertDialogPrimitive.Title className="text-base font-semibold">
             {title}
           </AlertDialogPrimitive.Title>
@@ -46,11 +55,28 @@ export const ConfirmDialog: FC<ConfirmDialogProps> = ({
           {error && <Notice tone="error">{error}</Notice>}
           <div className="flex justify-end gap-2">
             <AlertDialogPrimitive.Cancel asChild>
-              <Button type="button" variant="ghost" disabled={pending}>
+              <Button
+                type="button"
+                variant="ghost"
+                className={cn(
+                  warning &&
+                    'h-10 rounded-full bg-secondary px-5 text-sm text-secondary-foreground',
+                )}
+                disabled={pending}
+              >
                 取消
               </Button>
             </AlertDialogPrimitive.Cancel>
-            <Button type="button" variant="destructive" disabled={pending} onClick={onConfirm}>
+            <Button
+              type="button"
+              variant="destructive"
+              className={cn(
+                warning &&
+                  'h-10 rounded-full border-error-solid bg-error-solid px-5 text-sm text-primary-foreground',
+              )}
+              disabled={pending}
+              onClick={onConfirm}
+            >
               {confirmLabel}
             </Button>
           </div>

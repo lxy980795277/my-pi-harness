@@ -1,7 +1,7 @@
 import { test, expect } from './fixture.js';
 import { startTestModel } from './model-server.js';
 import { configureTestProvider } from './model-fixtures.js';
-import { chooseOption } from './ui-controls.js';
+import { chooseOption, openUserSettings } from './ui-controls.js';
 import { AuthStatusSchema } from '@my-pi-harness/protocol';
 import { Value } from 'typebox/value';
 
@@ -9,7 +9,7 @@ test('配置兼容 API、真实 Pi 流式请求、刷新与编辑分支', async 
   const model = await startTestModel();
   try {
     await page.goto(daemon.origin);
-    await page.getByRole('button', { name: '用户信息，打开设置', exact: true }).click();
+    await openUserSettings(page);
     const settings = page.getByRole('dialog', { name: '设置', exact: true });
     await settings.getByRole('tab', { name: '模型', exact: true }).click();
     await page.getByRole('button', { name: '添加 Provider', exact: true }).click();

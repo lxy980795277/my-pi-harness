@@ -12,3 +12,11 @@ export type { CreateSessionInput, EventInput, RequestAcceptance } from './types.
 
 export { sessionLogDirectory, type ProfileStoreOptions } from './session-log-directory.js';
 export { SessionBatchSchema, type SessionBatch } from './session-jsonl.js';
+
+export { AuthRepository } from './auth.js';
+export type {
+  VerifiedIdentity,
+  LocalClient,
+  LoginSessionInput,
+  StoredLoginSession,
+} from './auth-types.js';

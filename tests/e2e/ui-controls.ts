@@ -14,3 +14,27 @@ export async function chooseOption(
   await control.click();
   await page.getByRole('option', { name: option, exact: true }).click();
 }
+
+/**
+ * Reach settings through the sidebar account card and its portaled actions.
+ * @param page The authenticated application page.
+ */
+export async function openUserSettings(page: Page): Promise<void> {
+  await page.getByRole('button', { name: '用户信息，打开菜单', exact: true }).click();
+  await page
+    .getByRole('dialog', { name: '用户菜单', exact: true })
+    .getByRole('button', { name: '设置', exact: true })
+    .click();
+}
+
+/**
+ * Open the sign-out confirmation without accepting it or revoking the current session.
+ * @param page The authenticated application page.
+ */
+export async function openLogoutConfirmation(page: Page): Promise<void> {
+  await page.getByRole('button', { name: '用户信息，打开菜单', exact: true }).click();
+  await page
+    .getByRole('dialog', { name: '用户菜单', exact: true })
+    .getByRole('button', { name: '退出登录', exact: true })
+    .click();
+}

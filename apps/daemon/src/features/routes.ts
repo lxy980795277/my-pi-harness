@@ -9,10 +9,11 @@ import { registerWorkspaceRoutes } from './workspaces/routes.js';
 import { registerToolRoutes } from './tools/routes.js';
 import { registerWorkRoutes } from './work/routes.js';
 import { registerAttachmentRoutes } from './attachments/routes.js';
+import { LoginError } from './auth/errors.js';
 
 /** Install protected M1 endpoints; health and public process identity remain readable. */
 export function registerM1Routes(server: FastifyInstance, services: ApplicationServices): void {
-  const { auth, github, gateway, runtime } = services;
+  const { auth, login, gateway, runtime } = services;
   server.addHook('onRequest', (request, reply, done) => {
     const path = request.url.split('?')[0] ?? '';
     if (!path.startsWith('/api/') || path === '/api/health' || path === '/api/runtime/events') {
@@ -20,7 +21,9 @@ export function registerM1Routes(server: FastifyInstance, services: ApplicationS
       return;
     }
     const bootstrap = path === '/api/auth/desktop';
-    const callback = path === '/api/auth/github/callback';
+    const callback =
+      request.method === 'GET' && /^\/api\/auth\/callback\/[A-Za-z0-9_-]+$/.test(path);
+    if (callback) reply.header('Referrer-Policy', 'no-referrer');
     const write = !['GET', 'HEAD'].includes(request.method);
     if (!auth.trustedSource(request, write && !bootstrap)) {
       void reply.code(403).send({ code: 'SOURCE_REJECTED', message: '请求来源未授权。' });
@@ -28,8 +31,15 @@ export function registerM1Routes(server: FastifyInstance, services: ApplicationS
     }
     const publicRoute =
       ['/api/auth/status', '/api/auth/pair'].includes(path) || bootstrap || callback;
-    if (!publicRoute && !auth.isAuthorized(request)) {
-      void reply.code(401).send({ code: 'AUTH_REQUIRED', message: '请先完成本机授权。' });
+    const trustOnly =
+      ['/api/auth/login', '/api/auth/logout'].includes(path) ||
+      /^\/api\/auth\/login-flows\/login_[A-Za-z0-9_-]+(?:\/complete)?$/.test(path);
+    if (!publicRoute && !auth.client(request)) {
+      void reply.code(401).send({ code: 'LOCAL_AUTH_REQUIRED', message: '请先完成本机授权。' });
+      return;
+    }
+    if (!publicRoute && !trustOnly && !auth.isAuthorized(request)) {
+      void reply.code(401).send({ code: 'LOGIN_REQUIRED', message: '请先登录。' });
       return;
     }
     if (write && !publicRoute && !auth.csrfValid(request)) {
@@ -39,6 +49,20 @@ export function registerM1Routes(server: FastifyInstance, services: ApplicationS
     done();
   });
   server.setErrorHandler((error, request, reply) => {
+    if (error instanceof LoginError) {
+      void reply.code(error.status).send({ code: error.code, message: error.message });
+      return;
+    }
+    if (error instanceof StorageError && error.code === 'PROFILE_ACCOUNT_MISMATCH') {
+      void reply
+        .code(409)
+        .send({ code: error.code, message: '当前本机数据已绑定其他账号，请使用原账号登录。' });
+      return;
+    }
+    if (error instanceof StorageError && error.code === 'LOCAL_CLIENT_EXPIRED') {
+      void reply.code(401).send({ code: error.code, message: '本机授权已过期，请重新授权。' });
+      return;
+    }
     if (error instanceof Error && 'validation' in error && error.validation) {
       void reply.code(400).send({ code: 'INVALID_REQUEST', message: '请求字段或类型无效。' });
       return;
@@ -83,8 +107,8 @@ export function registerM1Routes(server: FastifyInstance, services: ApplicationS
     );
     void reply.code(500).send({ code: 'INTERNAL_ERROR', message: '本机服务无法完成请求。' });
   });
-  registerAuthRoutes(server, auth, github);
-  registerModelRoutes(server, gateway, github);
+  registerAuthRoutes(server, auth, login, services.githubCallbackUrl);
+  registerModelRoutes(server, gateway);
   registerSessionRoutes(server, runtime, services.store, auth, gateway, services.workspaces);
   registerWorkspaceRoutes(server, services.workspaces);
   registerToolRoutes(server, services.tools);

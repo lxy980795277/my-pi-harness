@@ -1,7 +1,7 @@
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { Page } from '@playwright/test';
+import type { Page, Route } from '@playwright/test';
 import {
   AuthStatusSchema,
   AttachmentSchema,
@@ -147,6 +147,41 @@ test('M3 上传文本随首发进入真实模型请求，刷新后可预览历�
     const preview = page.getByRole('dialog', { name: 'context.txt', exact: true });
     await expect(preview).toContainText('ATTACHMENT-CONTENT-M3');
     await preview.getByRole('button', { name: '关闭', exact: true }).click();
+    let releaseContent = (): void => {
+      throw new Error('The attachment content gate has not initialized');
+    };
+    const contentGate = new Promise<void>((resolve) => {
+      releaseContent = resolve;
+    });
+    const contentPattern = '**/api/attachments/*/content';
+    const holdContent = async (route: Route): Promise<void> => {
+      await contentGate;
+      if (route.request().failure() === null) {
+        await route.continue();
+      }
+    };
+    await page.route(contentPattern, holdContent);
+    try {
+      const contentRequested = page.waitForRequest((request) => {
+        return /\/api\/attachments\/[^/]+\/content$/.test(new URL(request.url()).pathname);
+      });
+      await chip.click();
+      await contentRequested;
+      await expect(preview).toContainText('正在加载附件…');
+      await expect(preview).not.toContainText('ATTACHMENT-CONTENT-M3');
+      const cancelled = page.waitForEvent('requestfailed', {
+        predicate: (request) => {
+          return /\/api\/attachments\/[^/]+\/content$/.test(new URL(request.url()).pathname);
+        },
+      });
+      await preview.getByRole('button', { name: '关闭', exact: true }).click();
+      const request = await cancelled;
+      expect(request.failure()?.errorText).toContain('ERR_ABORTED');
+      await expect(preview).not.toBeVisible();
+    } finally {
+      releaseContent();
+      await page.unroute(contentPattern, holdContent);
+    }
     expect(model.requests).toHaveLength(1);
   } finally {
     await daemon.stop();

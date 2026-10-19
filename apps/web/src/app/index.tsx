@@ -1,19 +1,52 @@
-import { Moon, Sun } from 'lucide-react';
+import { LoaderCircle, Moon, Sun } from 'lucide-react';
 import type { FC } from 'react';
 import { useApplicationShell } from '@/app/hooks/use-application-shell';
 import { WorkspaceNavigation } from '@/app/components/workspace-navigation';
 import { Button } from '@/components/ui/button';
 import { Notice } from '@/components/ui/notice';
-import { AuthFlowWorkspace } from '@/features/auth/components/auth-flow-workspace';
+import { LoginPage } from '@/features/auth/components/login-page';
 import { PairingPage } from '@/features/auth/components/pairing-page';
 import { RuntimePage } from '@/features/runtime/components/runtime-page';
 import { SessionsPage } from '@/features/sessions/components/sessions-page';
 import { SettingsDialog } from '@/features/settings/components/settings-dialog';
 import { describeError } from '@/utils/describe-error';
 
-/** Browser and desktop share the same locally authorized workspace. */
+/** Private application surfaces mount only after local trust and application login succeed. */
 export const App: FC = () => {
   const state = useApplicationShell();
+  if (state.auth.isPending || (state.checkingAuthorization && !state.auth.isError)) {
+    return (
+      <div
+        className="flex h-svh items-center justify-center gap-2 bg-background text-sm text-muted-foreground"
+        role="status"
+      >
+        <LoaderCircle width={16} height={16} className="animate-spin" aria-hidden />
+        正在检查登录状态…
+      </div>
+    );
+  }
+  if (state.auth.data === undefined || (state.auth.isError && !state.authorized)) {
+    return (
+      <div className="flex min-h-svh items-center justify-center bg-background p-6">
+        <div className="w-full max-w-sm space-y-4">
+          <Notice tone="error">{describeError(state.auth.error)}</Notice>
+          <Button type="button" onClick={state.reconnect}>
+            重新连接
+          </Button>
+        </div>
+      </div>
+    );
+  }
+  if (!state.localAuthorized) {
+    return (
+      <div className="min-h-svh bg-background text-foreground">
+        <PairingPage onPair={state.pair} />
+      </div>
+    );
+  }
+  if (!state.authorized) {
+    return <LoginPage status={state.auth.data} onAuthenticated={state.receiveLogin} />;
+  }
   return (
     <div className="flex h-svh min-h-0 bg-background text-foreground" data-testid="workspace-shell">
       <WorkspaceNavigation
@@ -27,7 +60,6 @@ export const App: FC = () => {
         onSettings={state.settings}
         onPairing={state.pairing}
         onHideCode={state.hideCode}
-        onGithub={state.github}
         onLogout={state.signOut}
       />
       <main className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
@@ -57,37 +89,18 @@ export const App: FC = () => {
             <Notice tone="error">{state.actionError}</Notice>
           </div>
         )}
-        {state.authorized && <AuthFlowWorkspace />}
         {state.page === 'runtime' && (
           <div className="min-h-0 flex-1 overflow-y-auto">
             <RuntimePage />
           </div>
         )}
-        {state.page !== 'runtime' && state.auth.isPending && (
-          <div className="p-6">
-            <Notice>正在检查本机授权…</Notice>
-          </div>
-        )}
-        {state.page !== 'runtime' && state.auth.isError && (
-          <div className="space-y-3 p-6">
-            <Notice tone="error">{describeError(state.auth.error)}</Notice>
-            <Button type="button" onClick={state.reconnect}>
-              重新连接
-            </Button>
-          </div>
-        )}
-        {state.page !== 'runtime' && state.auth.isSuccess && !state.authorized && (
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            <PairingPage onPair={state.pair} />
-          </div>
-        )}
-        {state.page === 'sessions' && state.authorized && (
+        {state.page === 'sessions' && (
           <div className="min-h-0 flex-1">
             <SessionsPage userName={state.userName} />
           </div>
         )}
       </main>
-      {state.authorized && state.settingsOpen && (
+      {state.settingsOpen && (
         <SettingsDialog theme={state.theme} onToggleTheme={state.toggleTheme} />
       )}
     </div>

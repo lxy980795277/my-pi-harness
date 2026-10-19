@@ -3,7 +3,6 @@ import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
-  AuthStatusSchema,
   AttachmentSchema,
   WorkSnapshotSchema,
   SessionSnapshotSchema,
@@ -15,6 +14,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { loadDaemonConfig } from '../src/config.js';
 import { createDaemonApplication, type DaemonApplication } from '../src/server.js';
 import { createApplicationServices, type ApplicationServices } from '../src/services.js';
+import { loginFixture } from './support/login.js';
 
 const fixtures: { directory: string; application: DaemonApplication }[] = [];
 
@@ -35,19 +35,11 @@ async function fixture() {
     application = await createDaemonApplication(config, undefined, services);
     const origin = await application.server.listen({ host: '127.0.0.1', port: 0 });
     fixtures.push({ directory, application });
-    const response = await fetch(`${origin}/api/auth/pair`, {
-      method: 'POST',
-      headers: { Origin: origin, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code: services.auth.pairingCode }),
-    });
-    const auth: unknown = await response.json();
-    const cookie = response.headers.get('set-cookie')?.split(';')[0];
-    if (!Value.Check(AuthStatusSchema, auth) || auth.csrfToken === null || !cookie)
-      throw new Error('Pairing failed');
+    const grant = await loginFixture(origin, services);
     const headers = {
       Origin: origin,
-      Cookie: cookie,
-      'X-CSRF-Token': auth.csrfToken,
+      Cookie: grant.cookie,
+      'X-CSRF-Token': grant.csrf,
       'Content-Type': 'application/json',
     };
     const send = (path: string, method = 'GET', body?: unknown): Promise<Response> =>

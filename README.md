@@ -2,7 +2,7 @@
 
 基于 Pi 的本地优先 PC Agent Runtime，独立实现，支持 Electron 与浏览器共用界面。第一阶段逐步对齐标杆功能，第二阶段迭代自己的产品能力；Computer Use 延后。
 
-当前实现 **M3 上下文与交互**：项目AGENTS规则、附件与文件引用、上下文预算/裁剪/压缩、人工提问、Plan/Todos、检查点对比恢复和工作状态重置；保留模型设置、持久会话、队列/分支，以及M2工作区、文件/PDF/图片与Web工具。权限提供请求批准、独立AI帮我批准与完全访问，macOS Shell按策略隔离；会话执行事实保存为完整宿主JSONL，SQLite保存配置与可重建投影。Windows/Linux Shell仍明确不可用；完整范围和平台限制见[路线图](docs/00_OVERVIEW/roadmap.md)。
+当前已加入 **GitHub应用登录**（M4前置专项），支持持久登录与单profile账号归属。已实现 **M3 上下文与交互**：项目AGENTS规则、附件与文件引用、上下文预算/裁剪/压缩、人工提问、Plan/Todos、检查点对比恢复和工作状态重置；保留模型设置、持久会话、队列/分支，以及M2工作区、文件/PDF/图片与Web工具。权限提供请求批准、独立AI帮我批准与完全访问，macOS Shell按策略隔离；会话执行事实保存为完整宿主JSONL，SQLite保存配置与可重建投影。Windows/Linux Shell仍明确不可用；完整范围和平台限制见[路线图](docs/00_OVERVIEW/roadmap.md)。
 
 ## 开始开发
 
@@ -12,13 +12,15 @@
 pnpm install
 ```
 
+GitHub 登录配置放在仓库根 `.env`，开发入口自动加载。新克隆仓库先按 [.env.example](.env.example) 配置；Electron 使用 Device Flow，浏览器使用授权码 + PKCE，并需 Client Secret。注册与回调设置见[登录配置](docs/07_USER_GUIDE/application-login.md)。
+
 浏览器入口：
 
 ```sh
 pnpm dev
 ```
 
-打开 `http://127.0.0.1:5174`，填写启动终端显示的一次性配对码。Vite 将 `/api` 代理到 `127.0.0.1:4311` 的独立 daemon。
+打开 `http://127.0.0.1:5174`，填写启动终端显示的一次性配对码，然后完成GitHub登录。Vite 将 `/api` 代理到 `127.0.0.1:4311` 的独立 daemon。
 
 桌面入口：
 
@@ -26,7 +28,7 @@ pnpm dev
 pnpm dev:desktop
 ```
 
-该命令启动 Vite 和 Electron；Electron 启动自己的 daemon，等待 Web 就绪后打开窗口，退出时关闭后台服务。两种入口共用默认开发端口，分别运行即可。桌面启动链自动授权；已授权页面可以生成另一个浏览器的配对码。
+该命令启动 Vite 和 Electron；Electron 启动自己的 daemon，等待 Web 就绪后打开窗口，退出时关闭后台服务。两种入口共用默认开发端口，分别运行即可。桌面启动链自动建立本机信任，然后由GitHub验证应用身份；已登录页面可以生成另一个浏览器的配对码。
 
 会话JSONL在开发和正式运行时统一写入仓库根目录的`.my-pi-harness/`，其下按profile路径摘要隔离。独立安装包通过`MY_PI_HARNESS_SESSION_LOG_ROOT`指定该仓库中的隐藏目录。配置数据库与系统凭据使用应用profile；会话从JSONL恢复，不以SQLite反向补日志。开发阶段不保留旧格式兼容。目录和配置细节见[架构](docs/01_ARCHITECTURE/overview.md)与[存储说明](packages/storage/README.md)。
 

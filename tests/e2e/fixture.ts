@@ -6,13 +6,18 @@ import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
-import { DaemonReadyRecordSchema } from '@my-pi-harness/protocol';
+import {
+  AuthStatusSchema,
+  DaemonReadyRecordSchema,
+  LoginFlowSchema,
+} from '@my-pi-harness/protocol';
 import { test as base } from '@playwright/test';
 import { Value } from 'typebox/value';
 
 interface RunningDaemon {
   origin: string;
   token: string;
+  loginToken: string;
   stop: () => Promise<void>;
 }
 
@@ -21,26 +26,48 @@ export const test = base.extend<{ daemon: RunningDaemon }>({
   page: async ({ page, daemon }, use) => {
     await page.context().addCookies([
       {
-        name: 'my_pi_session',
+        name: 'my_pi_local',
         value: daemon.token,
-        url: daemon.origin,
+        domain: new URL(daemon.origin).hostname,
+        path: '/api',
+        httpOnly: true,
+        sameSite: 'Strict',
+      },
+      {
+        name: 'my_pi_session',
+        value: daemon.loginToken,
+        domain: new URL(daemon.origin).hostname,
+        path: '/api',
         httpOnly: true,
         sameSite: 'Strict',
       },
     ]);
+    await page.route('https://avatars.githubusercontent.com/**', async (route) => {
+      await route.fulfill({
+        contentType: 'image/png',
+        body: Buffer.from(
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+          'base64',
+        ),
+      });
+    });
     await use(page);
   },
   daemon: async ({}, use) => {
     const profile = await mkdtemp(join(tmpdir(), 'my-pi-browser-'));
     const ownerSecret = randomBytes(32).toString('base64url');
+    const environment = { ...process.env };
+    delete environment['MY_PI_HARNESS_GITHUB_CALLBACK_URL'];
     const child = spawn(
       process.execPath,
       [fileURLToPath(new URL('./start-daemon.mjs', import.meta.url))],
       {
         stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
         env: {
-          ...process.env,
+          ...environment,
           MY_PI_HARNESS_PORT: '0',
+          MY_PI_HARNESS_GITHUB_CLIENT_ID: 'synthetic-e2e-client-id',
+          MY_PI_HARNESS_GITHUB_CLIENT_SECRET: 'synthetic-e2e-client-secret',
           MY_PI_HARNESS_PROFILE_DIRECTORY: profile,
           MY_PI_HARNESS_SESSION_LOG_ROOT: join(profile, '.my-pi-harness'),
           MY_PI_HARNESS_DESKTOP_SECRET: ownerSecret,
@@ -119,16 +146,78 @@ export const test = base.extend<{ daemon: RunningDaemon }>({
         body: JSON.stringify({ secret: ownerSecret }),
         signal: AbortSignal.timeout(5000),
       });
-      const token = /^my_pi_session=([A-Za-z0-9_-]+);/.exec(
+      const token = /^my_pi_local=([A-Za-z0-9_-]+);/.exec(
         authorization.headers.get('set-cookie') ?? '',
       )?.[1];
+      await authorization.body?.cancel();
       if (!authorization.ok || !token) throw new Error('Fixture authorization failed');
-      await use({ origin, token, stop });
+      const loginToken = await loginFixture(origin, token);
+      await use({ origin, token, loginToken, stop });
     } finally {
       await stop();
       await rm(profile, { recursive: true, force: true });
     }
   },
 });
+
+/** Establish a real HTTP application session through the injected upstream provider. */
+async function loginFixture(origin: string, localToken: string): Promise<string> {
+  const statusResponse = await fetch(`${origin}/api/auth/status`, {
+    headers: { Cookie: `my_pi_local=${localToken}` },
+    signal: AbortSignal.timeout(5000),
+  });
+  const status: unknown = await statusResponse.json();
+  if (!Value.Check(AuthStatusSchema, status) || status.csrfToken === null)
+    throw new Error('Fixture trust did not provide CSRF authorization');
+  const headers = {
+    Cookie: `my_pi_local=${localToken}`,
+    Origin: origin,
+    'Content-Type': 'application/json',
+    'X-CSRF-Token': status.csrfToken,
+  };
+  const login = await fetch(`${origin}/api/auth/login`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ providerId: 'github', method: 'device' }),
+    signal: AbortSignal.timeout(5000),
+  });
+  const flow: unknown = await login.json();
+  if (!login.ok || !Value.Check(LoginFlowSchema, flow))
+    throw new Error('Fixture GitHub challenge failed');
+  const deadline = Date.now() + 10_000;
+  let completed = flow.status === 'completed';
+  while (!completed && Date.now() < deadline) {
+    const response = await fetch(`${origin}/api/auth/login-flows/${flow.id}`, {
+      headers,
+      signal: AbortSignal.timeout(5000),
+    });
+    const current: unknown = await response.json();
+    if (!response.ok || !Value.Check(LoginFlowSchema, current))
+      throw new Error('Fixture GitHub challenge could not be read');
+    if (current.status === 'failed' || current.status === 'cancelled')
+      throw new Error(`Fixture GitHub authorization ended: ${current.error}`);
+    completed = current.status === 'completed';
+    if (!completed) await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  if (!completed) throw new Error('Fixture GitHub authorization timed out');
+  const authorization = await fetch(`${origin}/api/auth/login-flows/${flow.id}/complete`, {
+    method: 'POST',
+    headers,
+    body: '{}',
+    signal: AbortSignal.timeout(5000),
+  });
+  const token = /^my_pi_session=([A-Za-z0-9_-]+);/.exec(
+    authorization.headers.get('set-cookie') ?? '',
+  )?.[1];
+  const authenticated: unknown = await authorization.json();
+  if (
+    !authorization.ok ||
+    token === undefined ||
+    !Value.Check(AuthStatusSchema, authenticated) ||
+    !authenticated.authenticated
+  )
+    throw new Error('Fixture application login failed');
+  return token;
+}
 
 export { expect } from '@playwright/test';

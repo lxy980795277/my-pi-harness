@@ -4,12 +4,12 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   DaemonReadyRecordSchema,
-  AuthFlowSchema,
   type DaemonReadyRecord,
   type DaemonControlMessage,
 } from '@my-pi-harness/protocol';
 import { Value } from 'typebox/value';
-import { app, session, shell } from 'electron';
+import { app } from 'electron';
+import { createDesktopAuthorization } from './authorization.js';
 import { resolveProfileDirectory, resolveSessionLogRoot } from './profile-directory.js';
 
 /** 桌面只监督自己启动的独立 Node 服务，不 import 服务业务源码。 */
@@ -54,7 +54,14 @@ export async function startDaemon({ signal }: DaemonStartOptions = {}): Promise<
   const entry = app.isPackaged
     ? resolve(resources, 'daemon', 'dist', 'bootstrap.js')
     : fileURLToPath(new URL('../../../daemon/src/bootstrap.ts', import.meta.url));
-  const args = app.isPackaged ? [entry] : ['--import', 'tsx', entry];
+  const args = app.isPackaged
+    ? [`--env-file=${resolve(resources, 'daemon', 'desktop-oauth.env')}`, entry]
+    : [
+        `--env-file-if-exists=${fileURLToPath(new URL('../../../../.env', import.meta.url))}`,
+        '--import',
+        'tsx',
+        entry,
+      ];
   const cwd = app.isPackaged
     ? resolve(resources, 'daemon')
     : fileURLToPath(new URL('../../../daemon', import.meta.url));
@@ -155,53 +162,10 @@ export async function startDaemon({ signal }: DaemonStartOptions = {}): Promise<
       if (signal?.aborted) aborted();
     });
     const origin = `http://${record.host}:${record.port}`;
-    let cookie: string | undefined;
     return {
       origin,
       stop,
-      async authorizeRenderer(rendererOrigin): Promise<void> {
-        const response = await fetch(`${origin}/api/auth/desktop`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ secret: ownerSecret }),
-          signal: AbortSignal.any([
-            signal ?? new AbortController().signal,
-            AbortSignal.timeout(5000),
-          ]),
-        });
-        const header = response.headers.get('set-cookie');
-        const token = /^my_pi_session=([A-Za-z0-9_-]+);/.exec(header ?? '')?.[1];
-        if (!response.ok || !token) throw new Error('桌面授权失败');
-        cookie = `my_pi_session=${token}`;
-        await session.defaultSession.cookies.set({
-          url: rendererOrigin,
-          name: 'my_pi_session',
-          value: token,
-          path: '/api',
-          httpOnly: true,
-          sameSite: 'strict',
-          expirationDate: Date.now() / 1000 + 12 * 3600,
-        });
-      },
-      async openAuth(flowId): Promise<void> {
-        if (!cookie) throw new Error('桌面尚未授权');
-        const response = await fetch(`${origin}/api/auth-flows/${encodeURIComponent(flowId)}`, {
-          headers: { Cookie: cookie },
-          signal: AbortSignal.timeout(5000),
-        });
-        const flow: unknown = await response.json();
-        if (
-          !response.ok ||
-          !Value.Check(AuthFlowSchema, flow) ||
-          flow.status !== 'pending' ||
-          !flow.url
-        )
-          throw new Error('认证流程不可用');
-        const url = new URL(flow.url);
-        if (url.protocol !== 'https:' || url.username || url.password)
-          throw new Error('认证地址无效');
-        await shell.openExternal(url.href);
-      },
+      ...createDesktopAuthorization(origin, ownerSecret, signal),
     };
   } catch (error: unknown) {
     await stop();

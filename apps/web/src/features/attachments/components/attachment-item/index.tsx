@@ -4,8 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import { DialogContent } from '@/components/ui/dialog/dialog-content';
 import { DialogTitle } from '@/components/ui/dialog/dialog-title';
-import { Notice } from '@/components/ui/notice';
-import { AttachmentPreview } from '@/features/attachments/components/attachment-preview';
+import { AttachmentContent } from '@/features/attachments/components/attachment-content';
 import { useAttachmentPreview } from '@/features/attachments/hooks/use-attachment-preview';
 
 interface AttachmentItemProps {
@@ -55,9 +54,7 @@ export const AttachmentItem: FC<AttachmentItemProps> = ({ id, onRemove, disabled
               {state.metadata.data.sourcePath}
             </div>
           )}
-          {state.content.isPending && <Notice>正在加载附件…</Notice>}
-          {state.content.isError && <Notice tone="error">{state.content.error.message}</Notice>}
-          {state.content.data && <AttachmentPreview content={state.content.data} />}
+          {state.open && <AttachmentContent id={id} />}
         </DialogContent>
       </Dialog>
       {state.metadata.isError && (

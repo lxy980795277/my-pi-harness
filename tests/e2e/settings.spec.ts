@@ -3,7 +3,68 @@ import { Type } from 'typebox';
 import { Value } from 'typebox/value';
 import { test, expect } from './fixture.js';
 import { startTestModel } from './model-server.js';
-import { chooseOption } from './ui-controls.js';
+import { chooseOption, openUserSettings } from './ui-controls.js';
+
+test('用户卡片只打开向上菜单，关闭回焦且设置接管弹窗焦点', async ({ page, daemon }, testInfo) => {
+  await page.goto(daemon.origin);
+  const trigger = page.getByRole('button', { name: '用户信息，打开菜单', exact: true });
+  const menu = page.getByRole('dialog', { name: '用户菜单', exact: true });
+  const settings = page.getByRole('dialog', { name: '设置', exact: true });
+  await expect(page.getByRole('button', { name: '退出登录', exact: true })).toHaveCount(0);
+  await trigger.click();
+  await expect(menu).toBeVisible();
+  await expect(menu.getByRole('button')).toHaveText(['设置', '退出登录']);
+  await expect(settings).toHaveCount(0);
+  await expect(menu.getByRole('button', { name: '设置', exact: true }).locator('svg')).toHaveCount(
+    1,
+  );
+  await expect(
+    menu.getByRole('button', { name: '退出登录', exact: true }).locator('svg'),
+  ).toHaveCount(1);
+  await expect
+    .poll(async () => {
+      const cardBounds = await trigger.boundingBox();
+      const menuBounds = await menu.boundingBox();
+      return (
+        cardBounds !== null &&
+        menuBounds !== null &&
+        menuBounds.y + menuBounds.height <= cardBounds.y
+      );
+    })
+    .toBe(true);
+  await page.screenshot({ path: testInfo.outputPath('user-menu-light.png'), fullPage: true });
+  await page.keyboard.press('Escape');
+  await expect(menu).not.toBeVisible();
+  await expect(trigger).toBeFocused();
+
+  await page.getByRole('button', { name: '切换到深色主题', exact: true }).click();
+  await expect(page.getByRole('button', { name: '切换到浅色主题', exact: true })).toBeVisible();
+  await trigger.click();
+  await expect(menu).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('user-menu-dark.png'), fullPage: true });
+  await page.keyboard.press('Escape');
+  await expect(menu).not.toBeVisible();
+  await expect(trigger).toBeFocused();
+  await page.getByRole('button', { name: '切换到浅色主题', exact: true }).click();
+
+  await trigger.press('Enter');
+  await expect(menu).toBeVisible();
+  await page.getByRole('heading', { name: '我们从哪里开始？', exact: true }).click();
+  await expect(menu).not.toBeVisible();
+  await expect(trigger).toBeFocused();
+
+  await openUserSettings(page);
+  await expect(settings).toBeVisible();
+  await expect(menu).not.toBeVisible();
+  await expect
+    .poll(async () => {
+      return settings.evaluate((element) => element.contains(document.activeElement));
+    })
+    .toBe(true);
+  await settings.getByRole('button', { name: '关闭设置', exact: true }).click();
+  await expect(settings).not.toBeVisible();
+  await expect(trigger).toBeFocused();
+});
 
 test('设置内容加载中保留弹窗、草稿和焦点，滚动轨道与外框保持间距', async ({
   page,
@@ -30,10 +91,10 @@ test('设置内容加载中保留弹窗、草稿和焦点，滚动轨道与外�
     await route.continue();
   });
   try {
-    const trigger = page.getByRole('button', { name: '用户信息，打开设置', exact: true });
+    const trigger = page.getByRole('button', { name: '用户信息，打开菜单', exact: true });
     const settings = page.getByRole('dialog', { name: '设置', exact: true });
     const loading = settings.getByRole('status').filter({ hasText: '正在加载设置…' });
-    await trigger.click();
+    await openUserSettings(page);
     await expect.poll(() => heldScriptRequests).toBeGreaterThan(0);
     await expect(settings).toBeVisible();
     await expect(loading).toBeVisible();
@@ -51,7 +112,7 @@ test('设置内容加载中保留弹窗、草稿和焦点，滚动轨道与外�
     await expect(trigger).toBeFocused();
     await expect(draft).toHaveValue('加载设置时保留的未发送草稿');
     await expect(page.getByRole('status').filter({ hasText: '正在加载设置…' })).toHaveCount(0);
-    await trigger.click();
+    await openUserSettings(page);
     await expect(settings).toBeVisible();
     await expect(loading).toBeVisible();
     releaseScripts();
@@ -105,8 +166,8 @@ test('内置厂商只读设置、弹窗焦点与动态样式 CSP', async ({ page
   const navigation = page.getByRole('navigation', { name: '页面导航', exact: true });
   await expect(navigation.getByRole('button')).toHaveCount(2);
   await expect(navigation.getByRole('button', { name: '设置', exact: true })).toHaveCount(0);
-  const trigger = page.getByRole('button', { name: '用户信息，打开设置', exact: true });
-  await trigger.click();
+  const trigger = page.getByRole('button', { name: '用户信息，打开菜单', exact: true });
+  await openUserSettings(page);
   const settings = page.getByRole('dialog', { name: '设置', exact: true });
   await settings.getByRole('tab', { name: '模型', exact: true }).click();
   await expect(settings.getByRole('switch')).toHaveCount(6);
@@ -161,7 +222,7 @@ test('无 Key 模型、默认设置重载与失效提示，设置保留聊天草
   const model = await startTestModel();
   try {
     await page.goto(daemon.origin);
-    await page.getByRole('button', { name: '用户信息，打开设置', exact: true }).click();
+    await openUserSettings(page);
     const settings = page.getByRole('dialog', { name: '设置', exact: true });
     await settings.getByRole('tab', { name: '模型', exact: true }).click();
     await settings.getByRole('button', { name: '添加 Provider', exact: true }).click();
@@ -196,7 +257,7 @@ test('无 Key 模型、默认设置重载与失效提示，设置保留聊天草
     await page.reload();
     await expect(page.getByRole('combobox', { name: '对话模型', exact: true })).toBeVisible();
     await page.getByLabel('消息', { exact: true }).fill('保留这份未发送草稿');
-    await page.getByRole('button', { name: '用户信息，打开设置', exact: true }).click();
+    await openUserSettings(page);
     await expect(card).toBeVisible();
     await card.getByRole('switch', { name: '启用 无需 Key', exact: true }).click();
     await expect(card.getByRole('switch')).not.toBeChecked();
@@ -262,7 +323,7 @@ test('Provider OAuth 弹窗清理秘密、关闭取消及允许空文本挑战',
     flow = { ...flow, status: 'completed', prompt: null };
     await route.fulfill({ json: flow });
   });
-  await page.getByRole('button', { name: '用户信息，打开设置', exact: true }).click();
+  await openUserSettings(page);
   const settings = page.getByRole('dialog', { name: '设置', exact: true });
   await settings.getByRole('tab', { name: '模型', exact: true }).click();
   const card = settings.getByRole('region', { name: 'Anthropic', exact: true });

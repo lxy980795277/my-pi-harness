@@ -1,4 +1,5 @@
 import { API_PREFIX } from '@/constants/api';
+import { requestAuthorizationCheck } from '@/services/base-request';
 
 /** Subscribes to one same-origin event type and returns its complete connection cleanup. */
 export const subscribeSse = (
@@ -10,7 +11,10 @@ export const subscribeSse = (
 ): (() => void) => {
   const source = new EventSource(`${API_PREFIX}${path}`);
   source.addEventListener(eventType, onMessage);
-  source.onerror = onDisconnect;
+  source.onerror = (): void => {
+    requestAuthorizationCheck();
+    onDisconnect();
+  };
   if (onOpen) {
     source.onopen = onOpen;
   }

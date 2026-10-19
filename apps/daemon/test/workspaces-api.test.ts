@@ -1,13 +1,14 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { AuthStatusSchema, SessionSnapshotSchema, WorkspaceSchema } from '@my-pi-harness/protocol';
+import { SessionSnapshotSchema, WorkspaceSchema } from '@my-pi-harness/protocol';
 import { createMemoryCredentialStore } from '@my-pi-harness/storage';
 import { Value } from 'typebox/value';
 import { describe, expect, it } from 'vitest';
 import { loadDaemonConfig } from '../src/config.js';
 import { createDaemonApplication } from '../src/server.js';
 import { createApplicationServices } from '../src/services.js';
+import { loginFixture } from './support/login.js';
 
 describe('protected workspace API', () => {
   it('validates directories and optimistic names, fixes session workspace ownership and archives metadata only', async () => {
@@ -28,20 +29,11 @@ describe('protected workspace API', () => {
     try {
       const origin = await application.server.listen({ host: '127.0.0.1', port: 0 });
       expect((await fetch(`${origin}/api/workspaces`)).status).toBe(401);
-      const pair = await fetch(`${origin}/api/auth/pair`, {
-        method: 'POST',
-        headers: { Origin: origin, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: services.auth.pairingCode }),
-      });
-      const auth: unknown = await pair.json();
-      if (!Value.Check(AuthStatusSchema, auth) || auth.csrfToken === null)
-        throw new Error('Fixture pairing failed');
-      const cookie = pair.headers.get('set-cookie')?.split(';')[0];
-      if (!cookie) throw new Error('Fixture cookie missing');
+      const grant = await loginFixture(origin, services);
       const headers = {
-        Cookie: cookie,
+        Cookie: grant.cookie,
         Origin: origin,
-        'X-CSRF-Token': auth.csrfToken,
+        'X-CSRF-Token': grant.csrf,
         'Content-Type': 'application/json',
       };
       const send = (path: string, method: string, body?: unknown): Promise<Response> =>

@@ -8,6 +8,50 @@ import { DaemonConfigError, loadDaemonConfig } from '../src/config.js';
 const temporaryLogRoot = join(tmpdir(), 'my-pi-config-fixture', '.my-pi-harness');
 
 describe('daemon startup configuration', () => {
+  it('reads GitHub registration only from the loaded environment', () => {
+    expect(
+      loadDaemonConfig({}, join(tmpdir(), 'unrelated-launch-directory')).githubClientId,
+    ).toBeNull();
+    expect(
+      loadDaemonConfig({ MY_PI_HARNESS_GITHUB_CLIENT_ID: 'fixture-client' }).githubClientId,
+    ).toBe('fixture-client');
+    expect(() => loadDaemonConfig({ MY_PI_HARNESS_GITHUB_CLIENT_ID: '' })).toThrow(
+      DaemonConfigError,
+    );
+    expect(loadDaemonConfig({})).toMatchObject({
+      githubClientSecret: null,
+      githubCallbackUrl: null,
+    });
+    expect(
+      loadDaemonConfig({
+        MY_PI_HARNESS_GITHUB_CLIENT_ID: 'fixture-client',
+        MY_PI_HARNESS_GITHUB_CLIENT_SECRET: 'fixture-secret',
+        MY_PI_HARNESS_GITHUB_CALLBACK_URL: 'http://127.0.0.1:5174/api/auth/callback/github',
+      }),
+    ).toMatchObject({
+      githubClientSecret: 'fixture-secret',
+      githubCallbackUrl: 'http://127.0.0.1:5174/api/auth/callback/github',
+    });
+    expect(() => loadDaemonConfig({ MY_PI_HARNESS_GITHUB_CLIENT_SECRET: 'orphan-secret' })).toThrow(
+      DaemonConfigError,
+    );
+  });
+
+  it.each([
+    '',
+    'not-a-url',
+    'https://evil.example/api/auth/callback/github',
+    'http://127.0.0.1:5174/other',
+    'http://user:password@127.0.0.1:5174/api/auth/callback/github',
+    'http://127.0.0.1:5174/api/auth/callback/github?code=secret',
+    'http://127.0.0.1:5174/api/auth/callback/github#fragment',
+    'file:///api/auth/callback/github',
+  ])('rejects invalid or nonlocal GitHub callback %j', (url) => {
+    expect(() => loadDaemonConfig({ MY_PI_HARNESS_GITHUB_CALLBACK_URL: url })).toThrow(
+      DaemonConfigError,
+    );
+  });
+
   it('defaults logs to the source repository independently of the launch directory', () => {
     const config = loadDaemonConfig({}, join(tmpdir(), 'unrelated-launch-directory'));
     expect(config.sessionLogRoot).toBe(

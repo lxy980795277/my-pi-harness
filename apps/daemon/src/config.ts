@@ -15,7 +15,8 @@ const DaemonConfigSchema = Type.Object({
   ownerSecret: Type.Union([Type.String({ minLength: 40, maxLength: 128 }), Type.Null()]),
   developmentOrigin: Type.Union([Type.String(), Type.Null()]),
   githubClientId: Type.Union([Type.String({ minLength: 1, maxLength: 200 }), Type.Null()]),
-  githubClientSecret: Type.Union([Type.String({ minLength: 1, maxLength: 1024 }), Type.Null()]),
+  githubClientSecret: Type.Union([Type.String({ minLength: 1, maxLength: 4096 }), Type.Null()]),
+  githubCallbackUrl: Type.Union([Type.String({ minLength: 1, maxLength: 2048 }), Type.Null()]),
   port: Type.Integer({ minimum: 0, maximum: 65_535 }),
   webDistPath: Type.Union([Type.String({ minLength: 1 }), Type.Null()]),
   parentPid: Type.Union([Type.Integer({ minimum: 1, maximum: 2_147_483_647 }), Type.Null()]),
@@ -88,14 +89,21 @@ export function loadDaemonConfig(
   const developmentOrigin = environment.MY_PI_HARNESS_DEVELOPMENT_ORIGIN;
   if (developmentOrigin !== undefined && developmentOrigin !== 'http://127.0.0.1:5174')
     throw new DaemonConfigError('Development origin must be the owned local Web application');
+  const githubCallbackUrl = environment.MY_PI_HARNESS_GITHUB_CALLBACK_URL;
+  if (githubCallbackUrl !== undefined) validateGitHubCallbackUrl(githubCallbackUrl);
+  const githubClientId = environment.MY_PI_HARNESS_GITHUB_CLIENT_ID;
+  const githubClientSecret = environment.MY_PI_HARNESS_GITHUB_CLIENT_SECRET;
+  if (githubClientSecret !== undefined && githubClientId === undefined)
+    throw new DaemonConfigError('GitHub Client Secret requires MY_PI_HARNESS_GITHUB_CLIENT_ID');
   const candidate = {
     profileDirectory:
       configuredProfile ?? join(defaultData, 'My Pi Harness', 'profiles', 'default'),
     sessionLogRoot: configuredLogRoot ?? repositorySessionLogRoot(),
     ownerSecret: environment.MY_PI_HARNESS_DESKTOP_SECRET ?? null,
     developmentOrigin: developmentOrigin ?? null,
-    githubClientId: environment.MY_PI_HARNESS_GITHUB_CLIENT_ID ?? null,
-    githubClientSecret: environment.MY_PI_HARNESS_GITHUB_CLIENT_SECRET ?? null,
+    githubClientId: githubClientId ?? null,
+    githubClientSecret: githubClientSecret ?? null,
+    githubCallbackUrl: githubCallbackUrl ?? null,
     host: LOOPBACK_HOST,
     port: readInteger(environment.MY_PI_HARNESS_PORT, 'MY_PI_HARNESS_PORT', 4311),
     parentPid: readInteger(environment.MY_PI_HARNESS_PARENT_PID, 'MY_PI_HARNESS_PARENT_PID', null),
@@ -107,10 +115,29 @@ export function loadDaemonConfig(
     const firstError = [...Value.Errors(DaemonConfigSchema, candidate)][0];
     throw new DaemonConfigError(firstError?.message ?? 'Invalid daemon configuration');
   }
-  if (candidate.githubClientSecret !== null && candidate.githubClientId === null)
-    throw new DaemonConfigError('GitHub client secret requires a client ID');
   if (candidate.parentPid === process.pid) {
     throw new DaemonConfigError('MY_PI_HARNESS_PARENT_PID must identify a different process');
   }
   return candidate;
+}
+
+function validateGitHubCallbackUrl(value: string): void {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new DaemonConfigError('GitHub callback must be an absolute loopback URL');
+  }
+  if (
+    !['http:', 'https:'].includes(url.protocol) ||
+    !['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname) ||
+    url.pathname !== '/api/auth/callback/github' ||
+    url.username ||
+    url.password ||
+    url.search ||
+    url.hash
+  )
+    throw new DaemonConfigError(
+      'GitHub callback must be a loopback /api/auth/callback/github URL without credentials, query or fragment',
+    );
 }

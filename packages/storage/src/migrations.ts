@@ -4,11 +4,15 @@ import { Type } from 'typebox';
 import { Value } from 'typebox/value';
 import { StorageError } from './errors.js';
 import { FOUNDATION_SQL } from './migrations/0001-foundation.js';
+import { APPLICATION_LOGIN_SQL } from './migrations/0002-application-login.js';
 const MigrationRowSchema = Type.Object({ version: Type.Integer(), checksum: Type.String() });
 
 /** Highest installed schema version understood by this build. */
-export const SCHEMA_VERSION = 1;
-const migrations = [{ version: SCHEMA_VERSION, sql: FOUNDATION_SQL }];
+export const SCHEMA_VERSION = 2;
+const migrations = [
+  { version: 1, sql: FOUNDATION_SQL },
+  { version: 2, sql: APPLICATION_LOGIN_SQL },
+];
 
 /**
  * Install the fresh development schema and reject incompatible existing profiles.

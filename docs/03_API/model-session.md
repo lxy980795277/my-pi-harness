@@ -1,25 +1,10 @@
 # 模型、授权与会话协议
 
-本机wire协议版本为8，持久事件格式仍为version:1。M1的公开schema由 `packages/protocol/src/models.ts`、`auth.ts` 和 `sessions.ts` 拥有。HTTP返回公开DTO，SDK对象、模型上下文codec、凭据和数据库Entity不跨入Renderer。列表接口直接返回数组，写会话接口返回已提交的SessionSnapshot；失败返回 `{code,message}`。
+本机wire协议版本为9，持久事件格式仍为version:1。M1的公开schema由 `packages/protocol/src/models.ts`、`auth.ts` 和 `sessions.ts` 拥有。HTTP返回公开DTO，SDK对象、模型上下文codec、凭据和数据库Entity不跨入Renderer。列表接口直接返回数组，写会话接口返回已提交的SessionSnapshot；失败返回 `{code,message}`。
 
 ## 授权
 
-所有M1读取和写入均需要本机授权。`health` 与 `runtime/events` 仅公开进程身份；它们不包含会话事件。服务校验实际监听Host及准确Origin，开发只额外允许自有Vite的 `http://127.0.0.1:5174`。应用响应另以真实HTTP header设置frame-ancestors 'none'与X-Frame-Options DENY，禁止外部页面嵌入工作台。写请求还须携带当前内存CSRF Token到 `X-CSRF-Token`；Cookie为HttpOnly、SameSite=Strict、Path=/api，12小时过期。
-
-| 方法与路径                    | 输入与结果                                        |
-| ----------------------------- | ------------------------------------------------- |
-| GET /api/auth/status          | AuthStatus，未授权时不公开身份或CSRF              |
-| POST /api/auth/pair           | `{code}`；一次性配对，建立Cookie并返回AuthStatus  |
-| POST /api/auth/desktop        | main私有启动secret；创建Cookie，秘密不进入preload |
-| GET /api/auth/pairing-code    | 已授权所有者获取10分钟配对码                      |
-| POST /api/auth/logout         | `{}`；撤销当前Cookie                              |
-| GET /api/auth/github/start    | 可选GitHub应用PKCE授权地址                        |
-| POST /api/auth/github/device  | `{}`；可选GitHub应用Device Flow                   |
-| GET /api/auth/github/callback | 消费一次性state/code，完成身份查询并跳回页面      |
-
-浏览器配对码只在直接启动daemon的交互终端显示，或由已授权页面读取；不写普通日志或stdout启动记录。5次失败后限流1分钟。Electron通过其持有的随机启动secret建立页面Cookie，页面无须输入配对码。退出或daemon重启后Cookie需要重新授权。
-
-应用GitHub登录独立于模型Provider OAuth，不是本机使用前提。配置client ID后开放入口，Web授权码方式还需client secret，Device Flow只需client ID并在GitHub应用设置启用；授权码流程使用state、S256 PKCE与10分钟有效期，Device Flow按服务给出的间隔轮询，遵守slow_down并支持取消。身份查询完成即丢弃应用access token。[GitHub授权规则](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps)
+所有业务读取、写入和私有SSE同时要求本机信任与应用登录，写请求另需CSRF。GitHub应用登录、Cookie、profile归属与恢复见[应用身份与登录协议](application-auth.md)；模型Provider OAuth由本页接口管理，不与应用登录混用。
 
 ## Provider
 

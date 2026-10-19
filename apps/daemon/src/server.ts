@@ -45,9 +45,29 @@ export async function createDaemonApplication(
     bodyLimit: 256 * 1024,
     ...(logger === undefined ? { logger: false } : { loggerInstance: logger }),
   });
-  server.addHook('onSend', (_request, reply, payload, done) => {
+  server.setChildLoggerFactory((logger, bindings, options) =>
+    logger.child(bindings, {
+      ...options,
+      serializers: {
+        ...options.serializers,
+        req: (request: FastifyRequest) => {
+          const queryStart = request.url.indexOf('?');
+          let url = request.url;
+          if (queryStart !== -1) url = request.url.slice(0, queryStart);
+          return {
+            method: request.method,
+            url,
+            hostname: request.hostname,
+            remoteAddress: request.ip,
+          };
+        },
+      },
+    }),
+  );
+  server.addHook('onSend', (request, reply, payload, done) => {
     reply.header('Content-Security-Policy', "frame-ancestors 'none'");
     reply.header('X-Frame-Options', 'DENY');
+    if (request.url.startsWith('/api/')) reply.header('Cache-Control', 'no-store');
     done(null, payload);
   });
   const identity: RuntimeReadyEvent = {

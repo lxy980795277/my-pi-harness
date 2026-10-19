@@ -1,5 +1,6 @@
 import type { AuthStatus } from '@my-pi-harness/protocol';
 import type { UseQueryResult } from '@tanstack/react-query';
+import type { RefObject } from 'react';
 import type { Action, ValueChange } from '@/types/events';
 
 export type Theme = 'light' | 'dark';
@@ -16,6 +17,9 @@ export interface ApplicationShellState {
   toggleTheme: Action;
   auth: UseQueryResult<AuthStatus, Error>;
   pair: (code: string) => Promise<void>;
+  receiveLogin: (status: AuthStatus) => void;
+  localAuthorized: boolean;
+  checkingAuthorization: boolean;
   page: WorkspacePage;
   pageLabel: string;
   navigate: ValueChange<WorkspacePage>;
@@ -25,7 +29,6 @@ export interface ApplicationShellState {
   settings: Action;
   signOut: Action;
   pairing: Action;
-  github: Action;
   reconnect: Action;
   actionError: string | null;
 }
@@ -33,4 +36,25 @@ export interface NavigationItemState {
   current: 'page' | undefined;
   select: Action;
   className: string;
+}
+
+export interface UserProfile {
+  name: string;
+  initial: string;
+  avatarUrl: string | null;
+}
+export interface UserProfileState extends UserProfile {
+  failAvatar: Action;
+}
+
+export interface UserMenuState {
+  open: boolean;
+  trigger: RefObject<HTMLButtonElement | null>;
+  changeOpen: ValueChange<boolean>;
+  settings: Action;
+  logout: Action;
+  logoutOpen: boolean;
+  changeLogoutOpen: ValueChange<boolean>;
+  confirmLogout: Action;
+  closeFocus: (event: Event) => void;
 }

@@ -22,6 +22,8 @@
 
 根 package.json 是可执行入口，命令变化同步本页。局部变更运行最小充分检查；里程碑整体验收可做工程范围检查。代码、环境及风险未变化时复用已有通过结果，不因 commit/push 重复全量。CI负责keyless全量和macOS/Windows矩阵，真实供应商与外部账户独立配置，不让普通测试依赖用户Key或产生费用。
 
+CI桌面打包步骤显式提供合成GitHub Client ID，验证资源装配与独立临时身份的smoke，不依赖未提交的根 `.env`，也不执行真实GitHub授权。供用户登录的发布产物仍按[登录配置](../07_USER_GUIDE/application-login.md)使用实际OAuth App配置。
+
 ## 机械规则与审查
 
 - 类型感知no-deprecated拒绝实际弃用使用，源码gate拒绝types目录冗余-view文件名；合法/非法fixture必须实际运行。

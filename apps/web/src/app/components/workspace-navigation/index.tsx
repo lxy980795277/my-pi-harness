@@ -1,5 +1,5 @@
 import type { AuthStatus } from '@my-pi-harness/protocol';
-import { CircleDot, Cpu, Link2, LogIn, LogOut, MessageSquarePlus } from 'lucide-react';
+import { CircleDot, Cpu, Link2, MessageSquarePlus } from 'lucide-react';
 import type { FC } from 'react';
 
 import { NavigationItem } from '@/app/components/navigation-item';
@@ -19,7 +19,6 @@ interface WorkspaceNavigationProps {
   onSettings: () => void;
   onPairing: () => void;
   onHideCode: () => void;
-  onGithub: () => void;
   onLogout: () => void;
 }
 
@@ -35,7 +34,6 @@ export const WorkspaceNavigation: FC<WorkspaceNavigationProps> = ({
   onSettings,
   onPairing,
   onHideCode,
-  onGithub,
   onLogout,
 }) => {
   return (
@@ -82,43 +80,19 @@ export const WorkspaceNavigation: FC<WorkspaceNavigationProps> = ({
             本机服务
           </p>
           {authorized && (
-            <div className="flex items-center gap-1">
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                onClick={onPairing}
-                aria-label="生成浏览器配对码"
-                title="生成浏览器配对码"
-              >
-                <Link2 width={14} height={14} aria-hidden />
-              </Button>
-              {auth?.githubConfigured && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  onClick={onGithub}
-                  aria-label="GitHub 应用登录"
-                  title="GitHub 应用登录"
-                >
-                  <LogIn width={14} height={14} aria-hidden />
-                </Button>
-              )}
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                onClick={onLogout}
-                aria-label="退出本机授权"
-                title="退出本机授权"
-              >
-                <LogOut width={14} height={14} aria-hidden />
-              </Button>
-            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={onPairing}
+              aria-label="生成浏览器配对码"
+              title="生成浏览器配对码"
+            >
+              <Link2 width={14} height={14} aria-hidden />
+            </Button>
           )}
         </div>
-        {authorized && <UserProfileCard auth={auth} onSettings={onSettings} />}
+        {authorized && <UserProfileCard auth={auth} onSettings={onSettings} onLogout={onLogout} />}
       </div>
     </aside>
   );

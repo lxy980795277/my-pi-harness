@@ -4,7 +4,7 @@
 
 应用版本与协议版本用途不同：应用版本来自根版本生成流程；`PROTOCOL_VERSION` 管理跨端协议兼容。修改协议时更新所有消费者和相应检查，不能用产品版本代替兼容判定。
 
-当前协议为8，新增结构化多题、计划审核、步骤/Todo依据、上下文摘要版本与分类预算，并允许仅附件发送；保留审批策略、工具消息锚点、Workspace图标和有限目录拖放桥。开发阶段不保留旧协议兼容。客户端与daemon必须采用相同协议版本；SQLite迁移版本与Session事件版本分别管理，不随HTTP协议版本机械递增。
+当前协议为9，新增统一应用登录与持久身份；保留结构化多题、计划审核、步骤/Todo依据、上下文摘要版本与分类预算，并允许仅附件发送；保留审批策略、工具消息锚点、Workspace图标和有限目录拖放桥。开发阶段不保留旧协议兼容。客户端与daemon必须采用相同协议版本；SQLite迁移版本与Session事件版本分别管理，不随HTTP协议版本机械递增。
 
 ## M0 HTTP
 
@@ -30,6 +30,10 @@ daemon监听成功后向启动管道写入 `daemon.ready` 记录，包含 `host:
 桌面所有者通过Node IPC发送唯一控制消息 `{ type: "daemon.shutdown" }` 请求正常退出，daemon按schema拒绝其他控制值。IPC断开或父进程退出也触发服务关闭；该进程控制管道不暴露给Renderer。
 
 preload暴露 `DesktopBridge.getInfo()`、固定目录选择 `chooseWorkspaceDirectory()`、目录拖放 `getDroppedWorkspaceDirectory(file)` 与有限 `openAuth(flowId)`，后者的授权规则见[模型与会话协议](model-session.md)。getInfo返回经过校验的 `appVersion` 和 `platform`。拖放仅接受浏览器拥有的真实File，preload用Electron webUtils获取路径，main检查所属主frame、参数和实际目录；合成File或普通文件拒绝。点击与拖放均返回canonical目录，取消选择返回null，注册仍执行完整根策略。Renderer不接收通用 `ipcRenderer`、Node对象或任意channel；main校验消息来源，只接受当前窗口的受信任页面。
+
+## 应用身份
+
+[应用身份与登录协议](application-auth.md)拥有本机信任、GitHub登录、Cookie、profile归属、恢复和撤销。
 
 ## M1协议
 

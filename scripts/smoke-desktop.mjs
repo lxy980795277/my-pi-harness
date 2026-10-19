@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { access, mkdir, mkdtemp, readFile, readdir, realpath, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, join, relative } from 'node:path';
@@ -54,6 +55,46 @@ async function checkResourceLinks(directory) {
 }
 await checkResourceLinks(resources);
 const temporary = await mkdtemp(join(tmpdir(), 'my-pi-harness-desktop-'));
+const { openProfileStore } = await import('../packages/storage/dist/index.js');
+const profileDirectory =
+  process.platform === 'win32'
+    ? join(temporary, 'My Pi Harness', 'profiles', 'default')
+    : join(temporary, 'profiles', 'default');
+const fixtureLocalToken = randomBytes(32).toString('base64url');
+const fixtureLoginToken = randomBytes(32).toString('base64url');
+const digest = (token) => createHash('sha256').update(token).digest('hex');
+// Test-owned profile seeding keeps the shipped application free of authentication bypasses.
+const fixtureStore = await openProfileStore(profileDirectory, {
+  sessionLogRoot: join(temporary, '.my-pi-harness'),
+});
+try {
+  const createdAt = Date.now();
+  const client = fixtureStore.auth.createLocalClient({
+    id: randomUUID(),
+    tokenHash: digest(fixtureLocalToken),
+    csrfToken: randomBytes(32).toString('base64url'),
+    createdAt,
+    expiresAt: createdAt + 90 * 24 * 3600 * 1000,
+  });
+  fixtureStore.auth.completeLogin(
+    {
+      providerId: 'github',
+      issuer: 'https://github.com',
+      subject: '90000001',
+      name: 'Desktop Smoke',
+      avatarUrl: null,
+    },
+    client.id,
+    {
+      id: randomUUID(),
+      tokenHash: digest(fixtureLoginToken),
+      createdAt,
+      expiresAt: createdAt + 30 * 24 * 3600 * 1000,
+    },
+  );
+} finally {
+  fixtureStore.close();
+}
 const output = join(root, 'output', 'playwright');
 await mkdir(output, { recursive: true });
 let application;
@@ -96,8 +137,37 @@ try {
     await realpath(temporary),
     'Smoke profile must be isolated',
   );
+  const initialStatus = await page.evaluate(async () => (await fetch('/api/auth/status')).json());
+  assert.equal(initialStatus.localAuthorized, true);
+  assert.equal(initialStatus.authenticated, false);
+  await expect(page.getByTestId('login-page')).toBeVisible();
+  await expect(page.getByTestId('workspace-shell')).toHaveCount(0);
+  assert.equal(await page.evaluate(async () => (await fetch('/api/sessions')).status), 401);
+  await page.screenshot({ path: join(output, 'desktop-login.png'), fullPage: true });
+  await application.evaluate(
+    async ({ session }, credentials) => {
+      for (const [name, value] of Object.entries(credentials.values)) {
+        await session.defaultSession.cookies.set({
+          url: credentials.origin,
+          name,
+          value,
+          path: '/api',
+          httpOnly: true,
+          sameSite: 'strict',
+          expirationDate: Date.now() / 1000 + 30 * 24 * 3600,
+        });
+      }
+    },
+    {
+      origin: new URL(page.url()).origin,
+      values: { my_pi_local: fixtureLocalToken, my_pi_session: fixtureLoginToken },
+    },
+  );
+  await page.reload();
+  await expect(page.getByTestId('workspace-shell')).toBeVisible();
   const status = await page.evaluate(async () => (await fetch('/api/auth/status')).json());
   assert.equal(status.authenticated, true);
+  assert.equal(status.user.name, 'Desktop Smoke');
   const documentResult = await page.evaluate(async (csrfToken) => {
     const uploaded = await fetch('/api/attachments', {
       method: 'POST',
@@ -123,7 +193,11 @@ try {
     6,
     'Bundled Node must load the selected native provider factories',
   );
-  await page.getByRole('button', { name: '用户信息，打开设置', exact: true }).click();
+  await page.getByRole('button', { name: '用户信息，打开菜单', exact: true }).click();
+  await page
+    .getByRole('dialog', { name: '用户菜单', exact: true })
+    .getByRole('button', { name: '设置', exact: true })
+    .click();
   const settings = page.getByRole('dialog', { name: '设置', exact: true });
   await settings.getByRole('tab', { name: '模型', exact: true }).click();
   await expect(settings.getByRole('switch')).toHaveCount(6);

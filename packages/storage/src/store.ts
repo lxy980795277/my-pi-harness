@@ -29,6 +29,7 @@ import {
   type Checkpoint,
 } from '@my-pi-harness/protocol';
 import { StorageError } from './errors.js';
+import { AuthRepository } from './auth.js';
 import { applyMigrations } from './migrations.js';
 import { acquireProfileLock, type ProfileLock } from './profile-lock.js';
 import { ProjectionWriter } from './projector.js';
@@ -52,6 +53,7 @@ import {
 
 /** JSONL session facts, immutable attachments and SQLite configuration/projections for one daemon. */
 export class ProfileStore {
+  public readonly auth: AuthRepository;
   private readonly db: BetterSQLite3Database<typeof schema>;
   private readonly projector: ProjectionWriter;
   private readonly workspaces: WorkspaceRepository;
@@ -70,6 +72,7 @@ export class ProfileStore {
     private readonly lock: ProfileLock,
     options: ProfileStoreOptions = {},
   ) {
+    this.auth = new AuthRepository(sqlite, () => this.assertOpen());
     this.db = drizzle(sqlite, { schema });
     this.projector = new ProjectionWriter(this.db);
     this.workspaces = new WorkspaceRepository(this.db);

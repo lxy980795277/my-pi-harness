@@ -7,8 +7,3 @@ export {
   type ContextBudgetInput,
   type FittedContext,
 } from './budget.js';
-export {
-  selectCompactionPrefix,
-  buildCompactionPrompt,
-  type CompactionPrefix,
-} from './compaction.js';

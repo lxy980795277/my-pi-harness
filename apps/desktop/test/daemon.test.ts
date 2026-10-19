@@ -26,6 +26,7 @@ const FixtureStateSchema = Type.Object({
   shutdownCount: Type.Integer({ minimum: 0 }),
   exitCode: Type.Union([Type.Integer(), Type.Null()]),
   sessionLogRoot: Type.String(),
+  githubClientId: Type.String(),
   developmentOrigins: Type.Array(Type.Object({ key: Type.String(), value: Type.String() })),
 });
 
@@ -49,6 +50,10 @@ async function prepareFixture(mode: FixtureMode): Promise<Fixture> {
   );
   await writeFile(join(daemonDirectory, 'package.json'), '{"type":"module"}\n');
   await writeFile(
+    join(daemonDirectory, 'desktop-oauth.env'),
+    'MY_PI_HARNESS_GITHUB_CLIENT_ID=fixture-packaged-client\n',
+  );
+  await writeFile(
     join(bootstrapDirectory, 'bootstrap.js'),
     `import { createServer } from 'node:http';
 import { renameSync, writeFileSync } from 'node:fs';
@@ -62,6 +67,7 @@ const save = (exitCode) => {
   writeFileSync(statePath + '.tmp', JSON.stringify({
     pid: process.pid, origin, shutdownCount, exitCode,
     sessionLogRoot: process.env.MY_PI_HARNESS_SESSION_LOG_ROOT,
+    githubClientId: process.env.MY_PI_HARNESS_GITHUB_CLIENT_ID,
     developmentOrigins: Object.entries(process.env)
       .filter(([key]) => key.toUpperCase() === 'MY_PI_HARNESS_DEVELOPMENT_ORIGIN')
       .map(([key, value]) => ({ key, value })),
@@ -159,6 +165,27 @@ afterEach(async () => {
 });
 
 describe('desktop daemon supervisor', { concurrent: false }, () => {
+  it('loads packaged public OAuth configuration in the independent Node child', async () => {
+    vi.stubEnv('MY_PI_HARNESS_GITHUB_CLIENT_ID', undefined);
+    const current = await prepareFixture('valid-ready');
+    const daemon = await startDaemon();
+    try {
+      expect((await readState(current)).githubClientId).toBe('fixture-packaged-client');
+    } finally {
+      await daemon.stop();
+    }
+  });
+
+  it('allows an explicit process override of the packaged Client ID', async () => {
+    vi.stubEnv('MY_PI_HARNESS_GITHUB_CLIENT_ID', 'fixture-override-client');
+    const current = await prepareFixture('valid-ready');
+    const daemon = await startDaemon();
+    try {
+      expect((await readState(current)).githubClientId).toBe('fixture-override-client');
+    } finally {
+      await daemon.stop();
+    }
+  });
   it('requires a repository log root before spawning a standalone packaged daemon', async () => {
     const current = await prepareFixture('valid-ready');
     vi.stubEnv('MY_PI_HARNESS_SESSION_LOG_ROOT', undefined);

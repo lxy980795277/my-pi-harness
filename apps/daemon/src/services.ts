@@ -16,7 +16,8 @@ import {
 import type { DaemonConfig } from './config.js';
 import type { Question } from '@my-pi-harness/protocol';
 import { LocalAuth } from './features/auth/local-auth.js';
-import { GitHubAuth } from './features/auth/github-auth.js';
+import { GitHubIdentityProvider } from './features/auth/github-provider.js';
+import { LoginService } from './features/auth/login-service.js';
 import { WorkspaceService } from './features/workspaces/service.js';
 import { AttachmentService } from './features/attachments/service.js';
 
@@ -30,7 +31,8 @@ export interface ApplicationServices {
   tools: ToolRuntime;
   work: WorkRuntime;
   attachments: AttachmentService;
-  github?: GitHubAuth;
+  login: LoginService;
+  githubCallbackUrl: string | null;
   close(): Promise<void>;
 }
 
@@ -110,19 +112,22 @@ export async function createApplicationServices(
       work,
     });
     runtimeRef.current = runtime;
+    const login = new LoginService([
+      new GitHubIdentityProvider(
+        config.githubClientId,
+        options.githubFetch,
+        config.githubClientSecret,
+      ),
+    ]);
     const auth = new LocalAuth({
-      githubConfigured: config.githubClientId !== null,
+      store: store.auth,
+      providers: () => login.listProviders(),
       ...(config.ownerSecret ? { ownerSecret: config.ownerSecret } : {}),
       ...(config.developmentOrigin ? { developmentOrigin: config.developmentOrigin } : {}),
+      ...(config.githubCallbackUrl
+        ? { callbackOrigin: new URL(config.githubCallbackUrl).origin }
+        : {}),
     });
-    const github = config.githubClientId
-      ? new GitHubAuth({
-          clientId: config.githubClientId,
-          ...(config.githubClientSecret ? { clientSecret: config.githubClientSecret } : {}),
-          ...(options.githubFetch ? { fetch: options.githubFetch } : {}),
-          onIdentity: (identity) => auth.setIdentity(identity),
-        })
-      : undefined;
     let closing: Promise<void> | undefined;
     const ownedAttachments = attachments;
     const ownedWork = work;
@@ -135,16 +140,17 @@ export async function createApplicationServices(
       tools,
       work: ownedWork,
       attachments: ownedAttachments,
-      ...(github ? { github } : {}),
+      login,
+      githubCallbackUrl: config.githubCallbackUrl,
       close(): Promise<void> {
         closing ??= (async () => {
           const failures: unknown[] = [];
           ownedWork.close();
           for (const dispose of [
+            () => login.close(),
             () => ownedAttachments.close(),
             () => runtime.close(),
             () => ownedGateway.close(),
-            () => github?.close(),
           ]) {
             try {
               await dispose();

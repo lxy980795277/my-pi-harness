@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { loadDaemonConfig } from '../src/config.js';
 import { createApplicationServices, type ApplicationServices } from '../src/services.js';
 import { createDaemonApplication, type DaemonApplication } from '../src/server.js';
+import { loginFixture, pairFixture } from './support/login.js';
 
 const owned: {
   directory: string;
@@ -35,30 +36,25 @@ async function setup(): Promise<{ origin: string; services: ApplicationServices 
   const origin = await application.server.listen({ host: '127.0.0.1', port: 0 });
   return { origin, services };
 }
-async function pair(origin: string, code: string): Promise<{ cookie: string; csrf: string }> {
-  const response = await fetch(`${origin}/api/auth/pair`, {
-    method: 'POST',
-    headers: { Origin: origin, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ code }),
-  });
-  expect(response.status).toBe(200);
-  const status: unknown = await response.json();
-  if (
-    typeof status !== 'object' ||
-    status === null ||
-    !('csrfToken' in status) ||
-    typeof status.csrfToken !== 'string'
-  )
-    throw new Error('No CSRF token');
-  const cookie = response.headers.get('set-cookie')?.split(';')[0];
-  if (!cookie) throw new Error('No cookie');
-  return { cookie, csrf: status.csrfToken };
-}
-
 describe('M1 application authorization and settings', () => {
+  it('requires application login after pairing and hides private data from trusted clients', async () => {
+    const { origin, services } = await setup();
+    const trust = await pairFixture(origin, services.auth.pairingCode);
+    const status = await fetch(`${origin}/api/auth/status`, { headers: { Cookie: trust.cookie } });
+    expect(await status.json()).toMatchObject({
+      localAuthorized: true,
+      authenticated: false,
+      user: null,
+      session: null,
+    });
+    for (const path of ['/api/providers', '/api/settings', '/api/workspaces', '/api/sessions'])
+      expect((await fetch(`${origin}${path}`, { headers: { Cookie: trust.cookie } })).status).toBe(
+        401,
+      );
+  });
   it('validates atomic model settings and applies only a usable saved default to new sessions', async () => {
     const { origin, services } = await setup();
-    const grant = await pair(origin, services.auth.pairingCode);
+    const grant = await loginFixture(origin, services);
     const headers = {
       Cookie: grant.cookie,
       Origin: origin,
@@ -177,7 +173,7 @@ describe('M1 application authorization and settings', () => {
         })
       ).status,
     ).toBe(403);
-    const granted = await pair(origin, code);
+    const granted = await loginFixture(origin, services, code);
     const rebound = await new Promise<number>((resolve, reject) => {
       const request = httpRequest(
         `${origin}/api/providers`,
@@ -216,7 +212,7 @@ describe('M1 application authorization and settings', () => {
 
   it('rejects unknown fields and types, returns six native integrations and revokes the cookie', async () => {
     const { origin, services } = await setup();
-    const grant = await pair(origin, services.auth.pairingCode);
+    const grant = await loginFixture(origin, services);
     const headers = {
       Cookie: grant.cookie,
       Origin: origin,
@@ -259,11 +255,18 @@ describe('M1 application authorization and settings', () => {
       (await fetch(`${origin}/api/auth/logout`, { method: 'POST', headers, body: '{}' })).status,
     ).toBe(200);
     expect((await fetch(`${origin}/api/sessions`, { headers })).status).toBe(401);
+    const loggedOut = await fetch(`${origin}/api/auth/status`, { headers });
+    expect(await loggedOut.json()).toMatchObject({
+      localAuthorized: true,
+      authenticated: false,
+      user: null,
+      session: null,
+    });
   });
 
   it('keeps secrets in the injected credential store and rejects stale revisions', async () => {
     const { origin, services } = await setup();
-    const grant = await pair(origin, services.auth.pairingCode);
+    const grant = await loginFixture(origin, services);
     const headers = {
       Cookie: grant.cookie,
       Origin: origin,

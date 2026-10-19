@@ -21,6 +21,8 @@ import { sessionLogDirectory, SessionBatchSchema } from '@my-pi-harness/storage'
 import type { Static, TSchema } from 'typebox';
 import { Value } from 'typebox/value';
 import { describe, expect, it } from 'vitest';
+import { loginThroughHttp } from './support/login-http.js';
+import type { FixtureAuthorization } from './support/login.js';
 
 const root = fileURLToPath(new URL('../../../', import.meta.url));
 const launcher = fileURLToPath(new URL('../../../tests/e2e/start-daemon.mjs', import.meta.url));
@@ -56,7 +58,11 @@ async function deadline<T>(task: Promise<T>, label: string): Promise<T> {
   }
 }
 
-async function startDaemon(profile: string, children: ChildProcess[]): Promise<Daemon> {
+async function startDaemon(
+  profile: string,
+  children: ChildProcess[],
+  previous?: FixtureAuthorization,
+): Promise<Daemon> {
   const secret = randomBytes(32).toString('base64url');
   const environment: NodeJS.ProcessEnv = {
     ...process.env,
@@ -74,7 +80,8 @@ async function startDaemon(profile: string, children: ChildProcess[]): Promise<D
     'MY_PI_HARNESS_GITHUB_CLIENT_SECRET',
   ])
     delete environment[name];
-  // The artifact fixture explicitly injects Memory credentials; shipped bootstrap remains unchanged.
+  environment.MY_PI_HARNESS_GITHUB_CLIENT_ID = 'synthetic-built-client-id';
+  // The artifact fixture injects credentials and GitHub responses; production bootstrap does neither.
   const child = spawn(process.execPath, [launcher], {
     cwd: root,
     env: environment,
@@ -128,25 +135,48 @@ async function startDaemon(profile: string, children: ChildProcess[]): Promise<D
   const origin = `http://${ready.host}:${ready.port}`;
   const bootstrap = await fetch(`${origin}/api/auth/desktop`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(previous ? { Cookie: previous.cookie } : {}),
+    },
     body: JSON.stringify({ secret }),
     signal: AbortSignal.timeout(5000),
   });
-  const cookie = bootstrap.headers.get('set-cookie')?.split(';')[0];
-  if (!bootstrap.ok || !cookie) throw new Error('Artifact owner authorization failed');
+  const localCookie = bootstrap.headers.get('set-cookie')?.split(';')[0];
+  await bootstrap.body?.cancel();
+  if (!bootstrap.ok || !localCookie) throw new Error('Artifact owner authorization failed');
+  const retained =
+    previous?.cookie
+      .split(';')
+      .map((pair) => pair.trim())
+      .filter((pair) => !pair.startsWith('my_pi_local=')) ?? [];
+  const cookie = [localCookie, ...retained].join('; ');
   const response = await fetch(`${origin}/api/auth/status`, {
     headers: { Cookie: cookie },
     signal: AbortSignal.timeout(5000),
   });
   const status: unknown = await response.json();
-  const csrf = checked(AuthStatusSchema, status).csrfToken;
-  if (!response.ok || !csrf) throw new Error('Artifact owner has no CSRF token');
+  const authorization = checked(AuthStatusSchema, status);
+  const csrf = authorization.csrfToken;
+  if (!response.ok || !csrf || !authorization.localAuthorized)
+    throw new Error('Artifact owner has no local trust');
+  let granted: FixtureAuthorization;
+  if (previous) {
+    expect(authorization.authenticated).toBe(true);
+    granted = { cookie, csrf };
+  } else {
+    expect(authorization.authenticated).toBe(false);
+    const privateRead = await fetch(`${origin}/api/providers`, { headers: { Cookie: cookie } });
+    expect(privateRead.status).toBe(401);
+    await privateRead.body?.cancel();
+    granted = await loginThroughHttp(origin, { cookie, csrf });
+  }
   let stopping: Promise<Outcome> | undefined;
   return {
     child,
     origin,
-    cookie,
-    csrf,
+    cookie: granted.cookie,
+    csrf: granted.csrf,
     exited,
     stop: () =>
       (stopping ??= (async () => {
@@ -387,7 +417,7 @@ describe('built daemon recovery with real Pi HTTP streaming', () => {
       const killed = await deadline(first.exited, 'Killed daemon remained alive');
       expect(killed.code !== 0 || killed.signal !== null).toBe(true);
 
-      const second = await startDaemon(profile, children);
+      const second = await startDaemon(profile, children, first);
       daemons.push(second);
       const restored = await api(second, `/sessions/${sessionId}`, SessionSnapshotSchema);
       expect(restored.session.activeRunId).toBeNull();
@@ -630,7 +660,7 @@ describe('built daemon M3 work recovery', () => {
       );
       await appendFile(log, '{"version":1,"eventId":"crash-tail');
 
-      const second = await startDaemon(profile, children);
+      const second = await startDaemon(profile, children, first);
       daemons.push(second);
       const afterRestart = await api(second, `/sessions/${sessionId}`, SessionSnapshotSchema);
       expect(afterRestart).toEqual(restoredHistory);

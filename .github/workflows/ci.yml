@@ -33,4 +33,6 @@ jobs:
       - run: pnpm exec playwright install chromium
       - run: pnpm test:e2e
       - run: pnpm package:desktop
+        env:
+          MY_PI_HARNESS_GITHUB_CLIENT_ID: synthetic-ci-desktop-client
       - run: pnpm smoke:desktop

@@ -1,20 +1,27 @@
-import { randomBytes, timingSafeEqual } from 'node:crypto';
-import type { AuthStatus } from '@my-pi-harness/protocol';
+import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
+import type { AuthStatus, LoginProvider } from '@my-pi-harness/protocol';
+import type {
+  AuthRepository,
+  LocalClient,
+  StoredLoginSession,
+  VerifiedIdentity,
+} from '@my-pi-harness/storage';
 import type { FastifyRequest } from 'fastify';
+import { LoginError } from './errors.js';
 
-const COOKIE = 'my_pi_session';
-const SESSION_LIFETIME = 12 * 60 * 60 * 1000;
+const LOCAL_COOKIE = 'my_pi_local';
+const LOGIN_COOKIE = 'my_pi_session';
+const CLIENT_LIFETIME = 90 * 24 * 60 * 60 * 1000;
+const SESSION_LIFETIME = 30 * 24 * 60 * 60 * 1000;
 const PAIR_LIFETIME = 10 * 60 * 1000;
-interface LocalSession {
-  csrf: string;
-  expiresAt: number;
-}
 
-/** Private daemon-owner bootstrap and browser pairing settings. */
+/** Private bootstrap and persistent application authorization for one local profile. */
 export interface LocalAuthOptions {
+  store: AuthRepository;
+  providers: () => LoginProvider[];
   ownerSecret?: string;
   developmentOrigin?: string;
-  githubConfigured: boolean;
+  callbackOrigin?: string;
 }
 
 function equalSecret(actual: string, expected: string): boolean {
@@ -23,27 +30,28 @@ function equalSecret(actual: string, expected: string): boolean {
   return left.length === right.length && timingSafeEqual(left, right);
 }
 
-/** Owns application cookies; model provider credentials have separate ownership. */
+function hash(token: string): string {
+  return createHash('sha256').update(token).digest('hex');
+}
+
+/** Checks local client trust and separately issued, client-bound application sessions. */
 export class LocalAuth {
-  private readonly sessions = new Map<string, LocalSession>();
   private challenge = this.newChallenge();
   private attempts = { count: 0, until: 0 };
-  private identity: AuthStatus['identity'] = null;
+  private readonly watchers = new Map<() => void, () => void>();
 
   public constructor(private readonly options: LocalAuthOptions) {}
 
-  /** Private, user-visible pairing output is never a health or startup record. */
   public get pairingCode(): string {
     return this.challenge.code;
   }
 
-  /** Check the actual listener Host and exact accepted browser Origin. */
   public trustedSource(request: FastifyRequest, requireOrigin: boolean): boolean {
     const address = request.server.server.address();
     if (address === null || typeof address === 'string') return false;
-    const origin = `http://127.0.0.1:${address.port}`;
-    const accepted = new Set([origin]);
+    const accepted = new Set([`http://127.0.0.1:${address.port}`]);
     if (this.options.developmentOrigin) accepted.add(this.options.developmentOrigin);
+    if (this.options.callbackOrigin) accepted.add(this.options.callbackOrigin);
     const host = request.headers.host;
     if (!host || ![...accepted].some((value) => new URL(value).host === host)) return false;
     const source = request.headers.origin;
@@ -51,97 +59,188 @@ export class LocalAuth {
     return accepted.has(source);
   }
 
+  /** Called after source validation; no forwarding headers select the login return origin. */
+  public applicationOrigin(request: FastifyRequest): string {
+    if (request.headers.origin) return request.headers.origin;
+    return `http://${request.headers.host}`;
+  }
+
+  public client(request: FastifyRequest): LocalClient | undefined {
+    const token = this.cookieToken(request, LOCAL_COOKIE);
+    if (token === undefined) return undefined;
+    return this.options.store.findLocalClient(hash(token), Date.now());
+  }
+
+  public requireClient(request: FastifyRequest): LocalClient {
+    const client = this.client(request);
+    if (!client) throw new LoginError('LOCAL_AUTH_REQUIRED', '请先完成本机授权。', 401);
+    return client;
+  }
+
   public isAuthorized(request: FastifyRequest): boolean {
-    return this.readSession(request) !== undefined;
+    return this.session(request) !== undefined;
   }
 
   public csrfValid(request: FastifyRequest): boolean {
-    const session = this.readSession(request);
+    const client = this.client(request);
     const csrf = request.headers['x-csrf-token'];
-    return session !== undefined && typeof csrf === 'string' && equalSecret(csrf, session.csrf);
+    return client !== undefined && typeof csrf === 'string' && equalSecret(csrf, client.csrfToken);
   }
 
   public status(request: FastifyRequest): AuthStatus {
-    const session = this.readSession(request);
+    const client = this.client(request);
+    const session = this.session(request);
+    return this.describe(client, session);
+  }
+
+  private describe(
+    client: LocalClient | undefined,
+    session: StoredLoginSession | undefined,
+  ): AuthStatus {
+    let sessionInfo: AuthStatus['session'] = null;
+    if (session)
+      sessionInfo = {
+        id: session.id,
+        providerId: session.providerId,
+        expiresAt: session.expiresAt,
+      };
     return {
+      localAuthorized: client !== undefined,
       authenticated: session !== undefined,
-      csrfToken: session?.csrf ?? null,
-      githubConfigured: this.options.githubConfigured,
-      identity: session ? this.identity : null,
+      csrfToken: client?.csrfToken ?? null,
+      providers: this.options.providers(),
+      profileBound: this.options.store.profileOwner() !== undefined,
+      user: session?.user ?? null,
+      session: sessionInfo,
     };
   }
 
-  public pair(code: string): { cookie: string; csrfToken: string } {
+  public pair(code: string): { cookie: string; status: AuthStatus } {
     const now = Date.now();
     if (this.attempts.until < now) this.attempts = { count: 0, until: now + 60_000 };
     this.attempts.count += 1;
-    if (this.attempts.count > 5) throw new Error('PAIR_RATE_LIMIT');
+    if (this.attempts.count > 5)
+      throw new LoginError('PAIR_RATE_LIMIT', '尝试次数过多，请稍后再试。', 429);
     if (now > this.challenge.expiresAt || !equalSecret(code, this.challenge.code))
-      throw new Error('PAIR_INVALID');
+      throw new LoginError('PAIR_INVALID', '配对码无效或已过期。', 401);
+    const grant = this.grant();
     this.challenge = this.newChallenge();
     this.attempts = { count: 0, until: 0 };
-    return this.grant();
+    return { cookie: grant.cookie, status: this.describe(grant.client, undefined) };
   }
 
-  public bootstrap(secret: string): string {
+  public bootstrap(secret: string, request: FastifyRequest): string {
     if (!this.options.ownerSecret || !equalSecret(secret, this.options.ownerSecret))
-      throw new Error('OWNER_INVALID');
+      throw new LoginError('OWNER_INVALID', '桌面授权失败。', 401);
+    const token = this.cookieToken(request, LOCAL_COOKIE);
+    const client = this.client(request);
+    if (token && client) return cookieValue(LOCAL_COOKIE, token, client.expiresAt);
     return this.grant().cookie;
   }
 
-  /** Authorized owners renew an expired pairing challenge for another browser. */
   public getPairingCode(): string {
     if (this.challenge.expiresAt < Date.now()) this.challenge = this.newChallenge();
     return this.challenge.code;
   }
 
-  public logout(request: FastifyRequest): void {
-    const token = this.cookieToken(request);
-    if (token) this.sessions.delete(token);
-    this.identity = null;
-  }
-
-  public setIdentity(identity: NonNullable<AuthStatus['identity']>): void {
-    this.identity = identity;
-  }
-  public close(): void {
-    this.sessions.clear();
-    this.identity = null;
-  }
-  public clearCookie(): string {
-    return `${COOKIE}=; HttpOnly; SameSite=Strict; Path=/api; Max-Age=0`;
-  }
-
-  private grant(): { cookie: string; csrfToken: string } {
-    for (const [id, session] of this.sessions)
-      if (session.expiresAt < Date.now()) this.sessions.delete(id);
+  public login(
+    request: FastifyRequest,
+    identity: VerifiedIdentity,
+  ): { cookie: string; status: AuthStatus } {
+    const client = this.requireClient(request);
     const token = randomBytes(32).toString('base64url');
-    const csrf = randomBytes(32).toString('base64url');
-    this.sessions.set(token, { csrf, expiresAt: Date.now() + SESSION_LIFETIME });
+    const createdAt = Date.now();
+    const session = this.options.store.completeLogin(identity, client.id, {
+      id: randomUUID(),
+      tokenHash: hash(token),
+      createdAt,
+      expiresAt: Math.min(createdAt + SESSION_LIFETIME, client.expiresAt),
+    });
     return {
-      cookie: `${COOKIE}=${token}; HttpOnly; SameSite=Strict; Path=/api; Max-Age=${SESSION_LIFETIME / 1000}`,
-      csrfToken: csrf,
+      cookie: cookieValue(LOGIN_COOKIE, token, session.expiresAt),
+      status: this.describe(client, session),
     };
   }
+
+  public logout(request: FastifyRequest): void {
+    this.options.store.revokeClientSessions(this.requireClient(request).id);
+    for (const notify of this.watchers.keys()) notify();
+  }
+
+  /** Observe revocation immediately and expiry without waiting for another business event. */
+  public watch(request: FastifyRequest, onLost: () => void): () => void {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let closed = false;
+    const stop = (): void => {
+      closed = true;
+      this.watchers.delete(inspect);
+      clearTimeout(timer);
+    };
+    const inspect = (): void => {
+      if (closed) return;
+      clearTimeout(timer);
+      const session = this.session(request);
+      if (session === undefined) {
+        stop();
+        onLost();
+        return;
+      }
+      timer = setTimeout(
+        inspect,
+        Math.min(session.expiresAt - Date.now() + 1, 24 * 60 * 60 * 1000),
+      );
+      timer.unref();
+    };
+    this.watchers.set(inspect, stop);
+    inspect();
+    return stop;
+  }
+
+  public clearLoginCookie(): string {
+    return `${LOGIN_COOKIE}=; HttpOnly; SameSite=Strict; Path=/api; Max-Age=0`;
+  }
+
+  public close(): void {
+    for (const stop of this.watchers.values()) stop();
+  }
+
+  private grant(): { cookie: string; client: LocalClient } {
+    const token = randomBytes(32).toString('base64url');
+    const now = Date.now();
+    const client = this.options.store.createLocalClient({
+      id: randomUUID(),
+      tokenHash: hash(token),
+      csrfToken: randomBytes(32).toString('base64url'),
+      createdAt: now,
+      expiresAt: now + CLIENT_LIFETIME,
+    });
+    return { cookie: cookieValue(LOCAL_COOKIE, token, client.expiresAt), client };
+  }
+
+  private session(request: FastifyRequest): StoredLoginSession | undefined {
+    const client = this.client(request);
+    const token = this.cookieToken(request, LOGIN_COOKIE);
+    if (!client || !token) return undefined;
+    return this.options.store.findLoginSession(hash(token), client.id, Date.now());
+  }
+
   private newChallenge(): { code: string; expiresAt: number } {
     return { code: randomBytes(8).toString('hex'), expiresAt: Date.now() + PAIR_LIFETIME };
   }
-  private cookieToken(request: FastifyRequest): string | undefined {
+
+  private cookieToken(request: FastifyRequest, name: string): string | undefined {
     const values = request.headers.cookie
       ?.split(';')
       .map((part) => part.trim())
-      .filter((part) => part.startsWith(`${COOKIE}=`));
+      .filter((part) => part.startsWith(`${name}=`));
     if (!values || values.length !== 1) return undefined;
-    return values[0]?.slice(COOKIE.length + 1);
+    const token = values[0]?.slice(name.length + 1);
+    if (token === undefined || !/^[A-Za-z0-9_-]{43}$/.test(token)) return undefined;
+    return token;
   }
-  private readSession(request: FastifyRequest): LocalSession | undefined {
-    const token = this.cookieToken(request);
-    if (!token) return undefined;
-    const session = this.sessions.get(token);
-    if (session && session.expiresAt <= Date.now()) {
-      this.sessions.delete(token);
-      return undefined;
-    }
-    return session;
-  }
+}
+
+function cookieValue(name: string, token: string, expiresAt: number): string {
+  const maxAge = Math.max(0, Math.floor((expiresAt - Date.now()) / 1000));
+  return `${name}=${token}; HttpOnly; SameSite=Strict; Path=/api; Max-Age=${maxAge}`;
 }

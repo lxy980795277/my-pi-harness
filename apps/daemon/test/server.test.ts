@@ -10,6 +10,8 @@ import {
   RuntimeReadyEventSchema,
 } from '@my-pi-harness/protocol';
 import { Value } from 'typebox/value';
+import type { FastifyBaseLogger } from 'fastify';
+import pino from 'pino';
 import { afterEach, describe, expect, it } from 'vitest';
 import { loadDaemonConfig } from '../src/config.js';
 import { createDaemonApplication, type DaemonApplication } from '../src/server.js';
@@ -25,7 +27,10 @@ afterEach(async () => {
   );
 });
 
-async function createApplication(webDistPath?: string): Promise<DaemonApplication> {
+async function createApplication(
+  webDistPath?: string,
+  logger?: FastifyBaseLogger,
+): Promise<DaemonApplication> {
   const directory = await mkdtemp(join(tmpdir(), 'my-pi-server-config-'));
   temporaryDirectories.push(directory);
   const application = await createDaemonApplication(
@@ -35,6 +40,7 @@ async function createApplication(webDistPath?: string): Promise<DaemonApplicatio
       MY_PI_HARNESS_PORT: '0',
       ...(webDistPath === undefined ? {} : { MY_PI_HARNESS_WEB_DIST_PATH: webDistPath }),
     }),
+    logger,
   );
   applications.push(application);
   return application;
@@ -45,6 +51,22 @@ function listen(application: DaemonApplication): Promise<string> {
 }
 
 describe('local daemon API', () => {
+  it('omits OAuth callback query values from automatic request logs', async () => {
+    const messages: string[] = [];
+    const logger = pino({ level: 'info' }, { write: (message) => messages.push(message) });
+    const { server } = await createApplication(undefined, logger);
+    server.get('/api/auth/callback/:providerId', (_request, reply) =>
+      reply.code(303).redirect('/'),
+    );
+    const response = await server.inject({
+      url: '/api/auth/callback/github?code=private-fixture-code&state=private-fixture-state',
+    });
+    expect(response.statusCode).toBe(303);
+    expect(messages.join('')).toContain('/api/auth/callback/github');
+    expect(messages.join('')).not.toContain('private-fixture-code');
+    expect(messages.join('')).not.toContain('private-fixture-state');
+  });
+
   it('reports the daemon identity through the shared health protocol', async () => {
     const application = await createApplication();
     const response = await application.server.inject({ method: 'GET', url: '/api/health' });

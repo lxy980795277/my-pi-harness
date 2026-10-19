@@ -1,11 +1,11 @@
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fauxAssistantMessage, type Message } from '@earendil-works/pi-ai';
-import { ContextSummarySchema, type ContextSummary } from '@my-pi-harness/protocol';
+import { ContextSummarySchema, type ContextSummary, type WorkState } from '@my-pi-harness/protocol';
 import { Value } from 'typebox/value';
 import { describe, expect, it } from 'vitest';
 import { fallbackSummary, renderSummary } from '../src/context/summary.js';
-import { fixture, idle, call, sendTurn, todo } from './support/work-fixture.js';
+import { fixture, idle, call, sendTurn, todo, observe } from './support/work-fixture.js';
 
 function largeSummary(): ContextSummary {
   const entries = Array.from({ length: 20 }, (_, index) =>
@@ -29,6 +29,98 @@ function expectSummaryFits(summary: ContextSummary): void {
 }
 
 describe('M3 review regression cases', () => {
+  it('rejects a replacement plan that breaks task links before saving or waiting, while retaining compatible steps', async () => {
+    const f = await fixture();
+    let unsubscribe = (): void => undefined;
+    try {
+      const linkedStep = { id: 'linked-step', title: 'Analyze inputs', status: 'pending' as const };
+      const addedStep = { id: 'added-step', title: 'Explain results', status: 'pending' as const };
+      const linkedTask = {
+        ...todo('analysis', 'Analyze inputs', 'pending'),
+        planStepId: linkedStep.id,
+      };
+      const original = f.work.snapshot(f.session.id).state;
+      f.work.save(f.session.id, {
+        ...original,
+        plan: {
+          id: 'original-plan',
+          runId: null,
+          title: 'Original plan',
+          content: 'Analyze the supplied facts.',
+          steps: [linkedStep],
+          status: 'approved',
+          review: 'approved',
+          feedback: null,
+          updatedAt: 1,
+        },
+        todos: [linkedTask],
+      });
+      let beforeRejectedPlan: WorkState | undefined;
+      let afterRejectedPlan: WorkState | undefined;
+      unsubscribe = f.runtime.subscribe(f.session.id, (event) => {
+        if (event.type !== 'tool.requested' && event.type !== 'tool.updated') return;
+        const tool = f.runtime.getSnapshot(f.session.id).tools.at(-1);
+        if (tool?.name !== 'update_plan' || tool.arguments.title !== 'Broken replacement') return;
+        if (event.type === 'tool.requested')
+          beforeRejectedPlan = f.work.snapshot(f.session.id).state;
+        if (event.type === 'tool.updated' && tool.status === 'failed')
+          afterRejectedPlan = f.work.snapshot(f.session.id).state;
+      });
+      f.faux.setResponses([
+        call('update_plan', {
+          title: 'Broken replacement',
+          content: 'Explain results without the linked analysis step.',
+          steps: [addedStep],
+        }),
+        call('update_plan', {
+          title: 'Compatible replacement',
+          content: 'Preserve analysis and add an explanation.',
+          steps: [linkedStep, addedStep],
+        }),
+        call('update_plan_steps', { steps: [{ id: addedStep.id, status: 'completed' }] }),
+        fauxAssistantMessage('The compatible plan was reviewed and its steps updated.'),
+      ]);
+      await f.runtime.send(f.session.id, {
+        text: 'Revise the plan while preserving task links.',
+        mode: 'send',
+        requestId: 'replace-linked-plan',
+      });
+      await observe(
+        f.runtime,
+        f.session.id,
+        () => f.work.snapshot(f.session.id).state.plan?.review === 'pending',
+      );
+      expect(beforeRejectedPlan).toBeDefined();
+      expect(afterRejectedPlan).toEqual(beforeRejectedPlan);
+      const failed = f.runtime.getSnapshot(f.session.id).tools[0];
+      expect(failed).toMatchObject({ name: 'update_plan', status: 'failed' });
+      expect(failed?.result).toContain('请先更新或清理任务关联');
+      const pending = f.work.snapshot(f.session.id).state;
+      expect(pending.plan).toMatchObject({
+        title: 'Compatible replacement',
+        steps: [linkedStep, addedStep],
+        review: 'pending',
+      });
+      expect(pending.todos).toEqual([linkedTask]);
+      if (pending.plan === null) throw new Error('Missing compatible plan');
+      await f.work.reviewPlan(f.session.id, pending.plan.id, {
+        expectedBranchId: pending.branchId,
+        revision: pending.revision,
+        decision: 'approve',
+        feedback: '',
+      });
+      await idle(f);
+      const final = f.work.snapshot(f.session.id).state;
+      expect(final.plan?.steps).toEqual([linkedStep, { ...addedStep, status: 'completed' }]);
+      expect(final.todos).toEqual([linkedTask]);
+      expect(f.runtime.getSnapshot(f.session.id).runs[0]?.status).toBe('completed');
+      expect(f.errors).toEqual([]);
+    } finally {
+      unsubscribe();
+      await f.close();
+    }
+  });
+
   it('bounds consecutive fallback summaries globally despite large prior facts and twenty long failures', async () => {
     const f = await fixture();
     try {

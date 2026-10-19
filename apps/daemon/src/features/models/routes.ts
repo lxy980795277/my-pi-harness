@@ -13,7 +13,6 @@ import {
 import type { ModelGateway } from '@my-pi-harness/agent-runtime';
 import type { FastifyInstance } from 'fastify';
 import { Type } from 'typebox';
-import type { GitHubAuth } from '../auth/github-auth.js';
 import type { ProviderAuthInput } from './types.js';
 
 const IdParams = Type.Object(
@@ -23,11 +22,7 @@ const IdParams = Type.Object(
 const OkSchema = Type.Object({ ok: Type.Literal(true) }, { additionalProperties: false });
 
 /** Route validated public model settings into the provider gateway. */
-export function registerModelRoutes(
-  server: FastifyInstance,
-  gateway: ModelGateway,
-  github?: GitHubAuth,
-): void {
+export function registerModelRoutes(server: FastifyInstance, gateway: ModelGateway): void {
   server.get(
     '/api/providers/catalog',
     { schema: { response: { 200: Type.Array(NativeProviderInfoSchema) } } },
@@ -182,18 +177,13 @@ export function registerModelRoutes(
       return { ok: true };
     },
   );
-  server.get(
-    '/api/auth-flows',
-    { schema: { response: { 200: Type.Array(AuthFlowSchema) } } },
-    () => [...gateway.listAuth(), ...(github?.list() ?? [])],
+  server.get('/api/auth-flows', { schema: { response: { 200: Type.Array(AuthFlowSchema) } } }, () =>
+    gateway.listAuth(),
   );
   server.get<{ Params: { id: string } }>(
     '/api/auth-flows/:id',
     { schema: { params: IdParams, response: { 200: AuthFlowSchema } } },
-    (request) =>
-      github?.owns(request.params.id)
-        ? github.get(request.params.id)
-        : gateway.getAuth(request.params.id),
+    (request) => gateway.getAuth(request.params.id),
   );
   server.post<{ Params: { id: string }; Body: { promptId: string; value: string } }>(
     '/api/auth-flows/:id/respond',
@@ -215,9 +205,6 @@ export function registerModelRoutes(
   server.delete<{ Params: { id: string } }>(
     '/api/auth-flows/:id',
     { schema: { params: IdParams, response: { 200: AuthFlowSchema } } },
-    (request) =>
-      github?.owns(request.params.id)
-        ? github.cancel(request.params.id)
-        : gateway.cancelAuth(request.params.id),
+    (request) => gateway.cancelAuth(request.params.id),
   );
 }

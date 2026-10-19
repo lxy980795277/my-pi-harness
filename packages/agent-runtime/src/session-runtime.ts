@@ -427,12 +427,6 @@ export class SessionRuntime {
             input,
             resolved,
             systemPrompt,
-            this.options.tools
-              ? [
-                  ...SESSION_TOOL_DEFINITIONS,
-                  ...(session.workspaceId !== null ? TOOL_DEFINITIONS : []),
-                ]
-              : [],
             signal,
           )
         : undefined;

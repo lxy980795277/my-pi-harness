@@ -166,6 +166,15 @@ export class WorkInteractions {
     )
       throw new RuntimeError('PLAN_INVALID', '计划需要唯一的步骤，且最多一个步骤进行中。');
     const state = this.work.snapshot(sessionId).state;
+    if (
+      state.todos.some(
+        ({ planStepId }) => planStepId !== null && !steps.some((step) => step.id === planStepId),
+      )
+    )
+      throw new RuntimeError(
+        'TODO_PLAN_STEP_INVALID',
+        '新计划缺少任务关联的步骤，请先更新或清理任务关联。',
+      );
     const id = randomUUID();
     const plan: Plan = {
       id,

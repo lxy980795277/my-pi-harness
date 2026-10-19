@@ -29,7 +29,6 @@ import { WorkInteractions } from './work-interactions.js';
 import { completeToolHistory } from './tool-history.js';
 import { buildSystemContext, loadWorkspaceRules } from './context/index.js';
 import { userWithAttachments } from './attachment-context.js';
-import type { ContextToolDefinition } from './context/budget.js';
 
 export interface PreparedWork {
   state: WorkState;
@@ -113,7 +112,6 @@ export class WorkRuntime {
     input: InputRequest,
     resolved: ResolvedModel,
     basePrompt: string,
-    _toolDefinitions: readonly ContextToolDefinition[] = [],
     signal?: AbortSignal,
   ): Promise<PreparedWork> {
     const preparationSignal = signal

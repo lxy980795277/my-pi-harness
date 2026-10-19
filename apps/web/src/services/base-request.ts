@@ -12,6 +12,23 @@ export const subscribeAuthorizationLoss = (listener: () => void): (() => void) =
   };
 };
 
+const authorizationCheckListeners = new Set<() => void>();
+
+/** Registers an authorization status check after an SSE transport disconnects. */
+export const subscribeAuthorizationCheck = (listener: () => void): (() => void) => {
+  authorizationCheckListeners.add(listener);
+  return (): void => {
+    authorizationCheckListeners.delete(listener);
+  };
+};
+
+/** SSE does not expose its HTTP status, so its authorization owner verifies the cookie. */
+export const requestAuthorizationCheck = (): void => {
+  for (const listener of authorizationCheckListeners) {
+    listener();
+  }
+};
+
 /** Keeps the current cookie session's CSRF token in volatile transport memory. */
 export const setCsrfToken = (token: string | null): void => {
   csrfToken = token;

@@ -170,11 +170,13 @@ export function registerSessionRoutes(
       let stopped = false;
       let flushTimer: ReturnType<typeof setTimeout> | undefined;
       let unsubscribe = (): void => undefined;
+      let unwatch = (): void => undefined;
       const cleanup = (): void => {
         if (stopped) return;
         stopped = true;
         live.delete(response);
         unsubscribe();
+        unwatch();
         clearTimeout(flushTimer);
         clearInterval(heartbeat);
       };
@@ -211,10 +213,11 @@ export function registerSessionRoutes(
       unsubscribe = runtime.subscribe(sessionId, () => {
         flushTimer ??= setTimeout(flush, 32);
       });
-      flush();
       const heartbeat = setInterval(() => {
         if (!auth.isAuthorized(request) || !response.write(': heartbeat\n\n')) response.end();
       }, 15_000);
+      unwatch = auth.watch(request, () => response.end());
+      flush();
       return reply;
     },
   );

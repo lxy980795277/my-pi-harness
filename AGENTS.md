@@ -15,6 +15,7 @@
 - 目录、依赖方向、源码与发布产物以 [架构](docs/01_ARCHITECTURE/overview.md) 为准。业务代码只放 `apps/` 或有明确职责的 `packages/`。
 - Renderer 不访问 Node、凭据、数据库、daemon 源码或 Pi 内部对象；preload 只提供 [协议](docs/03_API/overview.md) 中声明的有限桌面能力。
 - HTTP、IPC、模型工具参数、配置、文件和持久化数据在进入业务层前校验；同进程已声明类型的值不重复做无依据的运行时防御。
+- 本机信任与应用登录分开；业务HTTP/SSE由daemon统一验证持久应用会话，GitHub身份适配与模型/MCP授权不混用。单profile归属、恢复和撤销遵守[应用登录协议](docs/03_API/application-auth.md)。
 - 本地副作用必须经过统一策略、真实路径检查与取消/超时管理。安全规则见 [安全约束](docs/05_CONSTRAINTS/backend.md)。
 - 当前所有迭代处于开发阶段，不要求旧API、数据库、日志或codec兼容；允许重建schema和删除本项目旧开发数据，不触碰工作区源文件或其他项目数据。
 - 临时运行状态可保存在内存；持久事实和派生索引按 [存储约束](docs/05_CONSTRAINTS/backend.md) 管理。

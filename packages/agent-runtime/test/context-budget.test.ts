@@ -1,11 +1,6 @@
 import { fauxAssistantMessage, type Message } from '@earendil-works/pi-ai';
 import { describe, expect, it } from 'vitest';
-import {
-  buildCompactionPrompt,
-  estimateContextUsage,
-  fitContext,
-  selectCompactionPrefix,
-} from '../src/context/index.js';
+import { estimateContextUsage, fitContext } from '../src/context/index.js';
 
 function user(content: string): Message {
   return { role: 'user', content, timestamp: 1 };
@@ -134,48 +129,6 @@ describe('context estimation and complete-turn fitting', () => {
     );
     expect(() => estimateContextUsage([], '', Number.NaN, 10)).toThrow(
       expect.objectContaining({ code: 'INVALID_CONTEXT_BUDGET' }),
-    );
-  });
-});
-
-describe('compaction prefix selection', () => {
-  it('selects old complete turns and returns the original anchor index with recent turns intact', () => {
-    const messages = [
-      user('Old task'),
-      ...exchange('old'),
-      fauxAssistantMessage('Done'),
-      user('Recent task'),
-      ...exchange('recent'),
-      user('Current task'),
-    ];
-    const result = selectCompactionPrefix(messages);
-    expect(result).toEqual({
-      prefix: messages.slice(0, 4),
-      retained: messages.slice(4),
-      throughIndex: 3,
-    });
-    expect(selectCompactionPrefix(messages.slice(4))).toBeUndefined();
-  });
-
-  it('preserves system updates and rejects incomplete prefixes or removal of all user turns', () => {
-    const system: Message = { role: 'system', content: 'Instructions', timestamp: 0 };
-    const messages = [
-      system,
-      user('Old'),
-      fauxAssistantMessage('Old reply'),
-      user('Recent'),
-      user('Latest'),
-    ];
-    expect(selectCompactionPrefix(messages)?.retained).toEqual([system, ...messages.slice(3)]);
-    expect(() => selectCompactionPrefix(messages, 0)).toThrow(
-      expect.objectContaining({ code: 'INVALID_COMPACTION' }),
-    );
-    expect(() =>
-      selectCompactionPrefix([user('Old'), ...exchange('incomplete').slice(0, 1), user('New')]),
-    ).toThrow(expect.objectContaining({ code: 'CONTEXT_TOOL_PAIR' }));
-    expect(buildCompactionPrompt('Saved facts')).toContain('"previousSummary":"Saved facts"');
-    expect(buildCompactionPrompt(null)).toContain(
-      'Distinguish plans from actions that actually completed',
     );
   });
 });

@@ -20,8 +20,6 @@ interface WorkspaceState {
   newConversationAttempt: NewConversationAttempt | null;
   pendingInputs: Readonly<Record<string, InputRequest>>;
   drafts: Readonly<Record<string, string>>;
-  activeAuthFlowId: string | null;
-  authFlowVisible: boolean;
   settingsOpen: boolean;
   settingsSection: SettingsSection;
   providerDialogId: string | null;
@@ -50,9 +48,6 @@ interface WorkspaceState {
   clearDraft: (sessionId: string) => void;
   clearSelection: () => void;
   reset: () => void;
-  addAuthFlow: (id: string) => void;
-  selectAuthFlow: (id: string) => void;
-  hideAuthFlow: () => void;
   openSettings: (section: SettingsSection) => void;
   closeSettings: () => void;
   setSettingsSection: (section: SettingsSection) => void;
@@ -78,8 +73,6 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => {
     newConversationAttempt: null,
     pendingInputs: {},
     drafts: {},
-    activeAuthFlowId: null,
-    authFlowVisible: false,
     settingsOpen: false,
     settingsSection: 'models',
     providerDialogId: null,
@@ -231,23 +224,12 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => {
         newConversationAttempt: null,
         pendingInputs: {},
         drafts: {},
-        activeAuthFlowId: null,
-        authFlowVisible: false,
         settingsOpen: false,
         providerDialogId: null,
         providerAuthFlowId: null,
         providerAuthStarting: false,
         modelsDialogId: null,
       });
-    },
-    addAuthFlow: (id: string): void => {
-      set({ activeAuthFlowId: id, authFlowVisible: true });
-    },
-    selectAuthFlow: (id: string): void => {
-      set({ activeAuthFlowId: id, authFlowVisible: true });
-    },
-    hideAuthFlow: (): void => {
-      set({ authFlowVisible: false });
     },
     openSettings: (section: SettingsSection): void => {
       set({ settingsOpen: true, settingsSection: section });

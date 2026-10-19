@@ -60,12 +60,27 @@ export type {
   QueuePatchInput,
 } from './sessions.js';
 export {
+  AppUserSchema,
+  LoginMethodSchema,
+  LoginProviderSchema,
+  LoginSessionInfoSchema,
+  LoginFlowStatusSchema,
+  LoginFlowSchema,
   AuthStatusSchema,
   AuthFlowSchema,
   PairingCodeResponseSchema,
-  AuthUrlResponseSchema,
 } from './auth.js';
-export type { AuthStatus, AuthFlow, PairingCodeResponse, AuthUrlResponse } from './auth.js';
+export type {
+  AppUser,
+  LoginMethod,
+  LoginProvider,
+  LoginSessionInfo,
+  LoginFlowStatus,
+  LoginFlow,
+  AuthStatus,
+  AuthFlow,
+  PairingCodeResponse,
+} from './auth.js';
 
 export { APP_VERSION } from './version.js';
 export {
@@ -97,7 +112,7 @@ export type {
 } from './tools.js';
 
 /** 跨端应用协议版本；不等同于产品版本。 */
-export const PROTOCOL_VERSION = 8;
+export const PROTOCOL_VERSION = 9;
 
 /** 本机服务完成监听后的可公开状态，不包含配置、路径或凭据。 */
 export const HealthResponseSchema = Type.Object(

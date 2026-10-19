@@ -1,22 +1,81 @@
 import { type Static, Type } from 'typebox';
 
-/** Local application authorization is separate from model provider credentials. */
+/** Public application identity; provider secrets and external subject IDs remain host-owned. */
+export const AppUserSchema = Type.Object(
+  {
+    id: Type.String({ minLength: 1, maxLength: 100 }),
+    name: Type.String({ minLength: 1, maxLength: 200 }),
+    avatarUrl: Type.Union([Type.String({ maxLength: 2048 }), Type.Null()]),
+  },
+  { additionalProperties: false },
+);
+export type AppUser = Static<typeof AppUserSchema>;
+
+/** A provider can expose different authorization grants to desktop and browser clients. */
+export const LoginMethodSchema = Type.Union([Type.Literal('device'), Type.Literal('web')]);
+export type LoginMethod = Static<typeof LoginMethodSchema>;
+
+/** Availability refers to local provider configuration, not upstream account authorization. */
+export const LoginProviderSchema = Type.Object(
+  {
+    id: Type.String({ minLength: 1, maxLength: 80 }),
+    name: Type.String({ minLength: 1, maxLength: 100 }),
+    available: Type.Boolean(),
+    methods: Type.Array(LoginMethodSchema, { uniqueItems: true }),
+  },
+  { additionalProperties: false },
+);
+export type LoginProvider = Static<typeof LoginProviderSchema>;
+
+/** Public login metadata never contains the bearer token or its hash. */
+export const LoginSessionInfoSchema = Type.Object(
+  {
+    id: Type.String({ minLength: 1, maxLength: 100 }),
+    providerId: Type.String({ minLength: 1, maxLength: 80 }),
+    expiresAt: Type.Integer({ minimum: 0, maximum: 8_640_000_000_000_000 }),
+  },
+  { additionalProperties: false },
+);
+export type LoginSessionInfo = Static<typeof LoginSessionInfoSchema>;
+
+/** Local machine trust and application login are independent authorization requirements. */
 export const AuthStatusSchema = Type.Object(
   {
+    localAuthorized: Type.Boolean(),
     authenticated: Type.Boolean(),
     csrfToken: Type.Union([Type.String(), Type.Null()]),
-    githubConfigured: Type.Boolean(),
-    identity: Type.Union([
-      Type.Object(
-        { name: Type.String(), avatarUrl: Type.Union([Type.String(), Type.Null()]) },
-        { additionalProperties: false },
-      ),
-      Type.Null(),
-    ]),
+    providers: Type.Array(LoginProviderSchema),
+    profileBound: Type.Boolean(),
+    user: Type.Union([AppUserSchema, Type.Null()]),
+    session: Type.Union([LoginSessionInfoSchema, Type.Null()]),
   },
   { additionalProperties: false },
 );
 export type AuthStatus = Static<typeof AuthStatusSchema>;
+
+/** Application login state is separate from model-provider authorization flows. */
+export const LoginFlowStatusSchema = Type.Union([
+  Type.Literal('pending'),
+  Type.Literal('completed'),
+  Type.Literal('failed'),
+  Type.Literal('cancelled'),
+]);
+export type LoginFlowStatus = Static<typeof LoginFlowStatusSchema>;
+
+/** The public deviceCode is a user verification code, never the private device_code. */
+export const LoginFlowSchema = Type.Object(
+  {
+    id: Type.String({ pattern: '^login_[A-Za-z0-9_-]+$', maxLength: 100 }),
+    providerId: Type.String({ minLength: 1, maxLength: 80 }),
+    status: LoginFlowStatusSchema,
+    url: Type.Union([Type.String({ maxLength: 2048 }), Type.Null()]),
+    deviceCode: Type.Union([Type.String({ maxLength: 100 }), Type.Null()]),
+    expiresAt: Type.Integer({ minimum: 0, maximum: 8_640_000_000_000_000 }),
+    error: Type.Union([Type.String({ maxLength: 1000 }), Type.Null()]),
+  },
+  { additionalProperties: false },
+);
+export type LoginFlow = Static<typeof LoginFlowSchema>;
 
 /** A login challenge contains user interaction, never an OAuth token. */
 export const AuthFlowSchema = Type.Object(
@@ -74,10 +133,3 @@ export const PairingCodeResponseSchema = Type.Object(
   { additionalProperties: false },
 );
 export type PairingCodeResponse = Static<typeof PairingCodeResponseSchema>;
-
-/** A provider-authorized browser redirect carries no credentials. */
-export const AuthUrlResponseSchema = Type.Object(
-  { url: Type.String() },
-  { additionalProperties: false },
-);
-export type AuthUrlResponse = Static<typeof AuthUrlResponseSchema>;

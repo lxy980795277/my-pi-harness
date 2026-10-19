@@ -10,6 +10,7 @@ Node 24 宿主使用的同步存储。JSONL保存会话执行事实，独立不�
 | 模型消息codec、冻结请求与队列幂等元数据                               | JSONL中的privateData | 仅宿主读取的恢复投影         |
 | 附件元数据、冻结文本和图片内容                                        | checksummed附件文件  | 可重建元数据索引，不保存正文 |
 | Provider配置、厂商绑定、工作区、应用设置                              | SQLite               | 权威配置，不能从会话日志恢复 |
+| 用户、外部身份、profile归属、本机客户端和应用登录会话                 | SQLite               | 权威认证事实，投影重建不删除 |
 | API Key、OAuth Token                                                  | 系统凭据库           | 只保存引用，不保存秘密       |
 
 JSONL是宿主私有数据，包含模型恢复所需的完整codec和工具结果，不能直接作为HTTP/SSE响应。`readEvents()`只选择公开envelope，`getSnapshot()`只返回公开投影；图片base64仅在受保护附件内容接口按需提供。上下文中用户主动提供的正文和工具结果可能包含敏感信息，宿主日志不等于脱敏导出。
@@ -24,7 +25,7 @@ JSONL是宿主私有数据，包含模型恢复所需的完整codec和工具结�
 
 文件写入或fsync失败时，SQLite事务回滚，但文件提交结果可能未知；本实例冻结后续持久写入并允许读取已有投影。JSONL成功而SQLite提交失败时，JSONL已经提交，同样冻结写入并明确报告；不能根据错误重执行工具或重复接受请求。修复文件或数据库问题并重启后，日志中完整的批会被回放。数据库与文件没有跨介质原子保证。
 
-每次启动在一个SQLite事务内清空会话派生表和附件索引，从附件文件与JSONL重新投影；Provider、Workspace和Settings不受影响。仅最后一行未完成的JSON片段可以截掉；结构完整但缺换行的合法记录补换行后保留；完整坏记录拒绝，不静默覆盖。已有SQLite会话缺少对应日志或没有有效创建记录时明确失败，不从SQLite反向填充日志。更换根目录需要携带权威日志和附件，不能得到一个看似空白的会话列表。
+每次启动在一个SQLite事务内清空会话派生表和附件索引，从附件文件与JSONL重新投影；Provider、Workspace、Settings和应用登录事实不受影响。仅最后一行未完成的JSON片段可以截掉；结构完整但缺换行的合法记录补换行后保留；完整坏记录拒绝，不静默覆盖。已有SQLite会话缺少对应日志或没有有效创建记录时明确失败，不从SQLite反向填充日志。更换根目录需要携带权威日志和附件，不能得到一个看似空白的会话列表。
 
 恢复前校验消息及未消费队列引用的附件文件存在。旧Run、未结束工具、待答问题和待审核计划追加为interrupted；保留部分输出和队列，不自动调用模型、执行工具或沿用审批。
 
@@ -52,9 +53,17 @@ JSONL是宿主私有数据，包含模型恢复所需的完整codec和工具结�
 
 请求接受结果独立投影，消费或删除队列不丢失requestId；重复接受返回原结果。队列来源从原始接受事件及Run解析。会话删除是归档，保留日志与历史；活跃Run拒绝归档。工作区归档只改变配置，不删除目录；仍有活动会话引用时拒绝归档。
 
+## 应用身份与登录
+
+`ProfileStore.auth`拥有应用User、稳定外部身份、单profile账号归属、本机信任和登录会话。首次`completeLogin()`在同一短事务内验证未过期客户端、绑定用户和身份、签发会话；任一步失败全部回滚。GitHub昵称/头像更新不改变内部userId，不同provider/issuer/subject拒绝接管已有profile，不自动关联相同邮箱。
+
+本机信任和应用登录分别按哈希查找，两个有效期都必须通过且登录属于原clientId。这里仅保存小写SHA-256摘要，不接收GitHub token，也不把认证事实写到会话JSONL；CSRF token随本机客户端持久化。凭据创建、GitHub验证、Cookie和会话有效期政策由daemon拥有。持久化读取校验字段、用户JSON和关联，损坏时明确失败。
+
+`revokeClientSessions(clientId)`撤销当前客户端所有登录而保留本机信任、profile归属与业务数据，另一客户端不受影响。有效会话可跨daemon重启及离线恢复，但不声明已检测GitHub侧撤销。每次写入最多清理100个过期登录及100个无会话引用的过期客户端，读取只校验有效期，不产生写入；退出按指定客户端撤销全部会话。
+
 ## 开发期schema与凭据
 
-当前使用一个fresh schema，版本1和checksum与产物一起发布；未知或不匹配的已有profile明确拒绝。按用户授权，本轮删除旧开发数据，不提供旧SQLite、公开JSONL镜像或旧codec迁移。版本与结构校验继续保留。
+schema按版本和checksum校验：0001保存配置与会话投影，0002独立添加应用登录事实；已有版本1 profile原位安装0002，不重建业务配置或改写JSONL。未知版本、已应用migration内容不匹配明确拒绝；不提供旧公开JSONL镜像或旧codec兼容。
 
 `createSystemCredentialStore(profileDirectory)`按profile独立namespace使用macOS Keychain或Windows Credential Store。每个ref的操作串行，Token刷新由`modify()`拥有完整异步过程；失败不退回明文或内存。`createMemoryCredentialStore()`仅供测试显式注入，不读取Pi或其他项目凭据。
 

@@ -60,3 +60,10 @@ AC写可观察结果，不用「完善」「支持全部」代替具体条件。
 
 - [代码治理与可读性](202610161244_refactor_code-governance/spec.md)
 - [M3收尾复核与核心技术文档](202610161259_refactor_m3-review-technical-docs/spec.md)
+- [M4 MCP、Skills与插件任务拆分](202610161435_feature_m4-capabilities/spec.md)
+- [M4前置：用户身份与应用登录](202610161500_feature_application-login/spec.md)
+
+- [应用登录验证与真实账号review](202610161500_feature_application-login/verify.md)
+
+- [M3复核与M4前代码治理](202610191506_refactor_m3-readiness-governance/spec.md)
+- [M3复核、治理修复与M4准备结论](202610191506_refactor_m3-readiness-governance/verify.md)
