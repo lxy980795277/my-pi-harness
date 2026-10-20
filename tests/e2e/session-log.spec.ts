@@ -81,6 +81,7 @@ test('会话标题栏全宽展示，下载完整 JSONL 并在失败后重试', a
     expect(headerBox.x).toBeCloseTo(panelBox.x, 1);
     expect(headerBox.width).toBeCloseTo(panelBox.width, 1);
 
+    await page.getByRole('article', { name: '你的消息', exact: true }).hover();
     await page.getByRole('button', { name: '编辑并在新分支重发', exact: true }).click();
     await page.getByLabel('编辑消息', { exact: true }).fill('分支里的新回复');
     await page.getByRole('button', { name: '创建分支并重发', exact: true }).click();

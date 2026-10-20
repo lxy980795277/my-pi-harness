@@ -370,6 +370,31 @@ pnpm --filter @my-pi-harness/daemon exec vitest run \
 
 源码4文件23项通过，daemon及依赖5个构建任务成功，构建后恢复1文件2项通过；修改的daemon文件ESLint与Prettier通过。没有启动或重启用户服务，没有新增真实供应商或平台验收。提交钩子另执行暂存格式、全仓lint、类型检查及源码测试，结果以实际提交输出为准。
 
+## 提问操作悬停显示
+
+2026-10-20将用户消息的复制和编辑操作默认设为透明且不接收鼠标点击，操作行与两个按钮继续挂载并保留原位置和28px最小行高。消息悬停或内部有键盘焦点时即时显示，不增加透明度过渡；助手状态及回答末尾操作保持原规则。保留用户已修改的消息纵向间距。键盘显示由focus-within保留，没有使用aria-hidden、visibility:hidden或移除Tab顺序。
+
+复用并调整M1和日志下载用例，编辑前先悬停用户消息，均完成编辑与新分支回复。两个浏览器场景分别通过（6.9秒、7.4秒），没有新增样式镜像单测。实际查看M1截图，非悬停提问下的两个图标不可见，助手末尾操作仍展示。截图位于`output/playwright/question-action-hover/`，日志用例证据位于`output/playwright/question-action-hover-log/`。本次没有单独运行键盘或触屏端到端场景，焦点规则经代码审查。
+
+实际执行Web三个类型面与生产构建、修改文件ESLint/Prettier、E2E类型、文档与diff检查，均通过；Vite原有大chunk警告保留。浏览器命令如下，均使用临时profile和受控模型，未重启用户服务：
+
+```sh
+pnpm exec playwright test tests/e2e/m1.spec.ts tests/e2e/session-log.spec.ts \
+  --grep '配置兼容 API|header' --workers=1 \
+  --output=output/playwright/question-action-hover
+pnpm exec playwright test tests/e2e/session-log.spec.ts \
+  --grep '会话标题栏全宽展示' --workers=1 \
+  --output=output/playwright/question-action-hover-log
+```
+
+第一条命令实际只匹配M1的一个场景；第二条补跑日志场景，合计两个。本次增量纳入0.6.1本地提交，未推送或对外发布。
+
+## 输入框再次收窄高度
+
+2026-10-20仅调整共享ComposerSurface，将正文最小高度从64px降至48px并设rows=1，新对话和已有对话使用同一设置，整体约减少16px。基础Textarea、工具栏和字符限制未修改。原组件没有自动增高机制，多行内容继续在输入区内滚动。
+
+Web三个类型面与生产构建、修改组件ESLint/Prettier、文档及diff检查通过。复用既有键盘浏览器场景，`pnpm exec playwright test tests/e2e/m1.spec.ts --grep '新对话与已有对话回车发送' --workers=1 --output=output/playwright/compact-composer-height`实际1项通过（6.2秒），覆盖两个入口的回车发送、Shift+Enter和输入法确认。使用临时profile与受控模型，没有重启用户服务；原有大chunk警告保留，增量纳入0.6.1本地提交，未推送或对外发布。
+
 ## 已知边界
 
 - daemon仍读取完整已提交投影后计算差异；完整SSE基线保留8MiB上限，超大历史分页后续迭代。不能据此宣称无限历史或只读取单条变化。

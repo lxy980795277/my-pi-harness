@@ -41,7 +41,7 @@ export const MessageCard: FC<MessageCardProps> = memo(
 
     return (
       <article
-        className={cn('group min-w-0 space-y-3', user && 'flex flex-col items-end')}
+        className={cn('group group/message min-w-0 space-y-1', user && 'flex flex-col items-end')}
         aria-label={`${ROLE_LABELS[message.role]}的消息`}
       >
         {message.thinking.length > 0 && (
@@ -94,7 +94,13 @@ export const MessageCard: FC<MessageCardProps> = memo(
           </div>
         )}
         {!editing && (user || message.status !== 'complete') && (
-          <div className="flex min-h-7 flex-wrap items-center gap-x-0 gap-y-1 text-xs text-muted-foreground">
+          <div
+            className={cn(
+              'flex min-h-7 flex-wrap items-center gap-x-0 gap-y-1 text-xs text-muted-foreground',
+              user &&
+                'pointer-events-none opacity-0 group-focus-within/message:pointer-events-auto group-focus-within/message:opacity-100 group-hover/message:pointer-events-auto group-hover/message:opacity-100',
+            )}
+          >
             {streaming && (
               <LoaderCircle
                 width={13}

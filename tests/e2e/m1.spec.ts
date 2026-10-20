@@ -76,6 +76,7 @@ test('配置兼容 API、真实 Pi 流式请求、刷新与编辑分支', async 
     await page.reload();
     await page.getByRole('button', { name: /^你好，流式测试 / }).click();
     await expect(page.getByText('响应：你好，流式测试', { exact: true })).toBeVisible();
+    await page.getByRole('article', { name: '你的消息', exact: true }).hover();
     await page.getByRole('button', { name: '编辑并在新分支重发', exact: true }).click();
     await page.getByLabel('编辑消息', { exact: true }).fill('新的分支输入');
     await page.getByRole('button', { name: '创建分支并重发', exact: true }).click();
