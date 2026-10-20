@@ -395,6 +395,14 @@ pnpm exec playwright test tests/e2e/session-log.spec.ts \
 
 Web三个类型面与生产构建、修改组件ESLint/Prettier、文档及diff检查通过。复用既有键盘浏览器场景，`pnpm exec playwright test tests/e2e/m1.spec.ts --grep '新对话与已有对话回车发送' --workers=1 --output=output/playwright/compact-composer-height`实际1项通过（6.2秒），覆盖两个入口的回车发送、Shift+Enter和输入法确认。使用临时profile与受控模型，没有重启用户服务；原有大chunk警告保留，增量纳入0.6.1本地提交，未推送或对外发布。
 
+## 仅缩小对话Markdown字号
+
+2026-10-20按用户明确范围先撤回上一轮全部22个文件的未提交改动，确认工作区恢复至e05d4bc，再仅修改Markdown CSS的10处font-size。正文16→14px，h1–h6为26/22/18/16/14/14px，行内代码、表格及代码正文14→12px，代码标题12→10px；原行高、间距和其他属性保留。全局样式、左侧工作区、输入框、工具栏及其他TSX均与HEAD一致；其余差异仅为既有字号断言及本Spec/verify。
+
+固定Node24.20.0、pnpm10.34.6环境下，`pnpm --filter @my-pi-harness/web build`通过三个Web类型面与生产构建，修改文件Prettier、文档和diff检查通过。`pnpm exec playwright test tests/e2e/conversation-rendering.spec.ts --grep 'Markdown流式、完成与刷新一致' --workers=1 --output=output/playwright/markdown-font-only`实际1项通过（用例5.4秒），确认正文14px/28px及Markdown各元素整数几何，流式、完成、刷新、代码/回答复制和安全渲染正常。用例覆盖明暗主题及900px窗口，实际查看窄窗口深色截图，未见重叠或页面横向溢出。
+
+验证使用隔离profile及受控模型，未操作用户5174服务或真实账号。未重新打包Electron或验收Windows，保留Vite既有大chunk提示及此前高度诊断边界。本增量纳入0.6.3本地提交，未推送或对外发布；提交钩子执行暂存格式、全仓lint、类型和源码测试，结果以本次commit输出为准。
+
 ## 已知边界
 
 - daemon仍读取完整已提交投影后计算差异；完整SSE基线保留8MiB上限，超大历史分页后续迭代。不能据此宣称无限历史或只读取单条变化。

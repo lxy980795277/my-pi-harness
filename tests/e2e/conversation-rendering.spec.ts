@@ -253,7 +253,7 @@ test('Markdown流式、完成与刷新一致，代码可复制且HTML和图片�
       return { fontSize: style.fontSize, lineHeight: style.lineHeight, fractionalMetrics };
     });
     expect(typography).toEqual({
-      fontSize: '16px',
+      fontSize: '14px',
       lineHeight: '28px',
       fractionalMetrics: [],
     });
