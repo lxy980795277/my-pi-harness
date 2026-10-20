@@ -37,6 +37,7 @@
 
 - REST 统一经 `services/base-request.ts`，SSE 经 `services/base-sse.ts`；Feature Service 负责领域调用、解析及错误，传输所有者负责连接与清理。组件和 Store 不直接 fetch 或创建 EventSource。
 - Query 拥有服务器快照与缓存；Zustand 只持有跨组件客户端状态，例如导航、选择、Dialog 和未提交草稿。局部 UI 用 useState，不复制 Query 数据形成第二份可写事实。
+- Store按导航、会话草稿、设置、附件和时间线展示等实际领域组织；跨域新建/清理由Hook显式组合。需要跨虚拟列表卸载保留的用户选择按稳定业务ID保存，普通局部表单不机械提升；存活时间和刷新/注销清理语义在所属Spec明确。
 - API 公共前缀放 constants/api；仅一个 Service 使用的路径留在该 Service，不把每个字符串变全局常量。
 - Store 按真实业务域拆，State/Actions 准确类型。组件通过窄选择器分别订阅状态与动作；禁止无参 useXxxStore、返回整个 state、组件/Hook 调用 getState，以及 get().member 链式读取。Store 内需要快照时在动作入口命名 get() 结果。
 - 普通选择器不创建临时对象、数组或新引用的兜底。多值优先独立选择器；确实需要组合时用 useShallow，并稳定嵌套引用。稳定常量默认值可用，不能借默认值掩盖无效协议。

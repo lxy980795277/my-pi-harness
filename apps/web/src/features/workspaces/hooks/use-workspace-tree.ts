@@ -1,7 +1,8 @@
 import type { Workspace } from '@my-pi-harness/protocol';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
-import { useWorkspaceStore } from '@/app/stores/workspace';
+import { useStartNewConversation } from '@/app/hooks/use-start-new-conversation';
+import { useNavigationStore } from '@/app/stores/navigation';
 import { useSessionList } from '@/features/sessions/hooks/use-session-list';
 import { useWorkspaces } from '@/features/workspaces/hooks/use-workspaces';
 import { removeWorkspace } from '@/features/workspaces/services/workspaces';
@@ -17,21 +18,19 @@ export const useWorkspaceTree = (): WorkspaceTreeState => {
   const workspaces = useWorkspaces();
   const sessions = useSessionList();
   const client = useQueryClient();
-  const activeId = useWorkspaceStore((state) => {
+  const activeId = useNavigationStore((state) => {
     return state.activeSessionId;
   });
-  const activeWorkspaceId = useWorkspaceStore((state) => {
+  const activeWorkspaceId = useNavigationStore((state) => {
     return state.activeWorkspaceId;
   });
-  const selectSession = useWorkspaceStore((state) => {
+  const selectSession = useNavigationStore((state) => {
     return state.selectSession;
   });
-  const selectWorkspace = useWorkspaceStore((state) => {
+  const selectWorkspace = useNavigationStore((state) => {
     return state.selectWorkspace;
   });
-  const startNewConversation = useWorkspaceStore((state) => {
-    return state.startNewConversation;
-  });
+  const startNewConversation = useStartNewConversation();
   const newConversation = useCallback(
     (workspaceId: string | null): void => {
       selectWorkspace(workspaceId);

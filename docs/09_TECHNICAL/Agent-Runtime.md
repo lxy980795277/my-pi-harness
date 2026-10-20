@@ -1,6 +1,6 @@
 # Agent 运行时技术设计
 
-**日期**：2026-10-16
+**日期**：2026-10-20
 
 **模块**：`packages/agent-runtime/`、`apps/daemon/src/services.ts`
 
@@ -50,6 +50,7 @@ flowchart TD
 | `ModelGateway`     | Provider 实例、认证流程、模型目录、使用中的 lease              | daemon                           |
 | `SessionRuntime`   | 活跃 Run、会话命令尾链、启动取消器、订阅者、停用会话           | daemon                           |
 | `RunExecution`     | Pi Agent、工具取消信号、本 Run 可消费队列、当前 assistant 消息 | 一个 Run                         |
+| `RunToolset`       | 接受时冻结的工具定义、来源与指纹                               | 一个 Run                         |
 | `ToolRuntime`      | 等待审批的单次工具调用                                         | daemon；等待项按调用/Run结算移除 |
 | `WorkRuntime`      | 分支工作状态操作、手动摘要取消器、上下文与交互协调             | daemon；事实由存储保存           |
 | `WorkInteractions` | 问题与计划审核的 Promise 等待者                                | daemon；等待项属于当前Run        |
@@ -183,7 +184,9 @@ sequenceDiagram
 
 ### 6.1 工具调用由 Run 约束
 
-`ToolRuntime.createTools()` 组合会话工具和工作区工具。没有工作区时仍可提问、规划和管理上下文，但不会获得文件或 Shell 工具。
+`ToolRuntime.selectToolset()` 在接受 Run 前按实际启用能力与工作区选择一次，生成只读 `RunToolset`。接受审计、Pi 工具声明、上下文预算与运行时执行路由使用同一集合；定义和来源深拷贝后冻结，来源与定义指纹单独保存，不混入模型 schema。没有工作区时仍可提问、规划和管理上下文，但不会获得文件或 Shell 工具。
+
+执行只允许集合内的工具，底层文件和会话执行器继续复核各自的固定内置目录。当前集合只包含会话与工作区工具；MCP 配置、连接和外部结果未知语义仍待实现。
 
 每次调用校验参数 schema、对象大小与调用数量，工具公开记录 ID 由 Run ID、assistant 消息 ID 和 Provider 调用 ID 派生。Provider 在不同 assistant 轮次复用调用 ID，不会混淆两次执行。
 

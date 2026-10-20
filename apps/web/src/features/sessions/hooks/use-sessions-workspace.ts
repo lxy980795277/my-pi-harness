@@ -2,7 +2,8 @@ import type { SessionsWorkspaceState } from '@/features/sessions/types/session';
 import type { ProviderConfig, SessionSnapshot } from '@my-pi-harness/protocol';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
-import { useWorkspaceStore } from '@/app/stores/workspace';
+import { useComposerStore } from '@/features/sessions/stores/composer';
+import { useNavigationStore } from '@/app/stores/navigation';
 import { fetchProviders } from '@/features/models/services/providers';
 import { mergeSessionSnapshot } from '@/features/sessions/queries/projection';
 import { useAsyncEvent } from '@/hooks/use-async-event';
@@ -10,13 +11,13 @@ import { useAsyncEvent } from '@/hooks/use-async-event';
 /** Navigation owns selections only; server lists and snapshots stay in Query. */
 export const useSessionsWorkspace = (): SessionsWorkspaceState => {
   const client = useQueryClient();
-  const activeId = useWorkspaceStore((state) => {
+  const activeId = useNavigationStore((state) => {
     return state.activeSessionId;
   });
-  const selectSession = useWorkspaceStore((state) => {
+  const selectSession = useNavigationStore((state) => {
     return state.selectSession;
   });
-  const generation = useWorkspaceStore((state) => {
+  const generation = useComposerStore((state) => {
     return state.newConversationGeneration;
   });
   const providersQuery = useQuery({

@@ -2,7 +2,7 @@
 
 ## Spec
 
-状态：2026-10-16完成标杆核对与M4.1–M4.9拆分，用户已确认模块边界。[用户身份与应用登录](../202610161500_feature_application-login/spec.md)前置专项已完成实现与macOS自动化，2026-10-19完成[M3复核与治理](../202610191506_refactor_m3-readiness-governance/verify.md)并提交0.5.0基线。现已整理[实施任务与模块归属](tasks.md)。用户此前优先完成[对话渲染与交互](../202610191647_feature_conversation-rendering/spec.md)，现已于2026-10-20确认[本次治理与提交](../202610201450_refactor_m4-readiness-governance/spec.md)后恢复M4.1详细设计。真实GitHub授权和用户体验继续单列验收；M4 MCP/Skills/插件能力尚未实现。
+状态：M4.1–M4.9模块边界已确认，[实施任务与模块归属](tasks.md)保持原拆分。2026-10-20完成[M4.1详细设计与官方SDK核对](local-mcp.md)，L1现有内置Run工具集统一已实现并通过定向验证。SDK尚未安装，外部来源协议、unknown事实、stdio、配置/信任及UI仍待开发；本地MCP闭环与M4.2–M4.9未完成。应用登录、M3复核及对话体验前置工程已完成相应实现与本机验证，真实账号、平台和用户体验验收继续单列。
 
 ### Roadmap Alignment
 
@@ -51,12 +51,12 @@ UI随每个模块一起实现，不把“后端完成、所有界面最后补”
 
 - 保留Electron/Web/daemon/Pi与存储分工。计划新增一个有真实实现的packages/integrations，内部按mcp、skills、plugins、connections组织适配能力；不提前建立空包、通用插件框架或动态执行任意JS的插件系统。
 - integrations不依赖React、Electron、Fastify、SQLite或运行时私有源码；daemon装配配置/凭据端口，agent-runtime拥有Run选择、工具适配、审批和模型可见内容，execution拥有进程/文件/网络执行机制。
-- MCP采用官方TypeScript Client SDK；M4.1接入前核对当时的稳定版本、维护状态、传输及Pi/schema兼容性，再按catalog规则锁定具体版本与peer，不以旧调研代替当前选型，也不自写JSON-RPC或传输协议。[官方SDK](https://github.com/modelcontextprotocol/typescript-sdk)
+- MCP采用官方TypeScript Client SDK；2026-10-20核对的版本与Node要求见[SDK核对](local-mcp.md#sdk核对)。当前尚未安装，真实接入时完成TypeScript/Pi兼容验证，再按catalog规则锁定版本与peer，不自写JSON-RPC或传输协议。[官方SDK](https://github.com/modelcontextprotocol/typescript-sdk)
 - 远程HTTP指Streamable HTTP，SSE为显式兼容传输；不将MCP与当前页面HTTP/SSE协议混用，不提供对外MCP Server。Resources/Prompts先对齐目录发现、诊断和展示，未发现消费入口的能力不冒充标杆已实现。
 
 #### 工具集、模型与持久化
 
-- 首先将SessionRuntime接受准备、预算/审计与ToolRuntime执行中的静态列表合并为同一个RunToolset。候选工具的来源、身份、版本、路由和定义指纹按Run固定，模型可见集合另行管理；连接按实际发现/执行请求取得租约并独立释放，不为整个Run预先持有所有Server连接。
+- 现有会话/工作区工具已由接受时选定的RunToolset统一模型定义、预算、审计及运行时路由，来源/指纹单独保存在私有审计；底层execution和会话执行器对固定目录的参数复核继续生效。当前仅冻结内置接受定义与来源，不代表已冻结MCP连接或执行器版本。外部工具接入后，候选身份、配置版本、路由和定义指纹按Run固定，模型可见集合另行管理；连接按实际发现/执行请求取得租约并独立释放，不为整个Run预先持有所有Server连接。
 - M4.2通过tool_search从已解析的候选目录显式加载完整定义，接入Pi公开prepareNextTurnWithContext等扩展点，不修改Pi loop。不是静态call_tool代理；新定义实际进入模型请求前先持久化，预算、Pi、审计与执行使用同一份可见工具集；每轮从当前active revision读取定义，不能继续使用RunExecution构造时捕获的初始列表。未进入该轮可见集合的候选工具不得提前调用。
 - list_changed、配置编辑和Skill内容修改不在旧Run中无声替换定义；发现远端已无法兑现冻结版本则明确拒绝。禁用/撤销信任明确使相关活动调用失效，不能仅隐藏设置项。具体忙时重配语义在M4.1协议设计中确定并验证。
 - 外部工具使用稳定短别名，保留serverId、原工具名、配置revision和定义指纹，不能靠人类可改名称拼接路由。动态schema在宿主校验方言、大小、深度和引用策略，不解析网络引用，不断言成TypeBox类型后跳过校验。
@@ -143,8 +143,10 @@ UI随每个模块一起实现，不把“后端完成、所有界面最后补”
 - [x] 扫描当前Run工具列表、上下文、日志、执行和设置接入点，形成M4.1–M4.9草案。
 - [x] 用户已确认M4.1–M4.9模块边界，完成登录前置与M3复核的本地提交。
 - [x] 整理各模块工作包、归属、依赖与完成门槛，明确M4.1最小闭环和M4.2按需加载的分工。
-- [ ] 细化M4.1协议、数据、信任/重配语义、UI与测试Spec，核对并锁定依赖。
-- [ ] M4.1：统一RunToolset并交付本地stdio配置/信任/调用完整链路及拒绝/取消证据。
+- [x] 完成M4.1详细设计、首批工具集边界与官方SDK核对；尚未安装或锁定SDK依赖。
+- [x] L1：统一现有内置RunToolset，接受审计、Pi声明、预算及运行时路由同源，完成真实Pi/JSONL及集合边界回归。
+- [ ] L2–L5：实现外部来源与unknown协议及其全部消费者、stdio/租约、配置/信任/UI，再锁定实际SDK依赖并完成本地MCP联调。
+- [ ] M4.1：完成L2–L5，本地stdio配置/信任/调用完整链路及拒绝/取消证据齐备后验收整个模块。
 - [ ] M4.2：目录管理、按需加载、SDK工具声明保留、版本路由、工具级设置/授权、批量导入/脱敏导出与诊断。
 - [ ] M4.3：远程HTTP/SSE、静态凭据、OAuth与网络/未知结果回归。
 - [ ] M4.4：Skills发现、选择、渐进加载、授权与压缩连续性。
@@ -154,13 +156,12 @@ UI随每个模块一起实现，不把“后端完成、所有界面最后补”
 - [ ] M4.8：四类办公工作流、独立资源、依赖检测、PDF页图与文件交付。
 - [ ] M4.9：真实SDK/Pi/存储/HTTP/浏览器/桌面回归，记录平台与真实账号证据后统一验收。
 
-验证设计：受控stdio/HTTP/SSE/OAuth服务使用动态端口与临时目录；覆盖分页/动态目录、坏schema、混合结果、两Run租约、撤销、流关闭和未知结果。安装/办公使用独立临时工作区与明确假凭据，不依赖用户keyring或付费账号。真实第三方与Windows进程/隔离验收另列，不能用Mock替代。M4实现后再生成verify，不在任务拆分阶段填写功能通过记录。
+验证设计：L1已完成现有内置集合的源码与真实Pi/JSONL回归；后续受控stdio/HTTP/SSE/OAuth服务使用动态端口与临时目录，覆盖分页/动态目录、坏schema、混合结果、两Run租约、撤销、流关闭和未知结果。安装/办公使用独立临时工作区与明确假凭据，不依赖用户keyring或付费账号。真实第三方与Windows进程/隔离验收另列，不能用Mock替代。verify按实际完成批次记录，不将后续MCP设计写成已通过。
 
 ## Issues
 
-暂无本轮已确认的产品缺陷，以下是实施前需细化的设计项：
+暂无本轮已确认的产品缺陷，以下是后续接入仍需处理的设计项：
 
-- 当前SessionRuntime的接受审计与ToolRuntime的工具创建/查找分别拼接静态定义；M3治理已移除prepare未使用的工具参数，M4.1仍需统一真实工具定义、预算与执行路由，避免模型声明和调用不一致。
 - 当前协议没有外部工具来源、结果未知及Skill激活记录；在对应子模块更新所有消费者和宿主codec，不建立兼容层。
 - Run内加载采用公开Pi准备钩子；当前WorkContext.project会过滤system消息并复用初始system，M4.2必须处理SDK动态toolsAdded/toolsRemoved声明，按活跃工具集版本重建或保留声明，并随实际context.prepared记录，防止新增schema被旧投影丢弃。验证steer续轮、预算和日志顺序，不修改SDK源码。
 - stdio是持久双向进程，不能用现有一次性Shell收集器假冒适配；Windows回收/隔离和真实第三方OAuth尚无本机验收环境，实施时保持真实状态。

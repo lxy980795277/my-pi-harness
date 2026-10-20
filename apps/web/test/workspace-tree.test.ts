@@ -61,5 +61,7 @@ describe('workspace conversation navigation', () => {
     expect(formatSessionCreatedAt(120000, 60000)).toBe('刚刚');
     expect(formatSessionCreatedAt(0, 180000)).toBe('3分钟前');
     expect(formatSessionCreatedAt(0, 7200000)).toBe('2小时前');
+    const createdAt = new Date(2026, 0, 9, 12).getTime();
+    expect(formatSessionCreatedAt(createdAt, createdAt + 172800000)).toBe('01-09');
   });
 });

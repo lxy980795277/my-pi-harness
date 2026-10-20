@@ -66,15 +66,17 @@ export const ConversationPanel: FC<ConversationPanelProps> = memo(({ sessionId, 
             className="flex w-full shrink-0 items-center justify-between gap-3 border-b border-border/60 px-5 py-3 sm:px-6"
             aria-label="会话标题栏"
           >
-            <div className="min-w-0 flex-1 space-y-1">
-              <h1 className="truncate text-sm font-semibold">{snapshot.session.title}</h1>
-              {connection !== 'connected' && (
-                <p className="text-[11px] text-muted-foreground">{CONNECTION_LABELS[connection]}</p>
-              )}
-            </div>
+            <h1 className="min-w-0 flex-1 truncate text-sm font-semibold">
+              {snapshot.session.title}
+            </h1>
             <div className="flex shrink-0 items-center gap-2">
               {lastRun && lastRun.status !== 'completed' && (
                 <Badge>{RUN_LABELS[lastRun.status]}</Badge>
+              )}
+              {connection !== 'connected' && (
+                <span className="text-[11px] whitespace-nowrap text-muted-foreground">
+                  {CONNECTION_LABELS[connection]}
+                </span>
               )}
               <Button
                 type="button"

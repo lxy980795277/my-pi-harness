@@ -23,10 +23,9 @@ import { RunExecution } from './run-execution.js';
 import type { EventInput, InputAcceptance, RuntimeStore } from './runtime-ports.js';
 import type { ToolRuntime } from './tool-runtime.js';
 import { completeToolHistory } from './tool-history.js';
-import { TOOL_DEFINITIONS } from '@my-pi-harness/execution';
 import type { WorkRuntime } from './work-runtime.js';
-import { SESSION_TOOL_DEFINITIONS } from './session-tools.js';
 import { userWithAttachments } from './attachment-context.js';
+import { RunToolset } from './run-toolset.js';
 
 export interface SessionRuntimeOptions {
   store: RuntimeStore;
@@ -436,6 +435,9 @@ export class SessionRuntime {
         systemPrompt = prepared.systemPrompt;
       }
       signal.throwIfAborted();
+      let toolset: RunToolset;
+      if (this.options.tools) toolset = this.options.tools.selectToolset(session);
+      else toolset = new RunToolset([]);
       const events: EventInput[] = [
         ...prefix,
         ...(prepared
@@ -460,12 +462,12 @@ export class SessionRuntime {
             systemPrompt,
             workspaceId: session.workspaceId,
             approvalMode: session.approvalMode,
-            tools: this.options.tools
-              ? [
-                  ...(this.options.work ? SESSION_TOOL_DEFINITIONS : []),
-                  ...(session.workspaceId !== null ? TOOL_DEFINITIONS : []),
-                ]
-              : [],
+            tools: toolset.definitions,
+            toolSources: toolset.records.map(({ source, fingerprint, definition }) => ({
+              name: definition.name,
+              source,
+              fingerprint,
+            })),
           }),
         },
         ...(queuedInputId
@@ -491,6 +493,7 @@ export class SessionRuntime {
           systemPrompt,
           basePrompt,
           eligibleInputIds,
+          toolset,
           queue: () => this.getSnapshot(session.id).queue,
           commit: (records) => this.commit(session.id, records),
           onError: (error) => this.options.onError(error),

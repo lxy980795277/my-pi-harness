@@ -9,6 +9,7 @@ import type { EventInput } from './runtime-ports.js';
 import { toolCallRecordId, type ToolRuntime } from './tool-runtime.js';
 import type { WorkRuntime } from './work-runtime.js';
 import { userWithAttachments } from './attachment-context.js';
+import type { RunToolset } from './run-toolset.js';
 import { messageUsage } from './message-usage.js';
 
 export interface RunExecutionOptions {
@@ -20,6 +21,7 @@ export interface RunExecutionOptions {
   systemPrompt: string;
   basePrompt: string;
   eligibleInputIds: readonly string[];
+  toolset: RunToolset;
   commit(events: readonly EventInput[]): void;
   queue(): QueueInput[];
   onError(error: unknown): void;
@@ -48,19 +50,24 @@ export class RunExecution {
 
   public constructor(public readonly options: RunExecutionOptions) {
     this.eligible = new Set(options.eligibleInputIds);
-    const tools =
-      options.tools?.createTools({
-        session: options.session,
-        run: options.run,
-        signal: this.toolAbort.signal,
-        recorded: this.recordedTools,
-        assistantMessageId: () => {
-          if (!this.lastAssistantMessageId)
-            throw new RuntimeError('STREAM_PROTOCOL', 'Tool request has no assistant call');
-          return this.lastAssistantMessageId;
+    let tools: ReturnType<ToolRuntime['createTools']> = [];
+    if (options.tools) {
+      tools = options.tools.createTools(
+        {
+          session: options.session,
+          run: options.run,
+          signal: this.toolAbort.signal,
+          recorded: this.recordedTools,
+          assistantMessageId: () => {
+            if (!this.lastAssistantMessageId)
+              throw new RuntimeError('STREAM_PROTOCOL', 'Tool request has no assistant call');
+            return this.lastAssistantMessageId;
+          },
+          commit: (events) => this.commit(events),
         },
-        commit: (events) => this.commit(events),
-      }) ?? [];
+        options.toolset,
+      );
+    }
     this.agent = new Agent({
       initialState: {
         messages: options.history,
@@ -97,7 +104,7 @@ export class RunExecution {
                           .slice(0, 1)
                           .map((part) => part.text)
                           .join(''),
-                  toolDefinitions: tools,
+                  toolDefinitions: options.toolset.definitions,
                   signal: signal
                     ? AbortSignal.any([signal, this.toolAbort.signal])
                     : this.toolAbort.signal,

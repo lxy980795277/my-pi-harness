@@ -2,32 +2,32 @@ import type { SettingsCloseTarget, SettingsDialogState } from '@/features/settin
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
 
-import { useWorkspaceStore } from '@/app/stores/workspace';
+import { useSettingsStore } from '@/features/settings/stores/settings';
 import { cancelAuthFlow } from '@/features/auth/services/auth';
 import { useAsyncEvent } from '@/hooks/use-async-event';
 
 /** Parent and child closes first cancel the model exchange owned by the settings window. */
 export const useSettingsDialog = (): SettingsDialogState => {
   const client = useQueryClient();
-  const open = useWorkspaceStore((state) => {
+  const open = useSettingsStore((state) => {
     return state.settingsOpen;
   });
-  const section = useWorkspaceStore((state) => {
+  const section = useSettingsStore((state) => {
     return state.settingsSection;
   });
-  const setSection = useWorkspaceStore((state) => {
+  const setSection = useSettingsStore((state) => {
     return state.setSettingsSection;
   });
-  const closeSettings = useWorkspaceStore((state) => {
+  const closeSettings = useSettingsStore((state) => {
     return state.closeSettings;
   });
-  const closeProvider = useWorkspaceStore((state) => {
+  const closeProvider = useSettingsStore((state) => {
     return state.closeProvider;
   });
-  const flowId = useWorkspaceStore((state) => {
+  const flowId = useSettingsStore((state) => {
     return state.providerAuthFlowId;
   });
-  const authStarting = useWorkspaceStore((state) => {
+  const authStarting = useSettingsStore((state) => {
     return state.providerAuthStarting;
   });
   const close = useAsyncEvent(

@@ -1,14 +1,15 @@
-import type { ApplicationShellState } from '@/app/types/application';
 import { useCallback, useEffect, useState } from 'react';
+import { useStartNewConversation } from '@/app/hooks/use-start-new-conversation';
+import { useNavigationStore } from '@/app/stores/navigation';
 import { useTheme } from '@/app/hooks/use-theme';
-import { useWorkspaceStore } from '@/app/stores/workspace';
-import type { WorkspacePage } from '@/app/types/application';
+import type { ApplicationShellState, WorkspacePage } from '@/app/types/application';
+import { getUserProfile } from '@/app/utils/user-profile';
 import { useAuthorization } from '@/features/auth/hooks/use-authorization';
 import { createPairingCode } from '@/features/auth/services/auth';
 import { hasValidApplicationSession } from '@/features/auth/utils/application-session';
 import { readLoginCallback } from '@/features/auth/utils/login-entry';
+import { useSettingsStore } from '@/features/settings/stores/settings';
 import { useAsyncEvent } from '@/hooks/use-async-event';
-import { getUserProfile } from '@/app/utils/user-profile';
 
 const PAGE_LABELS: Record<WorkspacePage, string> = { sessions: '新对话', runtime: '运行状态' };
 const THEME_LABELS = { light: '切换到深色主题', dark: '切换到浅色主题' } as const;
@@ -24,25 +25,20 @@ export const useApplicationShell = (): ApplicationShellState => {
     receive,
     revoked,
   } = useAuthorization();
-  const page = useWorkspaceStore((state) => {
+  const page = useNavigationStore((state) => {
     return state.page;
   });
-  const navigate = useWorkspaceStore((state) => {
+  const navigate = useNavigationStore((state) => {
     return state.navigate;
   });
-  const startNewConversation = useWorkspaceStore((state) => {
-    return state.startNewConversation;
-  });
-  const activeSessionId = useWorkspaceStore((state) => {
+  const startNewConversation = useStartNewConversation();
+  const activeSessionId = useNavigationStore((state) => {
     return state.activeSessionId;
   });
-  const reset = useWorkspaceStore((state) => {
-    return state.reset;
-  });
-  const settingsOpen = useWorkspaceStore((state) => {
+  const settingsOpen = useSettingsStore((state) => {
     return state.settingsOpen;
   });
-  const openSettings = useWorkspaceStore((state) => {
+  const openSettings = useSettingsStore((state) => {
     return state.openSettings;
   });
   const [pairingCode, setPairingCode] = useState<string | null>(null);
@@ -65,8 +61,7 @@ export const useApplicationShell = (): ApplicationShellState => {
     useCallback(async (): Promise<void> => {
       await logout();
       setPairingCode(null);
-      reset();
-    }, [logout, reset]),
+    }, [logout]),
   );
   const pairing = useAsyncEvent(
     useCallback(async (signal: AbortSignal): Promise<void> => {

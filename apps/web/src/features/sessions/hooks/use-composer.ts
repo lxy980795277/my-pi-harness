@@ -5,7 +5,7 @@ import {
 import type { ComposerState } from '@/features/sessions/types/session';
 import type { InputRequest } from '@my-pi-harness/protocol';
 import { useCallback, useState, type ChangeEvent, type SubmitEvent } from 'react';
-import { useWorkspaceStore } from '@/app/stores/workspace';
+import { useComposerStore } from '@/features/sessions/stores/composer';
 import { useAsyncEvent } from '@/hooks/use-async-event';
 import { isRejectedInput } from '@/features/sessions/utils/input-outcome';
 
@@ -28,22 +28,22 @@ export const useComposer = (
   const removeDraftAttachment = useAttachmentDrafts((state) => {
     return state.remove;
   });
-  const storedDraft = useWorkspaceStore((state): string => {
+  const storedDraft = useComposerStore((state): string => {
     return state.drafts[sessionId] ?? '';
   });
-  const setDraft = useWorkspaceStore((state) => {
+  const setDraft = useComposerStore((state) => {
     return state.setDraft;
   });
-  const confirmInput = useWorkspaceStore((state) => {
+  const confirmInput = useComposerStore((state) => {
     return state.confirmInput;
   });
-  const pendingInput = useWorkspaceStore((state) => {
+  const pendingInput = useComposerStore((state) => {
     return state.pendingInputs[sessionId] ?? null;
   });
-  const prepareInput = useWorkspaceStore((state) => {
+  const prepareInput = useComposerStore((state) => {
     return state.prepareInput;
   });
-  const clearPendingInput = useWorkspaceStore((state) => {
+  const clearPendingInput = useComposerStore((state) => {
     return state.clearPendingInput;
   });
   let draft = storedDraft;

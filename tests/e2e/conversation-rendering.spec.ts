@@ -106,6 +106,67 @@ test('一次回答跨工具步骤只在末尾复制全部正文，底部统计�
   }
 });
 
+test('工具展开选择跨虚拟卸载与会话切换保留，输入草稿独立保存', async ({ page, daemon }) => {
+  const calls = Array.from({ length: 16 }, (_, index) => {
+    return {
+      name: 'search_session_history',
+      arguments: { query: `state-retain-${index}` },
+      content: `正在检索第${index + 1}项。`,
+    };
+  });
+  const model = await startToolSequenceModel(calls, '状态生命周期验证完成。');
+  try {
+    await page.goto(daemon.origin);
+    await configureTestProvider(page, model.origin);
+    await page.reload();
+    await chooseOption(
+      page,
+      page.getByRole('combobox', { name: '对话模型', exact: true }),
+      'Queue Model · Chat',
+    );
+    const draft = page.getByLabel('消息', { exact: true });
+    await draft.fill('工具展开保留');
+    await page.getByRole('button', { name: '发送', exact: true }).click();
+    await expect(page.getByText('状态生命周期验证完成。', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: '停止', exact: true })).toHaveCount(0);
+    const timeline = page.getByLabel('对话记录', { exact: true });
+    const firstTool = page
+      .getByLabel('search_session_history 工具调用', { exact: true })
+      .filter({ hasText: 'state-retain-0' });
+    await timeline.evaluate((element) => {
+      element.scrollTop = 0;
+    });
+    await firstTool
+      .getByRole('button', { name: '展开 search_session_history 工具详情', exact: true })
+      .click();
+    await expect(firstTool.getByRole('region', { name: '调用参数', exact: true })).toBeVisible();
+    await timeline.evaluate((element) => {
+      element.scrollTop = element.scrollHeight;
+    });
+    await expect(firstTool).toHaveCount(0);
+    await timeline.evaluate((element) => {
+      element.scrollTop = 0;
+    });
+    await expect(
+      firstTool.getByRole('button', { name: '收起 search_session_history 工具详情', exact: true }),
+    ).toHaveAttribute('aria-expanded', 'true');
+    await draft.fill('旧会话未提交草稿');
+    await page.getByRole('button', { name: '新对话', exact: true }).click();
+    await expect(draft).toHaveValue('');
+    await page.getByRole('button', { name: /^工具展开保留 /u }).click();
+    await expect(draft).toHaveValue('旧会话未提交草稿');
+    await timeline.evaluate((element) => {
+      element.scrollTop = 0;
+    });
+    await expect(
+      firstTool.getByRole('button', { name: '收起 search_session_history 工具详情', exact: true }),
+    ).toHaveAttribute('aria-expanded', 'true');
+    expect(model.requests).toHaveLength(17);
+  } finally {
+    await model.close();
+  }
+});
+
 test('首响应延迟有等待提示，刷新可恢复，正文到达后接替等待', async ({ page, daemon }, testInfo) => {
   const model = await startMarkdownModel('正在返回的首段正文。', '\n\n回答已完成。', {
     pauseBeforeStart: true,

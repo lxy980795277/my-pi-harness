@@ -3,15 +3,10 @@ import type { ApprovalMode, DefaultModel, InputRequest } from '@my-pi-harness/pr
 import type {
   NewConversationAttempt,
   NewConversationIntent,
+  WorkMode,
 } from '@/features/sessions/types/composer';
 
-import type { SettingsSection, WorkspacePage } from '@/app/types/application';
-import type { WorkMode } from '@/features/sessions/types/composer';
-
-interface WorkspaceState {
-  page: WorkspacePage;
-  activeSessionId: string | null;
-  activeWorkspaceId: string | null;
+interface ComposerState {
   newConversationDraft: string;
   newConversationModel: DefaultModel | null;
   newConversationApproval: ApprovalMode;
@@ -20,15 +15,6 @@ interface WorkspaceState {
   newConversationAttempt: NewConversationAttempt | null;
   pendingInputs: Readonly<Record<string, InputRequest>>;
   drafts: Readonly<Record<string, string>>;
-  settingsOpen: boolean;
-  settingsSection: SettingsSection;
-  providerDialogId: string | null;
-  providerAuthFlowId: string | null;
-  providerAuthStarting: boolean;
-  modelsDialogId: string | null;
-  navigate: (page: WorkspacePage) => void;
-  selectSession: (sessionId: string) => void;
-  selectWorkspace: (workspaceId: string | null) => void;
   startNewConversation: () => void;
   setNewConversationDraft: (text: string) => void;
   setNewConversationModel: (model: DefaultModel) => void;
@@ -47,23 +33,11 @@ interface WorkspaceState {
   setDraft: (sessionId: string, text: string) => void;
   clearDraft: (sessionId: string) => void;
   reset: () => void;
-  openSettings: (section: SettingsSection) => void;
-  closeSettings: () => void;
-  setSettingsSection: (section: SettingsSection) => void;
-  openProvider: (id: string) => void;
-  closeProvider: () => void;
-  setProviderAuthFlow: (id: string | null) => void;
-  setProviderAuthStarting: (starting: boolean) => void;
-  openModels: (id: string) => void;
-  closeModels: () => void;
 }
 
-/** Volatile navigation and unsubmitted drafts; durable session facts stay in Query. */
-export const useWorkspaceStore = create<WorkspaceState>((set, get) => {
+/** Owns volatile composer choices, drafts and unconfirmed submissions; server facts stay in Query. */
+export const useComposerStore = create<ComposerState>((set, get) => {
   return {
-    page: 'sessions',
-    activeSessionId: null,
-    activeWorkspaceId: null,
     newConversationDraft: '',
     newConversationModel: null,
     newConversationApproval: 'ask',
@@ -72,25 +46,8 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => {
     newConversationAttempt: null,
     pendingInputs: {},
     drafts: {},
-    settingsOpen: false,
-    settingsSection: 'models',
-    providerDialogId: null,
-    providerAuthFlowId: null,
-    providerAuthStarting: false,
-    modelsDialogId: null,
-    navigate: (page: WorkspacePage): void => {
-      set({ page });
-    },
-    selectSession: (sessionId: string): void => {
-      set({ activeSessionId: sessionId, page: 'sessions' });
-    },
-    selectWorkspace: (workspaceId: string | null): void => {
-      set({ activeWorkspaceId: workspaceId });
-    },
     startNewConversation: (): void => {
       set({
-        activeSessionId: null,
-        page: 'sessions',
         newConversationGeneration: crypto.randomUUID(),
         newConversationAttempt: null,
         newConversationDraft: '',
@@ -196,12 +153,12 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => {
       }
     },
     setDraft: (sessionId: string, text: string): void => {
-      set((state): Partial<WorkspaceState> => {
+      set((state): Partial<ComposerState> => {
         return { drafts: { ...state.drafts, [sessionId]: text } };
       });
     },
     clearDraft: (sessionId: string): void => {
-      set((state): Partial<WorkspaceState> => {
+      set((state): Partial<ComposerState> => {
         const drafts = { ...state.drafts };
         delete drafts[sessionId];
         return { drafts };
@@ -209,9 +166,6 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => {
     },
     reset: (): void => {
       set({
-        page: 'sessions',
-        activeSessionId: null,
-        activeWorkspaceId: null,
         newConversationDraft: '',
         newConversationModel: null,
         newConversationApproval: 'ask',
@@ -220,45 +174,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => {
         newConversationAttempt: null,
         pendingInputs: {},
         drafts: {},
-        settingsOpen: false,
-        providerDialogId: null,
-        providerAuthFlowId: null,
-        providerAuthStarting: false,
-        modelsDialogId: null,
       });
-    },
-    openSettings: (section: SettingsSection): void => {
-      set({ settingsOpen: true, settingsSection: section });
-    },
-    closeSettings: (): void => {
-      set({
-        settingsOpen: false,
-        providerDialogId: null,
-        providerAuthFlowId: null,
-        providerAuthStarting: false,
-        modelsDialogId: null,
-      });
-    },
-    setSettingsSection: (section: SettingsSection): void => {
-      set({ settingsSection: section });
-    },
-    openProvider: (id: string): void => {
-      set({ providerDialogId: id, providerAuthFlowId: null });
-    },
-    closeProvider: (): void => {
-      set({ providerDialogId: null, providerAuthFlowId: null });
-    },
-    setProviderAuthStarting: (providerAuthStarting: boolean): void => {
-      set({ providerAuthStarting });
-    },
-    setProviderAuthFlow: (id: string | null): void => {
-      set({ providerAuthFlowId: id });
-    },
-    openModels: (id: string): void => {
-      set({ modelsDialogId: id });
-    },
-    closeModels: (): void => {
-      set({ modelsDialogId: null });
     },
   };
 });

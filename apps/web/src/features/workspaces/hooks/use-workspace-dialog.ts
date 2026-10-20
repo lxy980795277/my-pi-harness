@@ -1,7 +1,7 @@
 import type { Workspace, WorkspaceIcon } from '@my-pi-harness/protocol';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState, type ChangeEvent, type SubmitEvent } from 'react';
-import { useWorkspaceStore } from '@/app/stores/workspace';
+import { useNavigationStore } from '@/app/stores/navigation';
 import { useWorkspaceDirectory } from '@/features/workspaces/hooks/use-workspace-directory';
 import { createWorkspace, renameWorkspace } from '@/features/workspaces/services/workspaces';
 import { workspaceDirectoryName } from '@/features/workspaces/utils/workspace-directory';
@@ -14,7 +14,7 @@ export const useWorkspaceDialog = (
   onClose: () => void,
 ): WorkspaceDialogState => {
   const client = useQueryClient();
-  const selectWorkspace = useWorkspaceStore((state) => {
+  const selectWorkspace = useNavigationStore((state) => {
     return state.selectWorkspace;
   });
   const [name, setName] = useState(workspace?.name ?? '');

@@ -21,6 +21,7 @@ import { openProfileStore } from '@my-pi-harness/storage';
 import { RuntimeError } from '../../src/errors.js';
 import { SessionRuntime } from '../../src/session-runtime.js';
 import { ToolRuntime } from '../../src/tool-runtime.js';
+import type { ToolRuntimeOptions } from '../../src/tool-types.js';
 import { WorkRuntime } from '../../src/work-runtime.js';
 
 interface WorkFixture {
@@ -31,13 +32,23 @@ interface WorkFixture {
   faux: ReturnType<typeof fauxProvider>;
   errors: unknown[];
   runtime: SessionRuntime;
+  tools: ToolRuntime | undefined;
   work: WorkRuntime;
   session: SessionSummary;
   releases(): number;
   close(): Promise<void>;
 }
 
-export async function fixture(withWorkspace = false): Promise<WorkFixture> {
+interface WorkFixtureOptions {
+  sessionTools?: boolean;
+  tools?: boolean;
+  context?: boolean;
+}
+
+export async function fixture(
+  withWorkspace = false,
+  options: WorkFixtureOptions = {},
+): Promise<WorkFixture> {
   const temporary = await mkdtemp(join(tmpdir(), 'my-pi-work-runtime-'));
   const directory = await realpath(temporary);
   const profile = join(directory, 'profile');
@@ -83,16 +94,25 @@ export async function fixture(withWorkspace = false): Promise<WorkFixture> {
       command: (id, operation, allowActive) => sessions().workCommand(id, operation, allowActive),
       commit: (id, events) => sessions().record(id, events),
     });
-    const tools = new ToolRuntime({ profileDirectory: profile, resolveWorkspace, work });
-    const runtime = new SessionRuntime({
+    let tools: ToolRuntime | undefined;
+    if (options.tools !== false) {
+      const toolOptions: ToolRuntimeOptions = {
+        profileDirectory: profile,
+        resolveWorkspace,
+      };
+      if (options.sessionTools !== false) toolOptions.work = work;
+      tools = new ToolRuntime(toolOptions);
+    }
+    const runtimeOptions: ConstructorParameters<typeof SessionRuntime>[0] = {
       store,
       gateway,
-      work,
-      tools,
       onError: (error) => {
         errors.push(error);
       },
-    });
+    };
+    if (options.context !== false) runtimeOptions.work = work;
+    if (tools) runtimeOptions.tools = tools;
+    const runtime = new SessionRuntime(runtimeOptions);
     const session = runtime.createSession({
       title: 'M3 work',
       providerId: faux.provider.id,
@@ -109,6 +129,7 @@ export async function fixture(withWorkspace = false): Promise<WorkFixture> {
       faux,
       errors,
       runtime,
+      tools,
       work,
       session,
       releases: () => releases,

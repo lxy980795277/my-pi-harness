@@ -16,6 +16,8 @@ Node端的模型接入与持久会话运行层，使用固定的Pi core/ai 1.1.0
 
 `SessionRuntime`序列化单会话命令；每个Session只有一个活跃Run，不同Session可独立运行。输入、Run配置与模型上下文版本先原子提交，再创建真实Agent请求。SDK事件立即映射为独立公开字段，delta先提交后广播；订阅者不等待SDK idle，真正结算由Run所有者等待。绑定工作区的会话通过`ToolRuntime`提供受策略与单次审批约束的工具循环；没有工作区不自动获得本机目录权限，deferred不会被误报为完整成功。
 
+`RunToolset`在接受Run前由实际`ToolRuntime`能力与工作区选择一次，深拷贝并冻结定义，同时保留TypeBox元数据。接受审计的`tools`、Pi声明、上下文预算及运行时路由共用该集合；来源与稳定定义指纹单独保存为私有`toolSources`，不进入模型工具schema。`ToolRuntime`仅在已接受集合内查找来源和定义，重名与未接受的路由明确拒绝；底层execution及会话执行器对固定内置目录的参数复核继续生效。当前仅支持既有会话/工作区工具；MCP来源、连接、配置和结果未知语义尚未实现。
+
 `ToolRuntime`按接受Run时冻结的approvalMode执行：ask逐次询问，auto调用`ModelApprovalReviewer`，full-access自动批准并显式选择macOS无沙箱Shell；旧read-only继续阻止变更。Plan限制在审批前检查，文件工具仍以工作区为根。独立复核使用当前Run的Provider/model、用户请求与冻结规则，没有执行工具、共享主会话或多轮重试；只接受allow/deny/ask结构化结果，模型/认证失败、超预算、无效结果或30秒超时均转人工。停止中止复核并等待SDK结算后释放模型lease。审计请求和决定先持久化，存储失败直接传播，不当成模型失败转人工；公开事件只有工具/模型ID及决定/理由，完整复核请求仅保存在privateData。工具卡最终来源区分user/ai/full-access，先前AI转人工记录仍保留在事件历史。
 
 运行中的follow-up/steer输入先进入持久队列，再交Pi对应队列消费；文本更新与删除重建其内存投影。每个Run只投递当次允许的输入集合，普通发送与编辑不会激活旧暂停队列。取消、失败与重启保留未消费输入，恢复收费请求需显式resume，且原始分支必须与所选分支相符；同一恢复Run只激活相同Provider/model的输入。编辑用户消息追加分支与新输入，保留旧分支并排除其后续回复。session.deleted归档会话，保留事件，不是彻底删除私人数据。

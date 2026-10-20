@@ -1,11 +1,13 @@
 import type { DefaultModel, ProviderConfig, SessionSnapshot } from '@my-pi-harness/protocol';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, type ChangeEvent, type SubmitEvent } from 'react';
+import { useComposerStore } from '@/features/sessions/stores/composer';
+import { useNavigationStore } from '@/app/stores/navigation';
+import { useSettingsStore } from '@/features/settings/stores/settings';
 import {
   useAttachmentDrafts,
   EMPTY_ATTACHMENTS,
 } from '@/features/attachments/stores/attachment-drafts';
-import { useWorkspaceStore } from '@/app/stores/workspace';
 import { useModelCatalog, useProviderModels } from '@/features/models/hooks/use-model-catalog';
 import {
   buildThinkingOptions,
@@ -35,40 +37,40 @@ export const useNewSession = (
   const client = useQueryClient();
   const catalog = useModelCatalog();
   const workspaces = useWorkspaces();
-  const storedDraft = useWorkspaceStore((state) => {
+  const storedDraft = useComposerStore((state) => {
     return state.newConversationDraft;
   });
-  const setDraft = useWorkspaceStore((state) => {
+  const setDraft = useComposerStore((state) => {
     return state.setNewConversationDraft;
   });
-  const selectedModel = useWorkspaceStore((state) => {
+  const selectedModel = useComposerStore((state) => {
     return state.newConversationModel;
   });
-  const setModel = useWorkspaceStore((state) => {
+  const setModel = useComposerStore((state) => {
     return state.setNewConversationModel;
   });
-  const workspaceId = useWorkspaceStore((state) => {
+  const workspaceId = useNavigationStore((state) => {
     return state.activeWorkspaceId;
   });
-  const selectWorkspace = useWorkspaceStore((state) => {
+  const selectWorkspace = useNavigationStore((state) => {
     return state.selectWorkspace;
   });
-  const approvalMode = useWorkspaceStore((state) => {
+  const approvalMode = useComposerStore((state) => {
     return state.newConversationApproval;
   });
-  const workMode = useWorkspaceStore((state) => {
+  const workMode = useComposerStore((state) => {
     return state.newConversationWorkMode;
   });
-  const setWorkMode = useWorkspaceStore((state) => {
+  const setWorkMode = useComposerStore((state) => {
     return state.setNewConversationWorkMode;
   });
-  const setApproval = useWorkspaceStore((state) => {
+  const setApproval = useComposerStore((state) => {
     return state.setNewConversationApproval;
   });
-  const openSettings = useWorkspaceStore((state) => {
+  const openSettings = useSettingsStore((state) => {
     return state.openSettings;
   });
-  const generation = useWorkspaceStore((state) => {
+  const generation = useComposerStore((state) => {
     return state.newConversationGeneration;
   });
   const attachmentDraftKey = `new:${generation}`;
@@ -84,28 +86,28 @@ export const useNewSession = (
   const removeDraftAttachment = useAttachmentDrafts((state) => {
     return state.remove;
   });
-  const attempt = useWorkspaceStore((state) => {
+  const attempt = useComposerStore((state) => {
     return state.newConversationAttempt;
   });
-  const beginAttempt = useWorkspaceStore((state) => {
+  const beginAttempt = useComposerStore((state) => {
     return state.beginNewAttempt;
   });
-  const markCreated = useWorkspaceStore((state) => {
+  const markCreated = useComposerStore((state) => {
     return state.markNewAttemptCreated;
   });
-  const markUnknown = useWorkspaceStore((state) => {
+  const markUnknown = useComposerStore((state) => {
     return state.markNewAttemptUnknown;
   });
-  const clearAttempt = useWorkspaceStore((state) => {
+  const clearAttempt = useComposerStore((state) => {
     return state.clearNewAttempt;
   });
-  const confirmInput = useWorkspaceStore((state) => {
+  const confirmInput = useComposerStore((state) => {
     return state.confirmInput;
   });
-  const prepareInput = useWorkspaceStore((state) => {
+  const prepareInput = useComposerStore((state) => {
     return state.prepareInput;
   });
-  const clearPendingInput = useWorkspaceStore((state) => {
+  const clearPendingInput = useComposerStore((state) => {
     return state.clearPendingInput;
   });
   let selection = selectedModel;

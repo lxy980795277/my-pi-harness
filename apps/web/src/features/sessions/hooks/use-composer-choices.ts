@@ -1,6 +1,6 @@
 import type { ProviderConfig, SessionPatchInput, SessionSummary } from '@my-pi-harness/protocol';
 import { useCallback } from 'react';
-import { useWorkspaceStore } from '@/app/stores/workspace';
+import { useSettingsStore } from '@/features/settings/stores/settings';
 import { useProviderModels } from '@/features/models/hooks/use-model-catalog';
 import {
   buildThinkingOptions,
@@ -27,7 +27,7 @@ export const useComposerChoices = (
 ): ComposerChoicesState => {
   const workMode = useComposerWorkMode(session);
   const workspaces = useWorkspaces();
-  const openSettings = useWorkspaceStore((state) => {
+  const openSettings = useSettingsStore((state) => {
     return state.openSettings;
   });
   const provider = providers.find((entry) => {

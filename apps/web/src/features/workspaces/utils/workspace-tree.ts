@@ -52,7 +52,10 @@ export const formatSessionCreatedAt = (createdAt: number, now: number): string =
   if (elapsed < 86_400_000) {
     return `${Math.floor(elapsed / 3_600_000)}小时前`;
   }
-  return new Intl.DateTimeFormat('zh-CN', { month: 'numeric', day: 'numeric' }).format(createdAt);
+  const date = new Date(createdAt);
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${month}-${day}`;
 };
 
 /** Full timestamps remain available independently of the compact sidebar label. */

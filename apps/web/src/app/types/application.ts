@@ -5,7 +5,6 @@ import type { Action, ValueChange } from '@/types/events';
 
 export type Theme = 'light' | 'dark';
 export type WorkspacePage = 'sessions' | 'runtime';
-export type SettingsSection = 'general' | 'models';
 
 export interface ApplicationShellState {
   settingsOpen: boolean;

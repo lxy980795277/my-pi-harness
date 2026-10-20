@@ -1,7 +1,9 @@
-import type { SettingsSection, Theme } from '@/app/types/application';
+import type { Theme } from '@/app/types/application';
 import type { Action, ValueChange } from '@/types/events';
 
 export type SettingsCloseTarget = 'settings' | 'provider';
+
+export type SettingsSection = 'general' | 'models';
 
 export interface SettingsDialogState {
   open: boolean;

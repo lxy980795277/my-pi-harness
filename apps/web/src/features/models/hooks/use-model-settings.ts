@@ -1,7 +1,7 @@
 import type { ModelSettingsState } from '@/features/models/types/model';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
-import { useWorkspaceStore } from '@/app/stores/workspace';
+import { useSettingsStore } from '@/features/settings/stores/settings';
 import { useModelCatalog } from '@/features/models/hooks/use-model-catalog';
 import { setProviderEnabled } from '@/features/models/services/providers';
 import { useAsyncEvent } from '@/hooks/use-async-event';
@@ -11,19 +11,19 @@ import type { ProviderConfig } from '@my-pi-harness/protocol';
 export const useModelSettings = (): ModelSettingsState => {
   const catalog = useModelCatalog();
   const client = useQueryClient();
-  const providerId = useWorkspaceStore((state) => {
+  const providerId = useSettingsStore((state) => {
     return state.providerDialogId;
   });
-  const modelsId = useWorkspaceStore((state) => {
+  const modelsId = useSettingsStore((state) => {
     return state.modelsDialogId;
   });
-  const openProvider = useWorkspaceStore((state) => {
+  const openProvider = useSettingsStore((state) => {
     return state.openProvider;
   });
-  const openModels = useWorkspaceStore((state) => {
+  const openModels = useSettingsStore((state) => {
     return state.openModels;
   });
-  const closeModels = useWorkspaceStore((state) => {
+  const closeModels = useSettingsStore((state) => {
     return state.closeModels;
   });
   const addProvider = useCallback((): void => {

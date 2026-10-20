@@ -2,8 +2,7 @@ import type { AuthStatus } from '@my-pi-harness/protocol';
 import { useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { useWorkspaceStore } from '@/app/stores/workspace';
-import { useAttachmentDrafts } from '@/features/attachments/stores/attachment-drafts';
+import { useResetClientState } from '@/app/hooks/use-reset-client-state';
 import { logoutBrowser, pairBrowser } from '@/features/auth/services/auth';
 import {
   AUTH_STATUS_QUERY_KEY,
@@ -25,12 +24,7 @@ interface Authorization {
 
 /** Owns application login and removes private state on expiry, logout or HTTP rejection. */
 export const useAuthorization = (): Authorization => {
-  const resetAttachments = useAttachmentDrafts((state) => {
-    return state.reset;
-  });
-  const resetWorkspace = useWorkspaceStore((state) => {
-    return state.reset;
-  });
+  const resetClientState = useResetClientState();
   const client = useQueryClient();
   const task = useRequestTask();
   const [revoked, setRevoked] = useState(false);
@@ -57,10 +51,6 @@ export const useAuthorization = (): Authorization => {
       [statusOwner],
     ),
   );
-  const resetDrafts = useCallback((): void => {
-    resetAttachments();
-    resetWorkspace();
-  }, [resetAttachments, resetWorkspace]);
   const { run: refresh } = useAsyncEvent(
     useCallback(
       async (signal: AbortSignal): Promise<void> => {
@@ -89,9 +79,9 @@ export const useAuthorization = (): Authorization => {
     }
     const generation = statusOwner.invalidate();
     setRevoked(true);
-    resetDrafts();
+    resetClientState();
     recover(generation);
-  }, [recover, resetDrafts, statusOwner]);
+  }, [recover, resetClientState, statusOwner]);
 
   useEffect(() => {
     return subscribeAuthorizationLoss(revoke);
@@ -101,10 +91,10 @@ export const useAuthorization = (): Authorization => {
   }, [refresh]);
   useEffect(() => {
     if (query.data && !query.data.authenticated) {
-      resetDrafts();
+      resetClientState();
       clearCache();
     }
-  }, [clearCache, query.data, resetDrafts]);
+  }, [clearCache, query.data, resetClientState]);
   const expiresAt = query.data?.session?.expiresAt;
   useEffect(() => {
     if (expiresAt === undefined) {
@@ -151,7 +141,7 @@ export const useAuthorization = (): Authorization => {
     loggingOut.current = true;
     const generation = statusOwner.invalidate();
     setRevoked(true);
-    resetDrafts();
+    resetClientState();
     try {
       await task(async (signal): Promise<void> => {
         await clearPrivateCache(client);
@@ -164,7 +154,7 @@ export const useAuthorization = (): Authorization => {
     } finally {
       loggingOut.current = false;
     }
-  }, [client, recover, resetDrafts, statusOwner, task]);
+  }, [client, recover, resetClientState, statusOwner, task]);
 
   return { query, pair, logout, reconnect, receive, revoked };
 };

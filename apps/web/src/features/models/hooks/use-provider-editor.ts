@@ -11,7 +11,7 @@ import type {
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState, type SubmitEvent } from 'react';
 
-import { useWorkspaceStore } from '@/app/stores/workspace';
+import { useSettingsStore } from '@/features/settings/stores/settings';
 import { fetchAuthFlow, fetchAuthFlows } from '@/features/auth/services/auth';
 import {
   saveProvider,
@@ -31,16 +31,16 @@ export const useProviderEditor = (
   native: NativeProviderInfo | undefined,
 ): ProviderEditorState => {
   const client = useQueryClient();
-  const closeProvider = useWorkspaceStore((state) => {
+  const closeProvider = useSettingsStore((state) => {
     return state.closeProvider;
   });
-  const flowId = useWorkspaceStore((state) => {
+  const flowId = useSettingsStore((state) => {
     return state.providerAuthFlowId;
   });
-  const setFlowId = useWorkspaceStore((state) => {
+  const setFlowId = useSettingsStore((state) => {
     return state.setProviderAuthFlow;
   });
-  const setAuthStarting = useWorkspaceStore((state) => {
+  const setAuthStarting = useSettingsStore((state) => {
     return state.setProviderAuthStarting;
   });
   // The draft's revision advances only after this editor's acknowledged save.

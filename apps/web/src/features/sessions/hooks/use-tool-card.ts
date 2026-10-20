@@ -1,17 +1,26 @@
 import type { ToolCallView, ToolDecisionInput } from '@my-pi-harness/protocol';
-import { useCallback, useState } from 'react';
+import { useCallback } from 'react';
 import { useAsyncEvent } from '@/hooks/use-async-event';
+import { useTimelineStore } from '@/features/sessions/stores/timeline';
 import { toolNeedsApproval } from '@/features/sessions/utils/approval-options';
 import { toolPresentation } from '@/features/sessions/utils/tool-presentation';
 import type { ToolCardState } from '@/features/sessions/types/tool';
 
-/** A decision is scoped to one durable call; the snapshot owns its resulting status. */
+/** Disclosure choices survive row unmounts; the snapshot owns approval and execution status. */
 export const useToolCard = (
   tool: ToolCallView,
   onDecide: (id: string, decision: ToolDecisionInput['decision']) => Promise<void>,
 ): ToolCardState => {
   const needsApproval = toolNeedsApproval(tool.status);
-  const [expanded, setExpanded] = useState(needsApproval);
+  const expanded = useTimelineStore((state) => {
+    return state.expandedTools[tool.sessionId]?.[tool.id] === true;
+  });
+  const setToolExpanded = useTimelineStore((state) => {
+    return state.setToolExpanded;
+  });
+  const toggleTool = useTimelineStore((state) => {
+    return state.toggleTool;
+  });
   const decision = useAsyncEvent(
     useCallback(
       async (_signal: AbortSignal, value: ToolDecisionInput['decision']): Promise<void> => {
@@ -22,18 +31,18 @@ export const useToolCard = (
   );
   const { run: decideRun } = decision;
   const allow = useCallback((): void => {
-    setExpanded(true);
+    setToolExpanded(tool.sessionId, tool.id, true);
     decideRun('allow');
-  }, [decideRun]);
+  }, [decideRun, setToolExpanded, tool.id, tool.sessionId]);
   const deny = useCallback((): void => {
-    setExpanded(true);
+    setToolExpanded(tool.sessionId, tool.id, true);
     decideRun('deny');
-  }, [decideRun]);
+  }, [decideRun, setToolExpanded, tool.id, tool.sessionId]);
   const toggleDetails = useCallback((): void => {
-    setExpanded((open) => {
-      return !open;
-    });
-  }, []);
+    if (!needsApproval) {
+      toggleTool(tool.sessionId, tool.id);
+    }
+  }, [needsApproval, toggleTool, tool.id, tool.sessionId]);
   const detailsOpen = needsApproval || expanded;
   let detailsLabel = `展开 ${tool.name} 工具详情`;
   if (detailsOpen) {

@@ -1,11 +1,12 @@
 import { createHash } from 'node:crypto';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 import { TOOL_DEFINITIONS, describeTool, executeTool } from '@my-pi-harness/execution';
-import type { ToolCallRecord, ToolDecisionInput } from '@my-pi-harness/protocol';
+import type { SessionSummary, ToolCallRecord, ToolDecisionInput } from '@my-pi-harness/protocol';
 import { Type, type TSchema } from 'typebox';
 import { Value } from 'typebox/value';
 import { RuntimeError } from './errors.js';
 import { SESSION_TOOL_DEFINITIONS, executeSessionTool } from './session-tools.js';
+import { RunToolset, type RunToolSelection } from './run-toolset.js';
 import type { ApprovalReviewResult } from './approval-review.js';
 import type {
   PendingApproval,
@@ -38,12 +39,25 @@ export class ToolRuntime {
     pending.decide(input.decision);
   }
 
-  public createTools(context: ToolRunContext): AgentTool<TSchema, undefined>[] {
-    const definitions = [
-      ...(this.options.work ? SESSION_TOOL_DEFINITIONS : []),
-      ...(context.session.workspaceId === null ? [] : TOOL_DEFINITIONS),
-    ];
-    return definitions.map(
+  /** Select once before acceptance, using this executor's actual session capabilities. */
+  public selectToolset(session: Pick<SessionSummary, 'workspaceId'>): RunToolset {
+    const selections: RunToolSelection[] = [];
+    if (this.options.work) {
+      for (const definition of SESSION_TOOL_DEFINITIONS)
+        selections.push({ source: 'session', definition });
+    }
+    if (session.workspaceId !== null) {
+      for (const definition of TOOL_DEFINITIONS)
+        selections.push({ source: 'workspace', definition });
+    }
+    return new RunToolset(selections);
+  }
+
+  public createTools(
+    context: ToolRunContext,
+    toolset: RunToolset,
+  ): AgentTool<TSchema, undefined>[] {
+    return toolset.definitions.map(
       (definition): AgentTool<TSchema, undefined> => ({
         ...definition,
         label: definition.name,
@@ -52,7 +66,7 @@ export class ToolRuntime {
         execute: async (providerCallId, input: unknown, signal) => {
           if (!Value.Check(Type.Record(Type.String(), Type.Unknown()), input))
             throw new RuntimeError('TOOL_ARGUMENTS_INVALID', '工具参数必须是JSON对象。');
-          return this.execute(context, providerCallId, definition.name, input, signal);
+          return this.execute(context, toolset, providerCallId, definition.name, input, signal);
         },
       }),
     );
@@ -60,6 +74,7 @@ export class ToolRuntime {
 
   private async execute(
     context: ToolRunContext,
+    toolset: RunToolset,
     providerCallId: string,
     name: string,
     args: Record<string, unknown>,
@@ -69,19 +84,14 @@ export class ToolRuntime {
     signal.throwIfAborted();
     if (context.recorded.size >= 64)
       throw new RuntimeError('TOOL_LIMIT', '本次运行已达到工具调用上限。');
-    const sessionDefinition =
-      this.options.work && SESSION_TOOL_DEFINITIONS.find((candidate) => candidate.name === name);
-    const definition =
-      sessionDefinition || TOOL_DEFINITIONS.find((candidate) => candidate.name === name);
-    if (
-      !definition ||
-      !Value.Check(definition.parameters, args) ||
-      JSON.stringify(args).length > 256_000
-    )
+    const selected = toolset.require(name);
+    const { definition } = selected;
+    if (!Value.Check(definition.parameters, args) || JSON.stringify(args).length > 256_000)
       throw new RuntimeError('TOOL_ARGUMENTS_INVALID', '工具参数无效或超过限制。');
-    const policy = sessionDefinition
-      ? { approvalRequired: false, mutating: false, summary: name }
-      : describeTool(name, args);
+    const policy =
+      selected.source === 'session'
+        ? { approvalRequired: false, mutating: false, summary: name }
+        : describeTool(name, args);
     const at = Date.now();
     let status: ToolCallRecord['status'] = 'running';
     if (policy.approvalRequired && context.session.approvalMode !== 'full-access') {
@@ -111,7 +121,9 @@ export class ToolRuntime {
     commit('tool.requested');
     context.recorded.add(tool.id);
     try {
-      if (sessionDefinition && this.options.work) {
+      if (selected.source === 'session') {
+        if (!this.options.work)
+          throw new RuntimeError('TOOL_NOT_AVAILABLE', '会话工具运行时不可用。');
         const text = await executeSessionTool(
           this.options.work,
           context.session.id,

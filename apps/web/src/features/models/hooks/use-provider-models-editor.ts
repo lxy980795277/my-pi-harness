@@ -2,7 +2,7 @@ import type { ProviderModelsEditorState } from '@/features/models/types/model';
 import type { ConnectionResult, ModelDefinition, ProviderConfig } from '@my-pi-harness/protocol';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState, type ChangeEvent, type SubmitEvent } from 'react';
-import { useWorkspaceStore } from '@/app/stores/workspace';
+import { useSettingsStore } from '@/features/settings/stores/settings';
 import { useProviderModels } from '@/features/models/hooks/use-model-catalog';
 import { saveProvider, testProvider } from '@/features/models/services/providers';
 import { providerToInput } from '@/features/models/utils/model-options';
@@ -11,7 +11,7 @@ import { useAsyncEvent } from '@/hooks/use-async-event';
 /** A model list is saved atomically while untouched advanced fields stay attached to their model. */
 export const useProviderModelsEditor = (provider: ProviderConfig): ProviderModelsEditorState => {
   const client = useQueryClient();
-  const close = useWorkspaceStore((state) => {
+  const close = useSettingsStore((state) => {
     return state.closeModels;
   });
   const query = useProviderModels(provider.id, provider.revision);
