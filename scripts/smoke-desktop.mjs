@@ -271,11 +271,32 @@ try {
   }))()`);
   assert.deepEqual(
     bridge.keys.sort(),
-    ['chooseWorkspaceDirectory', 'getInfo', 'getDroppedWorkspaceDirectory', 'openAuth'].sort(),
+    [
+      'chooseWorkspaceDirectory',
+      'getInfo',
+      'getDroppedWorkspaceDirectory',
+      'openAuth',
+      'openExternal',
+    ].sort(),
   );
   assert.deepEqual(bridge.info, { appVersion: version, platform: process.platform });
   assert.equal(bridge.require, false);
   assert.equal(bridge.process, false);
+  for (const url of [
+    'javascript:alert(1)',
+    'file:///tmp/private',
+    'data:text/html,test',
+    'https://user:password@example.invalid/',
+    'https://example.invalid/\r\n',
+  ]) {
+    const rejection = await page.evaluate(
+      `(async () => {
+        try { await window.desktop.openExternal(${JSON.stringify(url)}); return 'unexpected success'; }
+        catch (error) { return error.message; }
+      })()`,
+    );
+    assert.match(rejection, /链接地址无效|仅支持 HTTP 或 HTTPS 链接/);
+  }
   const arbitraryUrl = await page.evaluate(
     `(async () => { try { await window.desktop.openAuth('https://example.com/'); return 'unexpected success'; } catch (error) { return error.message; } })()`,
   );
@@ -312,7 +333,11 @@ try {
   const authRejection = await rogueWindow.evaluate(
     `(async () => { try { await window.desktop.openAuth('missing-flow'); return 'unexpected success'; } catch (error) { return error.message; } })()`,
   );
+  const externalRejection = await rogueWindow.evaluate(
+    `(async () => { try { await window.desktop.openExternal('https://example.invalid/blocked'); return 'unexpected success'; } catch (error) { return error.message; } })()`,
+  );
   assert.match(authRejection, /桌面请求来源无效/);
+  assert.match(externalRejection, /桌面请求来源无效/);
   assert.match(rejection, /桌面请求来源无效/, 'Untrusted windows must not call the desktop bridge');
   await application.evaluate(({ BrowserWindow }) => {
     for (const window of BrowserWindow.getAllWindows()) window.close();

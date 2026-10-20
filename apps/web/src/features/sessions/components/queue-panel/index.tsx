@@ -43,12 +43,7 @@ export const QueuePanel: FC<QueuePanelProps> = ({
         <ul className="space-y-2">
           {queue.map((input) => {
             return (
-              <QueueItem
-                key={`${input.id}:${input.revision}`}
-                input={input}
-                onUpdate={onUpdate}
-                onDelete={onDelete}
-              />
+              <QueueItem key={input.id} input={input} onUpdate={onUpdate} onDelete={onDelete} />
             );
           })}
         </ul>

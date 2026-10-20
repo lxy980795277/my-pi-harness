@@ -14,7 +14,7 @@
 
 GitHub OAuth App 启用 Device Flow 后，Electron 只需要 Client ID。浏览器登录另需在 `.env` 填入 Client Secret，并将 GitHub 应用设置中的 Authorization callback URL 配为 `http://127.0.0.1:5174/api/auth/callback/github`。直接访问 daemon 托管页面时使用该页面 origin 对应的回调，并同步更新 GitHub 应用设置；显式回调不能含凭据、query 或 fragment，必须是本机回环地址，且 hostname 与登录页面相同（端口可不同）。不要把 Secret 发到聊天、提交 Git 或放进 `VITE_` 配置。
 
-桌面打包从根 `.env` 或构建环境提取 Client ID，生成 `desktop-oauth.env` 随 daemon 分发；根 `.env`、Client Secret 与其他凭据不会装入应用。缺少有效 Client ID 时打包直接失败。替换 OAuth App 后重新打包。[GitHub 登录协议](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps)
+桌面打包优先使用显式构建环境中的 Client ID，未提供时才读取根 `.env`，生成 `desktop-oauth.env` 随 daemon 分发；根 `.env`、Client Secret 与其他凭据不会装入应用。缺少有效 Client ID 时打包直接失败。替换 OAuth App 后重新打包。[GitHub 登录协议](https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/authorizing-oauth-apps)
 
 ## 首次登录
 

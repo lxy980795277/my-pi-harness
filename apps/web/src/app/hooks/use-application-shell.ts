@@ -16,8 +16,14 @@ const THEME_LABELS = { light: '切换到深色主题', dark: '切换到浅色主
 /** Shell commands share one cancellable owner; secrets never enter mutation variables. */
 export const useApplicationShell = (): ApplicationShellState => {
   const { theme, toggleTheme } = useTheme();
-  const { query: auth, pair, logout, receive, revoked } = useAuthorization();
-  const { refetch: authRefetch } = auth;
+  const {
+    query: auth,
+    pair,
+    logout,
+    reconnect: reconnectAuthorization,
+    receive,
+    revoked,
+  } = useAuthorization();
   const page = useWorkspaceStore((state) => {
     return state.page;
   });
@@ -71,14 +77,8 @@ export const useApplicationShell = (): ApplicationShellState => {
   );
   const reconnect = useAsyncEvent(
     useCallback(async (): Promise<void> => {
-      const result = await authRefetch();
-      if (result.isError) {
-        throw result.error;
-      }
-      if (result.isSuccess) {
-        receive(result.data);
-      }
-    }, [authRefetch, receive]),
+      await reconnectAuthorization();
+    }, [reconnectAuthorization]),
   );
   const hideCode = useCallback((): void => {
     setPairingCode(null);

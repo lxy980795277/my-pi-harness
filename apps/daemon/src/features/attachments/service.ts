@@ -79,7 +79,7 @@ export class AttachmentService {
     mediaType: string,
     bytes: Buffer,
     sourcePath: string | null,
-    signal?: AbortSignal,
+    signal: AbortSignal,
     range?: { startLine?: number; endLine?: number },
     workspaceId: string | null = null,
   ): Promise<Attachment> {
@@ -100,7 +100,7 @@ export class AttachmentService {
         throw new RuntimeError('ATTACHMENT_TYPE', '文档内容无效。');
       }
       kind = 'document';
-      text = await extractDocument(bytes, format, signal ?? new AbortController().signal);
+      text = await extractDocument(bytes, format, signal);
     } else if (mediaType.startsWith('image/')) {
       if (bytes.length > IMAGE_LIMIT)
         throw new RuntimeError('ATTACHMENT_TOO_LARGE', '图片不能超过2MiB。');
@@ -114,7 +114,7 @@ export class AttachmentService {
       if (bytes.subarray(0, 5).toString() !== '%PDF-')
         throw new RuntimeError('ATTACHMENT_TYPE', 'PDF内容无效。');
       kind = 'pdf';
-      text = await extractPdf(bytes, signal ?? new AbortController().signal);
+      text = await extractPdf(bytes, signal);
     } else if (
       mediaType.startsWith('text/') ||
       [

@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect } from 'react';
 
 import { cancelAuthFlow, fetchAuthFlow } from '@/features/auth/services/auth';
+import { AUTH_STATUS_QUERY_KEY } from '@/features/auth/utils/authorization-status';
 import { AUTH_STATUS_LABELS, oauthRefetchInterval } from '@/features/auth/utils/oauth-view';
 import { useAsyncEvent } from '@/hooks/use-async-event';
 import { authorizationUrl } from '@/utils/authorization-url';
@@ -27,7 +28,7 @@ export const useOAuthFlow = (flowId: string, onCompleted?: () => void): OAuthFlo
       async (signal: AbortSignal): Promise<void> => {
         await Promise.all([
           client.invalidateQueries({ queryKey: ['providers'] }),
-          client.invalidateQueries({ queryKey: ['auth-status'] }),
+          client.invalidateQueries({ queryKey: AUTH_STATUS_QUERY_KEY }),
           client.invalidateQueries({ queryKey: ['auth-flows'] }),
         ]);
         signal.throwIfAborted();

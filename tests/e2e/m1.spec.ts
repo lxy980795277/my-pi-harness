@@ -202,6 +202,7 @@ test('停止保留队列，编辑后显式恢复；引导继续同一个 Run', a
     const status: unknown = await statusResponse.json();
     if (!Value.Check(AuthStatusSchema, status) || !status.csrfToken)
       throw new Error('Fixture authorization failed');
+    const csrfToken = status.csrfToken;
     const created = await page.request.post(`${daemon.origin}/api/sessions`, {
       headers: { Origin: daemon.origin, 'X-CSRF-Token': status.csrfToken },
       data: {
@@ -230,7 +231,51 @@ test('停止保留队列，编辑后显式恢复；引导继续同一个 Run', a
     await page.getByRole('button', { name: '停止', exact: true }).click();
     await page.getByText('待执行输入 · 1', { exact: true }).click();
     await expect(page.getByRole('button', { name: '继续执行队列', exact: true })).toBeVisible();
+    const queued: unknown = await (
+      await page.request.get(`${daemon.origin}/api/sessions/${session.session.id}`)
+    ).json();
+    if (!Value.Check(SessionSnapshotSchema, queued) || !queued.queue[0])
+      throw new Error('The paused queue fixture is missing');
+    const queueId = queued.queue[0].id;
+    const queueUrl = `${daemon.origin}/api/sessions/${session.session.id}/queue/${queueId}`;
+    const remoteEdit = async (text: string, revision: number) => {
+      const response = await page.request.put(queueUrl, {
+        headers: { Origin: daemon.origin, 'X-CSRF-Token': csrfToken },
+        data: { text, revision },
+      });
+      expect(response.ok()).toBe(true);
+      const snapshot: unknown = await response.json();
+      if (!Value.Check(SessionSnapshotSchema, snapshot) || !snapshot.queue[0])
+        throw new Error('The remote queue edit did not return its authoritative input');
+      return snapshot.queue[0];
+    };
+    const remote = await remoteEdit('另一个页面的修改', queued.queue[0].revision);
+    await expect(page.getByText(remote.text, { exact: true })).toBeVisible();
     await page.getByRole('button', { name: '编辑', exact: true }).click();
+    await expect(page.getByLabel('排队消息内容', { exact: true })).toHaveValue(remote.text);
+    await page.getByLabel('排队消息内容', { exact: true }).fill('本页未保存的草稿');
+    const newer = await remoteEdit('另一个页面再次修改', remote.revision);
+    // A completed settings write also applies the full authoritative session, including the queue.
+    const approval = page.getByRole('combobox', { name: '执行批准方式', exact: true });
+    await chooseOption(page, approval, '完全访问权限');
+    await expect(approval).toContainText('完全访问权限');
+    await expect(approval).toBeEnabled();
+    await expect(page.getByLabel('排队消息内容', { exact: true })).toHaveValue('本页未保存的草稿');
+    const conflict = page.waitForResponse((response) => {
+      return response.url() === queueUrl && response.request().method() === 'PUT';
+    });
+    await page.getByRole('button', { name: '保存修改', exact: true }).click();
+    expect((await conflict).status()).toBe(409);
+    await expect(page.getByLabel('排队消息内容', { exact: true })).toHaveValue('本页未保存的草稿');
+    const preserved: unknown = await (
+      await page.request.get(`${daemon.origin}/api/sessions/${session.session.id}`)
+    ).json();
+    if (!Value.Check(SessionSnapshotSchema, preserved))
+      throw new Error('The conflicted queue fixture could not be read');
+    expect(preserved.queue[0]).toMatchObject({ text: newer.text, revision: newer.revision });
+    await page.getByRole('button', { name: '取消编辑', exact: true }).click();
+    await page.getByRole('button', { name: '编辑', exact: true }).click();
+    await expect(page.getByLabel('排队消息内容', { exact: true })).toHaveValue(newer.text);
     await page.getByLabel('排队消息内容', { exact: true }).fill('修改后继续');
     await page.getByRole('button', { name: '保存修改', exact: true }).click();
     await page.getByRole('button', { name: '继续执行队列', exact: true }).click();

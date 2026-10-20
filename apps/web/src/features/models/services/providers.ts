@@ -63,14 +63,6 @@ export const fetchProviderModels = async (
   );
 };
 
-/** Reads an exact provider, including a legacy account referenced by saved sessions. */
-export const fetchProvider = async (id: string, signal: AbortSignal): Promise<ProviderConfig> => {
-  return parseResponse(
-    ProviderConfigSchema,
-    await getJson(`/providers/${encodeURIComponent(id)}`, signal),
-  );
-};
-
 /** Native settings expose only an optimistic enabled update. */
 export const setProviderEnabled = async (
   provider: ProviderConfig,

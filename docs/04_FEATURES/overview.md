@@ -27,6 +27,8 @@ AC写可观察结果，不用「完善」「支持全部」代替具体条件。
 
 ## 当前Spec
 
+- [M4前代码治理](202610201450_refactor_m4-readiness-governance/spec.md)
+
 - [对话渲染与交互](202610191647_feature_conversation-rendering/spec.md)
 
 - [M0 工程底座](202610130900_feature_project-foundation/spec.md)

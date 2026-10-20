@@ -16,6 +16,7 @@ import { parseResponse } from '@/utils/parse-response';
 /** Reads current cookie authorization and installs its volatile CSRF token. */
 export const fetchAuthStatus = async (signal: AbortSignal): Promise<AuthStatus> => {
   const status = parseResponse(AuthStatusSchema, await getJson('/auth/status', signal));
+  signal.throwIfAborted();
   setCsrfToken(status.csrfToken);
   return status;
 };

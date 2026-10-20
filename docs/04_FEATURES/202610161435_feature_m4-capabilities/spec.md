@@ -2,7 +2,7 @@
 
 ## Spec
 
-状态：2026-10-16完成标杆核对与M4.1–M4.9拆分，用户已确认模块边界。[用户身份与应用登录](../202610161500_feature_application-login/spec.md)前置专项已完成实现与macOS自动化，2026-10-19完成[M3复核与治理](../202610191506_refactor_m3-readiness-governance/verify.md)并提交0.5.0基线。现已整理[实施任务与模块归属](tasks.md)。用户于2026-10-19暂缓M4，优先完成[对话渲染与交互](../202610191647_feature_conversation-rendering/spec.md)，之后恢复M4.1详细设计。真实GitHub授权和用户体验继续单列验收；M4 MCP/Skills/插件能力尚未实现。
+状态：2026-10-16完成标杆核对与M4.1–M4.9拆分，用户已确认模块边界。[用户身份与应用登录](../202610161500_feature_application-login/spec.md)前置专项已完成实现与macOS自动化，2026-10-19完成[M3复核与治理](../202610191506_refactor_m3-readiness-governance/verify.md)并提交0.5.0基线。现已整理[实施任务与模块归属](tasks.md)。用户此前优先完成[对话渲染与交互](../202610191647_feature_conversation-rendering/spec.md)，现已于2026-10-20确认[本次治理与提交](../202610201450_refactor_m4-readiness-governance/spec.md)后恢复M4.1详细设计。真实GitHub授权和用户体验继续单列验收；M4 MCP/Skills/插件能力尚未实现。
 
 ### Roadmap Alignment
 

@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   completeLogin,
   createPairingCode,
+  fetchAuthStatus,
   logoutBrowser,
   startLogin,
 } from '../src/features/auth/services/auth';
@@ -17,6 +18,11 @@ import {
 } from '../src/features/auth/utils/login-flow';
 import { loginEntry, readLoginCallback } from '../src/features/auth/utils/login-entry';
 import { clearPrivateCache } from '../src/features/auth/utils/private-cache';
+import {
+  AUTH_STATUS_QUERY_KEY,
+  createAuthorizationStatus,
+} from '../src/features/auth/utils/authorization-status';
+import { HEALTH_QUERY_KEY } from '../src/features/runtime/queries/health';
 import { hasValidApplicationSession } from '../src/features/auth/utils/application-session';
 import { getUserProfile } from '../src/app/utils/user-profile';
 import {
@@ -57,6 +63,26 @@ afterEach(() => {
 });
 
 describe('application login transport', () => {
+  it('does not replace the CSRF token with a cancelled authorization response', async () => {
+    const delayed = Promise.withResolvers<Response>();
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockReturnValueOnce(delayed.promise)
+      .mockResolvedValueOnce(response({ code: 'one-time-code' }));
+    vi.stubGlobal('fetch', fetch);
+    setCsrfToken('current-csrf');
+    const controller = new AbortController();
+    const pending = fetchAuthStatus(controller.signal);
+    const cancelled = expect(pending).rejects.toThrow();
+    controller.abort();
+    delayed.resolve(response(authenticated));
+    await cancelled;
+    await createPairingCode(new AbortController().signal);
+    expect(fetch.mock.calls[1]?.[1]).toMatchObject({
+      headers: { 'X-CSRF-Token': 'current-csrf' },
+    });
+  });
+
   it('uses separate login endpoints and installs only the public CSRF token', async () => {
     const fetch = vi
       .fn<typeof globalThis.fetch>()
@@ -408,19 +434,119 @@ describe('authorization recovery decisions', () => {
 });
 
 describe('private application state', () => {
+  it('starts a fresh revocation check while an older check is still waiting on the network', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const delayed = Promise.withResolvers<Response>();
+    const loggedOut: AuthStatus = {
+      ...authenticated,
+      authenticated: false,
+      user: null,
+      session: null,
+    };
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockReturnValueOnce(delayed.promise)
+      .mockResolvedValueOnce(response(loggedOut));
+    vi.stubGlobal('fetch', fetch);
+    const received = vi.fn();
+    const owner = createAuthorizationStatus(client, received);
+    const signal = new AbortController().signal;
+    const pending = owner.refresh(signal);
+    await vi.waitFor(() => {
+      expect(fetch).toHaveBeenCalledTimes(1);
+    });
+    const generation = owner.invalidate();
+    expect(fetch.mock.calls[0]?.[1]?.signal?.aborted).toBe(true);
+    await owner.refresh(signal, generation);
+    delayed.resolve(response(authenticated));
+    await pending;
+    expect(client.getQueryData(AUTH_STATUS_QUERY_KEY)).toEqual(loggedOut);
+    expect(received).toHaveBeenCalledTimes(1);
+    client.clear();
+  });
+
+  it('blocks passive reads during revocation and accepts a subsequent explicit login', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const delayed = Promise.withResolvers<Response>();
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(response(authenticated))
+      .mockReturnValueOnce(delayed.promise);
+    vi.stubGlobal('fetch', fetch);
+    const received = vi.fn();
+    const owner = createAuthorizationStatus(client, received);
+    const signal = new AbortController().signal;
+    const generation = owner.invalidate();
+    await owner.refresh(signal);
+    await expect(owner.read(signal)).rejects.toThrow('Authorization transition pending');
+    expect(fetch).not.toHaveBeenCalled();
+    const signedIn = {
+      ...authenticated,
+      session: {
+        id: 'session-2',
+        providerId: 'github',
+        expiresAt: 9_000_000_000_000,
+      },
+    };
+    await owner.receive(signedIn, signal);
+    await owner.refresh(signal, generation);
+    expect(fetch).not.toHaveBeenCalled();
+    expect(client.getQueryData(AUTH_STATUS_QUERY_KEY)).toEqual(signedIn);
+    expect(await owner.read(signal)).toEqual(authenticated);
+    const stale = owner.read(signal);
+    const cancelled = expect(stale).rejects.toThrow();
+    owner.invalidate();
+    expect(fetch.mock.calls[0]?.[1]?.signal?.aborted).toBe(false);
+    expect(fetch.mock.calls[1]?.[1]?.signal?.aborted).toBe(true);
+    delayed.resolve(response(authenticated));
+    await cancelled;
+    expect(client.getQueryData(AUTH_STATUS_QUERY_KEY)).toEqual(signedIn);
+    expect(received).toHaveBeenCalledTimes(1);
+    client.clear();
+  });
+
+  it('keeps a completed logout after an older authorization check responds', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const delayed = Promise.withResolvers<Response>();
+    const fetch = vi.fn<typeof globalThis.fetch>().mockReturnValueOnce(delayed.promise);
+    vi.stubGlobal('fetch', fetch);
+    const received = vi.fn();
+    const owner = createAuthorizationStatus(client, received);
+    const signal = new AbortController().signal;
+    client.setQueryData(AUTH_STATUS_QUERY_KEY, authenticated);
+    const pending = owner.refresh(signal);
+    await vi.waitFor(() => {
+      expect(fetch).toHaveBeenCalledTimes(1);
+    });
+    const loggedOut: AuthStatus = {
+      ...authenticated,
+      authenticated: false,
+      user: null,
+      session: null,
+    };
+    await owner.receive(loggedOut, signal);
+    delayed.resolve(response(authenticated));
+    await pending;
+    expect(client.getQueryData(AUTH_STATUS_QUERY_KEY)).toEqual(loggedOut);
+    expect(received).toHaveBeenCalledTimes(1);
+    client.clear();
+  });
+
   it('removes private queries and mutations while preserving authorization and public diagnostics', async () => {
     const client = new QueryClient();
-    client.setQueryData(['auth-status'], authenticated);
-    client.setQueryData(['health'], { status: 'ok' });
+    client.setQueryData(AUTH_STATUS_QUERY_KEY, authenticated);
+    client.setQueryData(HEALTH_QUERY_KEY, { status: 'ok' });
+    client.setQueryData(['runtime', 'private-state'], { sessionId: 'private-session' });
     client.setQueryData(['sessions'], ['private-session']);
     client.setQueryData(['providers'], ['private-provider']);
     client.getMutationCache().build(client, { mutationKey: ['private-write'] });
     await clearPrivateCache(client);
     expect(client.getQueryData(['sessions'])).toBeUndefined();
     expect(client.getQueryData(['providers'])).toBeUndefined();
+    expect(client.getQueryData(['runtime', 'private-state'])).toBeUndefined();
     expect(client.getMutationCache().getAll()).toEqual([]);
-    expect(client.getQueryData(['auth-status'])).toEqual(authenticated);
-    expect(client.getQueryData(['health'])).toEqual({ status: 'ok' });
+    expect(client.getQueryData(AUTH_STATUS_QUERY_KEY)).toEqual(authenticated);
+    expect(client.getQueryData(HEALTH_QUERY_KEY)).toEqual({ status: 'ok' });
     client.clear();
   });
 

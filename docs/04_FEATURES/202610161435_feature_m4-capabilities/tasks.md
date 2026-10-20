@@ -122,4 +122,4 @@
 
 ## 当前下一步
 
-用户于2026-10-19暂缓M4，优先完成[对话渲染与交互](../202610191647_feature_conversation-rendering/spec.md)。恢复后从M4.1.1开始细化本地MCP的协议、配置/信任状态、RunToolset、结果未知与关闭流程，同时设计设置页和输入框选择，再进入开发；M4功能尚未实现。
+[对话渲染与交互](../202610191647_feature_conversation-rendering/spec.md)已完成实现及本机定向验证；用户已确认[本次治理与提交](../202610201450_refactor_m4-readiness-governance/spec.md)后恢复M4。从M4.1.1开始细化本地MCP的协议、配置/信任状态、RunToolset、结果未知与关闭流程，同时设计设置页和输入框选择，再进入开发；M4功能尚未实现。

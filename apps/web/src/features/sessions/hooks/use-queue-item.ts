@@ -3,22 +3,25 @@ import type { QueueInput, QueuePatchInput } from '@my-pi-harness/protocol';
 import { useCallback, useState, type ChangeEvent } from 'react';
 import { useAsyncEvent } from '@/hooks/use-async-event';
 
-/** Queue edits submit the observed revision and wait for the authoritative response. */
+/** Queue edits keep the revision captured when editing starts until the draft is saved or cancelled. */
 export const useQueueItem = (
   input: QueueInput,
   onUpdate: (id: string, patch: QueuePatchInput) => Promise<void>,
   onDelete: (id: string) => Promise<void>,
 ): QueueItemState => {
   const [editing, setEditing] = useState(false);
-  const [text, setText] = useState(input.text);
+  const [draft, setDraft] = useState<QueuePatchInput>({
+    text: input.text,
+    revision: input.revision,
+  });
   const update = useAsyncEvent(
     useCallback(
       async (signal: AbortSignal): Promise<void> => {
-        await onUpdate(input.id, { text: text.trim(), revision: input.revision });
+        await onUpdate(input.id, { text: draft.text.trim(), revision: draft.revision });
         signal.throwIfAborted();
         setEditing(false);
       },
-      [input.id, input.revision, onUpdate, text],
+      [draft, input.id, onUpdate],
     ),
   );
   const { clearError: updateClearError } = update;
@@ -28,15 +31,20 @@ export const useQueueItem = (
     }, [input.id, onDelete]),
   );
   const start = useCallback((): void => {
+    setDraft({ text: input.text, revision: input.revision });
+    updateClearError();
     setEditing(true);
-  }, []);
+  }, [input.revision, input.text, updateClearError]);
   const cancel = useCallback((): void => {
     setEditing(false);
-    setText(input.text);
+    setDraft({ text: input.text, revision: input.revision });
     updateClearError();
-  }, [input.text, updateClearError]);
+  }, [input.revision, input.text, updateClearError]);
   const changeText = useCallback((event: ChangeEvent<HTMLTextAreaElement>): void => {
-    setText(event.target.value);
+    const text = event.target.value;
+    setDraft((current) => {
+      return { ...current, text };
+    });
   }, []);
   let error = update.error;
   if (error === null) {
@@ -44,7 +52,7 @@ export const useQueueItem = (
   }
   return {
     editing,
-    text,
+    text: draft.text,
     changeText,
     start,
     cancel,

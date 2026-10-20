@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parseEnv } from 'node:util';
@@ -47,6 +47,23 @@ describe('desktop OAuth resource', () => {
     expect(
       await desktopOAuthEnvironment(root, { MY_PI_HARNESS_GITHUB_CLIENT_ID: 'build-client' }),
     ).toBe('MY_PI_HARNESS_GITHUB_CLIENT_ID=build-client\n');
+  });
+
+  it('does not read an unrelated local env path when a build override is provided', async () => {
+    const root = await fixture();
+    await mkdir(join(root, '.env'));
+    expect(
+      await desktopOAuthEnvironment(root, { MY_PI_HARNESS_GITHUB_CLIENT_ID: 'build-client' }),
+    ).toBe('MY_PI_HARNESS_GITHUB_CLIENT_ID=build-client\n');
+    await expect(
+      desktopOAuthEnvironment(root, { MY_PI_HARNESS_GITHUB_CLIENT_ID: '' }),
+    ).rejects.toThrow('桌面打包需要有效的 MY_PI_HARNESS_GITHUB_CLIENT_ID，请配置根 .env');
+  });
+
+  it('preserves local env read failures when no build override is configured', async () => {
+    const root = await fixture();
+    await mkdir(join(root, '.env'));
+    await expect(desktopOAuthEnvironment(root, {})).rejects.toMatchObject({ code: 'EISDIR' });
   });
 
   it.each(['', 'bad\nOTHER_TOKEN=injected', ' '.repeat(2), 'x'.repeat(201)])(
