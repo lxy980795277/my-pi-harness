@@ -1,14 +1,30 @@
-import type { ProviderConfig, RunView, SessionSnapshot } from '@my-pi-harness/protocol';
+import type {
+  MessageView,
+  ProviderConfig,
+  RunView,
+  SessionSnapshot,
+  ToolCallView,
+} from '@my-pi-harness/protocol';
 import type { UseQueryResult } from '@tanstack/react-query';
-import type { Key, RefObject, UIEvent } from 'react';
-import type { SelectOption } from '@/components/ui/select-field';
+import type { RefObject, UIEvent } from 'react';
 import type { SessionCommands } from '@/features/sessions/hooks/use-session-commands';
-import type { Action, FormSubmit, InputChange, TextChange, ValueChange } from '@/types/events';
-import type { TimelineEntry } from '@/features/sessions/utils/timeline-entries';
+import type { AnswerFooter } from '@/features/sessions/types/answer-metadata';
+import type { Action, FormSubmit, TextChange, ValueChange } from '@/types/events';
 
 export type SessionCommandMethod = 'POST' | 'PUT' | 'DELETE';
 
 export type SessionConnectionStatus = 'connecting' | 'connected' | 'disconnected';
+
+export type TimelineEntry =
+  | {
+      type: 'message';
+      id: string;
+      createdAt: number;
+      message: MessageView;
+    }
+  | { type: 'answer-footer'; id: string; footer: AnswerFooter }
+  | { type: 'tool'; id: string; createdAt: number; tool: ToolCallView }
+  | { type: 'waiting'; id: string; runId: string };
 
 export interface LiveSession {
   query: UseQueryResult<SessionSnapshot, Error>;
@@ -16,31 +32,9 @@ export interface LiveSession {
   connectionError: string | null;
 }
 
-export interface SessionSettingsState {
-  title: string;
-  providerId: string;
-  modelId: string;
-  thinkingLevel: string;
-  providerOptions: SelectOption[];
-  modelOptions: SelectOption[];
-  thinkingOptions: SelectOption[];
-  changeTitle: InputChange;
-  changeProvider: ValueChange<string>;
-  changeModel: ValueChange<string>;
-  changeThinking: ValueChange<string>;
-  submit: FormSubmit;
-  pending: boolean;
-  modelsReady: boolean;
-  legacy: boolean;
-  disabled: boolean;
-  error: string | null;
-}
 export interface ComposerState {
   draft: string;
   changeDraft: TextChange;
-  mode: string;
-  changeMode: ValueChange<string>;
-  modeOptions: SelectOption[];
   submit: FormSubmit;
   stop: Action;
   running: boolean;
@@ -58,16 +52,10 @@ export interface ConversationState extends LiveSession {
   commands: SessionCommands;
   snapshot: SessionSnapshot | undefined;
   lastRun: RunView | undefined;
-  branchOptions: SelectOption[];
-  branch: ValueChange<string>;
-  branchPending: boolean;
-  confirmDelete: boolean;
-  openDelete: Action;
-  cancelDelete: Action;
-  remove: Action;
-  deletePending: boolean;
+  download: Action;
+  downloading: boolean;
   reload: Action;
-  branchError: string | null;
+  error: string | null;
 }
 export interface MessageEditorState {
   editing: boolean;
@@ -97,24 +85,23 @@ export interface SessionNavigationState {
   createdAtLabel: string;
   createdAtTitle: string;
 }
-export interface TimelineRow {
-  key: Key;
-  index: number;
-  entry: TimelineEntry;
-  measure: (node: HTMLDivElement | null) => void;
-}
 export interface MessageTimelineState {
   scrollElement: RefObject<HTMLDivElement | null>;
+  empty: boolean;
+  rows: TimelineRow[];
+  measureList: (node: HTMLDivElement | null) => void;
+  measureRow: (node: HTMLDivElement | null) => void;
   showJump: boolean;
   jump: Action;
   scroll: (event: UIEvent<HTMLDivElement>) => void;
-  measureList: (node: HTMLDivElement | null) => void;
-  rows: TimelineRow[];
+}
+export interface TimelineRow {
+  index: number;
+  entry: TimelineEntry;
 }
 export interface SessionsWorkspaceState {
   activeId: string | null;
   generation: string;
   providersQuery: UseQueryResult<ProviderConfig[], Error>;
   created: ValueChange<SessionSnapshot>;
-  deleted: Action;
 }

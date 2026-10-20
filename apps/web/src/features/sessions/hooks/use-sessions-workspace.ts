@@ -16,9 +16,6 @@ export const useSessionsWorkspace = (): SessionsWorkspaceState => {
   const selectSession = useWorkspaceStore((state) => {
     return state.selectSession;
   });
-  const clearSelection = useWorkspaceStore((state) => {
-    return state.clearSelection;
-  });
   const generation = useWorkspaceStore((state) => {
     return state.newConversationGeneration;
   });
@@ -42,12 +39,5 @@ export const useSessionsWorkspace = (): SessionsWorkspaceState => {
     },
     [client, refreshRun, selectSession],
   );
-  const deleted = useCallback((): void => {
-    if (activeId) {
-      client.removeQueries({ queryKey: ['session', activeId], exact: true });
-    }
-    clearSelection();
-    refreshRun();
-  }, [activeId, clearSelection, client, refreshRun]);
-  return { activeId, generation, providersQuery, created, deleted };
+  return { activeId, generation, providersQuery, created };
 };

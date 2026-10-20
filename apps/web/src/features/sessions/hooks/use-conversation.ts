@@ -1,33 +1,53 @@
 import type { ConversationState } from '@/features/sessions/types/session';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useSession } from '@/features/sessions/hooks/use-session';
 import { useSessionCommands } from '@/features/sessions/hooks/use-session-commands';
-import { deleteSession } from '@/features/sessions/services/sessions';
+import { fetchSessionLog } from '@/features/sessions/services/sessions';
 import { useAsyncEvent } from '@/hooks/use-async-event';
 
-/** Lifecycle commands share the selected session's cancellation owner. */
-export const useConversation = (sessionId: string, onDeleted: () => void): ConversationState => {
+/** Owns the selected session's commands and cancellable log download. */
+export const useConversation = (sessionId: string): ConversationState => {
   const state = useSession(sessionId);
   const commands = useSessionCommands(sessionId);
   const { refetch } = state.query;
-  const { branch: commandsBranch } = commands;
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  const branch = useAsyncEvent(
-    useCallback(
-      async (_signal: AbortSignal, id: string): Promise<void> => {
-        await commandsBranch(id);
-      },
-      [commandsBranch],
-    ),
-  );
-  const remove = useAsyncEvent(
+  const downloadUrl = useRef<string | null>(null);
+  const releaseTimer = useRef<number | null>(null);
+  const releaseDownload = useCallback((): void => {
+    if (releaseTimer.current !== null) {
+      window.clearTimeout(releaseTimer.current);
+      releaseTimer.current = null;
+    }
+    if (downloadUrl.current !== null) {
+      URL.revokeObjectURL(downloadUrl.current);
+      downloadUrl.current = null;
+    }
+  }, []);
+  useEffect(() => {
+    return releaseDownload;
+  }, [releaseDownload]);
+  const download = useAsyncEvent(
     useCallback(
       async (signal: AbortSignal): Promise<void> => {
-        await deleteSession(sessionId, signal);
+        const log = await fetchSessionLog(sessionId, signal);
         signal.throwIfAborted();
-        onDeleted();
+        releaseDownload();
+        downloadUrl.current = URL.createObjectURL(log);
+        const link = document.createElement('a');
+        link.href = downloadUrl.current;
+        link.download = `${sessionId}.jsonl`;
+        document.body.append(link);
+        try {
+          link.click();
+        } catch (error: unknown) {
+          releaseDownload();
+          throw error;
+        } finally {
+          link.remove();
+        }
+        // Chromium needs the object URL beyond click dispatch to consume the file.
+        releaseTimer.current = window.setTimeout(releaseDownload, 1_000);
       },
-      [onDeleted, sessionId],
+      [releaseDownload, sessionId],
     ),
   );
   const reload = useAsyncEvent(
@@ -35,42 +55,19 @@ export const useConversation = (sessionId: string, onDeleted: () => void): Conve
       await refetch();
     }, [refetch]),
   );
-  const openDelete = useCallback((): void => {
-    setConfirmDelete(true);
-  }, []);
-  const cancelDelete = useCallback((): void => {
-    setConfirmDelete(false);
-  }, []);
   const snapshot = state.query.data;
-  const branches = snapshot?.branches ?? [];
-  const branchOptions = branches.map((entry, index) => {
-    let label = `修订分支 ${index}`;
-    if (entry.parentId === null) {
-      label = '主分支';
-    }
-    return { value: entry.id, label };
-  });
-  let branchError = branch.error;
-  if (branchError === null) {
-    branchError = remove.error;
-  }
-  if (branchError === null) {
-    branchError = reload.error;
+  let error = download.error;
+  if (error === null) {
+    error = reload.error;
   }
   return {
     ...state,
     commands,
     snapshot,
     lastRun: snapshot?.runs.at(-1),
-    branchOptions,
-    branch: branch.run,
-    branchPending: branch.pending,
-    confirmDelete,
-    openDelete,
-    cancelDelete,
-    remove: remove.run,
-    deletePending: remove.pending,
+    download: download.run,
+    downloading: download.pending,
     reload: reload.run,
-    branchError: branchError,
+    error,
   };
 };

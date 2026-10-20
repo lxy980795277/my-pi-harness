@@ -22,7 +22,7 @@ export const Composer: FC<ComposerProps> = ({ session, providers, onSend, onStop
   const state = useComposer(session.id, session.activeRunId, onSend, onStop);
   const selection = useComposerChoices(session, providers, onPatch);
   return (
-    <div className="shrink-0 px-6 pt-3 pb-5">
+    <div className="shrink-0 px-5 pt-2 pb-2 sm:px-6">
       <div className="mx-auto w-full max-w-4xl">
         <ComposerSurface
           id={session.id}
@@ -30,6 +30,7 @@ export const Composer: FC<ComposerProps> = ({ session, providers, onSend, onStop
           choices={selection.choices}
           disabled={state.disabled || selection.submitBlocked}
           error={state.error ?? selection.error}
+          footer={null}
         />
       </div>
     </div>

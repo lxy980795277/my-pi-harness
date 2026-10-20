@@ -2,7 +2,8 @@ import { test, expect } from './fixture.js';
 import { startTestModel } from './model-server.js';
 import { configureTestProvider } from './model-fixtures.js';
 import { chooseOption, openUserSettings } from './ui-controls.js';
-import { AuthStatusSchema } from '@my-pi-harness/protocol';
+import { AuthStatusSchema, SessionSnapshotSchema } from '@my-pi-harness/protocol';
+import { selectTestSessionBranch } from './session-fixtures.js';
 import { Value } from 'typebox/value';
 
 test('配置兼容 API、真实 Pi 流式请求、刷新与编辑分支', async ({ page, daemon }, testInfo) => {
@@ -60,8 +61,16 @@ test('配置兼容 API、真实 Pi 流式请求、刷新与编辑分支', async 
       'chat-model',
     );
     await page.getByRole('button', { name: '关闭设置', exact: true }).click();
+    const createdSession = page.waitForResponse((response) => {
+      return (
+        response.request().method() === 'POST' &&
+        new URL(response.url()).pathname === '/api/sessions'
+      );
+    });
     await page.getByLabel('消息', { exact: true }).fill('你好，流式测试');
     await page.getByRole('button', { name: '发送', exact: true }).click();
+    const original: unknown = await (await createdSession).json();
+    if (!Value.Check(SessionSnapshotSchema, original)) throw new Error('Invalid created session');
     await expect(page.getByText('响应：你好，流式测试', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: '发送', exact: true })).toBeVisible();
     await page.reload();
@@ -72,10 +81,14 @@ test('配置兼容 API、真实 Pi 流式请求、刷新与编辑分支', async 
     await page.getByRole('button', { name: '创建分支并重发', exact: true }).click();
     await expect(page.getByText('响应：新的分支输入', { exact: true })).toBeVisible();
     await expect(page.getByText('响应：你好，流式测试', { exact: true })).not.toBeVisible();
-    const branches = page.getByLabel('历史分支', { exact: true });
-    await branches.click();
-    await expect(page.getByRole('option')).toHaveCount(2);
-    await page.getByRole('option').first().click();
+    await expect(page.getByLabel('历史分支', { exact: true })).toHaveCount(0);
+    await expect(page.getByText(/会话与模型设置/u)).toHaveCount(0);
+    const restored = await selectTestSessionBranch(
+      page,
+      original.session.id,
+      original.session.activeBranchId,
+    );
+    expect(restored.branches).toHaveLength(2);
     await expect(page.getByText('响应：你好，流式测试', { exact: true })).toBeVisible();
     expect(
       model.requests.every(
@@ -198,14 +211,21 @@ test('停止保留队列，编辑后显式恢复；引导继续同一个 Run', a
       },
     });
     expect(created.ok()).toBe(true);
+    const session: unknown = await created.json();
+    if (!Value.Check(SessionSnapshotSchema, session))
+      throw new Error('Creating the queue fixture session failed');
     await page.reload();
     await page.getByRole('button', { name: /^队列验收 / }).click();
     await page.getByLabel('消息', { exact: true }).fill('慢速测试');
     await page.getByRole('button', { name: '发送', exact: true }).click();
     await expect(page.getByRole('button', { name: '停止', exact: true })).toBeVisible();
+    const conversationStatistics = page.getByRole('group', { name: '对话统计', exact: true });
+    await expect(conversationStatistics).toBeVisible();
+    await expect(conversationStatistics).toContainText('总对话 1 次');
     await page.getByLabel('消息', { exact: true }).fill('待修改输入');
     await page.getByRole('button', { name: '发送', exact: true }).click();
     await expect(page.getByText('待执行输入 · 1', { exact: true })).toBeVisible();
+    await expect(conversationStatistics).toContainText('总对话 1 次');
     await page.getByRole('button', { name: '停止', exact: true }).click();
     await page.getByText('待执行输入 · 1', { exact: true }).click();
     await expect(page.getByRole('button', { name: '继续执行队列', exact: true })).toBeVisible();
@@ -214,32 +234,39 @@ test('停止保留队列，编辑后显式恢复；引导继续同一个 Run', a
     await page.getByRole('button', { name: '保存修改', exact: true }).click();
     await page.getByRole('button', { name: '继续执行队列', exact: true }).click();
     await expect(page.getByText('响应：修改后继续', { exact: true })).toBeVisible();
+    await expect(conversationStatistics).toContainText('总对话 2 次');
     await page.getByLabel('消息', { exact: true }).fill('慢速引导测试');
     await page.getByRole('button', { name: '发送', exact: true }).click();
     await expect(page.getByRole('button', { name: '停止', exact: true })).toBeVisible();
-    const runBefore = await page.evaluate(async () => {
-      const list = (await (await fetch('/api/sessions')).json()) as {
-        id: string;
-        activeRunId: string;
-      }[];
-      return list[0]?.activeRunId;
-    });
-    await chooseOption(
-      page,
-      page.getByRole('combobox', { name: '运行中输入策略', exact: true }),
-      '引导 · 中断当前模型请求',
+    await expect(conversationStatistics).toContainText('总对话 3 次');
+    const running: unknown = await (
+      await page.request.get(`${daemon.origin}/api/sessions/${session.session.id}`)
+    ).json();
+    if (!Value.Check(SessionSnapshotSchema, running))
+      throw new Error('The active queue fixture session could not be read');
+    const runBefore = running.session.activeRunId;
+    expect(runBefore).not.toBeNull();
+    const steered = await page.request.post(
+      `${daemon.origin}/api/sessions/${session.session.id}/inputs`,
+      {
+        headers: { Origin: daemon.origin, 'X-CSRF-Token': status.csrfToken },
+        data: {
+          text: '引导后的输入',
+          mode: 'steer',
+          requestId: 'queue-fixture-steer',
+        },
+      },
     );
-    await page.getByLabel('消息', { exact: true }).fill('引导后的输入');
-    await page.getByRole('button', { name: '发送', exact: true }).click();
+    expect(steered.ok()).toBe(true);
     await expect(page.getByText('响应：引导后的输入', { exact: true })).toBeVisible();
-    const lastRun = await page.evaluate(async () => {
-      const list = (await (await fetch('/api/sessions')).json()) as { id: string }[];
-      const snapshot = (await (await fetch(`/api/sessions/${list[0]?.id ?? ''}`)).json()) as {
-        runs: { id: string }[];
-      };
-      return snapshot.runs.at(-1)?.id;
-    });
-    expect(lastRun).toBe(runBefore);
+    const completed: unknown = await (
+      await page.request.get(`${daemon.origin}/api/sessions/${session.session.id}`)
+    ).json();
+    if (!Value.Check(SessionSnapshotSchema, completed))
+      throw new Error('The completed queue fixture session could not be read');
+    expect(completed.runs.at(-1)?.id).toBe(runBefore);
+    expect(completed.messages.filter((message) => message.role === 'user')).toHaveLength(4);
+    await expect(conversationStatistics).toContainText('总对话 4 次');
   } finally {
     await model.close();
   }

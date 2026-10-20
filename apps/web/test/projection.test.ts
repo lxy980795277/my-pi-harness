@@ -103,6 +103,14 @@ describe('committed session projection cache', () => {
     }).toThrow('不能合并不同会话');
   });
 
+  it('rejects HTTP responses whose snapshot cursor disagrees with their summary', () => {
+    const invalid = snapshot(3, '正文');
+    invalid.session.snapshotSeq = 99;
+    expect(() => {
+      retainNewestSnapshot(snapshot(1, '旧状态'), invalid);
+    }).toThrow('序号不一致');
+  });
+
   it('keeps unchanged message references while a later streaming row advances', () => {
     const initial = snapshot(1, '相同正文');
     const next = snapshot(2, '相同正文');

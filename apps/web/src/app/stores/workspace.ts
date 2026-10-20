@@ -46,7 +46,6 @@ interface WorkspaceState {
   clearNewAttempt: (generation: string) => void;
   setDraft: (sessionId: string, text: string) => void;
   clearDraft: (sessionId: string) => void;
-  clearSelection: () => void;
   reset: () => void;
   openSettings: (section: SettingsSection) => void;
   closeSettings: () => void;
@@ -207,9 +206,6 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => {
         delete drafts[sessionId];
         return { drafts };
       });
-    },
-    clearSelection: (): void => {
-      set({ activeSessionId: null });
     },
     reset: (): void => {
       set({

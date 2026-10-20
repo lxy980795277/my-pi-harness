@@ -1,6 +1,7 @@
 import type {
   Checkpoint,
   ContextUsage,
+  MessageView,
   Plan,
   Todo,
   WorkSnapshot,
@@ -34,9 +35,15 @@ export const QUESTION_STATUS_LABELS = {
 /** Presents estimates explicitly rather than implying provider billing precision. */
 export const usageLabel = (usage: ContextUsage | null): string => {
   if (!usage) {
-    return '上下文';
+    return '上下文 —';
   }
   return `上下文 ${Math.round((usage.estimatedTokens / usage.windowTokens) * 100)}%`;
+};
+/** Snapshot messages already follow the selected branch; queued inputs have no accepted message. */
+export const countConversationTurns = (messages: readonly MessageView[]): number => {
+  return messages.filter((message) => {
+    return message.role === 'user';
+  }).length;
 };
 export const formatCount = (value: number): string => {
   return new Intl.NumberFormat('zh-CN').format(value);

@@ -5,9 +5,10 @@ import { AuthStatusSchema, SessionSnapshotSchema } from '@my-pi-harness/protocol
 import { Value } from 'typebox/value';
 import { test, expect } from './fixture.js';
 import { configureTestProvider } from './model-fixtures.js';
-import { chooseOption } from './ui-controls.js';
+import { chooseOption, openUserSettings } from './ui-controls.js';
 import { startToolModel } from './tool-model-server.js';
 import { registerTestWorkspace } from './workspace-fixtures.js';
+import { archiveTestSession } from './session-fixtures.js';
 
 for (const policy of ['请求批准', '只读'] as const) {
   test(`工作区树、首次发送与真实工具循环：${policy}`, async ({ page, daemon }, testInfo) => {
@@ -63,14 +64,24 @@ for (const policy of ['请求批准', '只读'] as const) {
       await page.screenshot({ path: testInfo.outputPath('new-conversation.png'), fullPage: true });
       await page.getByLabel('消息', { exact: true }).fill('创建工作区文件');
       await page.getByRole('button', { name: '发送', exact: true }).click();
+      const toolRow = page.getByLabel('write_file 工具调用', { exact: true });
       if (policy === '请求批准') {
         await expect(page.getByRole('button', { name: '允许本次操作', exact: true })).toBeVisible();
+        await expect(toolRow.getByRole('region', { name: '调用参数', exact: true })).toContainText(
+          'created.txt',
+        );
+        await expect(
+          toolRow.getByRole('button', { name: '收起 write_file 工具详情', exact: true }),
+        ).toBeDisabled();
         await expect(readFile(join(directory, 'created.txt'))).rejects.toMatchObject({
           code: 'ENOENT',
         });
         await page.getByRole('button', { name: '允许本次操作', exact: true }).click();
       }
       await expect(page.getByText('已收到工具执行结果。', { exact: true })).toBeVisible();
+      const statistics = page.getByLabel('回答统计', { exact: true });
+      await expect(statistics).toContainText('用量 1.3K tok');
+      await expect(statistics.locator('[title^="总计 1,330 tok；"]')).toBeVisible();
       const group = page.getByRole('group', { name: '测试项目', exact: true });
       await expect(group.getByRole('button', { name: /^创建工作区文件 / })).toBeVisible();
       expect(model.requests).toHaveLength(2);
@@ -79,7 +90,7 @@ for (const policy of ['请求批准', '只读'] as const) {
         expect(await readFile(join(directory, 'created.txt'), 'utf8')).toBe(
           'Workspace tool result\n',
         );
-        await page.getByText('文件差异', { exact: true }).click();
+        await expect(toolRow.getByRole('region', { name: '文件差异', exact: true })).toBeVisible();
         await expect(
           page.getByText('+Workspace tool result', { exact: false }).first(),
         ).toBeVisible();
@@ -104,7 +115,45 @@ for (const policy of ['请求批准', '只读'] as const) {
       await page.reload();
       await page.getByRole('button', { name: /^创建工作区文件 / }).click();
       await expect(page.getByText('已收到工具执行结果。', { exact: true })).toBeVisible();
-      await expect(page.getByText('write_file', { exact: true })).toBeVisible();
+      await expect(page.getByText('写入文件', { exact: true })).toBeVisible();
+      await expect(page.getByLabel('回答统计', { exact: true })).toContainText('用量 1.3K tok');
+      const toggle = toolRow.getByRole('button', { name: '展开 write_file 工具详情', exact: true });
+      await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+      await expect(toggle.locator('[data-slot="tool-icon"]')).toBeVisible();
+      await expect(toggle.locator('[data-slot="tool-chevron"]')).toBeHidden();
+      await toggle.hover();
+      await expect(toggle.locator('[data-slot="tool-icon"]')).toBeHidden();
+      await expect(toggle.locator('[data-slot="tool-chevron"]')).toBeVisible();
+      await toggle.click();
+      await expect(toolRow.getByRole('region', { name: '执行结果', exact: true })).toBeVisible();
+      const collapse = toolRow.getByRole('button', {
+        name: '收起 write_file 工具详情',
+        exact: true,
+      });
+      await expect(collapse).toHaveAttribute('aria-expanded', 'true');
+      await collapse.press('Enter');
+      await expect(toolRow.getByRole('region', { name: '执行结果', exact: true })).toBeHidden();
+      await page.screenshot({
+        path: testInfo.outputPath('tool-row-collapsed.png'),
+        fullPage: true,
+      });
+      await toggle.press('Enter');
+      await expect(toolRow.getByRole('region', { name: '调用参数', exact: true })).toBeVisible();
+      await toolRow
+        .getByRole('button', { name: '收起 write_file 工具详情', exact: true })
+        .scrollIntoViewIfNeeded();
+      await page.screenshot({ path: testInfo.outputPath('tool-row-expanded.png'), fullPage: true });
+      if (policy === '请求批准') {
+        await openUserSettings(page);
+        await page.getByRole('tab', { name: '通用设置', exact: true }).click();
+        await page.getByRole('switch', { name: '深色模式', exact: true }).click();
+        await page.getByRole('button', { name: '关闭设置', exact: true }).click();
+        await expect(page.locator('html')).toHaveClass(/dark/u);
+        await toolRow
+          .getByRole('button', { name: '收起 write_file 工具详情', exact: true })
+          .scrollIntoViewIfNeeded();
+        await page.screenshot({ path: testInfo.outputPath('tool-row-dark.png'), fullPage: true });
+      }
       expect(model.requests).toHaveLength(2);
     } finally {
       await model.close();
@@ -142,8 +191,16 @@ test('响应丢失和跨页后确认原请求，不重复计费或复活旧首�
       }
       await route.continue();
     });
+    const createdSession = page.waitForResponse((response) => {
+      return (
+        response.request().method() === 'POST' &&
+        new URL(response.url()).pathname === '/api/sessions'
+      );
+    });
     await page.getByLabel('消息', { exact: true }).fill('保持原请求');
     await page.getByRole('button', { name: '发送', exact: true }).click();
+    const session: unknown = await (await createdSession).json();
+    if (!Value.Check(SessionSnapshotSchema, session)) throw new Error('Invalid created session');
     await expect(page.getByRole('button', { name: /^保持原请求 / })).toBeVisible();
     await page.getByRole('button', { name: '运行状态', exact: true }).click();
     await page.getByRole('button', { name: /^保持原请求 / }).click();
@@ -155,8 +212,12 @@ test('响应丢失和跨页后确认原请求，不重复计费或复活旧首�
     await page.getByRole('button', { name: '允许本次操作', exact: true }).click();
     await expect(page.getByText('已收到工具执行结果。', { exact: true })).toBeVisible();
     expect(model.requests).toHaveLength(2);
-    await page.getByRole('button', { name: '删除会话', exact: true }).click();
-    await page.getByRole('button', { name: '确认删除会话', exact: true }).click();
+    await expect(page.getByRole('button', { name: '删除会话', exact: true })).toHaveCount(0);
+    await archiveTestSession(page, session.session.id);
+    expect(
+      (await page.request.get(`${daemon.origin}/api/sessions/${session.session.id}`)).status(),
+    ).toBe(404);
+    await page.getByRole('button', { name: '新对话', exact: true }).click();
     await expect(
       page.getByRole('heading', { name: '我们从哪里开始？', exact: true }),
     ).toBeVisible();

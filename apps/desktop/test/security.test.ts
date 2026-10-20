@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => ({
   requestPermission: vi.fn<(handler: PermissionRequest | null) => void>(),
   frames: [] as { url: string }[],
   chooseDirectory: vi.fn<() => Promise<{ canceled: boolean; filePaths: string[] }>>(),
+  openExternal: vi.fn<(url: string) => Promise<void>>(),
 }));
 
 vi.mock('electron', async () => {
@@ -45,6 +46,7 @@ vi.mock('electron', async () => {
   return {
     BrowserWindow: TestWindow,
     dialog: { showOpenDialog: mocks.chooseDirectory },
+    shell: { openExternal: mocks.openExternal },
     ipcMain: { handle: mocks.handle, removeHandler: mocks.removeHandler },
   };
 });
@@ -73,6 +75,51 @@ beforeEach(() => {
 });
 
 describe('desktop window security', () => {
+  it('opens only explicit HTTP links from its own main frame', async () => {
+    const window = new BrowserWindow({});
+    secureWindow(window, 'http://127.0.0.1:1234');
+    const handler = mocks.handle.mock.calls.find(
+      ([channel]) => channel === 'desktop:open-external',
+    )?.[1];
+    if (!handler) throw new Error('Missing external link handler');
+    const event = invokeEvent(window);
+    await handler(event, 'https://example.com/guide?q=hello#part');
+    expect(mocks.openExternal).toHaveBeenCalledExactlyOnceWith(
+      'https://example.com/guide?q=hello#part',
+    );
+    for (const value of [
+      'file:///tmp/private',
+      'javascript:alert(1)',
+      'data:text/html,test',
+      'mailto:user@example.com',
+      'https://user:pass@example.com',
+      'https://example.com/\n',
+      {},
+      null,
+    ]) {
+      await expect(handler(event, value)).rejects.toThrow();
+    }
+    await expect(handler(event)).rejects.toThrow('链接请求参数无效');
+    await expect(handler(event, 'https://example.com', 'extra')).rejects.toThrow(
+      '链接请求参数无效',
+    );
+    const other = new BrowserWindow({});
+    await expect(handler(invokeEvent(other), 'https://example.com')).rejects.toThrow(
+      '桌面请求来源无效',
+    );
+    await expect(
+      handler({ ...event, senderFrame: other.webContents.mainFrame }, 'https://example.com'),
+    ).rejects.toThrow('桌面请求来源无效');
+    await expect(handler({ ...event, senderFrame: null }, 'https://example.com')).rejects.toThrow(
+      '桌面请求来源无效',
+    );
+    const frame = mocks.frames[0];
+    if (!frame) throw new Error('No main frame');
+    frame.url = 'https://example.com/';
+    await expect(handler(event, 'https://example.com')).rejects.toThrow('桌面请求来源无效');
+    expect(mocks.openExternal).toHaveBeenCalledTimes(1);
+  });
+
   it.each(['will-frame-navigate', 'will-redirect'])(
     'blocks foreign and invalid %s targets',
     (name) => {
@@ -216,6 +263,7 @@ describe('desktop window security', () => {
     expect(mocks.removeHandler).toHaveBeenCalledWith('desktop:get-info');
     expect(mocks.removeHandler).toHaveBeenCalledWith('desktop:choose-workspace-directory');
     expect(mocks.removeHandler).toHaveBeenCalledWith('desktop:get-dropped-workspace-directory');
-    expect(mocks.removeHandler).toHaveBeenCalledTimes(3);
+    expect(mocks.removeHandler).toHaveBeenCalledWith('desktop:open-external');
+    expect(mocks.removeHandler).toHaveBeenCalledTimes(4);
   });
 });

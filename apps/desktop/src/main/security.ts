@@ -1,6 +1,11 @@
-import { APP_VERSION, DesktopInfoSchema, type DesktopInfo } from '@my-pi-harness/protocol';
+import {
+  APP_VERSION,
+  DesktopInfoSchema,
+  parseExternalUrl,
+  type DesktopInfo,
+} from '@my-pi-harness/protocol';
 import type { BrowserWindow } from 'electron';
-import { dialog, ipcMain } from 'electron';
+import { dialog, ipcMain, shell } from 'electron';
 import { Value } from 'typebox/value';
 import { resolveWorkspaceDirectory } from './workspace-directory.js';
 
@@ -36,6 +41,20 @@ export function secureWindow(
   contents.on('will-redirect', (event) => {
     if (!isTrustedUrl(event.url, origin)) event.preventDefault();
   });
+  ipcMain.handle(
+    'desktop:open-external',
+    async (event, ...arguments_: unknown[]): Promise<void> => {
+      const frame = event.senderFrame;
+      if (
+        event.sender !== contents ||
+        frame !== contents.mainFrame ||
+        !isTrustedUrl(frame.url, origin)
+      )
+        throw new Error('桌面请求来源无效');
+      if (arguments_.length !== 1) throw new Error('链接请求参数无效');
+      await shell.openExternal(parseExternalUrl(arguments_[0]));
+    },
+  );
   ipcMain.handle(
     'desktop:choose-workspace-directory',
     async (event, ...arguments_: unknown[]): Promise<string | null> => {
@@ -100,6 +119,7 @@ export function secureWindow(
     });
   }
   window.once('closed', () => {
+    ipcMain.removeHandler('desktop:open-external');
     ipcMain.removeHandler('desktop:get-info');
     ipcMain.removeHandler('desktop:choose-workspace-directory');
     ipcMain.removeHandler('desktop:get-dropped-workspace-directory');

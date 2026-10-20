@@ -1,5 +1,12 @@
 import { type Static, Type } from 'typebox';
 export * from './context.js';
+export {
+  SessionChangeSchema,
+  SessionPatchSchema,
+  SessionStreamUpdateSchema,
+} from './session-stream.js';
+export type { SessionChange, SessionPatch, SessionStreamUpdate } from './session-stream.js';
+export { parseExternalUrl } from './external-links.js';
 
 export {
   CustomProtocolSchema,
@@ -31,6 +38,7 @@ export type {
 } from './models.js';
 export {
   SessionSummarySchema,
+  MessageUsageSchema,
   MessageViewSchema,
   RunViewSchema,
   QueueInputSchema,
@@ -46,6 +54,7 @@ export {
 } from './sessions.js';
 export type {
   SessionSummary,
+  MessageUsage,
   MessageView,
   RunView,
   QueueInput,
@@ -112,7 +121,7 @@ export type {
 } from './tools.js';
 
 /** 跨端应用协议版本；不等同于产品版本。 */
-export const PROTOCOL_VERSION = 9;
+export const PROTOCOL_VERSION = 11;
 
 /** 本机服务完成监听后的可公开状态，不包含配置、路径或凭据。 */
 export const HealthResponseSchema = Type.Object(
@@ -180,6 +189,8 @@ export interface DesktopBridge {
   getInfo(): Promise<DesktopInfo>;
   /** Open the URL of an active daemon-owned authentication flow. */
   openAuth(flowId: string): Promise<void>;
+  /** Open an explicit HTTP(S) link in the system browser; other protocols are rejected. */
+  openExternal(url: string): Promise<void>;
   /** Choose a local workspace directory; cancellation returns null. */
   chooseWorkspaceDirectory(): Promise<string | null>;
   /** Resolve one actual dropped directory; synthetic files and regular files are rejected. */

@@ -39,20 +39,30 @@ test('服务退出后显示断开，重新连接不会显示旧成功状态', as
   await expect(page.getByTestId('runtime-connection')).toHaveAttribute('data-state', 'error');
   await expect(page.getByText('事件连接已断开，请检查本机服务后重试。')).toBeVisible();
   await page.getByRole('button', { name: '重新连接' }).click();
+  await expect(page.getByTestId('service-gate')).toBeVisible();
   await expect(page.getByTestId('runtime-connection')).toHaveAttribute('data-state', 'error');
   await expect(page.getByText('无法连接本机服务，请确认 daemon 已启动后重试。')).toBeVisible();
 });
 
-test('健康接口不兼容协议会被拒绝', async ({ page, daemon }) => {
+test('主页在协议不兼容时阻止进入工作台，服务更新后可重连', async ({ page, daemon }) => {
   await page.route('**/api/health', async (route) => {
     const original = await route.fetch();
     const data: unknown = await original.json();
     await route.fulfill({ json: { ...(data as Record<string, unknown>), protocolVersion: 999 } });
   });
   await page.goto(daemon.origin);
-  await page.getByRole('button', { name: '运行状态', exact: true }).click();
+  await expect(page.getByTestId('service-gate')).toBeVisible();
   await expect(page.getByTestId('runtime-connection')).toHaveAttribute('data-state', 'error');
+  await expect(
+    page.getByText('本机服务与当前界面版本不兼容，请重启本机服务后重新连接。'),
+  ).toBeVisible();
+  await expect(page.getByTestId('workspace-shell')).not.toBeVisible();
+  await expect(page.getByPlaceholder('输入任何问题')).not.toBeVisible();
   await expect(page.getByTestId('runtime-ready-payload')).not.toBeVisible();
+  await page.unroute('**/api/health');
+  await page.getByRole('button', { name: '重新连接' }).click();
+  await expect(page.getByTestId('workspace-shell')).toBeVisible();
+  await expect(page.getByPlaceholder('输入任何问题')).toBeVisible();
 });
 
 test('SSE实例身份不一致会被拒绝', async ({ page, daemon }) => {
@@ -73,9 +83,12 @@ test('服务恢复后可手动重新连接', async ({ page, daemon }) => {
     route.fulfill({ status: 503, json: { error: 'Unavailable' } }),
   );
   await page.goto(daemon.origin);
-  await page.getByRole('button', { name: '运行状态', exact: true }).click();
+  await expect(page.getByTestId('service-gate')).toBeVisible();
   await expect(page.getByTestId('runtime-connection')).toHaveAttribute('data-state', 'error');
+  await expect(page.getByTestId('workspace-shell')).not.toBeVisible();
   await page.unroute('**/api/health');
   await page.getByRole('button', { name: '重新连接' }).click();
+  await expect(page.getByTestId('workspace-shell')).toBeVisible();
+  await page.getByRole('button', { name: '运行状态', exact: true }).click();
   await expect(page.getByTestId('runtime-connection')).toHaveAttribute('data-state', 'ready');
 });

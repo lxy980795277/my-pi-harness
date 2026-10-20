@@ -81,6 +81,7 @@ export class ProjectionWriter {
 
   private addMessage(event: HarnessEvent, privateData: string | undefined): void {
     const message = checked(MessageViewSchema, event.data);
+    this.validateMessageStatistics(message);
     if (message.sessionId !== event.sessionId || message.runId !== event.runId) {
       throw new StorageError('INVALID_EVENT', 'Message identity does not match its event');
     }
@@ -107,6 +108,16 @@ export class ProjectionWriter {
       .insert(schema.branchMessages)
       .values({ branchId: message.branchId, messageId: message.id, ordinal: (row?.last ?? 0) + 1 })
       .run();
+  }
+
+  private validateMessageStatistics(message: MessageView): void {
+    if (message.finishedAt === undefined && message.usage === undefined) return;
+    if (message.role !== 'assistant' || message.status === 'streaming') {
+      throw new StorageError(
+        'INVALID_EVENT',
+        'Message completion time and usage require a terminal assistant message',
+      );
+    }
   }
 
   private acceptRun(event: HarnessEvent, privateData: string | undefined): void {
@@ -170,7 +181,7 @@ export class ProjectionWriter {
       const status = finished.status === 'completed' ? 'complete' : finished.status;
       this.db
         .update(schema.messages)
-        .set({ data: { ...message, status } })
+        .set({ data: { ...message, status, finishedAt: finished.finishedAt } })
         .where(eq(schema.messages.id, message.id))
         .run();
     }
@@ -321,6 +332,7 @@ export class ProjectionWriter {
       case 'message.completed': {
         const completed = checked(MessageCompletedSchema, event.data);
         const message = checked(MessageViewSchema, completed.message);
+        this.validateMessageStatistics(message);
         const previous = this.message(event, message.id);
         if (
           previous.role !== message.role ||

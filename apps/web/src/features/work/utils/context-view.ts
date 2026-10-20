@@ -2,7 +2,6 @@ import type {
   Compaction,
   ContextSummary,
   ContextUsage,
-  Todo,
   WorkSnapshot,
 } from '@my-pi-harness/protocol';
 import { formatCount } from '@/features/work/utils/work-view';
@@ -63,21 +62,6 @@ export const usageCategories = (usage: ContextUsage): { label: string; tokens: s
   return Object.entries(usage.categories).map(([key, value]) => {
     return { label: labels[key as keyof typeof labels], tokens: formatCount(value) };
   });
-};
-
-/** Summarizes actual task progress without treating blocked or cancelled work as completed. */
-export const todoProgress = (todos: Todo[]): string => {
-  const completed = todos.filter((todo) => {
-    return todo.status === 'completed';
-  }).length;
-  const current = todos.find((todo) => {
-    return todo.status === 'in_progress';
-  });
-  let label = `${completed}/${todos.length} 个任务完成`;
-  if (current) {
-    label += ` · ${current.title}`;
-  }
-  return label;
 };
 
 /** Provider measurements calibrate the total; category attribution remains estimated. */

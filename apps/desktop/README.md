@@ -1,5 +1,7 @@
 # Desktop
 
+对话中的HTTP(S)外链由独立`openExternal(url)`桥交给系统浏览器；preload/main校验地址，main限制所属受信任主frame，拒绝带凭据、超长、控制字符、文件和脚本地址。窗口关闭回收handler，认证仍由`openAuth(flowId)`拥有。
+
 Electron main 负责窗口、有限 preload 桥，以及独立 Node daemon 的启动和退出。Renderer 与浏览器共用 Web；桌面不导入 daemon 业务代码。
 
 从根运行 `pnpm dev:desktop`，会准备固定版本 Node，启动 Vite 和 Electron。关闭最后一个窗口后，Electron 通过 IPC 请求自己的 daemon 退出；IPC 意外断开时 daemon 也会关闭。

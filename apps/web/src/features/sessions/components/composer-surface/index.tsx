@@ -3,7 +3,7 @@ import type { FC } from 'react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Notice } from '@/components/ui/notice';
-import { SelectField } from '@/components/ui/select-field';
+import { ConversationFooter } from '@/components/conversation-footer';
 import { Textarea } from '@/components/ui/textarea';
 import { useComposerKeyboard } from '@/features/sessions/hooks/use-composer-keyboard';
 import { useAttachmentComposer } from '@/features/attachments/hooks/use-attachment-composer';
@@ -24,9 +24,7 @@ export const ComposerSurface: FC<ComposerSurfaceProps> = ({
   running = false,
   stopping = false,
   stop,
-  mode,
-  modeOptions,
-  changeMode,
+  footer = <ConversationFooter />,
   error,
   uncertain = false,
   attachmentDraftKey,
@@ -57,7 +55,7 @@ export const ComposerSurface: FC<ComposerSurfaceProps> = ({
           onCompositionStart={keyboard.compositionStart}
           onCompositionEnd={keyboard.compositionEnd}
           onPaste={attachment.paste}
-          className="max-h-64 min-h-28 resize-none rounded-xl border-0 bg-transparent px-2 py-1 text-sm focus-visible:border-transparent focus-visible:ring-0"
+          className="max-h-48 min-h-16 resize-none rounded-xl border-0 bg-transparent px-2 py-1 text-sm focus-visible:border-transparent focus-visible:ring-0"
         />
         {attachmentIds.length > 0 && (
           <div className="px-2 pt-2">
@@ -68,7 +66,7 @@ export const ComposerSurface: FC<ComposerSurfaceProps> = ({
             />
           </div>
         )}
-        <div className="mt-3 flex items-end justify-between gap-2">
+        <div className="mt-2 flex items-end justify-between gap-2">
           <ComposerControls
             id={id}
             choices={choices}
@@ -105,20 +103,7 @@ export const ComposerSurface: FC<ComposerSurfaceProps> = ({
           </div>
         </div>
       </div>
-      {running && mode && modeOptions && changeMode && (
-        <div className="flex items-center gap-2 px-2 text-[11px] text-muted-foreground">
-          <span>运行中输入</span>
-          <SelectField
-            id={`${id}-input-mode`}
-            ariaLabel="运行中输入策略"
-            value={mode}
-            options={modeOptions}
-            onValueChange={changeMode}
-            disabled={pending || draftLocked}
-            className="h-7 w-auto max-w-52 text-[11px]"
-          />
-        </div>
-      )}
+      {footer}
     </form>
   );
 };

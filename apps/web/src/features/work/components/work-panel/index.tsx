@@ -1,7 +1,6 @@
 import type { SessionSnapshot } from '@my-pi-harness/protocol';
-import { Layers3 } from 'lucide-react';
-import type { FC } from 'react';
-import { Button } from '@/components/ui/button';
+import type { FC, ReactNode } from 'react';
+import { ConversationFooter } from '@/components/conversation-footer';
 import { Dialog } from '@/components/ui/dialog';
 import { DialogContent } from '@/components/ui/dialog/dialog-content';
 import { DialogTitle } from '@/components/ui/dialog/dialog-title';
@@ -13,49 +12,45 @@ import { TabsContent } from '@/components/ui/tabs/tabs-content';
 import { CheckpointPanel } from '@/features/work/components/checkpoint-panel';
 import { ContextPanel } from '@/features/work/components/context-panel';
 import { PlanReviewCard } from '@/features/work/components/plan-review-card';
-import { todoProgress } from '@/features/work/utils/context-view';
 import { PlanPanel } from '@/features/work/components/plan-panel';
 import { QuestionCard } from '@/features/work/components/question-card';
 import { useWork } from '@/features/work/hooks/use-work';
-import { usageLabel } from '@/features/work/utils/work-view';
 interface WorkPanelProps {
   session: SessionSnapshot;
+  children?: ReactNode;
 }
 /** Keeps the conversation uncluttered while surfacing active human questions immediately. */
-export const WorkPanel: FC<WorkPanelProps> = ({ session }) => {
+export const WorkPanel: FC<WorkPanelProps> = ({ session, children }) => {
   const state = useWork(session);
   const work = state.query.data;
   return (
-    <div className="max-h-[45svh] shrink-0 space-y-2 overflow-y-auto px-6 pb-2">
-      <Button
-        type="button"
-        variant="ghost"
-        className="h-7 gap-2 px-1 text-xs text-muted-foreground"
-        onClick={state.show}
-        aria-label="上下文与工作状态"
-      >
-        <Layers3 width={14} height={14} aria-hidden />
-        {usageLabel(work?.state.usage ?? null)}
-        {work?.state.mode === 'plan' && <span>· Plan</span>}
-        {work && work.state.todos.length > 0 && (
-          <span className="max-w-96 truncate">· {todoProgress(work.state.todos)}</span>
-        )}
-      </Button>
-      {work &&
-        state.running &&
-        work.state.plan?.review === 'pending' &&
-        work.state.plan.runId === session.session.activeRunId && (
-          <PlanReviewCard key={work.state.plan.id} state={work.state} onCommand={state.command} />
-        )}
-      {work?.state.questions.map((question) => {
-        return (
-          <div key={question.id}>
-            {question.status === 'pending' && (
-              <QuestionCard question={question} onAnswer={state.answer} />
+    <>
+      {state.hasRequests && (
+        <div className="shrink-0 px-5 sm:px-6">
+          <div className="mx-auto max-h-[45svh] w-full max-w-4xl space-y-2 overflow-y-auto">
+            {work && state.reviewingPlan && work.state.plan !== null && (
+              <PlanReviewCard
+                key={work.state.plan.id}
+                state={work.state}
+                onCommand={state.command}
+              />
             )}
+            {state.pendingQuestions.map((question) => {
+              return <QuestionCard key={question.id} question={question} onAnswer={state.answer} />;
+            })}
           </div>
-        );
-      })}
+        </div>
+      )}
+      {children}
+      <div className="shrink-0 px-5 pb-2 sm:px-6">
+        <div className="mx-auto w-full max-w-4xl">
+          <ConversationFooter
+            contextLabel={state.contextLabel}
+            conversationCount={state.conversationCount}
+            onContext={state.show}
+          />
+        </div>
+      </div>
       <Dialog open={state.open} onOpenChange={state.setOpen}>
         <DialogContent className="max-w-3xl" aria-describedby={undefined}>
           <DialogTitle>上下文与工作状态</DialogTitle>
@@ -107,6 +102,6 @@ export const WorkPanel: FC<WorkPanelProps> = ({ session }) => {
           )}
         </DialogContent>
       </Dialog>
-    </div>
+    </>
   );
 };

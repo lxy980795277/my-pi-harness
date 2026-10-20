@@ -2,6 +2,9 @@
 @import './themes/light.css';
 @import './themes/dark.css';
 
+@source '../../node_modules/streamdown/dist/*.js';
+@source '../../node_modules/@streamdown/cjk/dist/*.js';
+
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme inline {

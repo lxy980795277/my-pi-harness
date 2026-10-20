@@ -27,6 +27,8 @@ AC写可观察结果，不用「完善」「支持全部」代替具体条件。
 
 ## 当前Spec
 
+- [对话渲染与交互](202610191647_feature_conversation-rendering/spec.md)
+
 - [M0 工程底座](202610130900_feature_project-foundation/spec.md)
 - [M0 验证证据与平台限制](202610130900_feature_project-foundation/verify.md)
 - [M0 规范与架构审计](202610131000_refactor_m0-standards-audit/spec.md)
@@ -61,6 +63,7 @@ AC写可观察结果，不用「完善」「支持全部」代替具体条件。
 - [代码治理与可读性](202610161244_refactor_code-governance/spec.md)
 - [M3收尾复核与核心技术文档](202610161259_refactor_m3-review-technical-docs/spec.md)
 - [M4 MCP、Skills与插件任务拆分](202610161435_feature_m4-capabilities/spec.md)
+- [M4实施任务、模块归属与完成门槛](202610161435_feature_m4-capabilities/tasks.md)
 - [M4前置：用户身份与应用登录](202610161500_feature_application-login/spec.md)
 
 - [应用登录验证与真实账号review](202610161500_feature_application-login/verify.md)

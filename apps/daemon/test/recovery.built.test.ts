@@ -11,10 +11,9 @@ import {
   AttachmentContentSchema,
   WorkSnapshotSchema,
   DaemonReadyRecordSchema,
-  HarnessEventSchema,
+  SessionStreamUpdateSchema,
   ProviderConfigSchema,
   SessionSnapshotSchema,
-  type HarnessEvent,
   type SessionSnapshot,
 } from '@my-pi-harness/protocol';
 import { sessionLogDirectory, SessionBatchSchema } from '@my-pi-harness/storage';
@@ -275,18 +274,14 @@ async function providerFixture(): Promise<{ server: Server; baseUrl: string; req
   return { server, baseUrl: `http://127.0.0.1:${address.port}/v1`, requests };
 }
 
-async function replay(
-  daemon: Daemon,
-  sessionId: string,
-): Promise<{ events: HarnessEvent[]; snapshot: SessionSnapshot }> {
-  const response = await fetch(`${daemon.origin}/api/sessions/${sessionId}/events?afterSeq=0`, {
+async function readStreamSnapshot(daemon: Daemon, sessionId: string): Promise<SessionSnapshot> {
+  const response = await fetch(`${daemon.origin}/api/sessions/${sessionId}/events`, {
     headers: { Cookie: daemon.cookie },
     signal: AbortSignal.timeout(5000),
   });
   if (!response.ok || !response.body) throw new Error('Authorized replay failed');
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
-  const events: HarnessEvent[] = [];
   let pending = '';
   try {
     while (true) {
@@ -302,9 +297,11 @@ async function replay(
         const data = /^data: (.+)$/m.exec(record)?.[1];
         if (data) {
           const value: unknown = JSON.parse(data);
-          if (eventName === 'session.event') events.push(checked(HarnessEventSchema, value));
-          if (eventName === 'session.snapshot')
-            return { events, snapshot: checked(SessionSnapshotSchema, value) };
+          if (eventName !== 'session.update') throw new Error('Unexpected session stream event');
+          const update = checked(SessionStreamUpdateSchema, value);
+          if (update.kind !== 'snapshot')
+            throw new Error('Reconnect did not start with a baseline');
+          return update.snapshot;
         }
         end = pending.indexOf('\n\n');
       }
@@ -432,17 +429,26 @@ describe('built daemon recovery with real Pi HTTP streaming', () => {
       ]);
       expect(restored.snapshotSeq).toBe(beforeKill.snapshotSeq + 1);
       expect(provider.requests).toHaveLength(3);
-      const replayed = await replay(second, sessionId);
-      expect(replayed.snapshot).toEqual(restored);
-      expect(replayed.events.map(({ seq }) => seq)).toEqual(
+      const replayed = await readStreamSnapshot(second, sessionId);
+      expect(replayed).toEqual(restored);
+      const recoveredLog = join(
+        sessionLogDirectory(await realpath(profile), join(profile, '.my-pi-harness')),
+        `${sessionId}.jsonl`,
+      );
+      const recoveredLines = (await readFile(recoveredLog, 'utf8')).trimEnd().split('\n');
+      const recoveredEvents = recoveredLines.flatMap((line) => {
+        const value: unknown = JSON.parse(line);
+        return checked(SessionBatchSchema, value).records.map((record) => record.event);
+      });
+      expect(recoveredEvents.map(({ seq }) => seq)).toEqual(
         Array.from({ length: restored.snapshotSeq }, (_value, index) => index + 1),
       );
-      expect(replayed.events.at(-1)).toMatchObject({
+      expect(recoveredEvents.at(-1)).toMatchObject({
         type: 'run.finished',
         data: { status: 'interrupted' },
       });
       expect(JSON.stringify(replayed)).not.toContain('synthetic-key');
-      expect(replayed.events.some((event) => 'privateData' in event)).toBe(false);
+      expect(JSON.stringify(replayed)).not.toContain('privateData');
       await api(second, '/providers/recovery-provider/key', ProviderConfigSchema, 'POST', {
         key: 'synthetic-key-second-process',
       });
@@ -674,7 +680,7 @@ describe('built daemon M3 work recovery', () => {
       expect(await api(second, `/attachments/${attachment.id}`, AttachmentSchema)).toEqual(
         attachment,
       );
-      const replayed = await replay(second, sessionId);
+      const replayed = await readStreamSnapshot(second, sessionId);
       const jsonl = await readFile(log, 'utf8');
       expect(jsonl.endsWith('\n')).toBe(true);
       const diskBatches = jsonl
@@ -684,8 +690,12 @@ describe('built daemon M3 work recovery', () => {
           const value: unknown = JSON.parse(line);
           return checked(SessionBatchSchema, value);
         });
-      expect(diskBatches.flatMap((batch) => batch.records.map((record) => record.event))).toEqual(
-        replayed.events,
+      expect(replayed).toEqual(afterRestart);
+      const journalEvents = diskBatches.flatMap((batch) =>
+        batch.records.map((record) => record.event),
+      );
+      expect(journalEvents.map(({ seq }) => seq)).toEqual(
+        Array.from({ length: afterRestart.snapshotSeq }, (_value, index) => index + 1),
       );
       expect(
         diskBatches.some((batch) => batch.records.some((record) => record.privateData !== null)),
@@ -695,9 +705,9 @@ describe('built daemon M3 work recovery', () => {
       expect(JSON.stringify(replayed)).not.toContain('privateData');
       expect(jsonl).not.toContain(Buffer.from(frozenText).toString('base64'));
 
-      expect(replayed.events.filter(({ type }) => type === 'checkpoint.created')).toHaveLength(1);
-      expect(replayed.events.filter(({ type }) => type === 'branch.restored')).toHaveLength(1);
-      expect(replayed.events.some((event) => 'privateData' in event)).toBe(false);
+      expect(journalEvents.filter(({ type }) => type === 'checkpoint.created')).toHaveLength(1);
+      expect(journalEvents.filter(({ type }) => type === 'branch.restored')).toHaveLength(1);
+      expect(journalEvents.some((event) => 'privateData' in event)).toBe(false);
       expect(provider.requests).toHaveLength(2);
       const original = await api(
         second,

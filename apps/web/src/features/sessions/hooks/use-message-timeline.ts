@@ -1,68 +1,123 @@
 import type { MessageTimelineState } from '@/features/sessions/types/session';
-import type { MessageView, ToolCallView } from '@my-pi-harness/protocol';
+import type { MessageView, RunView, ToolCallView } from '@my-pi-harness/protocol';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { useCallback, useEffect, useMemo, useRef, useState, type UIEvent } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useRef, useState, type UIEvent } from 'react';
 import { buildTimelineEntries } from '@/features/sessions/utils/timeline-entries';
+import { estimateTimelineEntry } from '@/features/sessions/utils/timeline-layout';
 
-/** Virtual measurements own only numeric layout variables, never user-provided CSS. */
+/** Virtualize measured rows and follow the end only while the reader has not scrolled away. */
 export const useMessageTimeline = (
   messages: MessageView[],
   tools: ToolCallView[],
+  activeRunId: string | null,
+  runs: RunView[],
+  branchId: string,
 ): MessageTimelineState => {
   const entries = useMemo(() => {
-    return buildTimelineEntries(messages, tools);
-  }, [messages, tools]);
+    return buildTimelineEntries(messages, tools, activeRunId, runs, branchId);
+  }, [activeRunId, messages, tools, runs, branchId]);
   const scrollElement = useRef<HTMLDivElement>(null);
+  const contentElement = useRef<HTMLDivElement>(null);
   const followEnd = useRef(true);
+  const lastScrollTop = useRef(0);
   const [showJump, setShowJump] = useState(false);
-  const virtualizer = useVirtualizer({
+  const getItemKey = useCallback(
+    (index: number): string | number => {
+      const entry = entries[index];
+      if (entry === undefined) return index;
+      return entry.id;
+    },
+    [entries],
+  );
+  const estimateSize = useCallback(
+    (index: number): number => {
+      const entry = entries[index];
+      if (entry === undefined) return 120;
+      return estimateTimelineEntry(entry);
+    },
+    [entries],
+  );
+  const follow = useCallback((): void => {
+    const element = scrollElement.current;
+    if (element === null || !followEnd.current) {
+      return;
+    }
+    element.scrollTop = element.scrollHeight;
+    lastScrollTop.current = element.scrollTop;
+  }, []);
+  const virtualizer = useVirtualizer<HTMLDivElement, HTMLDivElement>({
     count: entries.length,
-    getScrollElement: (): HTMLDivElement | null => {
+    getScrollElement: () => {
       return scrollElement.current;
     },
-    getItemKey: (index): string | number => {
-      return entries[index]?.id ?? index;
+    getItemKey,
+    estimateSize,
+    initialOffset: () => {
+      let offset = 32;
+      for (const entry of entries) offset += estimateTimelineEntry(entry);
+      return offset;
     },
-    estimateSize: (): number => {
-      return 200;
-    },
+    initialRect: { width: 1, height: 1 },
     overscan: 5,
+    paddingStart: 24,
+    paddingEnd: 8,
+    anchorTo: 'end',
+    scrollEndThreshold: 4,
+    directDomUpdates: true,
   });
-  useEffect(() => {
-    if (followEnd.current && entries.length > 0) {
-      virtualizer.scrollToIndex(entries.length - 1, { align: 'end' });
+  const measureList = useCallback(
+    (node: HTMLDivElement | null): void => {
+      contentElement.current = node;
+      virtualizer.containerRef(node);
+    },
+    [virtualizer],
+  );
+  useLayoutEffect(() => {
+    const viewport = scrollElement.current;
+    const content = contentElement.current;
+    if (viewport === null || content === null) {
+      return;
     }
-  }, [entries, virtualizer]);
+    const observer = new ResizeObserver(follow);
+    observer.observe(content);
+    observer.observe(viewport);
+    follow();
+    return (): void => {
+      observer.disconnect();
+    };
+  }, [follow]);
+  useLayoutEffect(follow, [entries, follow]);
   const jump = useCallback((): void => {
     followEnd.current = true;
     setShowJump(false);
-    if (entries.length > 0) {
-      virtualizer.scrollToIndex(entries.length - 1, { align: 'end' });
-    }
-  }, [entries.length, virtualizer]);
+    follow();
+  }, [follow]);
   const scroll = useCallback((event: UIEvent<HTMLDivElement>): void => {
     const element = event.currentTarget;
-    const nearEnd = element.scrollHeight - element.scrollTop - element.clientHeight < 120;
-    followEnd.current = nearEnd;
-    setShowJump(!nearEnd);
+    const atEnd = element.scrollHeight - element.scrollTop - element.clientHeight <= 4;
+    const moved = Math.abs(element.scrollTop - lastScrollTop.current) > 1;
+    lastScrollTop.current = element.scrollTop;
+    if (atEnd) {
+      followEnd.current = true;
+      setShowJump(false);
+    } else if (moved) {
+      followEnd.current = false;
+      setShowJump(true);
+    }
   }, []);
-  const totalSize = virtualizer.getTotalSize();
-  const measureList = useCallback(
-    (node: HTMLDivElement | null): void => {
-      node?.style.setProperty('--list-height', `${totalSize}px`);
-    },
-    [totalSize],
-  );
   const rows = virtualizer.getVirtualItems().flatMap((item) => {
     const entry = entries[item.index];
-    if (!entry) {
-      return [];
-    }
-    const measure = (node: HTMLDivElement | null): void => {
-      node?.style.setProperty('--item-top', `${item.start}px`);
-      virtualizer.measureElement(node);
-    };
-    return [{ key: item.key, index: item.index, entry, measure }];
+    if (entry === undefined) return [];
+    return [{ index: item.index, entry }];
   });
-  return { scrollElement, showJump, jump, scroll, measureList, rows };
+  return {
+    scrollElement,
+    empty: entries.length === 0,
+    rows,
+    measureList,
+    measureRow: virtualizer.measureElement,
+    showJump,
+    jump,
+    scroll,
+  };
 };

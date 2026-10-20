@@ -18,6 +18,7 @@ import { test, expect } from './fixture.js';
 import { configureTestProvider } from './model-fixtures.js';
 import { startM3Model } from './m3-model-server.js';
 import { chooseOption } from './ui-controls.js';
+import { selectTestSessionBranch } from './session-fixtures.js';
 
 const readSession = async (page: Page, origin: string, id: string): Promise<SessionSnapshot> => {
   const response = await page.request.get(`${origin}/api/sessions/${encodeURIComponent(id)}`);
@@ -372,23 +373,27 @@ test('M3 计划反馈与批准保持同一次运行，快照恢复和两类重�
     expect(restored.messages).toEqual(original.messages);
     expect(restored.session.activeBranchId).not.toBe(original.session.activeBranchId);
     expect((await readWork(page, daemon.origin, id)).state.todos).toHaveLength(1);
-    await chooseOption(
-      page,
-      page.getByRole('combobox', { name: '历史分支', exact: true }),
-      '主分支',
-    );
+    await expect(page.getByRole('combobox', { name: '历史分支', exact: true })).toHaveCount(0);
+    await selectTestSessionBranch(page, id, original.session.activeBranchId);
+    await page.reload();
+    await page.getByRole('button', { name: /^计划与检查点验收 /u }).click();
     await expect
       .poll(async () => {
         return (await readWork(page, daemon.origin, id)).state.todos.length;
       })
       .toBe(2);
-    await chooseOption(
-      page,
-      page.getByRole('combobox', { name: '历史分支', exact: true }),
-      '修订分支 1',
-    );
     await openWork.click();
     dialog = page.getByRole('dialog', { name: '上下文与工作状态', exact: true });
+    await dialog.getByRole('tab', { name: '计划与任务', exact: true }).click();
+    await expect(dialog.getByRole('combobox', { name: /^任务状态 /u })).toHaveCount(2);
+    await dialog.getByRole('button', { name: '关闭', exact: true }).click();
+    await selectTestSessionBranch(page, id, restored.session.activeBranchId);
+    await page.reload();
+    await page.getByRole('button', { name: /^计划与检查点验收 /u }).click();
+    await openWork.click();
+    dialog = page.getByRole('dialog', { name: '上下文与工作状态', exact: true });
+    await dialog.getByRole('tab', { name: '计划与任务', exact: true }).click();
+    await expect(dialog.getByRole('combobox', { name: /^任务状态 /u })).toHaveCount(1);
     await dialog.getByRole('tab', { name: '会话快照', exact: true }).click();
     await dialog.getByRole('button', { name: '重新开始上下文', exact: true }).click();
     await page
@@ -427,6 +432,18 @@ test('M3 无工作区时 Agent 可等待用户回答，并支持取消后继续'
     const id = await firstSend(page, '请询问我 [ask:answer]');
     const question = page.getByLabel('Agent 提问', { exact: true });
     await expect(question).toBeVisible();
+    const toolRow = page.getByLabel('ask_user 工具调用', { exact: true }).first();
+    await expect(toolRow).toHaveAttribute('aria-busy', 'true');
+    await expect(toolRow.locator('[data-slot="tool-loading"]')).toBeVisible();
+    await expect(toolRow.locator('[data-slot="tool-icon"]')).toHaveCount(0);
+    await expect(toolRow.getByRole('status')).toHaveClass('sr-only');
+    const toggle = toolRow.getByRole('button', { name: '展开 ask_user 工具详情', exact: true });
+    await toggle.hover();
+    await expect(toggle.locator('[data-slot="tool-chevron"]')).toBeVisible();
+    await expect(toggle.locator('[data-slot="tool-loading"]')).toBeHidden();
+    await toggle.click();
+    await expect(toolRow.getByRole('region', { name: '调用参数', exact: true })).toBeVisible();
+    await toolRow.getByRole('button', { name: '收起 ask_user 工具详情', exact: true }).click();
     await question.getByRole('button', { name: /^方案 A/ }).click();
     await question.getByLabel('回答 Agent', { exact: true }).fill('方案 A，先读资料');
     await question.getByRole('button', { name: '下一题', exact: true }).click();
@@ -442,6 +459,9 @@ test('M3 无工作区时 Agent 可等待用户回答，并支持取消后继续'
     await question.getByRole('button', { name: '下一题', exact: true }).click();
     await question.getByRole('button', { name: '提交回答', exact: true }).click();
     await expect(page.getByText(/Agent 收到回答：.*方案 A，先读资料/)).toBeVisible();
+    await expect(toolRow).toHaveAttribute('aria-busy', 'false');
+    await expect(toolRow.locator('[data-slot="tool-loading"]')).toHaveCount(0);
+    await expect(toolRow.locator('[data-slot="tool-icon"]')).toBeVisible();
     await page.getByLabel('消息', { exact: true }).fill('请询问我 [ask:cancel]');
     await page.getByRole('button', { name: '发送', exact: true }).click();
     await expect(question).toBeVisible();

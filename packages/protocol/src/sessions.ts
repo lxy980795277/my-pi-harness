@@ -27,6 +27,19 @@ export const SessionSummarySchema = Type.Object(
 );
 export type SessionSummary = Static<typeof SessionSummarySchema>;
 
+/** Provider-reported tokens for one assistant step; totals retain the provider's accounting. */
+export const MessageUsageSchema = Type.Object(
+  {
+    inputTokens: Type.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER }),
+    outputTokens: Type.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER }),
+    cacheReadTokens: Type.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER }),
+    cacheWriteTokens: Type.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER }),
+    totalTokens: Type.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER }),
+  },
+  { additionalProperties: false },
+);
+export type MessageUsage = Static<typeof MessageUsageSchema>;
+
 /** Public message projection; provider-specific replay metadata stays on the host. */
 export const MessageViewSchema = Type.Object(
   {
@@ -39,6 +52,8 @@ export const MessageViewSchema = Type.Object(
     attachmentIds: Type.Optional(Type.Array(id, { maxItems: 8 })),
     thinking: Type.String({ maxLength: 2_000_000 }),
     createdAt: timestamp,
+    finishedAt: Type.Optional(timestamp),
+    usage: Type.Optional(MessageUsageSchema),
     status: Type.Union([
       Type.Literal('streaming'),
       Type.Literal('complete'),

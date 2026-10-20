@@ -48,6 +48,23 @@ export async function startToolModel(): Promise<TestModelServer> {
           send({ content: '已收到工具执行结果。' });
           send({}, 'stop');
         }
+        let usage = {
+          prompt_tokens: 1000,
+          completion_tokens: 100,
+          total_tokens: 1100,
+          prompt_tokens_details: { cached_tokens: 200 },
+        };
+        if (requests.length > 1) {
+          usage = {
+            prompt_tokens: 200,
+            completion_tokens: 30,
+            total_tokens: 230,
+            prompt_tokens_details: { cached_tokens: 50 },
+          };
+        }
+        response.write(
+          `data: ${JSON.stringify({ id: 'fixture-tool-completion', object: 'chat.completion.chunk', created: 1, model: body['model'], choices: [], usage })}\n\n`,
+        );
         response.end('data: [DONE]\n\n');
       } catch {
         response.destroy();

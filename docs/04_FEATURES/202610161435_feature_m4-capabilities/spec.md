@@ -2,13 +2,13 @@
 
 ## Spec
 
-状态：2026-10-16完成标杆核对与M4.1–M4.9拆分，用户已确认模块边界。[用户身份与应用登录](../202610161500_feature_application-login/spec.md)前置专项已完成实现与macOS自动化，2026-10-19完成[M3复核与治理](../202610191506_refactor_m3-readiness-governance/verify.md)；下一步细化M4.1协议并开发。真实GitHub授权和用户体验继续单列验收；当前产品为0.4.0，M4 MCP/Skills/插件能力尚未实现。
+状态：2026-10-16完成标杆核对与M4.1–M4.9拆分，用户已确认模块边界。[用户身份与应用登录](../202610161500_feature_application-login/spec.md)前置专项已完成实现与macOS自动化，2026-10-19完成[M3复核与治理](../202610191506_refactor_m3-readiness-governance/verify.md)并提交0.5.0基线。现已整理[实施任务与模块归属](tasks.md)。用户于2026-10-19暂缓M4，优先完成[对话渲染与交互](../202610191647_feature_conversation-rendering/spec.md)，之后恢复M4.1详细设计。真实GitHub授权和用户体验继续单列验收；M4 MCP/Skills/插件能力尚未实现。
 
 ### Roadmap Alignment
 
 本轮完整覆盖既有M4：MCP stdio/HTTP/SSE、信任/凭据/OAuth、工具发现加载、Skills创建安装管理、插件市场、外部服务连接与办公文档工作流。拆为M4.1–M4.9是实施顺序，不改变所属里程碑，也不把其中一条最小链路当作M4整体完成。
 
-M5子Agent、M6跨会话记忆/搜索和全局工具检索、M7完整Trace/导入导出/磁盘撤销不进入本轮。M4.2仅检索已启用、已信任的MCP目录，不做跨市场或embedding检索。Computer Use仍按用户决定排除；Windows Shell与浏览器新增工作区继续保留M2暂缓状态，不能据此把M4的Windows适配标为已验证。
+M5子Agent、M6跨会话记忆/搜索和全局工具检索、M7完整Trace/导入导出/磁盘撤销不进入本轮。M4.2仅检索已启用、已信任的MCP目录，不做跨市场或embedding检索。Computer Use仍按用户决定排除；Windows Shell与浏览器新增工作区继续保留M2暂缓状态，不能据此把M4的Windows适配标为已验证。各模块工作包、依赖与完成门槛由[实施任务](tasks.md)维护，本Spec拥有功能范围、约束及UC/AC。
 
 标杆当前实际功能与未实现边界见[能力核对](baseline.md)。这里只参考功能，不复制标杆业务代码、内部提示词、Skill正文、脚本或历史Spec。
 
@@ -51,7 +51,7 @@ UI随每个模块一起实现，不把“后端完成、所有界面最后补”
 
 - 保留Electron/Web/daemon/Pi与存储分工。计划新增一个有真实实现的packages/integrations，内部按mcp、skills、plugins、connections组织适配能力；不提前建立空包、通用插件框架或动态执行任意JS的插件系统。
 - integrations不依赖React、Electron、Fastify、SQLite或运行时私有源码；daemon装配配置/凭据端口，agent-runtime拥有Run选择、工具适配、审批和模型可见内容，execution拥有进程/文件/网络执行机制。
-- MCP采用维护中的官方TypeScript Client SDK，计划使用已核实稳定的v2系列；具体版本与peer在M4.1接入时按catalog规则锁定，不自写JSON-RPC或传输协议。[官方SDK](https://github.com/modelcontextprotocol/typescript-sdk)、[连接文档](https://ts.sdk.modelcontextprotocol.io/v2/clients/connect)
+- MCP采用官方TypeScript Client SDK；M4.1接入前核对当时的稳定版本、维护状态、传输及Pi/schema兼容性，再按catalog规则锁定具体版本与peer，不以旧调研代替当前选型，也不自写JSON-RPC或传输协议。[官方SDK](https://github.com/modelcontextprotocol/typescript-sdk)
 - 远程HTTP指Streamable HTTP，SSE为显式兼容传输；不将MCP与当前页面HTTP/SSE协议混用，不提供对外MCP Server。Resources/Prompts先对齐目录发现、诊断和展示，未发现消费入口的能力不冒充标杆已实现。
 
 #### 工具集、模型与持久化
@@ -141,7 +141,9 @@ UI随每个模块一起实现，不把“后端完成、所有界面最后补”
 
 - [x] 对照roadmap核对标杆MCP、Skills、插件、连接器与办公真实实现，区分目录/占位和实际调用。
 - [x] 扫描当前Run工具列表、上下文、日志、执行和设置接入点，形成M4.1–M4.9草案。
-- [ ] 用户确认模块边界与优先级，细化M4.1协议、数据和UI Spec；不要求用户逐文件验收设计。
+- [x] 用户已确认M4.1–M4.9模块边界，完成登录前置与M3复核的本地提交。
+- [x] 整理各模块工作包、归属、依赖与完成门槛，明确M4.1最小闭环和M4.2按需加载的分工。
+- [ ] 细化M4.1协议、数据、信任/重配语义、UI与测试Spec，核对并锁定依赖。
 - [ ] M4.1：统一RunToolset并交付本地stdio配置/信任/调用完整链路及拒绝/取消证据。
 - [ ] M4.2：目录管理、按需加载、SDK工具声明保留、版本路由、工具级设置/授权、批量导入/脱敏导出与诊断。
 - [ ] M4.3：远程HTTP/SSE、静态凭据、OAuth与网络/未知结果回归。
@@ -158,7 +160,7 @@ UI随每个模块一起实现，不把“后端完成、所有界面最后补”
 
 暂无本轮已确认的产品缺陷，以下是实施前需细化的设计项：
 
-- 现有静态工具列表在SessionRuntime准备/审计和ToolRuntime重复拼接；M4.1先统一，避免外部执行与模型声明不一致。
+- 当前SessionRuntime的接受审计与ToolRuntime的工具创建/查找分别拼接静态定义；M3治理已移除prepare未使用的工具参数，M4.1仍需统一真实工具定义、预算与执行路由，避免模型声明和调用不一致。
 - 当前协议没有外部工具来源、结果未知及Skill激活记录；在对应子模块更新所有消费者和宿主codec，不建立兼容层。
 - Run内加载采用公开Pi准备钩子；当前WorkContext.project会过滤system消息并复用初始system，M4.2必须处理SDK动态toolsAdded/toolsRemoved声明，按活跃工具集版本重建或保留声明，并随实际context.prepared记录，防止新增schema被旧投影丢弃。验证steer续轮、预算和日志顺序，不修改SDK源码。
 - stdio是持久双向进程，不能用现有一次性Shell收集器假冒适配；Windows回收/隔离和真实第三方OAuth尚无本机验收环境，实施时保持真实状态。

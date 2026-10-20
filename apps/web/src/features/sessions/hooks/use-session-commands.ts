@@ -17,7 +17,6 @@ import {
   patchQueuedInput,
   patchSession,
   resumeQueue,
-  selectBranch,
   stopSession,
   submitInput,
 } from '@/features/sessions/services/sessions';
@@ -28,7 +27,6 @@ export interface SessionCommands {
   stop: () => Promise<void>;
   edit: (input: EditInput) => Promise<void>;
   patch: (input: SessionPatchInput) => Promise<void>;
-  branch: (id: string) => Promise<void>;
   updateQueue: (id: string, input: QueuePatchInput) => Promise<void>;
   deleteQueue: (id: string) => Promise<void>;
   resume: () => Promise<void>;
@@ -81,14 +79,6 @@ export const useSessionCommands = (sessionId: string): SessionCommands => {
     },
     [execute, sessionId],
   );
-  const branch = useCallback(
-    async (id: string): Promise<void> => {
-      return execute((signal): Promise<SessionSnapshot> => {
-        return selectBranch(sessionId, id, signal);
-      });
-    },
-    [execute, sessionId],
-  );
   const updateQueue = useCallback(
     async (id: string, input: QueuePatchInput): Promise<void> => {
       return execute((signal): Promise<SessionSnapshot> => {
@@ -119,5 +109,5 @@ export const useSessionCommands = (sessionId: string): SessionCommands => {
     [execute, sessionId],
   );
 
-  return { send, stop, edit, patch, branch, updateQueue, deleteQueue, resume, decide };
+  return { send, stop, edit, patch, updateQueue, deleteQueue, resume, decide };
 };

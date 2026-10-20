@@ -4,6 +4,7 @@ import type { ModelRequest, TestModelServer } from './model-server.js';
 export interface ToolSequenceStep {
   name: string;
   arguments: Record<string, unknown>;
+  content?: string;
 }
 
 /** Every assistant round reuses call_0; public call identity must be owned by the runtime. */
@@ -35,6 +36,7 @@ export async function startToolSequenceModel(
         };
         send({ role: 'assistant', content: '' });
         if (step) {
+          if (step.content !== undefined) send({ content: step.content });
           send({
             tool_calls: [
               {

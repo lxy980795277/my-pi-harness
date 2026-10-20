@@ -4,17 +4,18 @@
 
 ## 已确认技术栈
 
-| 职责                | 选择                                                         | 落地阶段 |
-| ------------------- | ------------------------------------------------------------ | -------- |
-| Workspace与任务编排 | pnpm workspace + Turborepo                                   | M0       |
-| 类型与静态质量      | TypeScript strict、ESLint flat config、Oxlint a11y、Prettier | M0       |
-| Web                 | React + Vite、shadcn/ui、Tailwind CSS                        | M0起     |
-| 桌面                | Electron main / preload                                      | M0       |
-| 本地服务            | 独立 Node 24、Fastify、TypeBox、结构化日志                   | M0       |
-| 共享协议            | 浏览器安全 TypeBox schema / DTO                              | M0       |
-| 验证                | Vitest + Playwright                                          | M0起     |
-| Agent与模型         | Pi core + Pi ai                                              | M1       |
-| 持久化              | JSONL会话事实 + better-sqlite3 / Drizzle配置与投影           | M1       |
+| 职责                | 选择                                                         | 落地阶段     |
+| ------------------- | ------------------------------------------------------------ | ------------ |
+| Workspace与任务编排 | pnpm workspace + Turborepo                                   | M0           |
+| 类型与静态质量      | TypeScript strict、ESLint flat config、Oxlint a11y、Prettier | M0           |
+| Web                 | React + Vite、shadcn/ui、Tailwind CSS                        | M0起         |
+| 对话展示            | Streamdown Markdown、Shiki按需高亮与TanStack Virtual动态列表 | 会话体验专项 |
+| 桌面                | Electron main / preload                                      | M0           |
+| 本地服务            | 独立 Node 24、Fastify、TypeBox、结构化日志                   | M0           |
+| 共享协议            | 浏览器安全 TypeBox schema / DTO                              | M0           |
+| 验证                | Vitest + Playwright                                          | M0起         |
+| Agent与模型         | Pi core + Pi ai                                              | M1           |
+| 持久化              | JSONL会话事实 + better-sqlite3 / Drizzle配置与投影           | M1           |
 
 后续依赖按实际模块添加，不创建未实现能力的空壳。会话JSONL与SQLite配置/投影的职责见[存储约束](../05_CONSTRAINTS/backend.md)。能力范围与当前状态以[里程碑](../00_OVERVIEW/roadmap.md)为准。
 

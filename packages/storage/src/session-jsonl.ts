@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import {
   closeSync,
   constants,
+  createReadStream,
   fchmodSync,
   fsyncSync,
   ftruncateSync,
@@ -11,6 +12,7 @@ import {
   type Stats,
 } from 'node:fs';
 import { join } from 'node:path';
+import type { Readable } from 'node:stream';
 import { Type, type Static } from 'typebox';
 import { HarnessEventSchema } from '@my-pi-harness/protocol';
 import { StorageError } from './errors.js';
@@ -41,10 +43,16 @@ export const SessionBatchSchema = Type.Object(
 export type StoredSessionEvent = Static<typeof StoredEventSchema>;
 /** An indivisible journal line; a torn tail never replays a partial command. */
 export type SessionBatch = Static<typeof SessionBatchSchema>;
+/** A bounded byte snapshot of complete durable batches; the consumer owns stream disposal. */
+export interface SessionLogDownload {
+  content: Readable;
+  byteLength: number;
+}
 interface Cursor {
   seq: number;
   batchId: string | null;
   signature: string;
+  byteLength: number;
 }
 const MAXIMUM_LINE_BYTES = 32 * 1024 * 1024;
 function signature(value: Stats): string {
@@ -180,10 +188,12 @@ export class SessionJournal {
         changed = true;
       }
       if (changed) fsyncSync(fd);
+      const current = this.files.checkFile(fd, path);
       this.cursors.set(sessionId, {
         seq,
         batchId: previousBatchId,
-        signature: signature(this.files.checkFile(fd, path)),
+        signature: signature(current),
+        byteLength: current.size,
       });
     } catch (cause) {
       if (cause instanceof StorageError && cause.code === 'SESSION_LOG_INVALID') throw cause;
@@ -194,6 +204,35 @@ export class SessionJournal {
       );
     } finally {
       closeSync(fd);
+    }
+  }
+
+  /** Open the current durable prefix without replay, repair, reserialization or later appends. */
+  public openDownload(sessionId: string): SessionLogDownload {
+    this.files.validateId(sessionId);
+    this.files.checkDirectories();
+    const cursor = this.cursors.get(sessionId);
+    if (cursor === undefined)
+      throw new StorageError('SESSION_LOG_INVALID', 'Session journal has no committed cursor');
+    const path = join(this.files.directory, `${sessionId}.jsonl`);
+    let fd: number | undefined;
+    try {
+      fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+      if (signature(this.files.checkFile(fd, path)) !== cursor.signature)
+        throw new StorageError('SESSION_LOG_INVALID', 'Session journal changed outside its owner');
+      const content = createReadStream(path, {
+        fd,
+        autoClose: true,
+        start: 0,
+        end: cursor.byteLength - 1,
+      });
+      return { content, byteLength: cursor.byteLength };
+    } catch (cause) {
+      if (fd !== undefined) closeSync(fd);
+      if (cause instanceof StorageError) throw cause;
+      throw new StorageError('SESSION_LOG_INVALID', 'Session journal cannot be downloaded safely', {
+        cause,
+      });
     }
   }
 
@@ -228,10 +267,12 @@ export class SessionJournal {
       this.write(fd, path, bytes);
       fsyncSync(fd);
       if (created) this.files.syncDirectory(this.files.directory);
+      const current = this.files.checkFile(fd, path);
       this.cursors.set(sessionId, {
         seq: batch.firstSeq + batch.records.length - 1,
         batchId: batch.batchId,
-        signature: signature(this.files.checkFile(fd, path)),
+        signature: signature(current),
+        byteLength: current.size,
       });
     } finally {
       closeSync(fd);

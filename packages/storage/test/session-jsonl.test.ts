@@ -13,6 +13,7 @@ import {
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { buffer } from 'node:stream/consumers';
 import Database from 'better-sqlite3';
 import { initialWorkState, type MessageView, type RunView } from '@my-pi-harness/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -106,6 +107,149 @@ afterEach(async () => {
 });
 
 describe('authoritative host session journals', () => {
+  it('downloads the exact durable prefix while later batches continue to append', async () => {
+    const value = await fixture();
+    value.store.append('session', accept());
+    const persisted = await readFile(logPath(value.directory));
+    const download = value.store.exportSessionLog('session');
+    try {
+      value.store.append('session', [event('audit.after-download', { saved: true })]);
+      expect(download.byteLength).toBe(persisted.length);
+      expect(await buffer(download.content)).toEqual(persisted);
+      expect((await readFile(logPath(value.directory))).length).toBeGreaterThan(persisted.length);
+    } finally {
+      download.content.destroy();
+    }
+    value.store.close();
+    value.store = await openProfileStore(value.directory);
+    const reopened = value.store.exportSessionLog('session');
+    try {
+      expect(await buffer(reopened.content)).toEqual(await readFile(logPath(value.directory)));
+    } finally {
+      reopened.content.destroy();
+    }
+  });
+
+  it('refuses log downloads after external modification instead of exporting uncommitted bytes', async () => {
+    const value = await fixture();
+    await fs.promises.appendFile(logPath(value.directory), '{"uncommitted":');
+    expect(() => value.store.exportSessionLog('session')).toThrow('changed outside its owner');
+    expect(() => value.store.exportSessionLog('missing')).toThrow('does not exist');
+    expect(() => value.store.exportSessionLog('../outside')).toThrow('does not exist');
+  });
+
+  it('refuses linked log files during download', async () => {
+    const value = await fixture();
+    const path = logPath(value.directory);
+    const target = join(value.directory, 'outside.jsonl');
+    await rename(path, target);
+    await symlink(target, path);
+    expect(() => value.store.exportSessionLog('session')).toThrow('cannot be downloaded safely');
+  });
+
+  it('replays assistant step usage and completion time without rewriting journals or inventing missing usage', async () => {
+    const value = await fixture();
+    const assistant: MessageView = {
+      ...user,
+      id: 'assistant',
+      role: 'assistant',
+      text: '',
+      status: 'streaming',
+    };
+    const completed: MessageView = {
+      ...assistant,
+      text: 'Answer',
+      status: 'complete',
+      stopReason: 'stop',
+      finishedAt: 4,
+      usage: {
+        inputTokens: 100,
+        outputTokens: 20,
+        cacheReadTokens: 80,
+        cacheWriteTokens: 10,
+        totalTokens: 120,
+      },
+    };
+    value.store.append('session', [
+      ...accept(),
+      event('message.started', assistant, 'run'),
+      event('message.completed', { message: completed }, 'run', 'private-assistant-codec'),
+      event('run.finished', { status: 'completed', finishedAt: 5, error: null }, 'run'),
+    ]);
+    const journal = await readFile(logPath(value.directory), 'utf8');
+    expect(value.store.getSnapshot('session').messages.at(-1)).toEqual(completed);
+    value.store.close();
+    value.store = await openProfileStore(value.directory);
+    expect(value.store.getSnapshot('session').messages.at(-1)).toEqual(completed);
+    expect(value.store.getSnapshot('session').messages[0]).not.toHaveProperty('usage');
+    expect(await readFile(logPath(value.directory), 'utf8')).toBe(journal);
+    expect(JSON.stringify(value.store.getSnapshot('session'))).not.toContain('private-');
+  });
+
+  it.each([
+    { inputTokens: -1 },
+    { outputTokens: 0.5 },
+    { cacheReadTokens: Number.MAX_SAFE_INTEGER + 1 },
+    { cacheWriteTokens: '10' },
+    { totalTokens: -1 },
+    { unrecognized: 1 },
+  ])('rejects invalid reported usage %o before appending a journal batch', async (invalid) => {
+    const value = await fixture();
+    const assistant: MessageView = {
+      ...user,
+      id: 'assistant',
+      role: 'assistant',
+      status: 'streaming',
+    };
+    value.store.append('session', [...accept(), event('message.started', assistant, 'run')]);
+    const journal = await readFile(logPath(value.directory), 'utf8');
+    expect(() =>
+      value.store.append('session', [
+        event(
+          'message.completed',
+          {
+            message: {
+              ...assistant,
+              status: 'complete',
+              finishedAt: 3,
+              usage: {
+                inputTokens: 100,
+                outputTokens: 20,
+                cacheReadTokens: 0,
+                cacheWriteTokens: 0,
+                totalTokens: 120,
+                ...invalid,
+              },
+            },
+          },
+          'run',
+        ),
+      ]),
+    ).toThrow('validation');
+    expect(await readFile(logPath(value.directory), 'utf8')).toBe(journal);
+    expect(value.store.getSnapshot('session').messages.at(-1)).toEqual(assistant);
+  });
+
+  it.each(['user', 'streaming-assistant'])(
+    'rejects completion statistics on a %s message before appending it',
+    async (kind) => {
+      const value = await fixture();
+      value.store.append('session', accept());
+      const journal = await readFile(logPath(value.directory), 'utf8');
+      const message: MessageView = {
+        ...user,
+        id: 'invalid-statistics',
+        role: kind === 'user' ? 'user' : 'assistant',
+        status: kind === 'user' ? 'complete' : 'streaming',
+        finishedAt: 3,
+      };
+      expect(() =>
+        value.store.append('session', [event('message.started', message, 'run')]),
+      ).toThrow('terminal assistant');
+      expect(await readFile(logPath(value.directory), 'utf8')).toBe(journal);
+    },
+  );
+
   it('persists one complete batch with private replay material while public APIs omit it', async () => {
     const value = await fixture();
     value.store.append('session', accept());
@@ -219,6 +363,7 @@ describe('authoritative host session journals', () => {
     expect(() => value.store.append('session', [event('audit.retry', {})])).toThrow(
       'Restart before retrying',
     );
+    expect(() => value.store.exportSessionLog('session')).toThrow('Restart before retrying');
     value.store.close();
     const repair = new Database(join(value.directory, 'data.sqlite'));
     repair.exec('DROP TRIGGER fail_commit');
@@ -240,6 +385,7 @@ describe('authoritative host session journals', () => {
       expect(() => value.store.append('session', [event('audit.retry', {})])).toThrow(
         'Restart before retrying',
       );
+      expect(() => value.store.exportSessionLog('session')).toThrow('Restart before retrying');
     } finally {
       failure.mockRestore();
     }

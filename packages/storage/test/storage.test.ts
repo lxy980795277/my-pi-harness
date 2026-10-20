@@ -264,6 +264,8 @@ describe('SQLite event and projection transactions', () => {
     expect(snapshot.session.activeRunId).toBeNull();
     expect(snapshot.runs[0]?.status).toBe('interrupted');
     expect(snapshot.messages[1]).toMatchObject({ text: 'Partial', status: 'interrupted' });
+    expect(snapshot.messages[1]?.finishedAt).toBe(snapshot.runs[0]?.finishedAt);
+    expect(snapshot.messages[1]).not.toHaveProperty('usage');
     expect(snapshot.queue).toHaveLength(1);
     expect(value.store.recoverInterrupted()).toEqual([]);
     expect(value.store.getModelContext('session', 'main')).toEqual(['user-codec-run']);

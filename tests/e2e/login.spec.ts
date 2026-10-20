@@ -142,6 +142,9 @@ test('桌面入口使用设备码并自动打开浏览器，打开失败可手�
   await page.addInitScript(() => {
     let attempts = 0;
     const bridge: DesktopBridge = {
+      openExternal() {
+        return Promise.reject(new Error('This login scenario does not open external content'));
+      },
       getInfo() {
         return Promise.resolve({ appVersion: '0.0.0-e2e', platform: 'darwin' });
       },

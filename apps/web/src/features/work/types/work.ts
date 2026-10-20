@@ -3,6 +3,7 @@ import type {
   Compaction,
   PlanReview,
   QuestionItem,
+  Question,
   QuestionResponse,
   Todo,
   WorkPatch,
@@ -16,6 +17,11 @@ import type { WorkMode } from '@/features/sessions/types/composer';
 
 export interface WorkView {
   query: UseQueryResult<WorkSnapshot, Error>;
+  contextLabel: string;
+  conversationCount: number;
+  pendingQuestions: Question[];
+  reviewingPlan: boolean;
+  hasRequests: boolean;
   running: boolean;
   open: boolean;
   setOpen: ValueChange<boolean>;

@@ -5,12 +5,11 @@ import type {
   WorkspaceIcon,
   WorkState,
 } from '@my-pi-harness/protocol';
-import type { CompositionEventHandler, KeyboardEventHandler } from 'react';
+import type { CompositionEventHandler, KeyboardEventHandler, ReactNode } from 'react';
 import type { SelectOption } from '@/components/ui/select-field';
 import type { Action, FormSubmit, TextChange, ValueChange } from '@/types/events';
 
 export type WorkMode = WorkState['mode'];
-export type QueuedInputMode = Exclude<InputRequest['mode'], 'send'>;
 
 export interface ComposerCompositionState {
   active: boolean;
@@ -63,9 +62,7 @@ export interface ComposerSurfaceProps {
   running?: boolean;
   stopping?: boolean;
   stop?: Action;
-  mode?: string;
-  modeOptions?: SelectOption[];
-  changeMode?: ValueChange<string>;
+  footer?: ReactNode;
   error: string | null;
   uncertain?: boolean;
   attachmentDraftKey: string;
@@ -94,15 +91,5 @@ export type NewConversationAttempt = NewConversationIntent & { generation: strin
 export interface ComposerChoicesState {
   submitBlocked: boolean;
   choices: ComposerChoices;
-  error: string | null;
-}
-
-export interface ToolCardState {
-  statusLabel: string;
-  argumentsText: string;
-  needsApproval: boolean;
-  allow: Action;
-  deny: Action;
-  pending: boolean;
   error: string | null;
 }

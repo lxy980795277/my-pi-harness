@@ -26,6 +26,26 @@ beforeEach(() => {
 });
 
 describe('workspace drop preload bridge', () => {
+  it('opens a normalized HTTP destination through its fixed IPC handler', async () => {
+    const bridge = await desktopBridge();
+    mocks.invoke.mockResolvedValue(undefined);
+    await bridge.openExternal('https://EXAMPLE.com/guide');
+    expect(mocks.invoke).toHaveBeenCalledExactlyOnceWith(
+      'desktop:open-external',
+      'https://example.com/guide',
+    );
+    mocks.invoke.mockClear();
+    for (const url of [
+      'javascript:alert(1)',
+      'file:///tmp/private',
+      'https://user:pass@example.com',
+      'https://example.com/\r\n',
+    ]) {
+      await expect(bridge.openExternal(url)).rejects.toThrow();
+    }
+    expect(mocks.invoke).not.toHaveBeenCalled();
+  });
+
   it('extracts the native File path before invoking its fixed directory handler', async () => {
     const bridge = await desktopBridge();
     const file = new File([], '工作区');

@@ -13,7 +13,7 @@ import {
 } from '@my-pi-harness/protocol';
 import { Type } from 'typebox';
 
-import { getJson, requestJson } from '@/services/base-request';
+import { getBlob, getJson, requestJson } from '@/services/base-request';
 import { parseResponse } from '@/utils/parse-response';
 
 const TOOL_DECISION_ACK_SCHEMA = Type.Object(
@@ -48,6 +48,11 @@ export const fetchSession = async (id: string, signal: AbortSignal): Promise<Ses
   return snapshot;
 };
 
+/** Reads the session's durable JSONL bytes, including all recorded branches. */
+export const fetchSessionLog = async (id: string, signal: AbortSignal): Promise<Blob> => {
+  return getBlob(`${pathFor(id)}/log`, 'application/x-ndjson', signal);
+};
+
 /** Creates a session only after explicit provider/model selection. */
 export const createSession = async (
   input: SessionCreateInput,
@@ -63,11 +68,6 @@ export const patchSession = async (
   signal: AbortSignal,
 ): Promise<SessionSnapshot> => {
   return snapshotCommand(pathFor(id), 'PUT', input, signal);
-};
-
-/** Deletes one session through the protected command endpoint. */
-export const deleteSession = async (id: string, signal: AbortSignal): Promise<void> => {
-  await requestJson(pathFor(id), 'DELETE', {}, signal);
 };
 
 /** Submits an idempotent send, queued follow-up or steer command. */
@@ -125,20 +125,6 @@ export const editMessage = async (
   signal: AbortSignal,
 ): Promise<SessionSnapshot> => {
   return snapshotCommand(`${pathFor(id)}/edit`, 'POST', input, signal);
-};
-
-/** Selects a persisted branch; context comes from the server's selected history. */
-export const selectBranch = async (
-  id: string,
-  branchId: string,
-  signal: AbortSignal,
-): Promise<SessionSnapshot> => {
-  return snapshotCommand(
-    `${pathFor(id)}/branches/${encodeURIComponent(branchId)}/select`,
-    'POST',
-    {},
-    signal,
-  );
 };
 
 /** Records a decision for the exact pending tool call; it never grants standing permission. */

@@ -1,25 +1,17 @@
 import type { ToolCallView, ToolDecisionInput } from '@my-pi-harness/protocol';
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { useAsyncEvent } from '@/hooks/use-async-event';
 import { toolNeedsApproval } from '@/features/sessions/utils/approval-options';
-import type { ToolCardState } from '@/features/sessions/types/composer';
-
-const TOOL_STATUS_LABELS: Record<ToolCallView['status'], string> = {
-  reviewing: 'AI 复核中',
-  awaiting_approval: '等待批准',
-  running: '执行中',
-  completed: '已完成',
-  failed: '执行失败',
-  denied: '已拒绝',
-  cancelled: '已取消',
-  interrupted: '执行中断',
-};
+import { toolPresentation } from '@/features/sessions/utils/tool-presentation';
+import type { ToolCardState } from '@/features/sessions/types/tool';
 
 /** A decision is scoped to one durable call; the snapshot owns its resulting status. */
 export const useToolCard = (
   tool: ToolCallView,
   onDecide: (id: string, decision: ToolDecisionInput['decision']) => Promise<void>,
 ): ToolCardState => {
+  const needsApproval = toolNeedsApproval(tool.status);
+  const [expanded, setExpanded] = useState(needsApproval);
   const decision = useAsyncEvent(
     useCallback(
       async (_signal: AbortSignal, value: ToolDecisionInput['decision']): Promise<void> => {
@@ -30,15 +22,30 @@ export const useToolCard = (
   );
   const { run: decideRun } = decision;
   const allow = useCallback((): void => {
+    setExpanded(true);
     decideRun('allow');
   }, [decideRun]);
   const deny = useCallback((): void => {
+    setExpanded(true);
     decideRun('deny');
   }, [decideRun]);
+  const toggleDetails = useCallback((): void => {
+    setExpanded((open) => {
+      return !open;
+    });
+  }, []);
+  const detailsOpen = needsApproval || expanded;
+  let detailsLabel = `展开 ${tool.name} 工具详情`;
+  if (detailsOpen) {
+    detailsLabel = `收起 ${tool.name} 工具详情`;
+  }
   return {
-    statusLabel: TOOL_STATUS_LABELS[tool.status],
+    ...toolPresentation(tool),
     argumentsText: JSON.stringify(tool.arguments, null, 2),
-    needsApproval: toolNeedsApproval(tool.status),
+    needsApproval,
+    detailsOpen,
+    detailsLabel,
+    toggleDetails,
     allow,
     deny,
     pending: decision.pending,

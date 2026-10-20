@@ -2,15 +2,16 @@ import {
   initialWorkState,
   type Compaction,
   type ContextUsage,
+  type MessageView,
   type WorkSnapshot,
 } from '@my-pi-harness/protocol';
 import { describe, expect, it } from 'vitest';
 import {
   compareSummaries,
   resolveCompaction,
-  todoProgress,
   usageCategories,
 } from '../src/features/work/utils/context-view';
+import { countConversationTurns, usageLabel } from '../src/features/work/utils/work-view';
 const first: Compaction = {
   id: 'one',
   parentId: null,
@@ -78,7 +79,7 @@ describe('context versions and measurements', () => {
       })?.right,
     ).toBe('Deliver');
   });
-  it('shows category estimates separately from calibrated provider totals', () => {
+  it('shows category estimates and distinguishes unknown context from measured zero', () => {
     const usage: ContextUsage = {
       estimatedTokens: 500,
       windowTokens: 10000,
@@ -103,14 +104,31 @@ describe('context versions and measurements', () => {
         return row.label === '对话与工具结果';
       }),
     ).toEqual({ label: '对话与工具结果', tokens: '300' });
-    const base = { planStepId: null, evidenceToolCallIds: [], completionNote: null };
+    expect(usageLabel(null)).toBe('上下文 —');
+    expect(usageLabel(usage)).toBe('上下文 5%');
+    expect(usageLabel({ ...usage, estimatedTokens: 0 })).toBe('上下文 0%');
+  });
+  it('counts accepted user messages including inherited history while excluding assistant tool steps', () => {
+    const inherited: MessageView = {
+      id: 'inherited-question',
+      sessionId: 'session',
+      branchId: 'parent',
+      runId: 'previous-run',
+      role: 'user',
+      text: 'Inherited question',
+      thinking: '',
+      createdAt: 1,
+      status: 'complete',
+      stopReason: null,
+    };
+    expect(countConversationTurns([])).toBe(0);
     expect(
-      todoProgress([
-        { ...base, id: 'done', title: 'Setup', status: 'completed' },
-        { ...base, id: 'work', title: 'Implement', status: 'in_progress' },
-        { ...base, id: 'blocked', title: 'Credentials', status: 'blocked' },
-        { ...base, id: 'cancelled', title: 'Legacy', status: 'cancelled' },
+      countConversationTurns([
+        inherited,
+        { ...inherited, id: 'tool-step', role: 'assistant', text: '', stopReason: 'toolUse' },
+        { ...inherited, id: 'answer', role: 'assistant', text: 'Answer', stopReason: 'stop' },
+        { ...inherited, id: 'new-question', branchId: 'selected', runId: 'current-run' },
       ]),
-    ).toBe('1/4 个任务完成 · Implement');
+    ).toBe(2);
   });
 });

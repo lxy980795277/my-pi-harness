@@ -9,6 +9,7 @@ import type { EventInput } from './runtime-ports.js';
 import { toolCallRecordId, type ToolRuntime } from './tool-runtime.js';
 import type { WorkRuntime } from './work-runtime.js';
 import { userWithAttachments } from './attachment-context.js';
+import { messageUsage } from './message-usage.js';
 
 export interface RunExecutionOptions {
   session: SessionSummary;
@@ -212,11 +213,13 @@ export class RunExecution {
         : 'failed';
     if (this.current) {
       this.current.status = this.outcome === 'cancelled' ? 'cancelled' : 'failed';
+      const at = Date.now();
+      this.current.finishedAt = at;
       this.commit([
         {
           type: 'message.completed',
           runId: this.options.run.id,
-          at: Date.now(),
+          at,
           data: { message: this.current },
         },
       ]);
@@ -251,11 +254,13 @@ export class RunExecution {
         } else if (event.message.role === 'assistant') {
           if (this.current) {
             this.current.status = 'failed';
+            const at = Date.now();
+            this.current.finishedAt = at;
             this.commit([
               {
                 type: 'message.completed',
                 runId: this.options.run.id,
-                at: Date.now(),
+                at,
                 data: { message: this.current },
               },
             ]);
@@ -401,18 +406,22 @@ export class RunExecution {
           this.agent.abort();
           throw this.failure;
         }
+        const at = Date.now();
+        const usage = messageUsage(event.message.usage);
         this.current = {
           ...this.current,
           text,
           thinking,
           status,
           stopReason: event.message.stopReason,
+          finishedAt: at,
+          ...(usage ? { usage } : {}),
         };
         this.commit([
           {
             type: 'message.completed',
             runId: this.options.run.id,
-            at: Date.now(),
+            at,
             data: { message: this.current },
             ...(status === 'complete' ? { privateData: encodeContextMessage(event.message) } : {}),
           },

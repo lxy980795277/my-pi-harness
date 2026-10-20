@@ -1,4 +1,3 @@
-import type { QueuedInputMode } from '@/features/sessions/types/composer';
 import {
   useAttachmentDrafts,
   EMPTY_ATTACHMENTS,
@@ -9,11 +8,6 @@ import { useCallback, useState, type ChangeEvent, type SubmitEvent } from 'react
 import { useWorkspaceStore } from '@/app/stores/workspace';
 import { useAsyncEvent } from '@/hooks/use-async-event';
 import { isRejectedInput } from '@/features/sessions/utils/input-outcome';
-
-const MODE_OPTIONS = [
-  { value: 'follow-up', label: '排队 · 当前回复后继续' },
-  { value: 'steer', label: '引导 · 中断当前模型请求' },
-];
 
 /** Uncertain retries keep their request id; successful submission clears only that session's draft. */
 export const useComposer = (
@@ -62,7 +56,6 @@ export const useComposer = (
       attachmentIds = pendingInput.attachmentIds;
     }
   }
-  const [mode, setMode] = useState<QueuedInputMode>('follow-up');
   const [stopRequestId, setStopRequestId] = useState<string | null>(null);
   const running = activeRunId !== null;
   const send = useAsyncEvent(
@@ -98,7 +91,7 @@ export const useComposer = (
       const text = draft.trim();
       let submittedMode: InputRequest['mode'] = 'send';
       if (running) {
-        submittedMode = mode;
+        submittedMode = 'follow-up';
       }
       const input = prepareInput(sessionId, {
         text,
@@ -110,17 +103,7 @@ export const useComposer = (
       });
       sendRun(input);
     },
-    [
-      attachmentBusy,
-      attachments,
-      draft,
-      mode,
-      prepareInput,
-      running,
-      sendPending,
-      sendRun,
-      sessionId,
-    ],
+    [attachmentBusy, attachments, draft, prepareInput, running, sendPending, sendRun, sessionId],
   );
   const stop = useAsyncEvent(
     useCallback(async (): Promise<void> => {
@@ -142,21 +125,6 @@ export const useComposer = (
     },
     [pendingInput, sessionId, setDraft],
   );
-  const changeMode = useCallback(
-    (value: string): void => {
-      if (pendingInput) {
-        return;
-      }
-      if (value === 'follow-up' || value === 'steer') {
-        setMode(value);
-      }
-    },
-    [pendingInput],
-  );
-  let modeOptions = MODE_OPTIONS;
-  if (pendingInput?.mode === 'send') {
-    modeOptions = [{ value: 'send', label: '原始发送 · 等待确认' }];
-  }
   const removeAttachment = useCallback(
     (id: string): void => {
       if (!pendingInput && !attachmentBusy) {
@@ -175,9 +143,6 @@ export const useComposer = (
     removeAttachment,
     draft,
     changeDraft,
-    mode: pendingInput?.mode ?? mode,
-    changeMode,
-    modeOptions,
     submit,
     stop: stop.run,
     running,

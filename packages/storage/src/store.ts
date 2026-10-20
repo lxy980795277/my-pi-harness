@@ -36,7 +36,11 @@ import { ProjectionWriter } from './projector.js';
 import { WorkspaceRepository } from './workspaces.js';
 import { ToolProjection } from './tools.js';
 import { WorkRepository } from './work.js';
-import { SessionJournal, type StoredSessionEvent } from './session-jsonl.js';
+import {
+  SessionJournal,
+  type SessionLogDownload,
+  type StoredSessionEvent,
+} from './session-jsonl.js';
 import { PrivateSessionFiles } from './private-files.js';
 import { AttachmentBlobs } from './attachment-blobs.js';
 import { interruptionEvents } from './interruption.js';
@@ -520,6 +524,15 @@ export class ProfileStore {
     this.assertOpen();
     const row = this.db.select().from(schema.sessions).where(eq(schema.sessions.id, id)).get();
     return row && !row.archived ? this.projector.session(id) : undefined;
+  }
+
+  /** Export this session's original committed JSONL across all branches; credentials are separate. */
+  public exportSessionLog(id: string): SessionLogDownload {
+    this.assertOpen();
+    if (this.writeFailure) throw this.writeFailure;
+    if (this.getSession(id) === undefined)
+      throw new StorageError('SESSION_NOT_FOUND', 'Session does not exist or is archived');
+    return this.journal.openDownload(id);
   }
 
   /** Sort navigation by the latest committed event and validate every durable row. */

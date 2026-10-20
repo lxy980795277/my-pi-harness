@@ -1,8 +1,16 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
-import { DesktopInfoSchema, type DesktopBridge, type DesktopInfo } from '@my-pi-harness/protocol';
+import {
+  DesktopInfoSchema,
+  parseExternalUrl,
+  type DesktopBridge,
+  type DesktopInfo,
+} from '@my-pi-harness/protocol';
 import { Value } from 'typebox/value';
 
 const bridge: DesktopBridge = {
+  async openExternal(url: string): Promise<void> {
+    await ipcRenderer.invoke('desktop:open-external', parseExternalUrl(url));
+  },
   async getDroppedWorkspaceDirectory(file: unknown): Promise<string> {
     if (!(file instanceof File)) throw new Error('请拖入本机文件夹');
     let path: string;

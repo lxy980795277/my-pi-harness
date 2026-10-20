@@ -45,14 +45,13 @@ export class RequestError extends Error {
   }
 }
 
-/** Sends same-origin JSON with cancellation, cookie auth and bounded response wait. */
-export const requestJson = async (
+const requestResponse = async (
   path: string,
   method: HttpMethod,
   body: unknown,
   signal: AbortSignal,
-  timeoutMs = 8_000,
-): Promise<unknown> => {
+  timeoutMs: number,
+): Promise<Response> => {
   const headers: Record<string, string> = {};
   if (body !== undefined) {
     headers['Content-Type'] = 'application/json';
@@ -97,6 +96,18 @@ export const requestJson = async (
     throw new RequestError(message, response.status);
   }
 
+  return response;
+};
+
+/** Sends same-origin JSON with cancellation, cookie auth and bounded response wait. */
+export const requestJson = async (
+  path: string,
+  method: HttpMethod,
+  body: unknown,
+  signal: AbortSignal,
+  timeoutMs = 8_000,
+): Promise<unknown> => {
+  const response = await requestResponse(path, method, body, signal, timeoutMs);
   if (response.status === 204) {
     return null;
   }
@@ -107,4 +118,19 @@ export const requestJson = async (
 /** Reads JSON through the same authenticated transport as mutations. */
 export const getJson = async (path: string, signal: AbortSignal): Promise<unknown> => {
   return requestJson(path, 'GET', undefined, signal);
+};
+
+/** Downloads an authenticated file, rejecting gateway HTML and unexpected media types. */
+export const getBlob = async (
+  path: string,
+  mediaType: string,
+  signal: AbortSignal,
+): Promise<Blob> => {
+  const response = await requestResponse(path, 'GET', undefined, signal, 60_000);
+  const contentType = response.headers.get('Content-Type');
+  if (contentType === null || contentType.split(';')[0]?.trim().toLowerCase() !== mediaType) {
+    await response.body?.cancel();
+    throw new Error('下载响应的文件类型无效，请重试。');
+  }
+  return response.blob();
 };

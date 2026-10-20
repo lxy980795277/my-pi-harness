@@ -281,6 +281,16 @@ describe('ModelGateway protocol and credentials', () => {
       });
       await until(() => store.getSnapshot('old-session').session.activeRunId === null);
       expect(store.getSnapshot('old-session').messages.at(-1)?.text).toBe('Fixture answer');
+      expect(typeof store.getSnapshot('old-session').messages.at(-1)?.finishedAt).toBe('number');
+      expect(store.getSnapshot('old-session').messages.at(-1)).toMatchObject({
+        usage: {
+          inputTokens: 1,
+          outputTokens: 2,
+          cacheReadTokens: 0,
+          cacheWriteTokens: 0,
+          totalTokens: 3,
+        },
+      });
       expect(http.requests[0]?.authorization).toBe('Bearer legacy-private-key');
       expect(await secrets.read(canonical.credentialRef)).toBeUndefined();
     } finally {

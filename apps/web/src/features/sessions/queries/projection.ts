@@ -6,6 +6,9 @@ export const retainNewestSnapshot = (
   current: SessionSnapshot | undefined,
   incoming: SessionSnapshot,
 ): SessionSnapshot => {
+  if (incoming.snapshotSeq !== incoming.session.snapshotSeq) {
+    throw new Error('会话快照与摘要序号不一致。');
+  }
   if (current && current.session.id !== incoming.session.id) {
     throw new Error('不能合并不同会话的状态。');
   }

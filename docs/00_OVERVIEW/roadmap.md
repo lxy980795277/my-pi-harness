@@ -22,8 +22,9 @@ Spec目录采用北京时间 `YYYYMMDDHHmm_category_name/`；历史补齐分钟�
 | M3.6 Plan/Todos                                                                             | 同Run计划审核、结构化步骤/Todo证据与只读规划                                                                                  | 实现与macOS本机自动化验证完成；待用户统一体验验收               |
 | M3.7 检查点与重置                                                                           | 摘要版本恢复、本会话检索、任务/上下文重置与手动会话快照                                                                       | 实现与macOS本机自动化验证完成；待用户统一体验验收               |
 | M3.8 整体联调与验收                                                                         | JSONL恢复/质量用例、源码/HTTP/浏览器/桌面及M1/M2回归                                                                          | 实现与macOS本机自动化验证完成；待用户统一体验验收               |
+| [对话渲染与交互](../04_FEATURES/202610191647_feature_conversation-rendering/spec.md)        | Streamdown Markdown、消息增量、动态虚拟列表、轻量工具行、回答统计、阅读滚动与单会话日志下载                                   | 整数排版、常驻统计与统一整答操作完成，待体验                    |
 | [M4前置：用户身份与应用登录](../04_FEATURES/202610161500_feature_application-login/spec.md) | GitHub身份、单profile归属、持久应用会话、本机信任与统一API/SSE鉴权                                                            | 实现与macOS自动化交付完成；待真实GitHub及用户review             |
-| [M4 MCP 与插件](../04_FEATURES/202610161435_feature_m4-capabilities/spec.md)                | stdio / HTTP / SSE、信任与凭据、OAuth、工具发现加载、Skills创建安装管理、插件市场、外部服务连接与办公文档工作流               | M4.1–M4.9拆分与登录前置工程已完成；下一步M4.1，功能尚未实现     |
+| [M4 MCP 与插件](../04_FEATURES/202610161435_feature_m4-capabilities/spec.md)                | stdio / HTTP / SSE、信任与凭据、OAuth、工具发现加载、Skills创建安装管理、插件市场、外部服务连接与办公文档工作流               | 用户暂缓；优先对话渲染与交互，M4功能尚未实现                    |
 | M4.1 本地MCP闭环                                                                            | 配置/信任、受监管stdio、统一Run工具集、发现/审批调用与基础设置                                                                | 边界已确认；未实现                                              |
 | M4.2 工具目录与按需加载                                                                     | 目录/名称/schema、tool_search、Run内显式加载、工具级策略及导入导出                                                            | 边界已确认；未实现                                              |
 | M4.3 远程MCP与OAuth                                                                         | Streamable HTTP/SSE、静态认证、OAuth、网络与未知结果                                                                          | 边界已确认；未实现                                              |
@@ -43,7 +44,9 @@ Spec目录采用北京时间 `YYYYMMDDHHmm_category_name/`；历史补齐分钟�
 
 2026-10-19已完成[M3复核与M4前代码治理](../04_FEATURES/202610191506_refactor_m3-readiness-governance/verify.md)，M3.1–M3.8工程范围没有未实现子项；修复计划关联、附件预览缓存、CI配置与过期指南后完成本机回归，可进入M4.1设计和开发。用户体验、真实供应商/GitHub授权及其他平台证据继续单列，M2暂缓项不标完成。
 
-既有M2/M3的[审批与JSONL优化](../04_FEATURES/202610151800_feature_approval-session-jsonl/spec.md)新增请求批准、独立AI帮我批准、完全访问三种策略，以及每会话公开JSONL镜像；具体验证见同目录记录。本轮M3前置重构将JSONL升级为会话执行事实源，SQLite保留配置及可重建投影；旧公开镜像不再作为目标架构。开发期不保留旧格式兼容。完整导入导出仍属M7；M7其余范围、M4和已暂缓的Windows Shell保持原状态。
+M4沿用已确认的M4.1–M4.9边界，具体工作包、代码归属、依赖及完成门槛见[实施任务](../04_FEATURES/202610161435_feature_m4-capabilities/tasks.md)。用户于2026-10-19暂缓M4，优先开展[对话渲染与交互](../04_FEATURES/202610191647_feature_conversation-rendering/spec.md)，采用Streamdown补齐Markdown、公开消息增量更新和阅读体验；所有M4实现项仍待开发。
+
+既有M2/M3的[审批与JSONL优化](../04_FEATURES/202610151800_feature_approval-session-jsonl/spec.md)新增请求批准、独立AI帮我批准、完全访问三种策略，以及每会话公开JSONL镜像；具体验证见同目录记录。本轮M3前置重构将JSONL升级为会话执行事实源，SQLite保留配置及可重建投影；旧公开镜像不再作为目标架构。开发期不保留旧格式兼容。会话体验专项提供单会话原始JSONL下载；包含附件、配置、导入和恢复的完整导入导出仍属M7。M7其余范围、M4和已暂缓的Windows Shell保持原状态。
 
 用户后续调整添加上下文菜单为“上传文件、MCP、Skill”：MCP/Skill只保留禁用占位，实际能力仍属M4。M3.7明确包含压缩后的当前会话原文检索；跨会话搜索和长期记忆仍属M6。
 

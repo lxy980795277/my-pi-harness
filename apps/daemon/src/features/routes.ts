@@ -5,6 +5,7 @@ import type { ApplicationServices } from '../services.js';
 import { registerAuthRoutes } from './auth/routes.js';
 import { registerModelRoutes } from './models/routes.js';
 import { registerSessionRoutes } from './sessions/routes.js';
+import { registerSessionLogRoute } from './sessions/log-route.js';
 import { registerWorkspaceRoutes } from './workspaces/routes.js';
 import { registerToolRoutes } from './tools/routes.js';
 import { registerWorkRoutes } from './work/routes.js';
@@ -109,7 +110,8 @@ export function registerM1Routes(server: FastifyInstance, services: ApplicationS
   });
   registerAuthRoutes(server, auth, login, services.githubCallbackUrl);
   registerModelRoutes(server, gateway);
-  registerSessionRoutes(server, runtime, services.store, auth, gateway, services.workspaces);
+  registerSessionRoutes(server, runtime, auth, gateway, services.workspaces);
+  registerSessionLogRoute(server, services.store);
   registerWorkspaceRoutes(server, services.workspaces);
   registerToolRoutes(server, services.tools);
   registerWorkRoutes(server, services.work);

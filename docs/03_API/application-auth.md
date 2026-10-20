@@ -1,6 +1,6 @@
 # 应用身份与登录协议
 
-协议版本为9，schema由`packages/protocol/src/auth.ts`拥有。应用登录、模型Provider OAuth与后续MCP/服务授权分别管理；应用登录不会创建模型或GitHub仓库访问凭据。
+协议版本为11，schema由`packages/protocol/src/auth.ts`拥有。应用登录、模型Provider OAuth与后续MCP/服务授权分别管理；应用登录不会创建模型或GitHub仓库访问凭据。
 
 ## 访问控制
 

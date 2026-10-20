@@ -144,6 +144,13 @@ describe('durable Pi tool execution', () => {
       const completed = f.runtime.getSnapshot(f.session.id);
       expect(completed.runs[0]?.status).toBe('completed');
       expect(completed.tools.map((tool) => tool.status)).toEqual(['completed', 'completed']);
+      const assistantSteps = completed.messages.filter((message) => message.role === 'assistant');
+      expect(assistantSteps).toHaveLength(3);
+      for (const message of assistantSteps) {
+        expect(message.usage?.totalTokens).toBeGreaterThan(0);
+        expect(message.finishedAt).toBeGreaterThanOrEqual(message.createdAt);
+      }
+      expect(assistantSteps.slice(0, 2).map((message) => message.text)).toEqual(['', '']);
       const history = f.store
         .getModelContext(f.session.id, completed.session.activeBranchId)
         .map(decodeContextMessage);

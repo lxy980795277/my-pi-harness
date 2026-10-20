@@ -8,7 +8,7 @@ export const fetchHealth = async (signal: AbortSignal): Promise<HealthResponse> 
   const data = await getJson('/health', signal);
 
   if (!Value.Check(HealthResponseSchema, data)) {
-    throw new Error('本机服务返回了不兼容的数据，请确认前后端版本一致。');
+    throw new Error('本机服务与当前界面版本不兼容，请重启本机服务后重新连接。');
   }
 
   return data;

@@ -55,7 +55,8 @@
 - Dialog、Select、ScrollArea 等基础组件的动态样式使用页面 nonce；生产 style-src 与 nonce 由宿主生成，不用 unsafe-inline/unsafe-eval 绕过 CSP。
 - Select统一以轻微背景表示焦点，不因关闭菜单后的自动回焦新增边框或光圈；保留焦点恢复与键盘选择。对话输入容器仅在文本输入聚焦时改变边框，不由底部工具栏选择器触发。
 - Select和Popover下拉默认从触发器下方开始边对齐，向右展开，保留视口碰撞避让；工作区选项只显示图标和名称，不添加路径说明行或路径悬停提示。
-- 大列表虚拟滚动，流式事件批量更新。动态行高可在所属 ref 中设置有限数值 CSS 变量用于总高度与偏移；不允许业务数据或颜色进入 style，不开放 JSX style。
+- 列表按数据规模和交互需要选择普通文档流、分页或虚拟化。当前对话使用TanStack Virtual、稳定业务key、默认动态测高与有限overscan；虚拟库通过directDomUpdates拥有数值height与transform，应用不自管虚拟总高或行位置。不允许业务数据或颜色进入style，不开放JSX style，不放宽CSP；保留消息memo、Markdown稳定内容块复用与流式合批。历史分页按实际需要引入，不将该选择强制套用其他列表。
+- 当前Markdown固定字号、行高与间距使用整数px；公开components覆盖保留产品行为，Tailwind需显式扫描Streamdown构建样式源。块间距由本地CSS统一拥有，根space-y-0避免与库默认spacing职责冲突；松散列表段落保持block。默认rehype安全插件仅按需要移除raw，保留sanitize/harden与skipHtml，不将整数px视为消除所有缩放或像素量化的保证。
 - 动画以 transform/opacity 为主，尊重减少动态效果；适配桌面和平板。控件有名称、错误说明和焦点状态，Dialog 支持键盘与关闭后的焦点恢复。
 - 注释只说明非显然行为、失败、时间和所有权，不逐行翻译或保留开发过程。公共 Hook/函数提供调用者需要的 JSDoc；删除注释掉实现与无职责副本。
 

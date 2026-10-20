@@ -21,6 +21,7 @@
     "@radix-ui/react-slot": "catalog:",
     "@radix-ui/react-switch": "catalog:",
     "@radix-ui/react-tabs": "catalog:",
+    "@streamdown/cjk": "catalog:",
     "@tanstack/react-query": "catalog:",
     "@tanstack/react-virtual": "catalog:",
     "class-variance-authority": "catalog:",
@@ -29,6 +30,8 @@
     "lucide-react": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
+    "shiki": "catalog:",
+    "streamdown": "catalog:",
     "tailwind-merge": "catalog:",
     "typebox": "catalog:",
     "zustand": "catalog:"

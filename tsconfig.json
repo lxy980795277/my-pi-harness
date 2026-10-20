@@ -9,5 +9,5 @@
       "@my-pi-harness/execution": ["./packages/execution/src/index.ts"]
     }
   },
-  "include": ["*.config.ts", "tests/unit/**/*.ts"]
+  "include": ["*.config.ts", "tests/unit/**/*.ts", "tests/fixtures/**/*.ts"]
 }

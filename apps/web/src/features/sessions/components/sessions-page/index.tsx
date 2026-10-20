@@ -7,7 +7,7 @@ import { describeError } from '@/utils/describe-error';
 
 /** A shared, bounded workspace: navigation, scrolling timeline and fixed composer. */
 export const SessionsPage: FC<{ userName: string }> = ({ userName }) => {
-  const { activeId, generation, providersQuery, created, deleted } = useSessionsWorkspace();
+  const { activeId, generation, providersQuery, created } = useSessionsWorkspace();
 
   return (
     <div className="flex h-full min-h-0 min-w-0">
@@ -33,12 +33,7 @@ export const SessionsPage: FC<{ userName: string }> = ({ userName }) => {
           </div>
         )}
         {activeId && providersQuery.data && (
-          <ConversationPanel
-            key={activeId}
-            sessionId={activeId}
-            providers={providersQuery.data}
-            onDeleted={deleted}
-          />
+          <ConversationPanel key={activeId} sessionId={activeId} providers={providersQuery.data} />
         )}
       </div>
     </div>

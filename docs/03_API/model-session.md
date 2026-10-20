@@ -1,6 +1,6 @@
 # 模型、授权与会话协议
 
-本机wire协议版本为9，持久事件格式仍为version:1。M1的公开schema由 `packages/protocol/src/models.ts`、`auth.ts` 和 `sessions.ts` 拥有。HTTP返回公开DTO，SDK对象、模型上下文codec、凭据和数据库Entity不跨入Renderer。列表接口直接返回数组，写会话接口返回已提交的SessionSnapshot；失败返回 `{code,message}`。
+本机wire协议版本为11，持久事件格式仍为version:1。M1的公开schema由 `packages/protocol/src/models.ts`、`auth.ts` 、`sessions.ts` 和 `session-stream.ts` 拥有。HTTP返回公开DTO，SDK对象、模型上下文codec、凭据和数据库Entity不跨入Renderer。列表接口直接返回数组，写会话接口返回已提交的SessionSnapshot；失败返回 `{code,message}`。
 
 ## 授权
 
@@ -47,6 +47,7 @@ AuthFlow.prompt.type区分text、secret、select和manual_code；可含placehold
 | GET /api/sessions                                | SessionSummary[]                                           |
 | POST /api/sessions                               | SessionCreateInput；返回SessionSnapshot                    |
 | GET /api/sessions/:id                            | 当前分支、消息、Run、队列与snapshotSeq                     |
+| GET /api/sessions/:id/log                        | 当前会话已提交JSONL附件，包含全部分支的原始宿主批日志      |
 | PUT /api/sessions/:id                            | SessionPatchInput；设置用于后续Run                         |
 | DELETE /api/sessions/:id                         | 归档会话，从列表隐藏；保留历史事实，不是隐私擦除           |
 | POST /api/sessions/:id/inputs                    | `{text,attachmentIds?,mode,requestId}`；接受输入后返回快照 |
@@ -56,7 +57,7 @@ AuthFlow.prompt.type区分text、secret、select和manual_code；可含placehold
 | POST /api/sessions/:id/queue/resume              | `{}`；显式继续保存队列                                     |
 | POST /api/sessions/:id/edit                      | `{messageId,text,requestId}`；新分支重发                   |
 | POST /api/sessions/:id/branches/:branchId/select | `{}`；切换历史分支，运行中409                              |
-| GET /api/sessions/:id/events?afterSeq=N          | 已授权EventSource订阅与重放                                |
+| GET /api/sessions/:id/events                     | 已授权EventSource快照与有界增量                            |
 
 新建Session保存workspaceId和approvalMode（细节见[M2协议](workspace-execution.md)）。可以只提交title，此时owner读取持久化defaultModel并校验Provider启用、模型存在、thinkingLevel支持及认证可用后创建；未设置或失效时返回明确错误，不创建Session或发起模型请求。显式选择须同时提交providerId、modelId、thinkingLevel。修改全局默认只影响以后新建Session，不改写已有会话、队列或活动Run。默认引用失效时仍保留原值，由用户明确修改或置空，不自动选择替代模型。
 
@@ -68,13 +69,23 @@ AuthFlow.prompt.type区分text、secret、select和manual_code；可含placehold
 
 ## 事件、快照与断线
 
-HarnessEvent包含固定格式version:1、eventId、sessionId、可空runId、seq、type、at和公开data。seq在单Session事务中单调递增，事件追加和消息/Run/队列投影同时提交。SSE发送 `session.event` 重放事实，再发送 `session.snapshot`，data直接为SessionSnapshot，id为已提交seq。快照从同一数据库事务读取，snapshotSeq与内容一致。
+终态助手MessageView可带`finishedAt`（宿主记录的完成时间，Unix毫秒）和`usage`（inputTokens、outputTokens、cacheReadTokens、cacheWriteTokens、totalTokens，非负安全整数）。每次模型步骤的`message.completed`记录这组字段，终态SSE以message.set同步；中断时保留已提交用量并补完成时间。totalTokens沿用Pi供应商归一化结果，不把缓存再次相加。没有供应商用量、Pi全零默认值或历史未记录时usage缺省，不按正文估算，不改写JSONL补造。统计字段只能出现在终态助手消息，用户消息与streaming消息携带它们时拒绝写入。
 
-服务先订阅已提交事件，再同步读取和分页重放；随后将进度按32ms合并发送快照。客户端以Session和seq合并HTTP与SSE，较旧响应不能覆盖新快照。新建订阅以缓存snapshotSeq构造afterSeq；EventSource自动重连复用原URL，服务不以Last-Event-ID覆盖游标，因此可能重放重复事件，客户端按快照序号去重并重新读取HTTP快照。超出当前高水位的游标返回409。15秒注释心跳、背压断开和8MiB单记录上限限制连接资源，慢客户端不阻塞模型或数据库。关闭连接清理定时器与订阅。
+HarnessEvent仍是JSONL中的公开事实封套，包含固定格式version:1、eventId、sessionId、可空runId、seq、type、at和公开data。seq在单Session事务中单调递增，先持久化批事实，再提交消息/Run/队列投影，最后通知订阅者。HTTP继续返回已提交SessionSnapshot；正文、思考和工具结果仍存原文，不保存Markdown HTML或解析树。
+
+SSE仅发送 `session.update`，id为已提交snapshotSeq，data通过SessionStreamUpdateSchema校验。每条新连接（包含EventSource自动重连）先发送 `{kind:"snapshot",snapshot}` 作为完整基线；不接受afterSeq查询，也不根据Last-Event-ID重放事实。服务先订阅再同步读取基线，避免提交落入订阅空隙。连接存活期间将已提交变化按32ms合并为patch，不再同时传输事实事件和整份会话。
+
+patch包含sessionId、branchId、baseSeq、snapshotSeq、当前SessionSummary和changes。baseSeq指向该连接上一个已发送投影，snapshotSeq允许跨过同批多个事实；消息、分支、Run、队列和工具只发送变化条目。集合的set带目标index，删除先于插入，既有条目的相对顺序保持不变。消息正文/思考处于streaming且仅追加时，message.append只含id、textDelta和thinkingDelta；新消息、非追加修改及终态用message.set给出准确完整值。仅工作状态发生变化时仍发送空changes以推进序号，Web据此刷新独立工作状态。活动分支改变、既有条目重排、超过256项或序列化超过512KiB时改发完整基线。
+
+Web独立追踪当前连接的基线，逐批检查标识、分支、序号、目标存在性和修改唯一性。旧/重复序号忽略；缺口或重叠不能部分应用，连接关闭后以100ms到2s的有界退避重新请求完整基线。每次SSE打开后5秒仍未收到有效基线时，同样报告同步超时并重建连接；收到基线、原生断线或订阅清理均取消该计时器。每32ms将最新接受状态合批写入Query，并保留未变化条目/集合引用。HTTP迟到响应与SSE共用单调缓存，较旧响应不能覆盖新状态；HTTP先到达较高序号时，SSE仍按自己的连续基线追赶。切换会话或卸载取消连接、重试和待发布批次，不将旧会话增量应用到新目标。
+
+连接使用15秒注释心跳和8MiB单记录上限。Node写缓冲需要drain时暂停后续写入，只保留需要刷新这一标记；恢复后直接读取最新投影，不累积每个中间批次，5秒未恢复则断开。关闭立即清理心跳、drain/合批计时器、授权观察和订阅；正常可写连接在注销或停服时结束HTTP响应，背压、超时与异常连接强制销毁，不等待慢客户端排空。当前优化属于公开传输与客户端投影更新；daemon仍读取完整已提交投影后计算差异，不是JSONL格式改造或服务端增量存储。超出单记录上限的完整会话需要后续分页能力，本轮不宣称无限历史可在一个基线中恢复。
 
 终态区分completed、cancelled、failed和interrupted，SDK Promise resolve不等于成功。存储提交失败时取消模型并停用该会话，读取或再执行返回503/SESSION_UNAVAILABLE；不能广播未提交的完成。重启先取得profile所有权，再将遗留Run标记interrupted并保留已提交部分。
 
-每个会话在<logRoot>/sessions/<profileHash>/<sessionId>.jsonl保存完整宿主批日志，作为会话执行事实源；路径由[架构](../01_ARCHITECTURE/overview.md#启动配置)定义。完整批次校验后先持久化JSONL，再提交SQLite投影和推送公开事件。宿主记录含恢复所需privateData，HTTP/SSE仅输出公开投影；附件内容保存在独立校验文件。写入或投影失败返回503/SESSION_LOG_UNAVAILABLE并冻结后续持久写入，重启校验日志并重建投影，不重复执行副作用。不能从SQLite回填或覆盖权威日志，完整坏行明确拒绝。存储规则见[storage](../../packages/storage/README.md)。
+每个会话在<logRoot>/sessions/<profileHash>/<sessionId>.jsonl保存完整宿主批日志，作为会话执行事实源；路径由[架构](../01_ARCHITECTURE/overview.md#启动配置)定义。完整批次校验后先持久化JSONL，再提交SQLite投影和推送公开事件。宿主记录含恢复所需privateData，普通HTTP/SSE仅输出公开投影；附件内容保存在独立校验文件。写入或投影失败返回503/SESSION_LOG_UNAVAILABLE并冻结后续持久写入，重启校验日志并重建投影，不重复执行副作用。不能从SQLite回填或覆盖权威日志，完整坏行明确拒绝。存储规则见[storage](../../packages/storage/README.md)。
+
+日志下载是用户明确触发的受保护原始文件出口，沿用本机信任、应用登录与profile归属检查。响应为`application/x-ndjson; charset=utf-8`，以`<sessionId>.jsonl`作为attachment文件名，设置`Content-Length`、`Cache-Control: no-store`与`X-Content-Type-Options: nosniff`。storage在打开日志时固定已提交字节前缀，流式发送完整批记录；请求后的追加不会混入文件，下载不等待活动Run结束。文件包含全部分支及宿主恢复数据，附件字节、应用配置和认证凭据仍由各自存储拥有。未知/已归档会话、非法ID或查询、未登录及不可确定日志状态明确拒绝；前端下载失败保留重试入口。
 
 ## 桌面桥
 

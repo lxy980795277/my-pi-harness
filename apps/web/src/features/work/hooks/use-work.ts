@@ -1,6 +1,7 @@
 import type { WorkView } from '@/features/work/types/work';
 import type {
   QuestionResponse,
+  Question,
   SessionSnapshot,
   WorkPatch,
   WorkSnapshot,
@@ -8,7 +9,11 @@ import type {
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
 import { answerQuestion, commandWork, fetchWork, patchWork } from '@/features/work/services/work';
-import { retainWorkSnapshot } from '@/features/work/utils/work-view';
+import {
+  countConversationTurns,
+  retainWorkSnapshot,
+  usageLabel,
+} from '@/features/work/utils/work-view';
 import { useAsyncEvent } from '@/hooks/use-async-event';
 import { useRequestTask } from '@/hooks/use-request-task';
 
@@ -77,5 +82,35 @@ export const useWork = (session: SessionSnapshot): WorkView => {
     setOpen(true);
     refresh();
   }, [refresh]);
-  return { query, running, open, setOpen, tab, setTab, show, patch, command, answer };
+  const work = query.data;
+  let contextLabel = usageLabel(null);
+  let pendingQuestions: Question[] = [];
+  let reviewingPlan = false;
+  if (work !== undefined) {
+    contextLabel = usageLabel(work.state.usage);
+    pendingQuestions = work.state.questions.filter((question) => {
+      return question.status === 'pending';
+    });
+    reviewingPlan =
+      running &&
+      work.state.plan?.review === 'pending' &&
+      work.state.plan.runId === session.session.activeRunId;
+  }
+  return {
+    query,
+    contextLabel,
+    conversationCount: countConversationTurns(session.messages),
+    pendingQuestions,
+    reviewingPlan,
+    hasRequests: reviewingPlan || pendingQuestions.length > 0,
+    running,
+    open,
+    setOpen,
+    tab,
+    setTab,
+    show,
+    patch,
+    command,
+    answer,
+  };
 };
