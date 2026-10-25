@@ -7,6 +7,8 @@ import {
   AttachmentComposer,
   type AttachmentComposerProps,
 } from '@/features/attachments/components/attachment-composer';
+import type { SkillSelectionState } from '@/features/skills/types/skill';
+import type { McpSelectionState } from '@/features/mcp/types/mcp';
 import type { ComposerChoices } from '@/features/sessions/types/composer';
 import { WORK_MODE_OPTIONS } from '@/features/work/utils/work-view';
 import { ApprovalSelect } from '@/features/sessions/components/approval-select';
@@ -15,13 +17,41 @@ interface ComposerControlsProps {
   id: string;
   choices: ComposerChoices;
   attachment: AttachmentComposerProps;
+  mcp: McpSelectionState;
+  skills: SkillSelectionState;
 }
 
 /** Controls follow the same context, directory, approval and model order in every composer. */
-export const ComposerControls: FC<ComposerControlsProps> = ({ id, choices, attachment }) => {
+export const ComposerControls: FC<ComposerControlsProps> = ({
+  id,
+  choices,
+  attachment,
+  mcp,
+  skills,
+}) => {
   return (
     <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-1 gap-y-2">
       <AttachmentComposer {...attachment} />
+      {mcp.selected.length > 0 && (
+        <Button
+          type="button"
+          variant="ghost"
+          className="h-8 rounded-lg px-1 text-xs"
+          onClick={mcp.openPicker}
+        >
+          MCP · {mcp.selected.length}
+        </Button>
+      )}
+      {skills.selected.length > 0 && (
+        <Button
+          type="button"
+          variant="ghost"
+          className="h-8 rounded-lg px-1 text-xs"
+          onClick={skills.openPicker}
+        >
+          Skills · {skills.selected.length}
+        </Button>
+      )}
       <div className="flex min-w-0 items-center gap-1 text-muted-foreground">
         <WorkspaceIcon icon={choices.workspaceIcon} expanded className="shrink-0" />
         {choices.workspaceLocked && (

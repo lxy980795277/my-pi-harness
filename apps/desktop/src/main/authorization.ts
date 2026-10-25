@@ -1,11 +1,15 @@
-import { AuthFlowSchema, LoginFlowSchema } from '@my-pi-harness/protocol';
+import { AuthFlowSchema, LoginFlowSchema, AuthStatusSchema } from '@my-pi-harness/protocol';
 import { Value } from 'typebox/value';
+import { Type } from 'typebox';
+import { isAbsolute } from 'node:path';
+import { stat } from 'node:fs/promises';
 import { session, shell } from 'electron';
 
 /** Desktop bootstrap grants local trust; application login stays owned by the daemon. */
 export interface DesktopAuthorization {
   authorizeRenderer(rendererOrigin: string): Promise<void>;
   openAuth(flowId: string): Promise<void>;
+  revealSkillDirectory(skillId: string, workspaceId: string | null): Promise<void>;
 }
 
 /**
@@ -71,6 +75,47 @@ export function createDesktopAuthorization(
         expirationDate: Date.now() / 1000 + lifetime,
       });
       rendererOrigin = targetOrigin;
+    },
+    async revealSkillDirectory(skillId, workspaceId): Promise<void> {
+      const target = new URL(`/api/skills/${encodeURIComponent(skillId)}/directory`, origin);
+      if (workspaceId !== null) target.searchParams.set('workspaceId', workspaceId);
+      const cookie = await currentCookies();
+      const statusResponse = await fetch(`${origin}/api/auth/status`, {
+        headers: { Cookie: cookie },
+        signal: requestSignal(),
+        redirect: 'error',
+      });
+      const status: unknown = await statusResponse.json();
+      if (!statusResponse.ok || !Value.Check(AuthStatusSchema, status) || status.csrfToken === null)
+        throw new Error('桌面授权已失效');
+      const response = await fetch(target, {
+        method: 'POST',
+        headers: {
+          Cookie: cookie,
+          Origin: rendererOrigin ?? origin,
+          'x-csrf-token': status.csrfToken,
+        },
+        signal: requestSignal(),
+        redirect: 'error',
+      });
+      const result: unknown = await response.json();
+      if (
+        !response.ok ||
+        !Value.Check(
+          Type.Object(
+            { path: Type.String({ minLength: 1, maxLength: 4096 }) },
+            { additionalProperties: false },
+          ),
+          result,
+        ) ||
+        !isAbsolute(result.path) ||
+        result.path.includes('\0')
+      )
+        throw new Error('Skill目录不可用');
+      if (!(await stat(result.path)).isDirectory()) throw new Error('Skill目录不存在');
+      signal?.throwIfAborted();
+      const failure = await shell.openPath(result.path);
+      if (failure.length > 0) throw new Error('无法打开Skill目录');
     },
     async openAuth(flowId): Promise<void> {
       const cookie = await currentCookies();

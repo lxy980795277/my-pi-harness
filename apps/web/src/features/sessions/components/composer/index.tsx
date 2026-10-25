@@ -1,5 +1,6 @@
 import type {
   InputRequest,
+  RunView,
   ProviderConfig,
   SessionPatchInput,
   SessionSummary,
@@ -11,6 +12,7 @@ import { useComposerChoices } from '@/features/sessions/hooks/use-composer-choic
 
 interface ComposerProps {
   session: SessionSummary;
+  activeRun: RunView | undefined;
   providers: ProviderConfig[];
   onSend: (input: InputRequest) => Promise<void>;
   onStop: () => Promise<void>;
@@ -18,9 +20,22 @@ interface ComposerProps {
 }
 
 /** The ongoing conversation uses the same controls as first send while preserving queue and stop. */
-export const Composer: FC<ComposerProps> = ({ session, providers, onSend, onStop, onPatch }) => {
-  const state = useComposer(session.id, session.activeRunId, onSend, onStop);
+export const Composer: FC<ComposerProps> = ({
+  session,
+  activeRun,
+  providers,
+  onSend,
+  onStop,
+  onPatch,
+}) => {
   const selection = useComposerChoices(session, providers, onPatch);
+  const state = useComposer(
+    session,
+    activeRun,
+    selection.choices.workMode === 'plan',
+    onSend,
+    onStop,
+  );
   return (
     <div className="shrink-0 px-5 pt-2 pb-2 sm:px-6">
       <div className="mx-auto w-full max-w-4xl">

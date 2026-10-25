@@ -64,7 +64,14 @@ export const useSettingsDialog = (): SettingsDialogState => {
   );
   const changeSection = useCallback(
     (value: string): void => {
-      if (value === 'general' || value === 'models') {
+      if (
+        value === 'general' ||
+        value === 'models' ||
+        value === 'mcp' ||
+        value === 'skills' ||
+        value === 'plugins' ||
+        value === 'connections'
+      ) {
         setSection(value);
       }
     },

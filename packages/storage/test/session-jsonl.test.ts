@@ -405,7 +405,7 @@ describe('authoritative host session journals', () => {
       value.store.close();
       await writeFile(
         logPath(value.directory),
-        kind === 'fragment' ? `${full}{"version":1,"records":[` : full.trimEnd(),
+        kind === 'fragment' ? `${full}{"version":2,"records":[` : full.trimEnd(),
       );
       value.store = await openProfileStore(value.directory);
       expect(value.store.readEvents('session')).toHaveLength(3);
@@ -422,7 +422,7 @@ describe('authoritative host session journals', () => {
       let damaged = full.replace('Logs', 'forged');
       if (kind === 'duplicate-batch') damaged = full + full;
       if (kind === 'invalid-line') damaged = '{not json}\n';
-      if (kind === 'unknown-version') damaged = full.replace('"version":1', '"version":99');
+      if (kind === 'unknown-version') damaged = full.replace('"version":2', '"version":99');
       await writeFile(logPath(value.directory), damaged);
       await expect(openProfileStore(value.directory)).rejects.toMatchObject({
         code: 'SESSION_LOG_INVALID',

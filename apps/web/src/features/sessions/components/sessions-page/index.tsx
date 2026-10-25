@@ -12,11 +12,6 @@ export const SessionsPage: FC<{ userName: string }> = ({ userName }) => {
   return (
     <div className="flex h-full min-h-0 min-w-0">
       <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
-        {providersQuery.isPending && (
-          <div className="p-6">
-            <Notice>正在读取工作台…</Notice>
-          </div>
-        )}
         {providersQuery.isError && (
           <div className="p-6">
             <Notice tone="error">{describeError(providersQuery.error)}</Notice>

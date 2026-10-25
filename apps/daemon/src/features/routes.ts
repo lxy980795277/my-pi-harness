@@ -6,11 +6,20 @@ import { registerAuthRoutes } from './auth/routes.js';
 import { registerModelRoutes } from './models/routes.js';
 import { registerSessionRoutes } from './sessions/routes.js';
 import { registerSessionLogRoute } from './sessions/log-route.js';
+import { registerOfficeArtifactRoute } from './sessions/artifact-route.js';
 import { registerWorkspaceRoutes } from './workspaces/routes.js';
 import { registerToolRoutes } from './tools/routes.js';
 import { registerWorkRoutes } from './work/routes.js';
 import { registerAttachmentRoutes } from './attachments/routes.js';
 import { LoginError } from './auth/errors.js';
+import { registerMcpRoutes } from './mcp/routes.js';
+import { SkillError } from '@my-pi-harness/integrations';
+import { registerSkillRoutes } from './skills/routes.js';
+import { registerPluginRoutes } from './plugins/routes.js';
+import { registerRemoteMcpRoutes } from './mcp/remote-routes.js';
+import { registerMcpDirectoryRoutes } from './mcp/directory-routes.js';
+import { registerMcpConfigurationRoutes } from './mcp/configuration-routes.js';
+import { registerConnectionRoutes } from './connections/routes.js';
 
 /** Install protected M1 endpoints; health and public process identity remain readable. */
 export function registerM1Routes(server: FastifyInstance, services: ApplicationServices): void {
@@ -23,7 +32,10 @@ export function registerM1Routes(server: FastifyInstance, services: ApplicationS
     }
     const bootstrap = path === '/api/auth/desktop';
     const callback =
-      request.method === 'GET' && /^\/api\/auth\/callback\/[A-Za-z0-9_-]+$/.test(path);
+      request.method === 'GET' &&
+      (/^\/api\/auth\/callback\/[A-Za-z0-9_-]+$/.test(path) ||
+        path === '/api/mcp/oauth/callback' ||
+        /^\/api\/connections\/oauth\/callback\/(github|google|vercel|notion|supabase)$/.test(path));
     if (callback) reply.header('Referrer-Policy', 'no-referrer');
     const write = !['GET', 'HEAD'].includes(request.method);
     if (!auth.trustedSource(request, write && !bootstrap)) {
@@ -50,6 +62,15 @@ export function registerM1Routes(server: FastifyInstance, services: ApplicationS
     done();
   });
   server.setErrorHandler((error, request, reply) => {
+    if (error instanceof SkillError) {
+      const status = /NOT_FOUND/.test(error.code)
+        ? 404
+        : /CONFLICT|BUSY|STALE|CLOSED|REVOKED/.test(error.code)
+          ? 409
+          : 400;
+      void reply.code(status).send({ code: error.code, message: error.message });
+      return;
+    }
     if (error instanceof LoginError) {
       void reply.code(error.status).send({ code: error.code, message: error.message });
       return;
@@ -112,10 +133,18 @@ export function registerM1Routes(server: FastifyInstance, services: ApplicationS
   registerModelRoutes(server, gateway);
   registerSessionRoutes(server, runtime, auth, gateway, services.workspaces);
   registerSessionLogRoute(server, services.store);
+  registerOfficeArtifactRoute(server, runtime, services.workspaces);
   registerWorkspaceRoutes(server, services.workspaces);
   registerToolRoutes(server, services.tools);
   registerWorkRoutes(server, services.work);
   registerAttachmentRoutes(server, services.attachments);
+  registerMcpRoutes(server, services.mcp);
+  registerRemoteMcpRoutes(server, services.remoteMcp);
+  registerMcpDirectoryRoutes(server, services.mcp, services.remoteMcp);
+  registerMcpConfigurationRoutes(server, services.mcp, services.remoteMcp);
+  registerSkillRoutes(server, services.skills);
+  registerPluginRoutes(server, services.plugins);
+  registerConnectionRoutes(server, services.connections);
   server.addHook('preClose', async () => {
     await services.close();
   });

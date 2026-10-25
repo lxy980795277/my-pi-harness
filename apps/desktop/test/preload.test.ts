@@ -90,3 +90,21 @@ describe('workspace drop preload bridge', () => {
     );
   });
 });
+
+it('forwards only registered Skill identity and workspace through the fixed reveal IPC', async () => {
+  const bridge = await desktopBridge();
+  mocks.invoke.mockResolvedValue(undefined);
+  await bridge.revealSkillDirectory('skill:registered', null);
+  expect(mocks.invoke).toHaveBeenCalledExactlyOnceWith(
+    'desktop:reveal-skill-directory',
+    'skill:registered',
+    null,
+  );
+  mocks.invoke.mockClear();
+  await expect(bridge.revealSkillDirectory('', null)).rejects.toThrow('Skill目录请求无效');
+  await expect(bridge.revealSkillDirectory('a'.repeat(161), null)).rejects.toThrow(
+    'Skill目录请求无效',
+  );
+  await expect(bridge.revealSkillDirectory('registered', '')).rejects.toThrow('Skill目录请求无效');
+  expect(mocks.invoke).not.toHaveBeenCalled();
+});

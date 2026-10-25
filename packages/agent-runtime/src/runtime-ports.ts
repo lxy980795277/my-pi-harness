@@ -35,6 +35,7 @@ export interface RuntimeStore {
   readEvents(sessionId: string, afterSeq: number, limit: number): HarnessEvent[];
   getModelContext(sessionId: string, branchId: string, messageIds?: readonly string[]): string[];
   getQueueBranch(sessionId: string, inputId: string): string;
+  getQueuePrivateData(sessionId: string, inputId: string): string | null;
   findRequest(sessionId: string, requestId: string): RequestAcceptance | undefined;
   recoverInterrupted(): HarnessEvent[];
 }

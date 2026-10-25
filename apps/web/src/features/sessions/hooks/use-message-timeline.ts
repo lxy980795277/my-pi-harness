@@ -67,7 +67,6 @@ export const useMessageTimeline = (
   });
   const measureList = useCallback(
     (node: HTMLDivElement | null): void => {
-      contentElement.current = node;
       virtualizer.containerRef(node);
     },
     [virtualizer],
@@ -112,6 +111,7 @@ export const useMessageTimeline = (
   });
   return {
     scrollElement,
+    contentElement,
     empty: entries.length === 0,
     rows,
     measureList,

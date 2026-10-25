@@ -1,6 +1,6 @@
 # 模型、授权与会话协议
 
-本机wire协议版本为11，持久事件格式仍为version:1。M1的公开schema由 `packages/protocol/src/models.ts`、`auth.ts` 、`sessions.ts` 和 `session-stream.ts` 拥有。HTTP返回公开DTO，SDK对象、模型上下文codec、凭据和数据库Entity不跨入Renderer。列表接口直接返回数组，写会话接口返回已提交的SessionSnapshot；失败返回 `{code,message}`。
+共享协议版本见[API入口](overview.md)，公开事件envelope保持version:1，宿主JSONL批次格式独立管理。M1的公开schema由 `packages/protocol/src/models.ts`、`auth.ts` 、`sessions.ts` 和 `session-stream.ts` 拥有。HTTP返回公开DTO，SDK对象、模型上下文codec、凭据和数据库Entity不跨入Renderer。列表接口直接返回数组，写会话接口返回已提交的SessionSnapshot；失败返回 `{code,message}`。
 
 ## 授权
 
@@ -42,26 +42,26 @@ AuthFlow.prompt.type区分text、secret、select和manual_code；可含placehold
 
 ## Session与输入
 
-| 方法与路径                                       | 输入与结果                                                 |
-| ------------------------------------------------ | ---------------------------------------------------------- |
-| GET /api/sessions                                | SessionSummary[]                                           |
-| POST /api/sessions                               | SessionCreateInput；返回SessionSnapshot                    |
-| GET /api/sessions/:id                            | 当前分支、消息、Run、队列与snapshotSeq                     |
-| GET /api/sessions/:id/log                        | 当前会话已提交JSONL附件，包含全部分支的原始宿主批日志      |
-| PUT /api/sessions/:id                            | SessionPatchInput；设置用于后续Run                         |
-| DELETE /api/sessions/:id                         | 归档会话，从列表隐藏；保留历史事实，不是隐私擦除           |
-| POST /api/sessions/:id/inputs                    | `{text,attachmentIds?,mode,requestId}`；接受输入后返回快照 |
-| POST /api/sessions/:id/stop                      | `{}`；提交取消意图、等待SDK结束，返回快照                  |
-| PUT /api/sessions/:id/queue/:inputId             | `{text,revision}`；旧版本409                               |
-| DELETE /api/sessions/:id/queue/:inputId          | 删除尚未消费的输入                                         |
-| POST /api/sessions/:id/queue/resume              | `{}`；显式继续保存队列                                     |
-| POST /api/sessions/:id/edit                      | `{messageId,text,requestId}`；新分支重发                   |
-| POST /api/sessions/:id/branches/:branchId/select | `{}`；切换历史分支，运行中409                              |
-| GET /api/sessions/:id/events                     | 已授权EventSource快照与有界增量                            |
+| 方法与路径                                       | 输入与结果                                                           |
+| ------------------------------------------------ | -------------------------------------------------------------------- |
+| GET /api/sessions                                | SessionSummary[]                                                     |
+| POST /api/sessions                               | SessionCreateInput；返回SessionSnapshot                              |
+| GET /api/sessions/:id                            | 当前分支、消息、Run、队列与snapshotSeq                               |
+| GET /api/sessions/:id/log                        | 当前会话已提交JSONL附件，包含全部分支的原始宿主批日志                |
+| PUT /api/sessions/:id                            | SessionPatchInput；设置用于后续Run                                   |
+| DELETE /api/sessions/:id                         | 归档会话，从列表隐藏；保留历史事实，不是隐私擦除                     |
+| POST /api/sessions/:id/inputs                    | `{text,attachmentIds?,mcpTools?,mode,requestId}`；接受输入后返回快照 |
+| POST /api/sessions/:id/stop                      | `{}`；提交取消意图、等待SDK结束，返回快照                            |
+| PUT /api/sessions/:id/queue/:inputId             | `{text,revision,mcpTools?}`；旧版本409                               |
+| DELETE /api/sessions/:id/queue/:inputId          | 删除尚未消费的输入                                                   |
+| POST /api/sessions/:id/queue/resume              | `{}`；显式继续保存队列                                               |
+| POST /api/sessions/:id/edit                      | `{messageId,text,mcpTools?,requestId}`；新分支重发                   |
+| POST /api/sessions/:id/branches/:branchId/select | `{}`；切换历史分支，运行中409                                        |
+| GET /api/sessions/:id/events                     | 已授权EventSource快照与有界增量                                      |
 
 新建Session保存workspaceId和approvalMode（细节见[M2协议](workspace-execution.md)）。可以只提交title，此时owner读取持久化defaultModel并校验Provider启用、模型存在、thinkingLevel支持及认证可用后创建；未设置或失效时返回明确错误，不创建Session或发起模型请求。显式选择须同时提交providerId、modelId、thinkingLevel。修改全局默认只影响以后新建Session，不改写已有会话、队列或活动Run。默认引用失效时仍保留原值，由用户明确修改或置空，不自动选择替代模型。
 
-输入附件、消息/队列保留的attachmentIds与分支工作状态见[M3协议](context-interaction.md)。编辑用户消息重发继承原附件，队列文字修改保留原附件。
+输入附件、消息/队列保留的attachmentIds与分支工作状态见[M3协议](context-interaction.md)。mcpTools选择、冻结授权和队列失效见[本地MCP协议](local-mcp.md)。编辑用户消息重发继承原附件，队列文字修改保留原附件。
 
 同Session只允许一个活跃Run；不同Session可以并行。requestId保持幂等，同一请求重发不启动第二个Run。运行中的send返回409；steer在当前assistant回复及该轮工具处理完成后的下一轮注入，优先于follow-up，不中断正在进行的模型流或工具。follow-up在Agent本轮循环原本准备结束时消费；两者均可继续同一个Run。接受、修改、删除和消费队列均有持久事务。用户停止、运行失败或重启后不会自动恢复收费请求，队列由用户明确继续；普通新消息或编辑重发不会自动消费旧暂停队列。恢复要求选择原分支，并按保存的Provider/model消费。
 
@@ -81,7 +81,7 @@ Web独立追踪当前连接的基线，逐批检查标识、分支、序号、�
 
 连接使用15秒注释心跳和8MiB单记录上限。Node写缓冲需要drain时暂停后续写入，只保留需要刷新这一标记；恢复后直接读取最新投影，不累积每个中间批次，5秒未恢复则断开。关闭立即清理心跳、drain/合批计时器、授权观察和订阅；正常可写连接在注销或停服时结束HTTP响应，背压、超时与异常连接强制销毁，不等待慢客户端排空。当前优化属于公开传输与客户端投影更新；daemon仍读取完整已提交投影后计算差异，不是JSONL格式改造或服务端增量存储。超出单记录上限的完整会话需要后续分页能力，本轮不宣称无限历史可在一个基线中恢复。
 
-终态区分completed、cancelled、failed和interrupted，SDK Promise resolve不等于成功。存储提交失败时取消模型并停用该会话，读取或再执行返回503/SESSION_UNAVAILABLE；不能广播未提交的完成。重启先取得profile所有权，再将遗留Run标记interrupted并保留已提交部分。
+终态区分completed、cancelled、failed和interrupted，SDK Promise resolve不等于成功。存储提交失败时取消模型并停用该会话，读取或再执行返回503/SESSION_UNAVAILABLE；不能广播未提交的完成。重启先取得profile所有权，再为遗留运行追加中断事实；MCP有派发屏障却无可靠结果时保留unknown说明，不自动重发，已终态历史不改写。
 
 每个会话在<logRoot>/sessions/<profileHash>/<sessionId>.jsonl保存完整宿主批日志，作为会话执行事实源；路径由[架构](../01_ARCHITECTURE/overview.md#启动配置)定义。完整批次校验后先持久化JSONL，再提交SQLite投影和推送公开事件。宿主记录含恢复所需privateData，普通HTTP/SSE仅输出公开投影；附件内容保存在独立校验文件。写入或投影失败返回503/SESSION_LOG_UNAVAILABLE并冻结后续持久写入，重启校验日志并重建投影，不重复执行副作用。不能从SQLite回填或覆盖权威日志，完整坏行明确拒绝。存储规则见[storage](../../packages/storage/README.md)。
 

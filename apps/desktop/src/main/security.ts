@@ -28,6 +28,7 @@ export function secureWindow(
   window: BrowserWindow,
   origin: string,
   openAuth?: (flowId: string) => Promise<void>,
+  revealSkill?: (skillId: string, workspaceId: string | null) => Promise<void>,
 ): void {
   const contents = window.webContents;
   contents.setWindowOpenHandler(() => ({ action: 'deny' }));
@@ -118,8 +119,36 @@ export function secureWindow(
       await openAuth(id);
     });
   }
+  if (revealSkill) {
+    ipcMain.handle(
+      'desktop:reveal-skill-directory',
+      async (event, ...arguments_: unknown[]): Promise<void> => {
+        const frame = event.senderFrame;
+        const [id, workspaceId] = arguments_;
+        if (
+          event.sender !== contents ||
+          frame !== contents.mainFrame ||
+          !isTrustedUrl(frame.url, origin)
+        )
+          throw new Error('桌面请求来源无效');
+        if (
+          arguments_.length !== 2 ||
+          typeof id !== 'string' ||
+          id.length === 0 ||
+          id.length > 160 ||
+          (workspaceId !== null &&
+            (typeof workspaceId !== 'string' ||
+              workspaceId.length === 0 ||
+              workspaceId.length > 160))
+        )
+          throw new Error('Skill目录请求参数无效');
+        await revealSkill(id, workspaceId);
+      },
+    );
+  }
   window.once('closed', () => {
     ipcMain.removeHandler('desktop:open-external');
+    if (revealSkill) ipcMain.removeHandler('desktop:reveal-skill-directory');
     ipcMain.removeHandler('desktop:get-info');
     ipcMain.removeHandler('desktop:choose-workspace-directory');
     ipcMain.removeHandler('desktop:get-dropped-workspace-directory');

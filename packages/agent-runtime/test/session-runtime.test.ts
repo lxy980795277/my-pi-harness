@@ -331,6 +331,7 @@ describe('SessionRuntime durable execution', () => {
         getModelContext: (id, branch) => actual.getModelContext(id, branch),
         findRequest: (id, request) => actual.findRequest(id, request),
         getQueueBranch: (id, input) => actual.getQueueBranch(id, input),
+        getQueuePrivateData: (id, input) => actual.getQueuePrivateData(id, input),
         recoverInterrupted: () => actual.recoverInterrupted(),
         append: (id, events) => {
           if (events.some(({ type }) => type === 'message.delta')) {
@@ -371,6 +372,7 @@ describe('SessionRuntime durable execution', () => {
         readEvents: (id, after, limit) => actual.readEvents(id, after, limit),
         getModelContext: (id, branch) => actual.getModelContext(id, branch),
         getQueueBranch: (id, input) => actual.getQueueBranch(id, input),
+        getQueuePrivateData: (id, input) => actual.getQueuePrivateData(id, input),
         findRequest: (id, request) => actual.findRequest(id, request),
         recoverInterrupted: () => actual.recoverInterrupted(),
         append: (id, events) => {

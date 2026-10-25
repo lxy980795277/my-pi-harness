@@ -8,7 +8,7 @@ import type { ExecutionContext, ExecutionResult } from './types.js';
 
 const MAXIMUM_OUTPUT_BYTES = 100_000;
 
-function profile(
+export function sandboxProfile(
   root: string,
   temporary: string,
   runtimeDirectory: string,
@@ -70,7 +70,7 @@ export async function shellTool(
       program = '/usr/bin/sandbox-exec';
       commandArguments = [
         '-p',
-        profile(root, temporary, runtimeDirectory, privateDirectory),
+        sandboxProfile(root, temporary, runtimeDirectory, privateDirectory),
         '/bin/bash',
         ...shellArguments,
       ];

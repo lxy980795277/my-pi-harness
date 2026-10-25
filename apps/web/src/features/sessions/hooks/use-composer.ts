@@ -3,19 +3,28 @@ import {
   EMPTY_ATTACHMENTS,
 } from '@/features/attachments/stores/attachment-drafts';
 import type { ComposerState } from '@/features/sessions/types/session';
-import type { InputRequest } from '@my-pi-harness/protocol';
+import type { InputRequest, RunView, SessionSummary } from '@my-pi-harness/protocol';
 import { useCallback, useState, type ChangeEvent, type SubmitEvent } from 'react';
 import { useComposerStore } from '@/features/sessions/stores/composer';
 import { useAsyncEvent } from '@/hooks/use-async-event';
+import {
+  useComposerSkillSelection,
+  EMPTY_SKILL_SELECTIONS,
+} from '@/features/skills/hooks/use-composer-skill-selection';
+import { useComposerMcpSelection } from '@/features/mcp/hooks/use-composer-mcp-selection';
+import { EMPTY_MCP_SELECTIONS } from '@/features/mcp/utils/mcp-selection';
 import { isRejectedInput } from '@/features/sessions/utils/input-outcome';
 
 /** Uncertain retries keep their request id; successful submission clears only that session's draft. */
 export const useComposer = (
-  sessionId: string,
-  activeRunId: string | null,
+  session: SessionSummary,
+  activeRun: RunView | undefined,
+  planMode: boolean,
   onSend: (input: InputRequest) => Promise<void>,
   onStop: () => Promise<void>,
 ): ComposerState => {
+  const sessionId = session.id;
+  const activeRunId = session.activeRunId;
   const attachments = useAttachmentDrafts((state) => {
     return state.drafts[sessionId] ?? EMPTY_ATTACHMENTS;
   });
@@ -77,6 +86,26 @@ export const useComposer = (
     ),
   );
   const { pending: sendPending } = send;
+  let frozen = pendingInput?.mcpTools;
+  if (running && pendingInput === null) {
+    frozen = activeRun?.mcpTools ?? EMPTY_MCP_SELECTIONS;
+  }
+  const mcp = useComposerMcpSelection(
+    sessionId,
+    session.workspaceId,
+    session.approvalMode,
+    planMode,
+    sendPending || pendingInput !== null || running,
+    frozen,
+  );
+  let frozenSkills = pendingInput?.skills;
+  if (running && pendingInput === null) frozenSkills = activeRun?.skills ?? EMPTY_SKILL_SELECTIONS;
+  const skills = useComposerSkillSelection(
+    sessionId,
+    session.workspaceId,
+    sendPending || pendingInput !== null || running,
+    frozenSkills,
+  );
   const { run: sendRun } = send;
   const submit = useCallback(
     (event: SubmitEvent<HTMLFormElement>): void => {
@@ -84,6 +113,8 @@ export const useComposer = (
       if (
         sendPending ||
         attachmentBusy ||
+        ((mcp.blocked || skills.blocked) && pendingInput === null) ||
+        (running && activeRun === undefined) ||
         (draft.trim().length === 0 && attachments.length === 0)
       ) {
         return;
@@ -97,13 +128,30 @@ export const useComposer = (
         text,
         mode: submittedMode,
         requestId: crypto.randomUUID(),
+        mcpTools: mcp.selected,
+        skills: skills.selected,
         attachmentIds: attachments.map((attachment) => {
           return attachment.id;
         }),
       });
       sendRun(input);
     },
-    [attachmentBusy, attachments, draft, prepareInput, running, sendPending, sendRun, sessionId],
+    [
+      activeRun,
+      attachmentBusy,
+      attachments,
+      draft,
+      mcp.blocked,
+      mcp.selected,
+      skills.blocked,
+      skills.selected,
+      pendingInput,
+      prepareInput,
+      running,
+      sendPending,
+      sendRun,
+      sessionId,
+    ],
   );
   const stop = useAsyncEvent(
     useCallback(async (): Promise<void> => {
@@ -139,6 +187,8 @@ export const useComposer = (
   }
   return {
     attachmentDraftKey: sessionId,
+    mcp,
+    skills,
     attachmentIds,
     removeAttachment,
     draft,
@@ -149,7 +199,11 @@ export const useComposer = (
     stopping: running && stopRequestId === activeRunId,
     pending: sendPending,
     disabled:
-      sendPending || attachmentBusy || (draft.trim().length === 0 && attachments.length === 0),
+      sendPending ||
+      attachmentBusy ||
+      ((mcp.blocked || skills.blocked) && pendingInput === null) ||
+      (running && activeRun === undefined) ||
+      (draft.trim().length === 0 && attachments.length === 0),
     error: error,
     draftLocked: pendingInput !== null,
     uncertain: pendingInput !== null && !sendPending,

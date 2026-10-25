@@ -6,12 +6,11 @@ import type {
 } from '@my-pi-harness/protocol';
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 
+import { fetchProviderCatalog, fetchProviderModels } from '@/features/models/services/providers';
 import {
-  fetchAppSettings,
-  fetchProviderCatalog,
-  fetchProviderModels,
-  fetchProviders,
-} from '@/features/models/services/providers';
+  APP_SETTINGS_QUERY_OPTIONS,
+  PROVIDERS_QUERY_OPTIONS,
+} from '@/features/models/queries/catalog';
 
 export interface ModelCatalog {
   providers: UseQueryResult<ProviderConfig[], Error>;
@@ -21,24 +20,14 @@ export interface ModelCatalog {
 
 /** Public settings reads share the same cache across dialogs and session creation. */
 export const useModelCatalog = (): ModelCatalog => {
-  const providers = useQuery({
-    queryKey: ['providers'],
-    queryFn: ({ signal }): Promise<ProviderConfig[]> => {
-      return fetchProviders(signal);
-    },
-  });
+  const providers = useQuery(PROVIDERS_QUERY_OPTIONS);
   const nativeProviders = useQuery({
     queryKey: ['provider-catalog'],
     queryFn: ({ signal }): Promise<NativeProviderInfo[]> => {
       return fetchProviderCatalog(signal);
     },
   });
-  const settings = useQuery({
-    queryKey: ['app-settings'],
-    queryFn: ({ signal }): Promise<AppSettings> => {
-      return fetchAppSettings(signal);
-    },
-  });
+  const settings = useQuery(APP_SETTINGS_QUERY_OPTIONS);
   return { providers, nativeProviders, settings };
 };
 

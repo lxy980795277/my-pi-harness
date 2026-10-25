@@ -522,3 +522,40 @@ describe('session archive facts', () => {
     expect(store.getSession('session')?.activeRunId).toBe('run');
   });
 });
+
+describe('frozen queued MCP authority', () => {
+  it('retains private bindings through edits and projection rebuild without exposing them publicly', async () => {
+    const value = await fixture();
+    value.store.append('session', [
+      event('run.accepted', 'run', { requestId: 'root', run: run() }),
+    ]);
+    const input = queued();
+    const first = JSON.stringify({
+      version: 1,
+      requestId: 'mcp-queue',
+      mcpBindings: '[{"private":"frozen-authority"}]',
+    });
+    value.store.append('session', [event('queue.added', 'run', input, first)]);
+    expect(value.store.getQueuePrivateData('session', input.id)).toBe(first);
+    const next = JSON.stringify({ version: 1, requestId: 'mcp-queue', mcpBindings: '[]' });
+    value.store.append('session', [
+      event('queue.updated', 'run', { ...input, text: 'Edited', revision: 2 }, next),
+    ]);
+    expect(value.store.getQueuePrivateData('session', input.id)).toBe(next);
+    expect(JSON.stringify(value.store.getSnapshot('session'))).not.toContain('frozen-authority');
+    expect(() =>
+      value.store.append('session', [
+        event(
+          'queue.updated',
+          'run',
+          { ...input, revision: 3 },
+          JSON.stringify({ version: 1, requestId: 'replacement' }),
+        ),
+      ]),
+    ).toThrow('acceptance identity');
+    value.store.close();
+    value.store = await openProfileStore(value.directory);
+    expect(value.store.getQueuePrivateData('session', input.id)).toBe(next);
+    expect(value.store.getSnapshot('session').queue[0]?.text).toBe('Edited');
+  });
+});

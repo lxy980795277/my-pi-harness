@@ -70,7 +70,11 @@ export class DesktopApplication {
     await this.daemon.authorizeRenderer(new URL(renderer).origin);
     signal.throwIfAborted();
     const daemon = this.daemon;
-    const window = createMainWindow(renderer, (flowId) => daemon.openAuth(flowId));
+    const window = createMainWindow(
+      renderer,
+      (flowId) => daemon.openAuth(flowId),
+      (skillId, workspaceId) => daemon.revealSkillDirectory(skillId, workspaceId),
+    );
     this.window = window;
     window.once('closed', () => {
       if (this.window === window) this.window = undefined;

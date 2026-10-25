@@ -27,6 +27,16 @@ export async function openUserSettings(page: Page): Promise<void> {
     .click();
 }
 
+/** Reveal local process controls and configuration exchange without closing an already open section. */
+export async function openMcpAdvancedSettings(page: Page): Promise<void> {
+  const advanced = page.locator('details').filter({
+    has: page.getByText('高级配置', { exact: true }),
+  });
+  if ((await advanced.getAttribute('open')) === null) {
+    await advanced.locator('summary').click();
+  }
+}
+
 /**
  * Open the sign-out confirmation without accepting it or revoking the current session.
  * @param page The authenticated application page.

@@ -1,3 +1,6 @@
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { createServer, type IncomingMessage, type Server } from 'node:http';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createDesktopAuthorization } from '../src/main/authorization.js';
@@ -7,11 +10,12 @@ const desktop = vi.hoisted(() => ({
     vi.fn<(filter: { url: string; name?: string }) => Promise<{ name: string; value: string }[]>>(),
   setCookie: vi.fn<(cookie: Record<string, unknown>) => Promise<void>>(),
   openExternal: vi.fn<(url: string) => Promise<void>>(),
+  openPath: vi.fn<(path: string) => Promise<string>>(),
 }));
 
 vi.mock('electron', () => ({
   session: { defaultSession: { cookies: { get: desktop.getCookies, set: desktop.setCookie } } },
-  shell: { openExternal: desktop.openExternal },
+  shell: { openExternal: desktop.openExternal, openPath: desktop.openPath },
 }));
 
 const servers: Server[] = [];
@@ -49,6 +53,7 @@ beforeEach(() => {
   desktop.getCookies.mockResolvedValue([]);
   desktop.setCookie.mockResolvedValue();
   desktop.openExternal.mockResolvedValue();
+  desktop.openPath.mockResolvedValue('');
 });
 
 afterEach(async () => {
@@ -171,5 +176,68 @@ describe('desktop authorization ownership', () => {
     await auth.authorizeRenderer(origin);
     await expect(auth.openAuth('login_test-flow')).rejects.toThrow();
     expect(desktop.openExternal).not.toHaveBeenCalled();
+  });
+});
+
+describe('registered Skill directory reveal', () => {
+  it('resolves IDs through the authenticated host, obtains CSRF and opens only its directory response', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'my-pi-skill-reveal-'));
+    const requests: { url: string | undefined; csrf: string | string[] | undefined }[] = [];
+    try {
+      const origin = await serve((request) => {
+        requests.push({ url: request.url, csrf: request.headers['x-csrf-token'] });
+        if (request.url === '/api/auth/desktop') return bootstrap();
+        if (request.url === '/api/auth/status')
+          return {
+            body: {
+              localAuthorized: true,
+              authenticated: true,
+              csrfToken: 'fixture-csrf',
+              providers: [],
+              profileBound: true,
+              user: null,
+              session: null,
+            },
+          };
+        return { body: { path: directory } };
+      });
+      const auth = createDesktopAuthorization(origin, 'owner');
+      await auth.authorizeRenderer(origin);
+      desktop.getCookies.mockResolvedValue([
+        { name: 'my_pi_local', value: 'local' },
+        { name: 'my_pi_session', value: 'session' },
+      ]);
+      await auth.revealSkillDirectory('skill:registered', 'workspace');
+      expect(requests.at(-1)).toEqual({
+        url: '/api/skills/skill%3Aregistered/directory?workspaceId=workspace',
+        csrf: 'fixture-csrf',
+      });
+      expect(desktop.openPath).toHaveBeenCalledExactlyOnceWith(directory);
+      expect(desktop.openExternal).not.toHaveBeenCalled();
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+  it('does not open a rejected or malformed directory response', async () => {
+    const origin = await serve((request) => {
+      if (request.url === '/api/auth/desktop') return bootstrap();
+      if (request.url === '/api/auth/status')
+        return {
+          body: {
+            localAuthorized: true,
+            authenticated: true,
+            csrfToken: 'csrf',
+            providers: [],
+            profileBound: true,
+            user: null,
+            session: null,
+          },
+        };
+      return { status: 404, body: { path: '/private' } };
+    });
+    const auth = createDesktopAuthorization(origin, 'owner');
+    await auth.authorizeRenderer(origin);
+    await expect(auth.revealSkillDirectory('missing', null)).rejects.toThrow('Skill目录不可用');
+    expect(desktop.openPath).not.toHaveBeenCalled();
   });
 });

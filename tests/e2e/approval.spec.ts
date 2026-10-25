@@ -172,6 +172,8 @@ for (const scenario of ['auto-allow', 'full-access', 'auto-fallback'] as const) 
         'Approval fixture content\n',
       );
       await expect(card.getByRole('button', { name: '允许本次操作', exact: true })).toHaveCount(0);
+      if (scenario !== 'auto-fallback')
+        await card.getByRole('button', { name: '展开 write_file 工具详情', exact: true }).click();
       const audit = card.getByLabel('审批记录', { exact: true });
       if (scenario === 'auto-allow') {
         await expect(audit).toContainText('AI 复核 · 已批准');
@@ -189,6 +191,7 @@ for (const scenario of ['auto-allow', 'full-access', 'auto-fallback'] as const) 
       }
       await page.reload();
       await page.getByRole('button', { name: /^请创建 approved.txt 测试文件 / }).click();
+      await card.getByRole('button', { name: '展开 write_file 工具详情', exact: true }).click();
       await expect(card.getByLabel('审批记录', { exact: true })).toBeVisible();
       expect(await readFile(join(directory, 'approved.txt'), 'utf8')).toBe(
         'Approval fixture content\n',

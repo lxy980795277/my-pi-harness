@@ -25,6 +25,8 @@ import {
   readApprovalMode,
   titleFromFirstMessage,
 } from '@/features/sessions/utils/composer-options';
+import { useComposerSkillSelection } from '@/features/skills/hooks/use-composer-skill-selection';
+import { useComposerMcpSelection } from '@/features/mcp/hooks/use-composer-mcp-selection';
 import { isRejectedInput } from '@/features/sessions/utils/input-outcome';
 import { useWorkspaces } from '@/features/workspaces/hooks/use-workspaces';
 import { useAsyncEvent } from '@/hooks/use-async-event';
@@ -132,6 +134,20 @@ export const useNewSession = (
     selectedWorkspaceId = attempt.workspaceId;
     selectedApprovalMode = attempt.approvalMode;
   }
+  const mcp = useComposerMcpSelection(
+    attachmentDraftKey,
+    selectedWorkspaceId,
+    selectedApprovalMode,
+    selectedWorkMode === 'plan',
+    attempt !== null,
+    attempt?.input.mcpTools,
+  );
+  const skills = useComposerSkillSelection(
+    attachmentDraftKey,
+    selectedWorkspaceId,
+    attempt !== null,
+    attempt?.input.skills,
+  );
   const provider = providers.find((entry) => {
     return entry.id === selection?.providerId;
   });
@@ -148,7 +164,7 @@ export const useNewSession = (
   const send = useAsyncEvent(
     useCallback(
       async (signal: AbortSignal): Promise<void> => {
-        if (attachmentBusy) {
+        if (attachmentBusy || ((mcp.blocked || skills.blocked) && attempt === null)) {
           return;
         }
         if (!selection || (!valid && !attempt)) {
@@ -168,6 +184,8 @@ export const useNewSession = (
             input: {
               text,
               mode: 'send',
+              mcpTools: mcp.selected,
+              skills: skills.selected,
               requestId: crypto.randomUUID(),
               attachmentIds: attachments.map((attachment) => {
                 return attachment.id;
@@ -222,6 +240,11 @@ export const useNewSession = (
         } catch (failure: unknown) {
           if (isRejectedInput(failure)) {
             clearPendingInput(current.sessionId, input.requestId);
+            clearAttempt(generation);
+            const created = client.getQueryData<SessionSnapshot>(['session', current.sessionId]);
+            if (created !== undefined && !signal.aborted) {
+              onCreated(created);
+            }
           }
           throw failure;
         }
@@ -241,6 +264,10 @@ export const useNewSession = (
         draft,
         generation,
         markCreated,
+        mcp.blocked,
+        mcp.selected,
+        skills.blocked,
+        skills.selected,
         markUnknown,
         onCreated,
         prepareInput,
@@ -367,6 +394,8 @@ export const useNewSession = (
   }
   return {
     attachmentDraftKey,
+    mcp,
+    skills,
     attachmentIds,
     removeAttachment,
     draft,
@@ -378,6 +407,7 @@ export const useNewSession = (
     disabled:
       send.pending ||
       attachmentBusy ||
+      ((mcp.blocked || skills.blocked) && attempt === null) ||
       attempt?.phase === 'unknown' ||
       attempt?.phase === 'creating' ||
       (!attempt && valid === null) ||

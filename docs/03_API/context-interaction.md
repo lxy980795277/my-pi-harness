@@ -1,6 +1,6 @@
 # 上下文与工作状态协议
 
-当前wire协议为11；DTO和schema由packages/protocol/src/context.ts及sessions.ts拥有。开发期不保留旧协议/日志/codec适配，全部消费者同步更新。接口复用[应用登录](application-auth.md)、Host/Origin与CSRF校验，未知字段拒绝。存储权威与恢复由[storage](../../packages/storage/README.md)说明。
+共享协议版本见[API入口](overview.md)；DTO和schema由packages/protocol/src/context.ts及sessions.ts拥有。开发期不保留旧协议/日志/codec适配，全部消费者同步更新。接口复用[应用登录](application-auth.md)、Host/Origin与CSRF校验，未知字段拒绝。存储权威与恢复由[storage](../../packages/storage/README.md)说明。
 
 ## 附件与规则
 
@@ -17,7 +17,7 @@ Attachment包含id、name、mediaType、kind、byteLength、preview、sourcePath
 
 HTTP上传体上限12MiB；UTF-8文本最多256000字节，PNG/JPEG/GIF/WebP最多2MiB，PDF/文档最多8MiB。PDF提取最多20页、约100000字符；Office/开放文档提取最多约250000字符，均无OCR。支持DOCX/DOCM、XLSX/XLSM、PPTX/PPTM、ODT/ODS/ODP、RTF和EPUB；不执行宏。解析有独立worker、内存、解压与时间限制，请求断开及关闭取消并等待worker退出。限制在上传时验证，不常驻显示说明文案。
 
-输入text可以为空，但必须有非空文字或1–8个不重复附件ID。发送、排队和编辑重发保持冻结附件，缺失内容或不支持图片的模型明确拒绝。图片可从剪贴板上传；前端不恢复已移除的工作区引用入口，MCP/Skill继续仅禁用占位。
+输入text可以为空，但必须有非空文字或1–8个不重复附件ID。发送、排队和编辑重发保持冻结附件，缺失内容或不支持图片的模型明确拒绝。图片可从剪贴板上传；前端不恢复已移除的工作区引用入口，MCP工具选择与授权见[本地MCP协议](local-mcp.md)，Skill选择、冻结与资源管理见[Skills与插件协议](skills-plugins.md)。
 
 引用复用M2真实路径、敏感目录和链接检查；行号从1开始且含结束行。跨工作区显式复用冻结附件不授予原目录访问，仅同工作区引用参与祖先AGENTS发现。AGENTS最多16份、总量64KiB，按由浅到深冻结文本/hash，下一Run重载。
 

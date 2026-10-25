@@ -12,7 +12,7 @@ export interface AttachmentComposerProps {
   state: AttachmentComposerState;
   locked: boolean;
 }
-/** Both composers share uploads and disabled MCP/Skill placeholders. */
+/** Both composers share uploads and the explicit MCP selection entry. */
 export const AttachmentComposer: FC<AttachmentComposerProps> = ({ state, locked }) => {
   return (
     <>
@@ -49,11 +49,21 @@ export const AttachmentComposer: FC<AttachmentComposerProps> = ({ state, locked 
             <FilePlus2 width={16} height={16} aria-hidden />
             上传文件
           </Button>
-          <Button type="button" variant="ghost" className="h-8 w-full justify-start px-2" disabled>
+          <Button
+            type="button"
+            variant="ghost"
+            className="h-8 w-full justify-start px-2"
+            onClick={state.chooseMcp}
+          >
             <Plug width={16} height={16} aria-hidden />
             MCP
           </Button>
-          <Button type="button" variant="ghost" className="h-8 w-full justify-start px-2" disabled>
+          <Button
+            type="button"
+            variant="ghost"
+            className="h-8 w-full justify-start px-2"
+            onClick={state.chooseSkill}
+          >
             <BookOpen width={16} height={16} aria-hidden />
             Skill
           </Button>

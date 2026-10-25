@@ -9,6 +9,8 @@ export interface AttachmentComposerState {
   open: boolean;
   setOpen: ValueChange<boolean>;
   choose: Action;
+  chooseMcp: Action;
+  chooseSkill: Action;
   changeFiles: InputChange;
   paste: (event: ClipboardEvent<HTMLTextAreaElement>) => void;
   remove: ValueChange<string>;

@@ -29,7 +29,6 @@ export const WorkspaceTree: FC = () => {
         </Button>
       </div>
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 pb-4">
-        {state.pending && <p className="px-2 text-xs text-muted-foreground">正在读取工作区…</p>}
         {state.error && <Notice tone="error">{state.error}</Notice>}
         {!state.pending && state.groups.length === 0 && (
           <p className="px-2 text-xs leading-6 text-muted-foreground">

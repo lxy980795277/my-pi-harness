@@ -1,12 +1,19 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 import { TOOL_DEFINITIONS, describeTool, executeTool } from '@my-pi-harness/execution';
-import type { SessionSummary, ToolCallRecord, ToolDecisionInput } from '@my-pi-harness/protocol';
+import type {
+  SessionSummary,
+  ToolCallRecord,
+  ToolDecisionInput,
+  StoredToolResult,
+} from '@my-pi-harness/protocol';
 import { Type, type TSchema } from 'typebox';
 import { Value } from 'typebox/value';
 import { RuntimeError } from './errors.js';
+import { encodeToolResult } from './context-codec.js';
+import type { FrozenMcpTool, ExternalToolOutcome } from './external-tools.js';
 import { SESSION_TOOL_DEFINITIONS, executeSessionTool } from './session-tools.js';
-import { RunToolset, type RunToolSelection } from './run-toolset.js';
+import { RunToolset, type RunToolSelection, type RunToolDefinition } from './run-toolset.js';
 import type { ApprovalReviewResult } from './approval-review.js';
 import type {
   PendingApproval,
@@ -40,15 +47,35 @@ export class ToolRuntime {
   }
 
   /** Select once before acceptance, using this executor's actual session capabilities. */
-  public selectToolset(session: Pick<SessionSummary, 'workspaceId'>): RunToolset {
+  public selectToolset(
+    session: Pick<SessionSummary, 'workspaceId'>,
+    external: readonly FrozenMcpTool[] = [],
+    controls: readonly RunToolDefinition[] = [],
+    extraWorkspace: readonly RunToolDefinition[] = [],
+  ): RunToolset {
     const selections: RunToolSelection[] = [];
+    for (const definition of controls) selections.push({ source: { kind: 'session' }, definition });
     if (this.options.work) {
       for (const definition of SESSION_TOOL_DEFINITIONS)
-        selections.push({ source: 'session', definition });
+        selections.push({ source: { kind: 'session' }, definition });
     }
     if (session.workspaceId !== null) {
-      for (const definition of TOOL_DEFINITIONS)
-        selections.push({ source: 'workspace', definition });
+      for (const definition of [...TOOL_DEFINITIONS, ...extraWorkspace])
+        selections.push({ source: { kind: 'workspace' }, definition });
+    }
+    if (external.length > 0 && !this.options.externalTools)
+      throw new RuntimeError('MCP_UNAVAILABLE', '外部工具运行时不可用。');
+    for (const tool of external) {
+      selections.push({
+        definition: tool.definition,
+        source: {
+          kind: 'mcp',
+          serverId: tool.selection.serverId,
+          serverRevision: tool.selection.serverRevision,
+          remoteToolName: tool.selection.remoteToolName,
+        },
+        external: tool,
+      });
     }
     return new RunToolset(selections);
   }
@@ -88,10 +115,24 @@ export class ToolRuntime {
     const { definition } = selected;
     if (!Value.Check(definition.parameters, args) || JSON.stringify(args).length > 256_000)
       throw new RuntimeError('TOOL_ARGUMENTS_INVALID', '工具参数无效或超过限制。');
-    const policy =
-      selected.source === 'session'
-        ? { approvalRequired: false, mutating: false, summary: name }
-        : describeTool(name, args);
+    const external = selected.source.kind === 'mcp' || selected.source.kind === 'connection';
+    let policy = { approvalRequired: false, mutating: false, summary: name };
+    if (selected.source.kind === 'workspace') policy = describeTool(name, args);
+    if (selected.source.kind === 'mcp')
+      policy = { approvalRequired: true, mutating: true, summary: selected.source.remoteToolName };
+    if (
+      selected.external &&
+      this.options.externalTools?.isReadOnlyAuthorized?.(selected.external, args)
+    )
+      policy = { ...policy, approvalRequired: false, mutating: false };
+    if (selected.connection)
+      policy = {
+        approvalRequired: !selected.connection.operation.readOnly,
+        mutating: !selected.connection.operation.readOnly,
+        summary: selected.connection.operation.name,
+      };
+    if (name === 'request_skill_tools' || name === 'request_service_access')
+      policy = { approvalRequired: true, mutating: false, summary: '授予本次运行的Skill工具权限' };
     const at = Date.now();
     let status: ToolCallRecord['status'] = 'running';
     if (policy.approvalRequired && context.session.approvalMode !== 'full-access') {
@@ -106,22 +147,86 @@ export class ToolRuntime {
       name,
       arguments: structuredClone(args),
       status,
+      binding: { kind: 'accepted', source: selected.source, fingerprint: selected.fingerprint },
+      dispatch: external ? { state: 'not_started' } : { state: 'not_applicable' },
       summary: policy.summary.slice(0, 4000),
       result: null,
       diff: null,
       createdAt: at,
       updatedAt: at,
     };
+    let persistenceFailed = false;
+    let resultOrigin: StoredToolResult['origin'] = external ? 'host' : 'tool';
     const commit = (type: ToolEventType): void => {
       tool.updatedAt = Date.now();
-      context.commit([
-        { type, runId: context.run.id, at: tool.updatedAt, data: { tool: structuredClone(tool) } },
-      ]);
+      try {
+        context.commit([
+          {
+            type,
+            runId: context.run.id,
+            at: tool.updatedAt,
+            data: { tool: structuredClone(tool) },
+          },
+        ]);
+      } catch (error) {
+        persistenceFailed = true;
+        context.persistenceFailure(error);
+      }
+    };
+    const finish = (result: ToolExecutionResult): ToolExecutionResult => {
+      tool.updatedAt = Date.now();
+      if (
+        tool.status === 'running' ||
+        tool.status === 'reviewing' ||
+        tool.status === 'awaiting_approval'
+      )
+        throw new RuntimeError('TOOL_OUTCOME_INVALID', '工具没有终态。');
+      try {
+        context.commit([
+          {
+            type: 'tool.updated',
+            runId: context.run.id,
+            at: tool.updatedAt,
+            data: { tool: structuredClone(tool) },
+          },
+          {
+            type: 'tool.context',
+            runId: context.run.id,
+            at: tool.updatedAt,
+            data: {
+              branchId: context.run.branchId,
+              afterMessageId: context.assistantMessageId(),
+              toolCallId: tool.id,
+            },
+            privateData: encodeToolResult({
+              toolResultVersion: 1,
+              providerCallId,
+              toolName: name,
+              content: result.content,
+              isError: result.isError === true,
+              at: tool.updatedAt,
+              outcome: tool.status,
+              origin: resultOrigin,
+            }),
+          },
+        ]);
+      } catch (error) {
+        persistenceFailed = true;
+        context.persistenceFailure(error);
+      }
+      if (
+        (name === 'revoke_skill_tools' || name === 'revoke_service_access') &&
+        tool.status === 'completed'
+      )
+        context.stopAfterTool?.('本次运行的工具授权已撤销。');
+      return result;
     };
     commit('tool.requested');
     context.recorded.add(tool.id);
     try {
-      if (selected.source === 'session') {
+      if (name === 'pdf_read_pages' && !context.supportsImages)
+        throw new RuntimeError('MODEL_CAPABILITY', '读取PDF页图需要支持图像的模型。');
+      if (selected.source.kind === 'session' && !context.controls?.has(name)) {
         if (!this.options.work)
           throw new RuntimeError('TOOL_NOT_AVAILABLE', '会话工具运行时不可用。');
         const text = await executeSessionTool(
@@ -136,8 +241,7 @@ export class ToolRuntime {
         tool.status = 'completed';
         tool.result = text;
         tool.summary = text.slice(0, 4000);
-        commit('tool.updated');
-        return { content: [{ type: 'text', text }], details: undefined };
+        return finish({ content: [{ type: 'text', text }], details: undefined });
       }
       if (
         this.options.work?.snapshot(context.session.id).state.mode === 'plan' &&
@@ -155,7 +259,12 @@ export class ToolRuntime {
       }
       if (policy.approvalRequired) {
         let decision: ApprovalReviewResult['decision'] = 'ask';
-        if (context.session.approvalMode === 'full-access') {
+        if (name === 'request_skill_tools' || name === 'request_service_access') {
+          tool.status = 'awaiting_approval';
+          commit('tool.updated');
+          decision = await this.waitForApproval(context.session.id, tool.id, signal);
+          tool.approval = { source: 'user', decision, reason: null };
+        } else if (context.session.approvalMode === 'full-access') {
           decision = 'allow';
           tool.approval = { source: 'full-access', decision, reason: null };
         } else if (context.session.approvalMode === 'auto') {
@@ -187,6 +296,87 @@ export class ToolRuntime {
         tool.status = 'running';
         commit('tool.updated');
       }
+      if (context.controls?.has(name)) {
+        const content = await context.controls.execute(name, tool.arguments, signal);
+        tool.status = 'completed';
+        tool.result = content
+          .filter((part) => part.type === 'text')
+          .map((part) => part.text)
+          .join('\n')
+          .slice(0, 128_000);
+        return finish({ content, details: undefined });
+      }
+      if (external) {
+        const callAttemptId = randomUUID();
+        const beforeDispatch = (): Promise<void> => {
+          signal.throwIfAborted();
+          if (tool.dispatch.state !== 'not_started')
+            throw new RuntimeError('DUPLICATE_DISPATCH', '本次调用不允许重复派发。');
+          tool.dispatch = { state: 'may_have_started', attemptId: callAttemptId, at: Date.now() };
+          commit('tool.updated');
+          return Promise.resolve();
+        };
+        let outcome: ExternalToolOutcome;
+        if (selected.connection) {
+          const gateway = this.options.connectionGateway;
+          if (!gateway) throw new RuntimeError('CONNECTION_UNAVAILABLE', '服务网关不可用。');
+          outcome = await gateway.call({
+            grant: selected.connection.grant,
+            operation: selected.connection.operation.id,
+            runId: context.run.id,
+            parentToolCallId: tool.id,
+            arguments: tool.arguments,
+            signal,
+            beforeDispatch,
+          });
+        } else {
+          const port = this.options.externalTools;
+          if (!port || !selected.external)
+            throw new RuntimeError('MCP_UNAVAILABLE', '外部工具运行时不可用。');
+          outcome = await port.call({
+            tool: selected.external,
+            arguments: tool.arguments,
+            callAttemptId,
+            signal,
+            beforeDispatch,
+          });
+        }
+        if (outcome.kind === 'unknown') {
+          tool.status = 'unknown';
+          tool.result = outcome.message.slice(0, 4000);
+          const result = finish({
+            content: [{ type: 'text', text: tool.result }],
+            details: undefined,
+            isError: true,
+          });
+          context.outcomeUnknown(tool.result);
+          return result;
+        }
+        if (outcome.kind === 'not-dispatched') {
+          if (tool.dispatch.state === 'may_have_started')
+            tool.dispatch = { ...tool.dispatch, confirmedNotWritten: true };
+          tool.status = outcome.cancelled ? 'cancelled' : 'failed';
+          tool.result = outcome.message.slice(0, 4000);
+          return finish({
+            content: [{ type: 'text', text: tool.result }],
+            details: undefined,
+            isError: true,
+          });
+        }
+        resultOrigin = 'server';
+        tool.status = outcome.isError ? 'failed' : 'completed';
+        tool.summary = outcome.summary.slice(0, 4000);
+        tool.result = outcome.content
+          .filter((part) => part.type === 'text')
+          .map((part) => part.text)
+          .join('\n')
+          .slice(0, 128_000);
+        return finish({
+          content: outcome.content,
+          details: undefined,
+          ...(outcome.isError ? { isError: true } : {}),
+        });
+      }
       const workspaceId = context.session.workspaceId;
       if (workspaceId === null) throw new RuntimeError('WORKSPACE_REQUIRED', '请先选择工作区。');
       const workspace = await this.options.resolveWorkspace(workspaceId);
@@ -196,6 +386,9 @@ export class ToolRuntime {
         profileDirectory: this.options.profileDirectory,
         readOnly: context.session.approvalMode === 'read-only',
         shellAccess: context.session.approvalMode === 'full-access' ? 'full-access' : 'sandboxed',
+        ...(this.options.officePythonPath
+          ? { officePythonPath: this.options.officePythonPath }
+          : {}),
         signal,
       });
       tool.status = 'completed';
@@ -206,15 +399,33 @@ export class ToolRuntime {
         .join('\n')
         .slice(0, 128_000);
       tool.diff = result.diff?.slice(0, 128_000) ?? null;
-      commit('tool.updated');
-      return { content: result.content, details: undefined };
+      return finish({ content: result.content, details: undefined });
     } catch (error: unknown) {
+      if (persistenceFailed) throw error;
+      const message = error instanceof Error ? error.message : '工具执行失败。';
+      if (
+        external &&
+        tool.dispatch.state === 'may_have_started' &&
+        !tool.dispatch.confirmedNotWritten
+      ) {
+        tool.status = 'unknown';
+        tool.result = '结果未知，操作可能已生效，需要核验。';
+        const result = finish({
+          content: [{ type: 'text', text: tool.result }],
+          details: undefined,
+          isError: true,
+        });
+        context.outcomeUnknown(tool.result);
+        return result;
+      }
       if (signal.aborted) tool.status = 'cancelled';
       else if (tool.status !== 'denied') tool.status = 'failed';
-      const message = error instanceof Error ? error.message : '工具执行失败。';
       tool.result = message.slice(0, 4000);
-      commit('tool.updated');
-      return { content: [{ type: 'text', text: tool.result }], details: undefined, isError: true };
+      return finish({
+        content: [{ type: 'text', text: tool.result }],
+        details: undefined,
+        isError: true,
+      });
     }
   }
 

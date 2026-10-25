@@ -76,6 +76,7 @@ describe('desktop application lifetime', () => {
       stop: stopDaemon,
       authorizeRenderer: vi.fn().mockResolvedValue(undefined),
       openAuth: vi.fn().mockResolvedValue(undefined),
+      revealSkillDirectory: vi.fn().mockResolvedValue(undefined),
     });
     await vi.waitFor(() => expect(stopDaemon).toHaveBeenCalledOnce());
     expect(stopped).toBe(false);
@@ -94,6 +95,7 @@ describe('desktop application lifetime', () => {
       stop: stopDaemon,
       authorizeRenderer: vi.fn().mockResolvedValue(undefined),
       openAuth: vi.fn().mockResolvedValue(undefined),
+      revealSkillDirectory: vi.fn().mockResolvedValue(undefined),
     });
     window.loadURL.mockReturnValue(navigation.promise);
     window.destroy.mockImplementation(() => {

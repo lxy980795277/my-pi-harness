@@ -11,7 +11,7 @@ describe('accepted Run tool definitions', () => {
       { additionalProperties: false },
     );
     const definition = { name: 'read', description: 'Read one entry', parameters };
-    const selections: RunToolSelection[] = [{ source: 'workspace', definition }];
+    const selections: RunToolSelection[] = [{ source: { kind: 'workspace' }, definition }];
     const toolset = new RunToolset(selections);
     const selected = toolset.require('read');
     definition.name = 'changed';
@@ -34,7 +34,7 @@ describe('accepted Run tool definitions', () => {
     const properties = (selected.definition.parameters as typeof parameters).properties;
     expect(Reflect.get(properties.count, '~optional')).toBe(true);
     expect(Object.isFrozen(properties.count)).toBe(true);
-    expect(() => Object.assign(selected, { source: 'session' })).toThrow(TypeError);
+    expect(() => Object.assign(selected, { source: { kind: 'session' } })).toThrow(TypeError);
     expect(() => Object.assign(properties.path, { type: 'number' })).toThrow(TypeError);
     expect(Value.Check(selected.definition.parameters, { path: 'file.txt' })).toBe(true);
     const validator = Compile(selected.definition.parameters);
@@ -49,7 +49,7 @@ describe('accepted Run tool definitions', () => {
       description: 'Read one entry',
       parameters: Type.Object({ path: Type.String() }),
     };
-    const fingerprint = new RunToolset([{ source: 'workspace', definition }]).require(
+    const fingerprint = new RunToolset([{ source: { kind: 'workspace' }, definition }]).require(
       'read',
     ).fingerprint;
     expect(fingerprint).toMatch(/^[a-f0-9]{64}$/);
@@ -61,22 +61,25 @@ describe('accepted Run tool definitions', () => {
             description: definition.description,
             name: definition.name,
           },
-          source: 'workspace',
+          source: { kind: 'workspace' },
         },
       ]).require('read').fingerprint,
     ).toBe(fingerprint);
     expect(
-      new RunToolset([{ source: 'session', definition }]).require('read').fingerprint,
+      new RunToolset([{ source: { kind: 'session' }, definition }]).require('read').fingerprint,
     ).not.toBe(fingerprint);
     expect(
       new RunToolset([
-        { source: 'workspace', definition: { ...definition, description: 'Different action' } },
+        {
+          source: { kind: 'workspace' },
+          definition: { ...definition, description: 'Different action' },
+        },
       ]).require('read').fingerprint,
     ).not.toBe(fingerprint);
     expect(
       new RunToolset([
         {
-          source: 'workspace',
+          source: { kind: 'workspace' },
           definition: { ...definition, parameters: Type.Object({ path: Type.Integer() }) },
         },
       ]).require('read').fingerprint,
@@ -88,8 +91,8 @@ describe('accepted Run tool definitions', () => {
     expect(
       () =>
         new RunToolset([
-          { source: 'session', definition },
-          { source: 'workspace', definition },
+          { source: { kind: 'session' }, definition },
+          { source: { kind: 'workspace' }, definition },
         ]),
     ).toThrow('工具名称重复');
   });
@@ -102,7 +105,7 @@ describe('accepted Run tool definitions', () => {
     expect(Object.isFrozen(empty.definitions)).toBe(true);
     const toolset = new RunToolset([
       {
-        source: 'workspace',
+        source: { kind: 'workspace' },
         definition: { name: 'read_file', description: 'Read', parameters: Type.Object({}) },
       },
     ]);

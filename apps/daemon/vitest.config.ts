@@ -4,6 +4,9 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   resolve: {
     alias: {
+      '@my-pi-harness/integrations': fileURLToPath(
+        new URL('../../packages/integrations/src/index.ts', import.meta.url),
+      ),
       '@my-pi-harness/execution': fileURLToPath(
         new URL('../../packages/execution/src/index.ts', import.meta.url),
       ),

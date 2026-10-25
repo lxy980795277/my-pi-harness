@@ -10,6 +10,7 @@ import { secureWindow } from './security.js';
 export function createMainWindow(
   rendererUrl: string,
   openAuth?: (flowId: string) => Promise<void>,
+  revealSkill?: (skillId: string, workspaceId: string | null) => Promise<void>,
 ): BrowserWindow {
   const window = new BrowserWindow({
     width: 1280,
@@ -26,7 +27,7 @@ export function createMainWindow(
       webviewTag: false,
     },
   });
-  secureWindow(window, new URL(rendererUrl).origin, openAuth);
+  secureWindow(window, new URL(rendererUrl).origin, openAuth, revealSkill);
   window.once('ready-to-show', () => {
     if (!window.isDestroyed()) window.show();
   });

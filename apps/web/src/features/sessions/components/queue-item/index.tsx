@@ -1,7 +1,9 @@
-import type { QueueInput, QueuePatchInput } from '@my-pi-harness/protocol';
+import type { ApprovalMode, QueueInput, QueuePatchInput } from '@my-pi-harness/protocol';
 import type { FC } from 'react';
 
 import { AttachmentList } from '@/features/attachments/components/attachment-list';
+import { SkillPicker } from '@/features/skills/components/skill-picker';
+import { McpToolPicker } from '@/features/mcp/components/mcp-tool-picker';
 import { Button } from '@/components/ui/button';
 import { Notice } from '@/components/ui/notice';
 import { Textarea } from '@/components/ui/textarea';
@@ -9,18 +11,25 @@ import { useQueueItem } from '@/features/sessions/hooks/use-queue-item';
 import { Label } from '@/components/ui/label';
 
 interface QueueItemProps {
+  workspaceId: string | null;
+  approvalMode: ApprovalMode;
+  running: boolean;
   input: QueueInput;
   onUpdate: (id: string, patch: QueuePatchInput) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
 }
 
 /** Queue edits carry the observed revision; accepted input is never a local-only row. */
-export const QueueItem: FC<QueueItemProps> = ({ input, onUpdate, onDelete }) => {
-  const { editing, text, changeText, start, cancel, update, remove, pending, error } = useQueueItem(
-    input,
-    onUpdate,
-    onDelete,
-  );
+export const QueueItem: FC<QueueItemProps> = ({
+  input,
+  workspaceId,
+  approvalMode,
+  running,
+  onUpdate,
+  onDelete,
+}) => {
+  const { editing, text, changeText, start, cancel, update, remove, pending, error, mcp, skills } =
+    useQueueItem(input, workspaceId, approvalMode, running, onUpdate, onDelete);
 
   return (
     <li className="space-y-2 rounded border border-border bg-background p-3">
@@ -50,6 +59,20 @@ export const QueueItem: FC<QueueItemProps> = ({ input, onUpdate, onDelete }) => 
           />
         </>
       )}
+      <McpToolPicker state={mcp} />
+      <SkillPicker state={skills} />
+      {editing && (
+        <Button type="button" variant="ghost" onClick={mcp.openPicker} disabled={pending}>
+          MCP 工具 · {mcp.selected.length}
+        </Button>
+      )}
+      {editing && (
+        <Button type="button" variant="ghost" onClick={skills.openPicker} disabled={pending}>
+          Skills · {skills.selected.length}
+        </Button>
+      )}
+      {skills.blocked && <Notice tone="error">Skill 选择已失效，请编辑并重新选择。</Notice>}
+      {mcp.blocked && <Notice tone="error">MCP 选择已失效，请编辑并重新选择。</Notice>}
       {error && <Notice tone="error">{error}</Notice>}
       <div className="flex gap-2">
         {!editing && (
@@ -61,7 +84,7 @@ export const QueueItem: FC<QueueItemProps> = ({ input, onUpdate, onDelete }) => 
           <Button
             type="button"
             variant="outline"
-            disabled={pending || text.trim().length === 0}
+            disabled={pending || mcp.blocked || skills.blocked || text.trim().length === 0}
             onClick={update}
           >
             保存修改

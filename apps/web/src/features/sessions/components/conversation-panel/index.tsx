@@ -2,13 +2,10 @@ import type { ProviderConfig, RunView } from '@my-pi-harness/protocol';
 import { Download, LoaderCircle } from 'lucide-react';
 import { memo, type FC } from 'react';
 
-import { WorkPanel } from '@/features/work/components/work-panel';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Notice } from '@/components/ui/notice';
-import { Composer } from '@/features/sessions/components/composer';
-import { MessageTimeline } from '@/features/sessions/components/message-timeline';
-import { QueuePanel } from '@/features/sessions/components/queue-panel';
+import { ConversationBody } from '@/features/sessions/components/conversation-body';
 import { useConversation } from '@/features/sessions/hooks/use-conversation';
 import { describeError } from '@/utils/describe-error';
 
@@ -126,35 +123,13 @@ export const ConversationPanel: FC<ConversationPanelProps> = memo(({ sessionId, 
               <Notice>上次运行因服务退出而中断，已保存内容仍可阅读；继续需要新的明确操作。</Notice>
             </div>
           )}
-          <MessageTimeline
-            key={snapshot.session.activeBranchId}
-            messages={snapshot.messages}
-            tools={snapshot.tools}
-            runs={snapshot.runs}
-            branchId={snapshot.session.activeBranchId}
-            activeRunId={snapshot.session.activeRunId}
-            canEdit={snapshot.session.activeRunId === null}
-            onEdit={commands.edit}
-            onDecide={commands.decide}
+          <ConversationBody
+            key={`${sessionId}:${snapshot.session.activeBranchId}`}
+            snapshot={snapshot}
+            providers={providers}
+            lastRun={lastRun}
+            commands={commands}
           />
-          {snapshot.queue.length > 0 && (
-            <QueuePanel
-              queue={snapshot.queue}
-              running={snapshot.session.activeRunId !== null}
-              onUpdate={commands.updateQueue}
-              onDelete={commands.deleteQueue}
-              onResume={commands.resume}
-            />
-          )}
-          <WorkPanel key={`${sessionId}:${snapshot.session.activeBranchId}`} session={snapshot}>
-            <Composer
-              session={snapshot.session}
-              providers={providers}
-              onSend={commands.send}
-              onStop={commands.stop}
-              onPatch={commands.patch}
-            />
-          </WorkPanel>
         </>
       )}
     </section>

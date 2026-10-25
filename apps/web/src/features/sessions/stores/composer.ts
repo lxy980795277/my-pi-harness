@@ -1,5 +1,11 @@
 import { create } from 'zustand';
-import type { ApprovalMode, DefaultModel, InputRequest } from '@my-pi-harness/protocol';
+import type {
+  ApprovalMode,
+  DefaultModel,
+  InputRequest,
+  McpToolSelection,
+  SkillSelection,
+} from '@my-pi-harness/protocol';
 import type {
   NewConversationAttempt,
   NewConversationIntent,
@@ -15,6 +21,10 @@ interface ComposerState {
   newConversationAttempt: NewConversationAttempt | null;
   pendingInputs: Readonly<Record<string, InputRequest>>;
   drafts: Readonly<Record<string, string>>;
+  mcpSelections: Readonly<Record<string, McpToolSelection[]>>;
+  skillSelections: Readonly<Record<string, SkillSelection[]>>;
+  setSkillSelections: (draftKey: string, skills: SkillSelection[]) => void;
+  setMcpSelections: (draftKey: string, tools: McpToolSelection[]) => void;
   startNewConversation: () => void;
   setNewConversationDraft: (text: string) => void;
   setNewConversationModel: (model: DefaultModel) => void;
@@ -40,14 +50,33 @@ export const useComposerStore = create<ComposerState>((set, get) => {
   return {
     newConversationDraft: '',
     newConversationModel: null,
-    newConversationApproval: 'ask',
+    newConversationApproval: 'full-access',
     newConversationWorkMode: 'execute',
     newConversationGeneration: crypto.randomUUID(),
     newConversationAttempt: null,
     pendingInputs: {},
     drafts: {},
+    mcpSelections: {},
+    skillSelections: {},
+    setSkillSelections: (draftKey, skills): void => {
+      set((state): Partial<ComposerState> => {
+        return { skillSelections: { ...state.skillSelections, [draftKey]: skills } };
+      });
+    },
+    setMcpSelections: (draftKey, tools): void => {
+      set((state): Partial<ComposerState> => {
+        return { mcpSelections: { ...state.mcpSelections, [draftKey]: tools } };
+      });
+    },
     startNewConversation: (): void => {
+      const state = get();
+      const mcpSelections = { ...state.mcpSelections };
+      const skillSelections = { ...state.skillSelections };
+      delete skillSelections[`new:${state.newConversationGeneration}`];
+      delete mcpSelections[`new:${state.newConversationGeneration}`];
       set({
+        mcpSelections,
+        skillSelections,
         newConversationGeneration: crypto.randomUUID(),
         newConversationAttempt: null,
         newConversationDraft: '',
@@ -137,6 +166,8 @@ export const useComposerStore = create<ComposerState>((set, get) => {
         newConversationAttempt: { ...attempt, phase: 'created', sessionId },
         pendingInputs: { ...state.pendingInputs, [sessionId]: attempt.input },
         drafts: { ...state.drafts, [sessionId]: attempt.input.text },
+        mcpSelections: { ...state.mcpSelections, [sessionId]: attempt.input.mcpTools ?? [] },
+        skillSelections: { ...state.skillSelections, [sessionId]: attempt.input.skills ?? [] },
       });
     },
     markNewAttemptUnknown: (generation: string): void => {
@@ -168,12 +199,14 @@ export const useComposerStore = create<ComposerState>((set, get) => {
       set({
         newConversationDraft: '',
         newConversationModel: null,
-        newConversationApproval: 'ask',
+        newConversationApproval: 'full-access',
         newConversationWorkMode: 'execute',
         newConversationGeneration: crypto.randomUUID(),
         newConversationAttempt: null,
         pendingInputs: {},
         drafts: {},
+        mcpSelections: {},
+        skillSelections: {},
       });
     },
   };

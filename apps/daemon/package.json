@@ -32,7 +32,8 @@
     "pino": "catalog:",
     "typebox": "catalog:",
     "@my-pi-harness/storage": "workspace:*",
-    "@my-pi-harness/agent-runtime": "workspace:*"
+    "@my-pi-harness/agent-runtime": "workspace:*",
+    "@my-pi-harness/integrations": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",

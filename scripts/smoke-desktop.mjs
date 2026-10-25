@@ -54,6 +54,33 @@ async function checkResourceLinks(directory) {
   }
 }
 await checkResourceLinks(resources);
+await access(
+  join(
+    resources,
+    'daemon',
+    'node_modules',
+    '@my-pi-harness',
+    'integrations',
+    'resources',
+    'plugins',
+    'github',
+    'skills',
+    'github',
+    'SKILL.md',
+  ),
+);
+await access(
+  join(
+    resources,
+    'daemon',
+    'node_modules',
+    '@my-pi-harness',
+    'execution',
+    'resources',
+    'office',
+    'runner.py',
+  ),
+);
 const temporary = await mkdtemp(join(tmpdir(), 'my-pi-harness-desktop-'));
 const { openProfileStore } = await import('../packages/storage/dist/index.js');
 const profileDirectory =
@@ -277,11 +304,17 @@ try {
       'getDroppedWorkspaceDirectory',
       'openAuth',
       'openExternal',
+      'revealSkillDirectory',
     ].sort(),
   );
   assert.deepEqual(bridge.info, { appVersion: version, platform: process.platform });
   assert.equal(bridge.require, false);
   assert.equal(bridge.process, false);
+  const missingSkill = await page.evaluate(`(async () => {
+    try { await window.desktop.revealSkillDirectory('missing-registered-skill', null); return 'unexpected success'; }
+    catch (error) { return error.message; }
+  })()`);
+  assert.match(missingSkill, /Skill目录不可用/);
   for (const url of [
     'javascript:alert(1)',
     'file:///tmp/private',

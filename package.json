@@ -1,6 +1,6 @@
 {
   "name": "my-pi-harness",
-  "version": "0.6.4",
+  "version": "0.7.0",
   "private": true,
   "type": "module",
   "description": "Local-first PC agent harness built independently on Pi",
@@ -34,6 +34,8 @@
     "test:provider": "vitest run apps/daemon/test/provider-real.test.ts"
   },
   "devDependencies": {
+    "@modelcontextprotocol/node": "catalog:",
+    "@modelcontextprotocol/server": "catalog:",
     "@my-pi-harness/eslint-config": "workspace:*",
     "@my-pi-harness/protocol": "workspace:*",
     "@playwright/test": "catalog:",
@@ -45,10 +47,10 @@
     "prettier": "catalog:",
     "prettier-plugin-tailwindcss": "catalog:",
     "turbo": "catalog:",
-    "typescript": "catalog:",
     "typebox": "catalog:",
-    "vitest": "catalog:",
-    "vite": "catalog:"
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:"
   },
   "lint-staged": {
     "*.{ts,tsx,js,mjs,cjs,cts,mts,json,css,md,yaml,yml}": "prettier --write"

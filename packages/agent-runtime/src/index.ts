@@ -9,7 +9,15 @@ export {
 export { encodeContextMessage, decodeContextMessage } from './context-codec.js';
 export { BUILTIN_PROVIDER_IDS, loadBuiltinProvider } from './provider-loader.js';
 export { ToolRuntime } from './tool-runtime.js';
+export type { SkillsPort, ToolDiscoveryPort } from './capability-ports.js';
 export type { ToolRuntimeOptions } from './tool-types.js';
+export type {
+  ExternalTools,
+  ExternalToolCall,
+  ExternalToolOutcome,
+  ExternalToolAuthorization,
+  FrozenMcpTool,
+} from './external-tools.js';
 export type { EventInput, InputAcceptance, ProviderStore, RuntimeStore } from './runtime-ports.js';
 export { WorkRuntime } from './work-runtime.js';
 export type { WorkRuntimeOptions, WorkStore } from './work-ports.js';
@@ -20,3 +28,9 @@ export type {
   ApprovalReviewInput,
   ApprovalReviewResult,
 } from './approval-review.js';
+
+export type {
+  ConnectionGrantRequest,
+  ConnectionGatewayCall,
+  ConnectionGatewayPort,
+} from './connection-ports.js';

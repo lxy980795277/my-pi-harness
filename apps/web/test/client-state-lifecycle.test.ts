@@ -132,7 +132,7 @@ describe('private client state lifecycle', () => {
       pendingInputs: {},
       newConversationDraft: '',
       newConversationModel: null,
-      newConversationApproval: 'ask',
+      newConversationApproval: 'full-access',
       newConversationWorkMode: 'execute',
       newConversationAttempt: null,
     });

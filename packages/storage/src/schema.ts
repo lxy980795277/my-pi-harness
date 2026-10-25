@@ -115,6 +115,7 @@ export const queue = sqliteTable('queued_inputs', {
   id: text('id').primaryKey(),
   sessionId: text('session_id').notNull(),
   data: text('data', { mode: 'json' }).$type<QueueInput>().notNull(),
+  privateData: text('private_data'),
 });
 
 export const events = sqliteTable('events', {

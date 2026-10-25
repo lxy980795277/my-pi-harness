@@ -1,10 +1,10 @@
 import type { SessionsWorkspaceState } from '@/features/sessions/types/session';
-import type { ProviderConfig, SessionSnapshot } from '@my-pi-harness/protocol';
+import type { SessionSnapshot } from '@my-pi-harness/protocol';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
 import { useComposerStore } from '@/features/sessions/stores/composer';
 import { useNavigationStore } from '@/app/stores/navigation';
-import { fetchProviders } from '@/features/models/services/providers';
+import { PROVIDERS_QUERY_OPTIONS } from '@/features/models/queries/catalog';
 import { mergeSessionSnapshot } from '@/features/sessions/queries/projection';
 import { useAsyncEvent } from '@/hooks/use-async-event';
 
@@ -20,12 +20,7 @@ export const useSessionsWorkspace = (): SessionsWorkspaceState => {
   const generation = useComposerStore((state) => {
     return state.newConversationGeneration;
   });
-  const providersQuery = useQuery({
-    queryKey: ['providers'],
-    queryFn: ({ signal }): Promise<ProviderConfig[]> => {
-      return fetchProviders(signal);
-    },
-  });
+  const providersQuery = useQuery(PROVIDERS_QUERY_OPTIONS);
   const refresh = useAsyncEvent(
     useCallback(async (): Promise<void> => {
       await client.invalidateQueries({ queryKey: ['sessions'] });

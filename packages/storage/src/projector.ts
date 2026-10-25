@@ -14,6 +14,7 @@ import {
 import { StorageError } from './errors.js';
 import { ToolProjection } from './tools.js';
 import { WorkRepository } from './work.js';
+import { projectCapabilityLoad, projectServiceGrant } from './capabilities.js';
 import * as schema from './schema.js';
 import {
   BranchSelectionSchema,
@@ -259,7 +260,7 @@ export class ProjectionWriter {
     const request = checked(QueueRequestSchema, metadata);
     this.db
       .insert(schema.queue)
-      .values({ id: input.id, sessionId: input.sessionId, data: input })
+      .values({ id: input.id, sessionId: input.sessionId, data: input, privateData })
       .run();
     this.db
       .insert(schema.requests)
@@ -279,6 +280,12 @@ export class ProjectionWriter {
    */
   public apply(event: HarnessEvent, privateData?: string): void {
     switch (event.type) {
+      case 'run.service_access_granted':
+        projectServiceGrant(this.db, event, privateData);
+        break;
+      case 'run.tools_loaded':
+        projectCapabilityLoad(this.db, event, privateData);
+        break;
       case 'work.updated':
         this.work.update(event);
         break;
@@ -371,9 +378,22 @@ export class ProjectionWriter {
           input.modelId !== previous.modelId
         )
           throw new StorageError('CONFLICT', 'Queued input was modified or consumed');
+        if (privateData !== undefined) {
+          const metadata: unknown = JSON.parse(privateData);
+          const nextMetadata = checked(QueueRequestSchema, metadata);
+          if (row.privateData !== null) {
+            const previousMetadata: unknown = JSON.parse(row.privateData);
+            const original = checked(QueueRequestSchema, previousMetadata);
+            if (original.requestId !== nextMetadata.requestId)
+              throw new StorageError(
+                'CONFLICT',
+                'Queued input cannot replace its acceptance identity',
+              );
+          }
+        }
         this.db
           .update(schema.queue)
-          .set({ data: input })
+          .set({ data: input, ...(privateData === undefined ? {} : { privateData }) })
           .where(eq(schema.queue.id, input.id))
           .run();
         break;

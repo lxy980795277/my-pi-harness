@@ -19,7 +19,7 @@
 - 本地副作用必须经过统一策略、真实路径检查与取消/超时管理。安全规则见 [安全约束](docs/05_CONSTRAINTS/backend.md)。
 - 当前所有迭代处于开发阶段，不要求旧API、数据库、日志或codec兼容；允许重建schema和删除本项目旧开发数据，不触碰工作区源文件或其他项目数据。
 - 临时运行状态可保存在内存；持久事实和派生索引按 [存储约束](docs/05_CONSTRAINTS/backend.md) 管理。
-- 当前实现模型、授权、JSONL会话事实与SQLite配置/投影、队列/分支、M2工作区与三种审批策略，以及M3规则/附件上下文、预算/压缩、人工提问、计划任务和会话检查点；检查点不回滚磁盘或外部副作用。Computer Use属于后续里程碑。后续范围见[里程碑](docs/00_OVERVIEW/roadmap.md)。
+- 当前实现模型、授权、JSONL会话事实与SQLite配置/投影、队列/分支、M2工作区与三种审批策略、M3上下文与交互，以及M4 MCP、动态工具、Skills、插件、外部服务连接和本地办公能力。M4工程与macOS本机验证已完成，必要视觉、真实账号和Windows适配/验收仍待完成，见[M4验证](docs/04_FEATURES/202610201932_feature_m4-capabilities/m4-completion-verify.md)。检查点不回滚磁盘或外部副作用；Computer Use属于后续里程碑。后续范围见[里程碑](docs/00_OVERVIEW/roadmap.md)。
 
 ## 质量与交付
 

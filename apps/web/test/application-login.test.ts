@@ -547,6 +547,7 @@ describe('private application state', () => {
     expect(client.getMutationCache().getAll()).toEqual([]);
     expect(client.getQueryData(AUTH_STATUS_QUERY_KEY)).toEqual(authenticated);
     expect(client.getQueryData(HEALTH_QUERY_KEY)).toEqual({ status: 'ok' });
+    expect(client.getQueryState(HEALTH_QUERY_KEY)?.isInvalidated).toBe(true);
     client.clear();
   });
 

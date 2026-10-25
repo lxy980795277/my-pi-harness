@@ -7,6 +7,8 @@ import type {
 } from '@my-pi-harness/protocol';
 import type { CompositionEventHandler, KeyboardEventHandler, ReactNode } from 'react';
 import type { SelectOption } from '@/components/ui/select-field';
+import type { SkillSelectionState } from '@/features/skills/types/skill';
+import type { McpSelectionState } from '@/features/mcp/types/mcp';
 import type { Action, FormSubmit, TextChange, ValueChange } from '@/types/events';
 
 export type WorkMode = WorkState['mode'];
@@ -68,6 +70,8 @@ export interface ComposerSurfaceProps {
   attachmentDraftKey: string;
   attachmentIds: string[];
   removeAttachment: (id: string) => void;
+  mcp: McpSelectionState;
+  skills: SkillSelectionState;
 }
 
 export interface NewSessionState extends Omit<ComposerSurfaceProps, 'id'> {

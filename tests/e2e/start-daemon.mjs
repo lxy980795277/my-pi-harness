@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { startConnectionUpstream } from './connection-upstream.mjs';
 import { createMemoryCredentialStore } from '../../packages/storage/dist/index.js';
 import { loadDaemonConfig } from '../../apps/daemon/dist/config.js';
 import { createApplicationServices } from '../../apps/daemon/dist/services.js';
@@ -10,8 +11,10 @@ const config = loadDaemonConfig();
 clearAmbientModelEnvironment(process.env);
 let challengeId = 0;
 const tokenPolls = new Map();
+const connectionUpstream = await startConnectionUpstream();
 const services = await createApplicationServices(config, {
   credentials: createMemoryCredentialStore(),
+  connectionFixtureOrigin: connectionUpstream.origin,
   githubFetch: async (input, init) => {
     const address = new URL(input instanceof Request ? input.url : input);
     if (address.href === 'https://github.com/login/device/code') {
@@ -67,7 +70,8 @@ const services = await createApplicationServices(config, {
 const { server, identity } = await createDaemonApplication(config, undefined, services);
 let stopping;
 function stop() {
-  stopping ??= server.close().finally(() => {
+  stopping ??= server.close().finally(async () => {
+    await connectionUpstream.close();
     if (process.connected) process.disconnect();
   });
   return stopping;

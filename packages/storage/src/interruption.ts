@@ -1,11 +1,12 @@
-import type { SessionSummary, ToolCallRecord, WorkState } from '@my-pi-harness/protocol';
+import { ToolCallRecordSchema, type SessionSummary, type WorkState } from '@my-pi-harness/protocol';
 import type { EventInput } from './types.js';
+import { checked } from './validation.js';
 
 /** Build terminal facts for resources abandoned by the previous daemon; no work is executed. */
 export function interruptionEvents(
   session: SessionSummary,
   states: readonly WorkState[],
-  tools: readonly ToolCallRecord[],
+  toolEvents: readonly EventInput[],
   at: number,
 ): EventInput[] {
   const work: EventInput[] = states.map((state) => ({
@@ -24,30 +25,22 @@ export function interruptionEvents(
       },
     },
   }));
-  if (session.activeRunId === null) return work;
+  if (session.activeRunId === null) return [...toolEvents, ...work];
   return [
-    ...tools.map(
-      (tool): EventInput => ({
-        type: 'tool.updated',
-        runId: session.activeRunId,
-        at,
-        data: {
-          tool: {
-            ...tool,
-            status: 'interrupted',
-            updatedAt: at,
-            summary: 'Daemon stopped before the tool completed',
-          },
-        },
-      }),
-    ),
+    ...toolEvents,
     ...work,
     {
       type: 'run.finished',
       runId: session.activeRunId,
       at,
       data: {
-        status: 'interrupted',
+        status: toolEvents.some(
+          (event) =>
+            event.type === 'tool.updated' &&
+            checked(ToolCallRecordSchema, event.data['tool']).status === 'unknown',
+        )
+          ? 'failed'
+          : 'interrupted',
         finishedAt: at,
         error: 'Daemon stopped before a durable terminal outcome',
       },

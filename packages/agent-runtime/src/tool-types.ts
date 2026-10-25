@@ -8,16 +8,24 @@ import type {
 import type { ApprovalReviewer } from './approval-review.js';
 import type { EventInput } from './runtime-ports.js';
 import type { WorkRuntime } from './work-runtime.js';
+import type { ExternalTools } from './external-tools.js';
+import type { RunControls } from './capability-ports.js';
+import type { ConnectionGatewayPort } from './connection-ports.js';
 
 export type ToolEventType = 'tool.requested' | 'tool.updated';
 
 export interface ToolRunContext {
+  controls?: RunControls;
   session: SessionSummary;
   run: RunView;
   signal: AbortSignal;
+  supportsImages: boolean;
   recorded: Set<string>;
   assistantMessageId(): string;
   commit(events: readonly EventInput[]): void;
+  persistenceFailure(error: unknown): never;
+  outcomeUnknown(message: string): void;
+  stopAfterTool?(reason: string): void;
 }
 
 export interface PendingApproval {
@@ -31,6 +39,9 @@ export interface ToolRuntimeOptions {
   approvalTimeoutMs?: number;
   work?: WorkRuntime;
   reviewer?: ApprovalReviewer;
+  externalTools?: ExternalTools;
+  connectionGateway?: ConnectionGatewayPort;
+  officePythonPath?: string;
 }
 
 export interface ToolExecutionResult {

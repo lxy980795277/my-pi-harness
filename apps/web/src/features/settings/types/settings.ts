@@ -3,7 +3,7 @@ import type { Action, ValueChange } from '@/types/events';
 
 export type SettingsCloseTarget = 'settings' | 'provider';
 
-export type SettingsSection = 'general' | 'models';
+export type SettingsSection = 'general' | 'models' | 'mcp' | 'skills' | 'plugins' | 'connections';
 
 export interface SettingsDialogState {
   open: boolean;

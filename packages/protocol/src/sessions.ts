@@ -1,3 +1,5 @@
+import { McpToolSelectionsSchema } from './mcp.js';
+import { SkillSelectionsSchema } from './skills.js';
 import { type Static, Type } from 'typebox';
 import { ThinkingLevelSchema } from './models.js';
 import { ApprovalModeSchema, ToolCallViewSchema } from './tools.js';
@@ -43,6 +45,8 @@ export type MessageUsage = Static<typeof MessageUsageSchema>;
 /** Public message projection; provider-specific replay metadata stays on the host. */
 export const MessageViewSchema = Type.Object(
   {
+    mcpTools: Type.Optional(McpToolSelectionsSchema),
+    skills: Type.Optional(SkillSelectionsSchema),
     id,
     sessionId: id,
     branchId: id,
@@ -70,6 +74,8 @@ export type MessageView = Static<typeof MessageViewSchema>;
 /** Durable host outcome; SDK completion and HTTP acceptance do not imply success. */
 export const RunViewSchema = Type.Object(
   {
+    mcpTools: Type.Optional(McpToolSelectionsSchema),
+    skills: Type.Optional(SkillSelectionsSchema),
     id,
     sessionId: id,
     branchId: id,
@@ -93,6 +99,8 @@ export type RunView = Static<typeof RunViewSchema>;
 /** Accepted inputs remain server facts until consumption or explicit deletion. */
 export const QueueInputSchema = Type.Object(
   {
+    mcpTools: Type.Optional(McpToolSelectionsSchema),
+    skills: Type.Optional(SkillSelectionsSchema),
     id,
     sessionId: id,
     text,
@@ -192,6 +200,8 @@ export const SessionPatchInputSchema = Type.Object(
 export type SessionPatchInput = Static<typeof SessionPatchInputSchema>;
 export const InputRequestSchema = Type.Object(
   {
+    mcpTools: Type.Optional(McpToolSelectionsSchema),
+    skills: Type.Optional(SkillSelectionsSchema),
     text,
     attachmentIds: Type.Optional(Type.Array(id, { maxItems: 8 })),
     mode: Type.Union([Type.Literal('send'), Type.Literal('follow-up'), Type.Literal('steer')]),
@@ -201,12 +211,23 @@ export const InputRequestSchema = Type.Object(
 );
 export type InputRequest = Static<typeof InputRequestSchema>;
 export const EditInputSchema = Type.Object(
-  { messageId: id, text, requestId: id },
+  {
+    mcpTools: Type.Optional(McpToolSelectionsSchema),
+    skills: Type.Optional(SkillSelectionsSchema),
+    messageId: id,
+    text,
+    requestId: id,
+  },
   { additionalProperties: false },
 );
 export type EditInput = Static<typeof EditInputSchema>;
 export const QueuePatchInputSchema = Type.Object(
-  { text, revision: Type.Integer({ minimum: 1 }) },
+  {
+    mcpTools: Type.Optional(McpToolSelectionsSchema),
+    skills: Type.Optional(SkillSelectionsSchema),
+    text,
+    revision: Type.Integer({ minimum: 1 }),
+  },
   { additionalProperties: false },
 );
 export type QueuePatchInput = Static<typeof QueuePatchInputSchema>;

@@ -14,6 +14,8 @@ import { useAsyncEvent } from '@/hooks/use-async-event';
 export const useAttachmentComposer = (
   draftKey: string,
   locked: boolean,
+  onMcp: () => void,
+  onSkill: () => void,
 ): AttachmentComposerState => {
   const input = useRef<HTMLInputElement>(null);
   const client = useQueryClient();
@@ -59,6 +61,14 @@ export const useAttachmentComposer = (
     setOpen(false);
     input.current?.click();
   }, []);
+  const chooseMcp = useCallback((): void => {
+    setOpen(false);
+    onMcp();
+  }, [onMcp]);
+  const chooseSkill = useCallback((): void => {
+    setOpen(false);
+    onSkill();
+  }, [onSkill]);
   const changeFiles = useCallback(
     (event: ChangeEvent<HTMLInputElement>): void => {
       const selectedFiles = event.target.files;
@@ -99,6 +109,8 @@ export const useAttachmentComposer = (
     open,
     setOpen,
     choose,
+    chooseMcp,
+    chooseSkill,
     changeFiles,
     paste,
     remove,

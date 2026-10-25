@@ -15,6 +15,7 @@ import {
 import { StorageError } from './errors.js';
 import * as schema from './schema.js';
 import { checked } from './validation.js';
+import { currentCapabilityRevision } from './capabilities.js';
 
 const WorkEventSchema = Type.Object({ state: WorkStateSchema }, { additionalProperties: false });
 const CheckpointEventSchema = Type.Object(
@@ -35,6 +36,7 @@ const PreparedEventSchema = Type.Object(
     usage: ContextUsageSchema,
     messageIds: Type.Array(Type.String({ minLength: 1 }), { maxItems: 10_000 }),
     attachmentIds: Type.Optional(Type.Array(Type.String({ minLength: 1 }), { maxItems: 4096 })),
+    capabilityRevision: Type.Optional(Type.Integer({ minimum: 1 })),
   },
   { additionalProperties: false },
 );
@@ -251,6 +253,15 @@ export class WorkRepository {
 
   public prepared(event: HarnessEvent, privateData?: string): void {
     const input = checked(PreparedEventSchema, event.data);
+    if (
+      event.runId !== null &&
+      input.capabilityRevision !== undefined &&
+      input.capabilityRevision !== currentCapabilityRevision(this.db, event.runId)
+    )
+      throw new StorageError(
+        'INVALID_EVENT',
+        'Prepared request must use the current visible capability revision',
+      );
     const session = this.db
       .select()
       .from(schema.sessions)

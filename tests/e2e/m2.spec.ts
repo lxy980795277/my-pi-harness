@@ -206,7 +206,7 @@ test('响应丢失和跨页后确认原请求，不重复计费或复活旧首�
     await page.getByRole('button', { name: /^保持原请求 / }).click();
     await expect(page.getByRole('button', { name: '允许本次操作', exact: true })).toBeVisible();
     await expect(page.getByLabel('消息', { exact: true })).toHaveValue('保持原请求');
-    await page.getByRole('button', { name: '发送', exact: true }).click();
+    await page.getByLabel('消息', { exact: true }).press('Enter');
     await expect(page.getByLabel('消息', { exact: true })).toHaveValue('');
     expect(model.requests).toHaveLength(1);
     await page.getByRole('button', { name: '允许本次操作', exact: true }).click();

@@ -1,4 +1,4 @@
-import type { QueueInput, QueuePatchInput } from '@my-pi-harness/protocol';
+import type { ApprovalMode, QueueInput, QueuePatchInput } from '@my-pi-harness/protocol';
 import type { FC } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -7,6 +7,8 @@ import { QueueItem } from '@/features/sessions/components/queue-item';
 import { useQueueResume } from '@/features/sessions/hooks/use-queue-resume';
 
 interface QueuePanelProps {
+  workspaceId: string | null;
+  approvalMode: ApprovalMode;
   queue: QueueInput[];
   running: boolean;
   onUpdate: (id: string, patch: QueuePatchInput) => Promise<void>;
@@ -16,6 +18,8 @@ interface QueuePanelProps {
 
 /** Durable pending inputs remain inspectable after stop, refresh and host recovery. */
 export const QueuePanel: FC<QueuePanelProps> = ({
+  workspaceId,
+  approvalMode,
   queue,
   running,
   onUpdate,
@@ -43,7 +47,15 @@ export const QueuePanel: FC<QueuePanelProps> = ({
         <ul className="space-y-2">
           {queue.map((input) => {
             return (
-              <QueueItem key={input.id} input={input} onUpdate={onUpdate} onDelete={onDelete} />
+              <QueueItem
+                workspaceId={workspaceId}
+                approvalMode={approvalMode}
+                key={input.id}
+                running={running}
+                input={input}
+                onUpdate={onUpdate}
+                onDelete={onDelete}
+              />
             );
           })}
         </ul>

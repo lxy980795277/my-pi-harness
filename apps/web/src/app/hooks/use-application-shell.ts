@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useStartNewConversation } from '@/app/hooks/use-start-new-conversation';
+import { useApplicationInitialization } from '@/app/hooks/use-application-initialization';
 import { useNavigationStore } from '@/app/stores/navigation';
 import { useTheme } from '@/app/hooks/use-theme';
 import type { ApplicationShellState, WorkspacePage } from '@/app/types/application';
@@ -43,6 +44,7 @@ export const useApplicationShell = (): ApplicationShellState => {
   });
   const [pairingCode, setPairingCode] = useState<string | null>(null);
   const authorized = hasValidApplicationSession(auth.data, revoked, Date.now());
+  const initialization = useApplicationInitialization(authorized);
   useEffect(() => {
     if (!authorized) {
       return;
@@ -89,6 +91,7 @@ export const useApplicationShell = (): ApplicationShellState => {
     actionError = reconnect.error;
   }
   return {
+    initialization,
     settingsOpen,
     startNewConversation,
     newConversation: page === 'sessions' && activeSessionId === null,

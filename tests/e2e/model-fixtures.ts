@@ -15,6 +15,7 @@ import { Value } from 'typebox/value';
 export async function configureTestProvider(
   page: Page,
   modelOrigin: string,
+  contextWindow = 8192,
 ): Promise<ProviderConfig> {
   const origin = new URL(page.url()).origin;
   const authResponse = await page.request.get(`${origin}/api/auth/status`);
@@ -38,7 +39,7 @@ export async function configureTestProvider(
           id: 'chat-model',
           name: 'Chat',
           api: 'openai-completions',
-          contextWindow: 8192,
+          contextWindow,
           maxTokens: 1024,
           reasoning: false,
           input: ['text'],

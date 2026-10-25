@@ -9,6 +9,8 @@ import type { UseQueryResult } from '@tanstack/react-query';
 import type { RefObject, UIEvent } from 'react';
 import type { SessionCommands } from '@/features/sessions/hooks/use-session-commands';
 import type { AnswerFooter } from '@/features/sessions/types/answer-metadata';
+import type { SkillSelectionState } from '@/features/skills/types/skill';
+import type { McpSelectionState } from '@/features/mcp/types/mcp';
 import type { Action, FormSubmit, TextChange, ValueChange } from '@/types/events';
 
 export type SessionCommandMethod = 'POST' | 'PUT' | 'DELETE';
@@ -47,6 +49,8 @@ export interface ComposerState {
   attachmentDraftKey: string;
   attachmentIds: string[];
   removeAttachment: (id: string) => void;
+  mcp: McpSelectionState;
+  skills: SkillSelectionState;
 }
 export interface ConversationState extends LiveSession {
   commands: SessionCommands;
@@ -58,6 +62,8 @@ export interface ConversationState extends LiveSession {
   error: string | null;
 }
 export interface MessageEditorState {
+  mcp: McpSelectionState;
+  skills: SkillSelectionState;
   editing: boolean;
   text: string;
   changeText: TextChange;
@@ -68,6 +74,8 @@ export interface MessageEditorState {
   error: string | null;
 }
 export interface QueueItemState {
+  mcp: McpSelectionState;
+  skills: SkillSelectionState;
   editing: boolean;
   text: string;
   changeText: TextChange;
@@ -87,6 +95,7 @@ export interface SessionNavigationState {
 }
 export interface MessageTimelineState {
   scrollElement: RefObject<HTMLDivElement | null>;
+  contentElement: RefObject<HTMLDivElement | null>;
   empty: boolean;
   rows: TimelineRow[];
   measureList: (node: HTMLDivElement | null) => void;

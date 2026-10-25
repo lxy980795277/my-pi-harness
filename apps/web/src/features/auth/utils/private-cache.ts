@@ -13,9 +13,15 @@ export const isPrivateQuery = (query: Pick<Query, 'queryKey'>): boolean => {
   return query.queryKey[0] !== AUTH_STATUS_QUERY_KEY[0] && !publicHealth;
 };
 
-/** Cancels requests before removing their data so a late response cannot restore private cache. */
+/** Cancels old reads; retained diagnostics need a new protocol check after authorization changes. */
 export const clearPrivateCache = async (client: QueryClient): Promise<void> => {
   await client.cancelQueries({ predicate: isPrivateQuery });
+  await client.cancelQueries({ queryKey: HEALTH_QUERY_KEY, exact: true });
   client.removeQueries({ predicate: isPrivateQuery });
+  await client.invalidateQueries({
+    queryKey: HEALTH_QUERY_KEY,
+    exact: true,
+    refetchType: 'none',
+  });
   client.getMutationCache().clear();
 };

@@ -16,15 +16,15 @@ Node端的模型接入与持久会话运行层，使用固定的Pi core/ai 1.1.0
 
 `SessionRuntime`序列化单会话命令；每个Session只有一个活跃Run，不同Session可独立运行。输入、Run配置与模型上下文版本先原子提交，再创建真实Agent请求。SDK事件立即映射为独立公开字段，delta先提交后广播；订阅者不等待SDK idle，真正结算由Run所有者等待。绑定工作区的会话通过`ToolRuntime`提供受策略与单次审批约束的工具循环；没有工作区不自动获得本机目录权限，deferred不会被误报为完整成功。
 
-`RunToolset`在接受Run前由实际`ToolRuntime`能力与工作区选择一次，深拷贝并冻结定义，同时保留TypeBox元数据。接受审计的`tools`、Pi声明、上下文预算及运行时路由共用该集合；来源与稳定定义指纹单独保存为私有`toolSources`，不进入模型工具schema。`ToolRuntime`仅在已接受集合内查找来源和定义，重名与未接受的路由明确拒绝；底层execution及会话执行器对固定内置目录的参数复核继续生效。当前仅支持既有会话/工作区工具；MCP来源、连接、配置和结果未知语义尚未实现。
+`RunToolset`在接受Run前由实际`ToolRuntime`能力与工作区选择一次，深拷贝并冻结定义，同时保留TypeBox元数据。接受审计的`tools`、Pi声明、上下文预算及运行时路由共用该集合；来源与稳定定义指纹单独保存为私有`toolSources`，不进入模型工具schema。`ToolRuntime`仅在已接受集合内查找来源和定义，重名与未接受的路由明确拒绝；底层execution及会话执行器对固定内置目录的参数复核继续生效。MCP来源从宿主ExternalTools端口获得有界、可执行的冻结定义与非秘密授权，Run接受审计同时保存工具选择及授权绑定。配置、信任、凭据和SDK连接由daemon/integrations拥有，runtime不直接访问SDK或SQL。
 
 `ToolRuntime`按接受Run时冻结的approvalMode执行：ask逐次询问，auto调用`ModelApprovalReviewer`，full-access自动批准并显式选择macOS无沙箱Shell；旧read-only继续阻止变更。Plan限制在审批前检查，文件工具仍以工作区为根。独立复核使用当前Run的Provider/model、用户请求与冻结规则，没有执行工具、共享主会话或多轮重试；只接受allow/deny/ask结构化结果，模型/认证失败、超预算、无效结果或30秒超时均转人工。停止中止复核并等待SDK结算后释放模型lease。审计请求和决定先持久化，存储失败直接传播，不当成模型失败转人工；公开事件只有工具/模型ID及决定/理由，完整复核请求仅保存在privateData。工具卡最终来源区分user/ai/full-access，先前AI转人工记录仍保留在事件历史。
 
-运行中的follow-up/steer输入先进入持久队列，再交Pi对应队列消费；文本更新与删除重建其内存投影。每个Run只投递当次允许的输入集合，普通发送与编辑不会激活旧暂停队列。取消、失败与重启保留未消费输入，恢复收费请求需显式resume，且原始分支必须与所选分支相符；同一恢复Run只激活相同Provider/model的输入。编辑用户消息追加分支与新输入，保留旧分支并排除其后续回复。session.deleted归档会话，保留事件，不是彻底删除私人数据。
+运行中的follow-up/steer输入先进入持久队列，再交Pi对应队列消费；文本更新与删除重建其内存投影。每个Run只投递当次允许的输入集合，普通发送与编辑不会激活旧暂停队列。取消、失败与重启保留未消费输入，恢复收费请求需显式resume，且原始分支必须与所选分支相符；同一恢复Run只激活相同Provider/model、MCP工具选择和授权绑定的输入。排队时即冻结定义与原始授权，编辑保留接受请求ID；恢复先校验原始授权并重建TypeBox元数据，撤销后重新信任不会复活旧输入。编辑用户消息追加分支与新输入，保留旧分支并排除其后续回复。session.deleted归档会话，保留事件，不是彻底删除私人数据。
 
 输入接受后若Agent初始化或首次队列读取失败，运行层清理订阅与临时所有权、释放模型lease并停用Session；不会遗留可继续工作的假Agent，也不补写假完成。下一次启动将已接受但未结算的事实恢复为interrupted。
 
-RuntimeStore拥有会话日志与投影。公开MessageView与宿主模型codec分离，成功消息保留Provider签名、responseId、system工具声明及工具结果；codec统一写入并读取version1，不兼容旧开发格式。工具结果按assistant消息锚点进入分支前缀，未完成周期不会伪造结果。工具记录ID按Run、assistant消息ID与SDK调用ID派生，允许网关在不同assistant轮次复用调用ID。持久化失败中止并停用Session，不广播假完成或继续使用未提交状态。
+RuntimeStore拥有会话日志与投影。公开MessageView与宿主模型codec分离，成功消息保留Provider签名、responseId、system工具声明及工具结果；普通模型消息使用version1 codec；工具结果使用protocol拥有的中立StoredToolResult，runtime再组装Pi消息。不兼容旧开发格式。工具结果按assistant消息锚点进入分支前缀；工具终态和中立结果同批写入，SDK回调不产生第二份结果。已持久完整assistant中未进入执行的call结算为宿主interrupted。MCP调用首次写入前先持久化may_have_started屏障；无法确认结果记unknown、停止Run并保留队列，不自动重试或继续模型请求。恢复只配对日志，不重新连接或执行；未知结果在模型/本地摘要中保留可能已生效的阻塞，不能成为Todo成功证据。工具记录ID按Run、assistant消息ID与SDK调用ID派生，允许网关在不同assistant轮次复用调用ID。持久化失败中止并停用Session，不广播假完成或继续使用未提交状态。
 
 主对话每个助手模型步骤在完成事实中保留供应商token用量与宿主完成时间，字段与缺失语义见[会话协议](../../docs/03_API/model-session.md#事件快照与断线)。工具轮与最终正文使用同一记录入口，独立审批复核和上下文压缩请求不并入这组主对话用量；不从正文估算或从私有codec补造历史统计。
 
@@ -51,3 +51,9 @@ pnpm --filter @my-pi-harness/agent-runtime typecheck
 pnpm --filter @my-pi-harness/agent-runtime lint
 pnpm --filter @my-pi-harness/agent-runtime test
 ```
+
+## M4渐进能力
+
+`InputCapabilityResolver`冻结显式MCP、候选目录和Skill正文/授权，排队保留原requestId与授权epoch。`RunCapabilities`将搜索目录与当前可调用集合分开，`load_tools`/`load_skill`只暂存下一请求内容；先提交`run.tools_loaded`再更新Pi AgentContext、预算和路由。旧assistant不能调用未曾提供的工具。Skill正文每次从冻结记录重建，不被压缩摘要或新磁盘版本替换；目录禁用、插件重装和授权撤销不能复活旧绑定。
+
+`request_skill_tools`及`request_service_access`始终要求明确用户批准。后者由ConnectionGatewayPort冻结Run/Skill版本/账户/操作/期限，再生成下一请求的具体服务工具；凭据只在daemon上游请求中添加。连接来源独立于MCP来源，继续保存派发屏障和中立结果；unknown停止Run并保留队列。Run关闭释放Skill lease及全部服务grant。接口与事实见[运行时能力协议](../../docs/03_API/capability-runtime.md)。

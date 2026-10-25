@@ -117,7 +117,8 @@ test('工具展开选择跨虚拟卸载与会话切换保留，输入草稿独�
   const model = await startToolSequenceModel(calls, '状态生命周期验证完成。');
   try {
     await page.goto(daemon.origin);
-    await configureTestProvider(page, model.origin);
+    // Keep all sixteen tool rounds in context; this case tests UI state rather than compaction.
+    await configureTestProvider(page, model.origin, 32768);
     await page.reload();
     await chooseOption(
       page,

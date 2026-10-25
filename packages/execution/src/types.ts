@@ -21,6 +21,7 @@ export interface ExecutionContext {
   readOnly: boolean;
   /** Frozen by the run owner; omission keeps macOS Seatbelt isolation. */
   shellAccess?: ShellAccess;
+  officePythonPath?: string;
   signal: AbortSignal;
 }
 

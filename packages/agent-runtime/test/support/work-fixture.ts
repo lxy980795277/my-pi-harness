@@ -22,6 +22,9 @@ import { RuntimeError } from '../../src/errors.js';
 import { SessionRuntime } from '../../src/session-runtime.js';
 import { ToolRuntime } from '../../src/tool-runtime.js';
 import type { ToolRuntimeOptions } from '../../src/tool-types.js';
+import type { ExternalTools } from '../../src/external-tools.js';
+import type { ConnectionGatewayPort } from '../../src/connection-ports.js';
+import type { SkillsPort, ToolDiscoveryPort } from '../../src/capability-ports.js';
 import { WorkRuntime } from '../../src/work-runtime.js';
 
 interface WorkFixture {
@@ -40,6 +43,10 @@ interface WorkFixture {
 }
 
 interface WorkFixtureOptions {
+  externalTools?: ExternalTools;
+  discovery?: ToolDiscoveryPort;
+  skills?: SkillsPort;
+  connectionGateway?: ConnectionGatewayPort;
   sessionTools?: boolean;
   tools?: boolean;
   context?: boolean;
@@ -101,6 +108,8 @@ export async function fixture(
         resolveWorkspace,
       };
       if (options.sessionTools !== false) toolOptions.work = work;
+      if (options.externalTools) toolOptions.externalTools = options.externalTools;
+      if (options.connectionGateway) toolOptions.connectionGateway = options.connectionGateway;
       tools = new ToolRuntime(toolOptions);
     }
     const runtimeOptions: ConstructorParameters<typeof SessionRuntime>[0] = {
@@ -111,6 +120,10 @@ export async function fixture(
       },
     };
     if (options.context !== false) runtimeOptions.work = work;
+    if (options.externalTools) runtimeOptions.externalTools = options.externalTools;
+    if (options.discovery) runtimeOptions.discovery = options.discovery;
+    if (options.skills) runtimeOptions.skills = options.skills;
+    if (options.connectionGateway) runtimeOptions.connectionGateway = options.connectionGateway;
     if (tools) runtimeOptions.tools = tools;
     const runtime = new SessionRuntime(runtimeOptions);
     const session = runtime.createSession({

@@ -20,6 +20,7 @@ const DaemonConfigSchema = Type.Object({
   port: Type.Integer({ minimum: 0, maximum: 65_535 }),
   webDistPath: Type.Union([Type.String({ minLength: 1 }), Type.Null()]),
   parentPid: Type.Union([Type.Integer({ minimum: 1, maximum: 2_147_483_647 }), Type.Null()]),
+  officePythonPath: Type.Optional(Type.String({ minLength: 1, maxLength: 4096 })),
 });
 
 /** Validated startup settings. Port zero requests an available port. */
@@ -69,6 +70,9 @@ export function loadDaemonConfig(
     throw new DaemonConfigError('MY_PI_HARNESS_WEB_DIST_PATH must not be empty');
   }
   const configuredProfile = environment.MY_PI_HARNESS_PROFILE_DIRECTORY;
+  const officePythonPath = environment.MY_PI_HARNESS_OFFICE_PYTHON;
+  if (officePythonPath !== undefined && (!isAbsolute(officePythonPath) || !officePythonPath.trim()))
+    throw new DaemonConfigError('MY_PI_HARNESS_OFFICE_PYTHON must be an absolute executable path');
   if (
     configuredProfile !== undefined &&
     (!configuredProfile.trim() || !isAbsolute(configuredProfile))
@@ -96,6 +100,7 @@ export function loadDaemonConfig(
   if (githubClientSecret !== undefined && githubClientId === undefined)
     throw new DaemonConfigError('GitHub Client Secret requires MY_PI_HARNESS_GITHUB_CLIENT_ID');
   const candidate = {
+    ...(officePythonPath === undefined ? {} : { officePythonPath }),
     profileDirectory:
       configuredProfile ?? join(defaultData, 'My Pi Harness', 'profiles', 'default'),
     sessionLogRoot: configuredLogRoot ?? repositorySessionLogRoot(),

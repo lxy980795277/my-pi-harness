@@ -150,3 +150,18 @@ describe('daemon startup configuration', () => {
     ).toMatch(/[/\\]app[/\\]web$/);
   });
 });
+
+it('accepts only an explicitly absolute Office interpreter path', () => {
+  expect(
+    loadDaemonConfig({
+      MY_PI_HARNESS_SESSION_LOG_ROOT: temporaryLogRoot,
+      MY_PI_HARNESS_OFFICE_PYTHON: '/fixture/office/python',
+    }).officePythonPath,
+  ).toBe('/fixture/office/python');
+  expect(() =>
+    loadDaemonConfig({
+      MY_PI_HARNESS_SESSION_LOG_ROOT: temporaryLogRoot,
+      MY_PI_HARNESS_OFFICE_PYTHON: './python',
+    }),
+  ).toThrow(DaemonConfigError);
+});

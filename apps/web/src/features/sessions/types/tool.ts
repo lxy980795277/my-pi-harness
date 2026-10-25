@@ -3,6 +3,10 @@ import type { Action } from '@/types/events';
 
 export interface ToolPresentation {
   name: string;
+  sourceLabel: string;
+  fingerprint: string | null;
+  dispatchLabel: string;
+  unknown: boolean;
   Icon: LucideIcon;
   summary: string;
   statusLabel: string;

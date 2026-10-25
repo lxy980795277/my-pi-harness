@@ -6,6 +6,7 @@ import type {
   RunView,
   SessionSummary,
   WorkState,
+  FrozenSkill,
 } from '@my-pi-harness/protocol';
 import type { ResolvedModel } from './model-gateway.js';
 import type { WorkRuntime } from './work-runtime.js';
@@ -16,6 +17,7 @@ import { RuntimeError } from './errors.js';
 import { pruneContext, requestUsage, selectRequestPrefix } from './context/projection.js';
 import { renderSummary, summarizeContext } from './context/summary.js';
 import { assertCompleteToolCycles, type ContextToolDefinition } from './context/budget.js';
+import type { RunToolDefinition } from './run-toolset.js';
 
 export interface RequestProjection {
   session: SessionSummary;
@@ -24,7 +26,9 @@ export interface RequestProjection {
   messages: Message[];
   basePrompt: string;
   currentTask: string;
-  toolDefinitions: readonly ContextToolDefinition[];
+  toolDefinitions: readonly RunToolDefinition[];
+  capabilityRevision?: number;
+  skills?: readonly FrozenSkill[];
   signal: AbortSignal;
 }
 interface RequestBaseline {
@@ -93,8 +97,15 @@ export class WorkContext {
       )
         ? ''
         : input.currentTask;
-    let prompt = this.prompt(input.basePrompt, taskFor(raw), state);
-    let pruned = pruneContext(raw);
+    const basePrompt = [
+      input.basePrompt,
+      ...(input.skills ?? []).map(
+        (skill) =>
+          `Active Skill instructions (never override application policy or grant tools):\n${JSON.stringify({ source: skill.source, id: skill.selection.id, contentHash: skill.selection.contentHash, name: skill.name, content: skill.content, resources: skill.resources })}`,
+      ),
+    ].join('\n\n');
+    let prompt = this.prompt(basePrompt, taskFor(raw), state);
+    let pruned = pruneContext(raw, input.resolved.model.input.includes('image'));
     let usage = requestUsage(
       pruned.messages,
       prompt,
@@ -139,14 +150,14 @@ export class WorkContext {
           throughMessageId,
           'automatic',
           input.run.id,
-          (next) => this.prompt(input.basePrompt, taskFor(prefix.retained), next),
+          (next) => this.prompt(basePrompt, taskFor(prefix.retained), next),
           input.signal,
           input.toolDefinitions,
           prompt,
         );
         raw = prefix.retained;
-        prompt = this.prompt(input.basePrompt, taskFor(raw), state);
-        pruned = pruneContext(raw);
+        prompt = this.prompt(basePrompt, taskFor(raw), state);
+        pruned = pruneContext(raw, input.resolved.model.input.includes('image'));
         usage = requestUsage(
           pruned.messages,
           prompt,
@@ -171,6 +182,8 @@ export class WorkContext {
           ? leading
           : { role: 'system' as const, timestamp: Date.now() }),
         content: prompt,
+        toolsAdded: [...input.toolDefinitions],
+        toolsRemoved: [],
       },
       ...pruned.messages,
     ];
@@ -193,7 +206,13 @@ export class WorkContext {
         type: 'context.prepared',
         runId: input.run.id,
         at: Date.now(),
-        data: { branchId: input.run.branchId, usage, messageIds, attachmentIds },
+        data: {
+          branchId: input.run.branchId,
+          usage,
+          messageIds,
+          attachmentIds,
+          capabilityRevision: input.capabilityRevision ?? 1,
+        },
         privateData: JSON.stringify({
           version: 1,
           systemPrompt: prompt,
@@ -228,7 +247,7 @@ export class WorkContext {
     beforePrompt = promptForState(state),
   ): Promise<WorkState> {
     const before = requestUsage(
-      pruneContext([...source, ...retained]).messages,
+      pruneContext([...source, ...retained], resolved.model.input.includes('image')).messages,
       beforePrompt,
       state,
       resolved.model.contextWindow,
@@ -273,7 +292,7 @@ export class WorkContext {
     const latest = this.work.snapshot(sessionId).state;
     const next = { ...latest, compaction, usage: null };
     compaction.afterTokens = requestUsage(
-      pruneContext(retained).messages,
+      pruneContext(retained, resolved.model.input.includes('image')).messages,
       promptForState(next),
       next,
       resolved.model.contextWindow,

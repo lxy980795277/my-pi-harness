@@ -1,3 +1,4 @@
+import { OFFICE_TOOL_DEFINITIONS } from '@my-pi-harness/execution';
 import { randomUUID } from 'node:crypto';
 import {
   getSupportedThinkingLevels,
@@ -15,6 +16,7 @@ import type {
   SessionPatchInput,
   SessionSnapshot,
   SessionSummary,
+  WorkState,
 } from '@my-pi-harness/protocol';
 import { decodeContextMessage, encodeContextMessage } from './context-codec.js';
 import { RuntimeError } from './errors.js';
@@ -26,6 +28,22 @@ import { completeToolHistory } from './tool-history.js';
 import type { WorkRuntime } from './work-runtime.js';
 import { userWithAttachments } from './attachment-context.js';
 import { RunToolset } from './run-toolset.js';
+import { mcpSelectionKey, type ExternalTools } from './external-tools.js';
+import {
+  InputCapabilityResolver,
+  encodeInputCapabilities,
+  frozenInputKey,
+  skillSelectionKey,
+  type FrozenInputCapabilities,
+} from './input-capabilities.js';
+import {
+  RunCapabilities,
+  DISCOVERY_TOOL_DEFINITIONS,
+  SKILL_TOOL_DEFINITIONS,
+} from './run-capabilities.js';
+import type { SkillsPort, ToolDiscoveryPort } from './capability-ports.js';
+import { CONNECTION_TOOL_DEFINITIONS } from './connection-capabilities.js';
+import type { ConnectionGatewayPort } from './connection-ports.js';
 
 export interface SessionRuntimeOptions {
   store: RuntimeStore;
@@ -34,6 +52,10 @@ export interface SessionRuntimeOptions {
   onError(error: unknown): void;
   tools?: ToolRuntime;
   work?: WorkRuntime;
+  externalTools?: ExternalTools;
+  discovery?: ToolDiscoveryPort;
+  skills?: SkillsPort;
+  connectionGateway?: ConnectionGatewayPort;
 }
 
 /** Session commands are serialized; committed facts remain authoritative across restarts. */
@@ -46,7 +68,15 @@ export class SessionRuntime {
   private closed = false;
   private stopPromise: Promise<void> | undefined;
 
-  public constructor(private readonly options: SessionRuntimeOptions) {}
+  private readonly capabilityInputs: InputCapabilityResolver;
+  public constructor(private readonly options: SessionRuntimeOptions) {
+    this.capabilityInputs = new InputCapabilityResolver({
+      store: options.store,
+      ...(options.externalTools ? { external: options.externalTools } : {}),
+      ...(options.discovery ? { discovery: options.discovery } : {}),
+      ...(options.skills ? { skills: options.skills } : {}),
+    });
+  }
 
   public createSession(input: ResolvedSessionCreateInput): SessionSummary {
     this.ensureOpen();
@@ -143,11 +173,26 @@ export class SessionRuntime {
         if (input.mode === 'send')
           throw new RuntimeError('SESSION_BUSY', 'Session already has an active run');
         if (running.cancelled) throw new RuntimeError('SESSION_CANCELLING', 'Session is stopping');
+        if (
+          mcpSelectionKey(input.mcpTools ?? []) !==
+          mcpSelectionKey(running.options.run.mcpTools ?? [])
+        )
+          throw new RuntimeError('MCP_SELECTION_CONFLICT', '运行中不能更改MCP工具选择。');
+        if (
+          skillSelectionKey(input.skills ?? []) !==
+          skillSelectionKey(running.options.run.skills ?? [])
+        )
+          throw new RuntimeError('SKILL_SELECTION_CONFLICT', '运行中不能更改Skill选择。');
+        const frozen = this.activeInput(running);
+        await this.capabilityInputs.restore(frozen, signal);
+
         const at = Date.now();
         const queued: QueueInput = {
           id: randomUUID(),
           sessionId,
           text: input.text,
+          mcpTools: structuredClone(input.mcpTools ?? []),
+          skills: structuredClone(input.skills ?? []),
           ...(input.attachmentIds ? { attachmentIds: input.attachmentIds } : {}),
           mode: input.mode,
           providerId: running.options.run.providerId,
@@ -169,7 +214,11 @@ export class SessionRuntime {
             runId: running.options.run.id,
             at,
             data: queued,
-            privateData: JSON.stringify({ version: 1, requestId: input.requestId }),
+            privateData: JSON.stringify({
+              version: 1,
+              requestId: input.requestId,
+              ...encodeInputCapabilities(frozen),
+            }),
           },
         ]);
         running.allowQueue(queued.id);
@@ -199,16 +248,42 @@ export class SessionRuntime {
     inputId: string,
     patch: QueuePatchInput,
   ): Promise<SessionSnapshot> {
-    return this.serialize(sessionId, () => {
+    return this.startCommand(sessionId, async (signal) => {
       const snapshot = this.getSnapshot(sessionId);
       const input = snapshot.queue.find(({ id }) => id === inputId);
       if (!input) throw new RuntimeError('QUEUE_NOT_FOUND', 'Queued input no longer exists');
       if (input.revision !== patch.revision)
         throw new RuntimeError('QUEUE_CONFLICT', 'Queued input changed');
       this.requireInput({ text: patch.text, attachmentIds: input.attachmentIds });
+      const requested = patch.mcpTools ?? input.mcpTools ?? [];
+      const active = this.active.get(sessionId);
+      if (
+        active &&
+        mcpSelectionKey(requested) !== mcpSelectionKey(active.options.run.mcpTools ?? [])
+      )
+        throw new RuntimeError('MCP_SELECTION_CONFLICT', '运行中不能更改MCP工具选择。');
+      const skillSelections = patch.skills ?? input.skills ?? [];
+      if (
+        active &&
+        skillSelectionKey(skillSelections) !== skillSelectionKey(active.options.run.skills ?? [])
+      )
+        throw new RuntimeError('SKILL_SELECTION_CONFLICT', '运行中不能更改Skill选择。');
+      let frozen: FrozenInputCapabilities;
+      if (active) {
+        frozen = this.activeInput(active);
+        await this.capabilityInputs.restore(frozen, signal);
+      } else
+        frozen = await this.capabilityInputs.freeze(
+          snapshot.session,
+          { mcpTools: requested, skills: skillSelections },
+          this.workMode(sessionId),
+          signal,
+        );
       const updated: QueueInput = {
         ...input,
         text: patch.text,
+        mcpTools: structuredClone(requested),
+        skills: structuredClone(skillSelections),
         revision: input.revision + 1,
         updatedAt: Date.now(),
       };
@@ -218,6 +293,10 @@ export class SessionRuntime {
           runId: snapshot.session.activeRunId,
           at: Date.now(),
           data: updated,
+          privateData: JSON.stringify({
+            ...this.capabilityInputs.metadata(sessionId, input.id),
+            ...encodeInputCapabilities(frozen),
+          }),
         },
       ]);
       this.active.get(sessionId)?.rebuildQueue();
@@ -262,6 +341,9 @@ export class SessionRuntime {
           (queued) =>
             queued.providerId === input.providerId &&
             queued.modelId === input.modelId &&
+            mcpSelectionKey(queued.mcpTools ?? []) === mcpSelectionKey(input.mcpTools ?? []) &&
+            frozenInputKey(this.capabilityInputs.queued(sessionId, queued.id)) ===
+              frozenInputKey(this.capabilityInputs.queued(sessionId, input.id)) &&
             this.options.store.getQueueBranch(sessionId, queued.id) ===
               snapshot.session.activeBranchId,
         )
@@ -272,6 +354,8 @@ export class SessionRuntime {
           text: input.text,
           mode: 'send',
           requestId: `queue:${input.id}`,
+          mcpTools: input.mcpTools ?? [],
+          skills: input.skills ?? [],
           ...(input.attachmentIds ? { attachmentIds: input.attachmentIds } : {}),
         },
         signal,
@@ -311,6 +395,8 @@ export class SessionRuntime {
           text: input.text,
           mode: 'send',
           requestId: input.requestId,
+          mcpTools: input.mcpTools ?? original.mcpTools ?? [],
+          skills: input.skills ?? original.skills ?? [],
           ...(original.attachmentIds ? { attachmentIds: original.attachmentIds } : {}),
         },
         signal,
@@ -366,6 +452,7 @@ export class SessionRuntime {
       signal,
     );
     let transferred = false;
+    let capabilities: RunCapabilities | undefined;
     try {
       signal.throwIfAborted();
       if (
@@ -386,6 +473,25 @@ export class SessionRuntime {
           .getModelContext(session.id, priorBranch, historyIds)
           .map(decodeContextMessage),
       );
+      let frozen: FrozenInputCapabilities;
+      if (queuedInputId) {
+        frozen = this.capabilityInputs.queued(session.id, queuedInputId);
+        if (
+          mcpSelectionKey(frozen.external.map((tool) => tool.selection)) !==
+            mcpSelectionKey(input.mcpTools ?? []) ||
+          skillSelectionKey(frozen.skills.map((skill) => skill.selection)) !==
+            skillSelectionKey(input.skills ?? [])
+        )
+          throw new RuntimeError('INPUT_BINDING_INVALID', '排队输入的选择与原授权不一致。');
+        frozen = await this.capabilityInputs.restore(frozen, signal);
+      } else
+        frozen = await this.capabilityInputs.freeze(
+          session,
+          input,
+          this.workMode(session.id),
+          signal,
+        );
+      const external = frozen.external;
       const at = Date.now();
       const run = {
         id: randomUUID(),
@@ -394,6 +500,8 @@ export class SessionRuntime {
         providerId: session.providerId,
         modelId: session.modelId,
         status: 'running' as const,
+        mcpTools: structuredClone(input.mcpTools ?? []),
+        skills: structuredClone(input.skills ?? []),
         createdAt: at,
         finishedAt: null,
         error: null,
@@ -406,6 +514,8 @@ export class SessionRuntime {
         runId: run.id,
         role: 'user',
         text: input.text,
+        mcpTools: structuredClone(input.mcpTools ?? []),
+        skills: structuredClone(input.skills ?? []),
         ...(input.attachmentIds ? { attachmentIds: input.attachmentIds } : {}),
         thinking: '',
         createdAt: at,
@@ -436,8 +546,36 @@ export class SessionRuntime {
       }
       signal.throwIfAborted();
       let toolset: RunToolset;
-      if (this.options.tools) toolset = this.options.tools.selectToolset(session);
+      if (this.options.tools)
+        toolset = this.options.tools.selectToolset(
+          session,
+          external,
+          [
+            ...(this.options.discovery ? DISCOVERY_TOOL_DEFINITIONS : []),
+            ...(this.options.skills ? SKILL_TOOL_DEFINITIONS : []),
+            ...(this.options.connectionGateway ? CONNECTION_TOOL_DEFINITIONS : []),
+          ],
+          OFFICE_TOOL_DEFINITIONS.filter(
+            (tool) =>
+              session.workspaceId !== null &&
+              frozen.skills.some((skill) => skill.allowedTools.includes(tool.name)),
+          ),
+        );
       else toolset = new RunToolset([]);
+      if (this.options.discovery || this.options.skills || this.options.connectionGateway)
+        capabilities = new RunCapabilities({
+          runId: run.id,
+          workspaceId: session.workspaceId,
+          initial: toolset,
+          candidates: frozen.candidates,
+          workspaceCandidates: session.workspaceId === null ? [] : OFFICE_TOOL_DEFINITIONS,
+          skills: frozen.skills,
+          ...(this.options.skills ? { skillPort: this.options.skills } : {}),
+          ...(this.options.connectionGateway
+            ? { connectionGateway: this.options.connectionGateway }
+            : {}),
+          commit: (records) => this.commit(session.id, records),
+        });
       const events: EventInput[] = [
         ...prefix,
         ...(prepared
@@ -463,6 +601,11 @@ export class SessionRuntime {
             workspaceId: session.workspaceId,
             approvalMode: session.approvalMode,
             tools: toolset.definitions,
+            mcpBindings: external,
+            mcpCandidates: frozen.candidates,
+            workspaceCandidates: session.workspaceId === null ? [] : OFFICE_TOOL_DEFINITIONS,
+            skills: frozen.skills,
+            capabilityRevision: 1,
             toolSources: toolset.records.map(({ source, fingerprint, definition }) => ({
               name: definition.name,
               source,
@@ -494,6 +637,9 @@ export class SessionRuntime {
           basePrompt,
           eligibleInputIds,
           toolset,
+          acceptedCapabilities: frozen,
+          ...(capabilities ? { capabilities } : {}),
+          ...(this.options.externalTools ? { externalTools: this.options.externalTools } : {}),
           queue: () => this.getSnapshot(session.id).queue,
           commit: (records) => this.commit(session.id, records),
           onError: (error) => this.options.onError(error),
@@ -545,7 +691,10 @@ export class SessionRuntime {
       transferred = true;
       return { sessionId: session.id, runId: run.id, inputId: null, queued: false };
     } finally {
-      if (!transferred) resolved.release();
+      if (!transferred) {
+        capabilities?.close();
+        resolved.release();
+      }
     }
   }
 
@@ -567,6 +716,9 @@ export class SessionRuntime {
             (queued) =>
               queued.providerId === input.providerId &&
               queued.modelId === input.modelId &&
+              mcpSelectionKey(queued.mcpTools ?? []) === mcpSelectionKey(input.mcpTools ?? []) &&
+              frozenInputKey(this.capabilityInputs.queued(sessionId, queued.id)) ===
+                frozenInputKey(this.capabilityInputs.queued(sessionId, input.id)) &&
               this.options.store.getQueueBranch(sessionId, queued.id) ===
                 snapshot.session.activeBranchId,
           )
@@ -577,6 +729,8 @@ export class SessionRuntime {
             text: input.text,
             mode: 'send',
             requestId: `queue:${input.id}`,
+            mcpTools: input.mcpTools ?? [],
+            skills: input.skills ?? [],
             ...(input.attachmentIds ? { attachmentIds: input.attachmentIds } : {}),
           },
           signal,
@@ -589,6 +743,22 @@ export class SessionRuntime {
     } catch (error) {
       this.options.onError(error);
     }
+  }
+
+  private workMode(sessionId: string): WorkState['mode'] {
+    if (this.options.work) return this.options.work.snapshot(sessionId).state.mode;
+    return 'execute';
+  }
+
+  private activeInput(run: RunExecution): FrozenInputCapabilities {
+    if (run.options.acceptedCapabilities) return run.options.acceptedCapabilities;
+    return {
+      external: run.options.toolset.records.flatMap((tool) =>
+        tool.external ? [tool.external] : [],
+      ),
+      candidates: [],
+      skills: [],
+    };
   }
 
   /** A stop owns queued starts as well as model resolution and context preparation. */

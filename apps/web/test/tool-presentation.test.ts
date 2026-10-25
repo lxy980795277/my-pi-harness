@@ -9,6 +9,8 @@ const tool = (overrides: Partial<ToolCallView> = {}): ToolCallView => {
     runId: 'run',
     branchId: 'branch',
     afterMessageId: 'assistant',
+    binding: { kind: 'accepted', source: { kind: 'workspace' }, fingerprint: 'a'.repeat(64) },
+    dispatch: { state: 'not_applicable' },
     name: 'read_file',
     arguments: { path: 'src/main.ts' },
     status: 'completed',
@@ -119,4 +121,55 @@ describe('compact tool presentation', () => {
       'A recorded summary',
     );
   });
+});
+
+it('displays an unknown MCP call as a terminal warning with frozen source and no spinner', () => {
+  const call = tool({
+    name: 'mcp_alias',
+    status: 'unknown',
+    summary: 'Result unknown',
+    result: 'Operation may have taken effect',
+    binding: {
+      kind: 'accepted',
+      source: {
+        kind: 'mcp',
+        serverId: 'server',
+        serverRevision: 3,
+        remoteToolName: 'remote_write',
+      },
+      fingerprint: 'a'.repeat(64),
+    },
+    dispatch: { state: 'may_have_started', attemptId: 'attempt', at: 100 },
+  });
+  expect(toolPresentation(call)).toMatchObject({
+    name: 'remote_write',
+    busy: false,
+    showStatus: true,
+    unknown: true,
+    statusLabel: '结果未知',
+    sourceLabel: 'MCP · server · revision 3 · remote_write',
+    dispatchLabel: '可能已经派发',
+  });
+});
+
+it('identifies a credentialed service call independently from MCP and workspace tools', () => {
+  const view = toolPresentation(
+    tool({
+      name: 'service_account_github_user',
+      binding: {
+        kind: 'accepted',
+        fingerprint: 'a'.repeat(64),
+        source: {
+          kind: 'connection',
+          connectionId: 'account',
+          grantId: 'grant',
+          operation: 'service_github_user',
+        },
+      },
+      dispatch: { state: 'may_have_started', attemptId: 'attempt', at: 1 },
+    }),
+  );
+  expect(view.name).toBe('服务请求');
+  expect(view.sourceLabel).toContain('服务 · account');
+  expect(view.dispatchLabel).toBe('可能已经派发');
 });

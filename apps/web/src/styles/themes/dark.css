@@ -15,6 +15,9 @@
   --border: oklch(0.31 0.01 240);
   --ring: oklch(0.7 0.05 230);
   --workspace-folder: oklch(0.72 0.16 250);
+  --loading-blue: oklch(0.72 0.16 252);
+  --loading-violet: oklch(0.74 0.16 300);
+  --loading-cyan: oklch(0.79 0.12 195);
   --success: oklch(0.28 0.035 155);
   --success-foreground: oklch(0.8 0.08 155);
   --success-solid: oklch(0.72 0.1 155);

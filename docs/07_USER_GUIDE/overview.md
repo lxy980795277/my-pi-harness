@@ -1,6 +1,6 @@
 # 使用指南
 
-先按[应用登录](application-login.md)配置GitHub并进入工作台。当前提供模型设置、持久会话、队列与历史分支、工作区与审批工具，以及M3附件、项目规则、上下文压缩、提问、计划和检查点。操作见[模型与会话](model-session.md)、[工作区与工具](workspace-execution.md)及[上下文、计划与检查点](context-interaction.md)。各平台与真实供应商状态见[里程碑](../00_OVERVIEW/roadmap.md)及所属功能验证记录；Windows Shell与浏览器新增目录仍保留原暂缓范围，Computer Use属于后续专项。
+先按[应用登录](application-login.md)配置GitHub并进入工作台。当前提供模型设置、持久会话、队列与历史分支、工作区与审批工具，以及M3附件、项目规则、上下文压缩、提问、计划和检查点。操作见[模型与会话](model-session.md)、[工作区与工具](workspace-execution.md)及[上下文、计划与检查点](context-interaction.md)。本地外部工具配置与调用见[本地MCP](本地MCP.md)，远端OAuth、目录和导入导出见[MCP扩展](MCP扩展.md)。各平台与真实供应商状态见[里程碑](../00_OVERVIEW/roadmap.md)及所属功能验证记录；Windows Shell与浏览器新增目录仍保留原暂缓范围，Computer Use属于后续专项。
 
 ## 开发启动
 
@@ -23,4 +23,4 @@
 
 当前构建、资源装配与应用目录打包入口见 [测试入口](../05_CONSTRAINTS/testing.md)。应用目录携带自身运行资源，不依赖本仓库源码、Vite或tsx；正式安装器及签名发布在后续平台发布步骤实现。
 
-当前模型、会话、工具与M3交互见上述指南。插件操作在所属里程碑落地后新增。
+Skills选择、创建、安装与插件管理见[Skills与插件](Skills与插件.md)，办公依赖与操作见[办公文档](office.md)，外部账户见[服务连接](connections.md)。

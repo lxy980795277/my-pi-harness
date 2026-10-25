@@ -20,3 +20,11 @@ export type {
   LoginSessionInput,
   StoredLoginSession,
 } from './auth-types.js';
+
+export { McpRepository } from './mcp.js';
+export type { StoredMcpServer, McpSecretBinding, McpStartupGrant, McpIdentity } from './mcp.js';
+export { ExtensionRepository, type StoredSkill, type StoredPlugin } from './extensions.js';
+export { RemoteMcpRepository, type StoredRemoteMcpServer } from './remote-mcp.js';
+export { McpDirectoryRepository, type McpReadOnlyGrant } from './mcp-directory.js';
+
+export { ConnectionRepository, type StoredConnection } from './connections.js';

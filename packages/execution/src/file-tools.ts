@@ -1,11 +1,12 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { constants } from 'node:fs';
 import { lstat, open, opendir, rename, rm, stat } from 'node:fs/promises';
-import { dirname, resolve } from 'node:path';
+import { dirname, resolve, extname } from 'node:path';
 import { createPatch } from 'diff';
 import { stringArgument } from './catalog.js';
 import { ExecutionError, checkCancelled, isMissing } from './errors.js';
 import { extractPdf } from './pdf.js';
+import { extractDocument } from './document.js';
 import type { ExecutionContext, ExecutionResult, FileMutationToolName } from './types.js';
 import {
   isPortableFileName,
@@ -97,6 +98,20 @@ export async function readFileTool(
   if (data.subarray(0, 5).toString() === '%PDF-') {
     const text = await extractPdf(data, context.signal);
     return textResult(`Read PDF ${input}`, text);
+  }
+  const format = extname(input).slice(1).toLowerCase();
+  if (
+    ['docx', 'docm', 'xlsx', 'xlsm', 'pptx', 'pptm', 'odt', 'ods', 'odp', 'epub'].includes(format)
+  ) {
+    if (data[0] !== 80 || data[1] !== 75)
+      throw new ExecutionError(
+        'DOCUMENT_FAILED',
+        'Document does not contain the expected ZIP structure',
+      );
+    return textResult(
+      `Read document ${input}`,
+      await extractDocument(data, format, context.signal),
+    );
   }
   if (data.length > MAXIMUM_TEXT_BYTES)
     throw new ExecutionError('FILE_TOO_LARGE', 'Text file exceeds its 500000-byte limit');

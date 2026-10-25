@@ -15,27 +15,31 @@
 | 共享协议            | 浏览器安全 TypeBox schema / DTO                              | M0           |
 | 验证                | Vitest + Playwright                                          | M0起         |
 | Agent与模型         | Pi core + Pi ai                                              | M1           |
+| 扩展能力            | 官方MCP SDK、HTTP/SSE、yaml Skills与oauth4webapi服务连接     | M4           |
 | 持久化              | JSONL会话事实 + better-sqlite3 / Drizzle配置与投影           | M1           |
 
 后续依赖按实际模块添加，不创建未实现能力的空壳。会话JSONL与SQLite配置/投影的职责见[存储约束](../05_CONSTRAINTS/backend.md)。能力范围与当前状态以[里程碑](../00_OVERVIEW/roadmap.md)为准。
 
 ## Monorepo职责
 
-| 路径                     | 负责                                                              | 不负责                                 |
-| ------------------------ | ----------------------------------------------------------------- | -------------------------------------- |
-| `apps/web`               | 页面、交互、HTTP/SSE客户端、状态呈现                              | Node API、凭据与Agent实例              |
-| `apps/daemon`            | API装配、本机信任与应用登录、事件重放、profile与服务生命周期      | 页面组件与桌面窗口                     |
-| `apps/desktop`           | Electron窗口、有限preload桥、daemon启动和退出、桌面资源与发布装配 | Agent Loop、业务数据库与工具实现       |
-| `packages/agent-runtime` | Pi模型、认证与Run编排、独立审批复核、取消、队列和分支             | Electron、React、Fastify与SQL实现      |
-| `packages/execution`     | 有界文件/PDF、Web与按策略隔离的macOS Shell执行                    | Pi Loop、审批拥有者、数据库与页面      |
-| `packages/storage`       | JSONL批日志、SQLite配置/投影、附件文件、profile锁、系统凭据       | 模型调用和页面状态                     |
-| `packages/protocol`      | 跨端DTO、schema、协议版本、公开桌面桥                             | Node imports、业务服务、环境配置或密钥 |
-| `packages/eslint-config` | 共享静态检查配置                                                  | 业务实现                               |
-| `packages/tsconfig`      | 明确的TypeScript编译配置                                          | 运行时代码                             |
+| 路径                     | 负责                                                                     | 不负责                                    |
+| ------------------------ | ------------------------------------------------------------------------ | ----------------------------------------- |
+| `apps/web`               | 页面、交互、HTTP/SSE客户端、状态呈现                                     | Node API、凭据与Agent实例                 |
+| `apps/daemon`            | API装配、本机信任与应用登录、事件重放、profile与服务生命周期             | 页面组件与桌面窗口                        |
+| `apps/desktop`           | Electron窗口、有限preload桥、daemon启动和退出、桌面资源与发布装配        | Agent Loop、业务数据库与工具实现          |
+| `packages/agent-runtime` | Pi模型、认证与Run编排、独立审批复核、取消、队列和分支                    | Electron、React、Fastify与SQL实现         |
+| `packages/execution`     | 有界文件/PDF、Web与按策略隔离的macOS Shell执行                           | Pi Loop、审批拥有者、数据库与页面         |
+| `packages/integrations`  | MCP传输/目录/租约、Skills资源/安装、插件manifest与服务OAuth/固定操作目录 | 数据库、启动授权决策、Pi Loop、HTTP与页面 |
+| `packages/storage`       | JSONL批日志、SQLite配置/投影、附件文件、profile锁、系统凭据              | 模型调用和页面状态                        |
+| `packages/protocol`      | 跨端DTO、schema、协议版本、公开桌面桥                                    | Node imports、业务服务、环境配置或密钥    |
+| `packages/eslint-config` | 共享静态检查配置                                                         | 业务实现                                  |
+| `packages/tsconfig`      | 明确的TypeScript编译配置                                                 | 运行时代码                                |
 
 `agent-runtime`通过明确RuntimeStore/ProviderStore与SecretStore接口接入宿主，ToolRuntime按冻结策略逐次确认、调用独立ModelApprovalReviewer或使用用户明确选择的full-access，再调用execution；daemon提供注册工作区解析和复核资料，Renderer只消费公开工具事件。`storage`拥有JSONL会话事实、不可变附件以及SQLite配置/会话投影；完整批次校验后先写日志并fsync，再提交SQLite投影，Runtime随后发布公开SSE。失败冻结写入，重启从日志重建会话投影，不重执行副作用。其他package在真实职责出现时创建，避免无边界共享工具包。跨包导入使用`@my-pi-harness/*`；相对导入仅留在同一app/package，源码检查拒绝跨workspace私有源码引用。
 
 M3由agent-runtime内的WorkRuntime/context模块拥有规则、预算、摘要和会话工具；WorkStore扩展宿主存储端口，工作状态按分支持久化。daemon的AttachmentService接收显式上传或安全工作区引用，保存冻结内容并提供受保护预览；Renderer仅缓存元数据/ID，base64仅在上传与局部预览操作中存在。人工提问和Plan/Todos不要求工作区；文件/Shell仍执行M2策略。每次模型请求前统一处理预算、压缩与工作状态。自动上下文检查点选择摘要版本；手动会话快照通过新增分支恢复消息前缀和工作状态。二者都不撤销磁盘或外部副作用。
+
+MCP由daemon的`McpService`管理配置、系统秘密与启动授权，`ExternalTools`端口把冻结定义和非秘密授权交给runtime。`integrations`使用官方Client管理协议与租约，stdio字节交给`execution`的受监管持久进程；runtime仍拥有审批、派发前持久屏障及终态。普通GET不创建进程，最后租约释放等待进程组和管道关闭。MCP连接/进程不进入Renderer或storage；接口与平台范围见[本地MCP协议](../03_API/local-mcp.md)。
 
 ## 进程和连接
 
@@ -73,3 +77,11 @@ JSONL根与上述数据库位置独立：开发入口、仓库中的daemon源码
 `MY_PI_HARNESS_DESKTOP_SECRET`仅由main私有启动链注入，不进入公开启动记录；`MY_PI_HARNESS_DEVELOPMENT_ORIGIN`只允许自有5174开发页面。GitHub登录配置来自仓库根`.env`，开发daemon启动时自动加载，进程环境优先。Web使用授权码+PKCE，桌面使用Device Flow；打包只提取Client ID至`desktop-oauth.env`，不分发根`.env`或Client Secret。字段、本机信任、profile归属与恢复语义见[应用登录协议](../03_API/application-auth.md)。
 
 Web开发的 `DAEMON_ORIGIN` 指定同源代理目标，缺省连接上述独立daemon地址。桌面开发入口注入 `MY_PI_HARNESS_NODE_PATH` 和 `MY_PI_HARNESS_RENDERER_URL`，分别选择独立Node与开发页面；发布版根据安装资源和实际daemon地址解析，不使用这些开发覆盖项。
+
+## M4能力所有权
+
+`McpService`与`RemoteMcpService`分别拥有本地/远端配置和启动信任；`SkillsService`拥有发现、不可变版本与资源lease；`PluginService`按精确引用装配独立资源及MCP Apps。`ConnectionService`另管插件服务账户、系统凭据和固定REST操作，不复用应用GitHub登录Token。它们由daemon装配，Runtime仅消费能力端口和非秘密冻结数据。
+
+`RunCapabilities`分开冻结候选目录与当前可调用定义，`run.tools_loaded`持久化后推进下一模型请求；同一版本同时供声明、预算和执行使用。`ConnectionCapabilities`在明确用户审批后保存账户/Skill/Run限定的有限服务授权，具体调用仍经过ToolRuntime策略、派发屏障和unknown处理。Office工具在工作区执行，由选中Skill声明或按需加载，不把全部Office schema默认塞入所有请求。
+
+生产package包含`integrations/resources/plugins`与`execution/resources/office`；Python/LibreOffice等可选办公依赖按明确配置检测，不在Agent任务中静默安装。核心过程见[能力扩展设计](../09_TECHNICAL/能力扩展与授权设计.md)。

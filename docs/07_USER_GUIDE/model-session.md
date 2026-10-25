@@ -1,6 +1,6 @@
 # 使用模型与会话
 
-M1提供文字对话、配置与认证、停止、持久队列和历史分支。M2新增工作区与有审批的工具执行，操作见[工作区与工具](workspace-execution.md)。M3的附件、上下文、计划与检查点见[对应指南](context-interaction.md)；MCP、子Agent、记忆和Computer Use仍在后续里程碑。
+M1提供文字对话、配置与认证、停止、持久队列和历史分支。M2新增工作区与有审批的工具执行，操作见[工作区与工具](workspace-execution.md)。M3的附件、上下文、计划与检查点见[对应指南](context-interaction.md)；MCP与Skills入口见[MCP扩展](MCP扩展.md)及[Skills与插件](Skills与插件.md)；子Agent、记忆和Computer Use仍在后续里程碑。
 
 ## 进入工作台
 

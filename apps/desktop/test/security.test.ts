@@ -267,3 +267,24 @@ describe('desktop window security', () => {
     expect(mocks.removeHandler).toHaveBeenCalledTimes(4);
   });
 });
+
+it('restricts Skill reveal to the owned main frame and two bounded identity arguments', async () => {
+  const window = new BrowserWindow({});
+  const reveal = vi
+    .fn<(id: string, workspaceId: string | null) => Promise<void>>()
+    .mockResolvedValue();
+  secureWindow(window, 'http://127.0.0.1:1234', undefined, reveal);
+  const handler = mocks.handle.mock.calls.find(
+    ([channel]) => channel === 'desktop:reveal-skill-directory',
+  )?.[1];
+  if (!handler) throw new Error('Missing Skill reveal handler');
+  await handler(invokeEvent(window), 'registered', null);
+  expect(reveal).toHaveBeenCalledExactlyOnceWith('registered', null);
+  const other = new BrowserWindow({});
+  await expect(handler(invokeEvent(other), 'registered', null)).rejects.toThrow('桌面请求来源无效');
+  for (const args of [[], [''], ['registered', {}], ['registered', null, '/tmp']])
+    await expect(handler(invokeEvent(window), ...args)).rejects.toThrow('Skill目录请求参数无效');
+  window.emit('closed');
+  expect(mocks.removeHandler).toHaveBeenCalledWith('desktop:reveal-skill-directory');
+  expect(reveal).toHaveBeenCalledTimes(1);
+});

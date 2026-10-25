@@ -74,6 +74,12 @@ export const BranchSelectionSchema = Type.Object(
   { additionalProperties: false },
 );
 export const QueueRequestSchema = Type.Object(
-  { version: Type.Literal(1), requestId: Type.String({ minLength: 1 }) },
+  {
+    version: Type.Literal(1),
+    requestId: Type.String({ minLength: 1 }),
+    mcpBindings: Type.Optional(Type.String({ maxLength: 2_000_000 })),
+    candidateBindings: Type.Optional(Type.String({ maxLength: 4_000_000 })),
+    skillBindings: Type.Optional(Type.String({ maxLength: 3_000_000 })),
+  },
   { additionalProperties: false },
 );

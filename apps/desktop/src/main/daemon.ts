@@ -18,6 +18,7 @@ export interface ManagedDaemon {
   stop(): Promise<void>;
   authorizeRenderer(origin: string): Promise<void>;
   openAuth(flowId: string): Promise<void>;
+  revealSkillDirectory(skillId: string, workspaceId: string | null): Promise<void>;
 }
 
 /** Cancellation owned by the desktop lifetime, including pending readiness. */

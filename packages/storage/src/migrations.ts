@@ -5,13 +5,21 @@ import { Value } from 'typebox/value';
 import { StorageError } from './errors.js';
 import { FOUNDATION_SQL } from './migrations/0001-foundation.js';
 import { APPLICATION_LOGIN_SQL } from './migrations/0002-application-login.js';
+import { MCP_SQL } from './migrations/0003-mcp.js';
+import { EXTENSIONS_SQL } from './migrations/0004-extensions.js';
+import { REMOTE_MCP_SQL } from './migrations/0005-remote-mcp.js';
+import { CONNECTIONS_SQL } from './migrations/0006-connections.js';
 const MigrationRowSchema = Type.Object({ version: Type.Integer(), checksum: Type.String() });
 
 /** Highest installed schema version understood by this build. */
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 6;
 const migrations = [
   { version: 1, sql: FOUNDATION_SQL },
   { version: 2, sql: APPLICATION_LOGIN_SQL },
+  { version: 3, sql: MCP_SQL },
+  { version: 4, sql: EXTENSIONS_SQL },
+  { version: 5, sql: REMOTE_MCP_SQL },
+  { version: 6, sql: CONNECTIONS_SQL },
 ];
 
 /**

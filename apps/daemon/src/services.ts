@@ -20,6 +20,15 @@ import { GitHubIdentityProvider } from './features/auth/github-provider.js';
 import { LoginService } from './features/auth/login-service.js';
 import { WorkspaceService } from './features/workspaces/service.js';
 import { AttachmentService } from './features/attachments/service.js';
+import { McpService } from './features/mcp/service.js';
+import type { McpManager } from './features/mcp/types.js';
+import { RemoteMcpService } from './features/mcp/remote-service.js';
+import { createExternalToolPorts } from './features/mcp/external-tools.js';
+import { SkillsService } from './features/skills/service.js';
+import { PluginService } from './features/plugins/service.js';
+import { createPluginAppPort } from './features/plugins/apps.js';
+import { ConnectionService } from './features/connections/service.js';
+import type { SkillsPort } from '@my-pi-harness/agent-runtime';
 
 /** Resources have one daemon owner and close in dependency order. */
 export interface ApplicationServices {
@@ -32,6 +41,11 @@ export interface ApplicationServices {
   work: WorkRuntime;
   attachments: AttachmentService;
   login: LoginService;
+  mcp: McpService;
+  remoteMcp: RemoteMcpService;
+  skills: SkillsService;
+  plugins: PluginService;
+  connections: ConnectionService;
   githubCallbackUrl: string | null;
   close(): Promise<void>;
 }
@@ -40,6 +54,9 @@ export interface ApplicationServices {
 export interface ServiceOptions {
   credentials?: CredentialStore;
   githubFetch?: typeof fetch;
+  mcpManager?: McpManager;
+  remoteFixtureOrigin?: string;
+  connectionFixtureOrigin?: string;
   onError?: (error: unknown) => void;
 }
 
@@ -54,7 +71,13 @@ export async function createApplicationServices(
   let gateway: ModelGateway | undefined;
   let attachments: AttachmentService | undefined;
   let work: WorkRuntime | undefined;
+  let mcp: McpService | undefined;
+  let remoteMcp: RemoteMcpService | undefined;
+  let skills: SkillsService | undefined;
+  let plugins: PluginService | undefined;
+  let connections: ConnectionService | undefined;
   try {
+    const profileDirectory = await realpath(config.profileDirectory);
     const credentials =
       options.credentials ?? (await createSystemCredentialStore(config.profileDirectory));
     const runtimeRef: { current?: SessionRuntime } = {};
@@ -68,6 +91,74 @@ export async function createApplicationServices(
     });
     await gateway.initialize();
     const workspaces = new WorkspaceService(store, config.profileDirectory);
+    mcp = new McpService({
+      store,
+      credentials,
+      profileDirectory,
+      resolveWorkspace: (id) => workspaces.requireAvailable(id),
+      ...(options.mcpManager === undefined ? {} : { manager: options.mcpManager }),
+    });
+    const ownedMcp = mcp;
+    remoteMcp = new RemoteMcpService({
+      store,
+      repository: store.remoteMcp,
+      credentials,
+      connectionToken: {
+        authority(id, endpoint) {
+          if (!connections) throw new Error('Connections have not been initialized');
+          return connections.authority(id, endpoint);
+        },
+        async read(id, endpoint, signal) {
+          if (!connections) throw new Error('Connections have not been initialized');
+          return await connections.read(id, endpoint, signal);
+        },
+      },
+      ...(options.remoteFixtureOrigin ? { fixtureOrigin: options.remoteFixtureOrigin } : {}),
+    });
+    const ownedRemoteMcp = remoteMcp;
+    const externalTools = createExternalToolPorts(ownedMcp, ownedRemoteMcp);
+    skills = new SkillsService({
+      repository: store.extensions,
+      profileDirectory,
+      resolveWorkspace: (id) => workspaces.requireAvailable(id),
+    });
+    const ownedSkills = skills;
+    const skillPort: SkillsPort = {
+      list: (workspaceId, signal) => ownedSkills.list(workspaceId, signal),
+      freezeSelections: (workspaceId, selections, signal) =>
+        ownedSkills.freezeSelections(workspaceId, selections, signal),
+      validateBindings: (frozen, signal) => ownedSkills.validateBindings(frozen, signal),
+      assertBindingsCurrent: (frozen) => ownedSkills.assertBindingsCurrent(frozen),
+      retainBindings: (frozen) => ownedSkills.retainBindings(frozen),
+      async loadResource(skill, path, signal) {
+        const content = await ownedSkills.loadResource(skill, path, signal);
+        const identity = {
+          type: 'text' as const,
+          text: JSON.stringify({ skill: skill.selection, path: content.path, hash: content.hash }),
+        };
+        if (content.type === 'image')
+          return [identity, { type: 'image', data: content.data, mimeType: content.mimeType }];
+        return [identity, { type: 'text', text: content.text }];
+      },
+    };
+    connections = new ConnectionService({
+      store,
+      repository: store.connections,
+      credentials,
+      skills: ownedSkills,
+      onInvalidated: (id) => ownedRemoteMcp.invalidateConnection(id),
+      ...(options.connectionFixtureOrigin
+        ? { fixtureOrigin: options.connectionFixtureOrigin }
+        : {}),
+    });
+    const ownedConnections = connections;
+    plugins = new PluginService({
+      repository: store.extensions,
+      profileDirectory,
+      skills: ownedSkills,
+      apps: createPluginAppPort(ownedRemoteMcp),
+    });
+    const ownedPlugins = plugins;
     const ownedGateway = gateway;
     const sessionRuntime = (): SessionRuntime => {
       if (!runtimeRef.current) throw new Error('Session runtime has not been initialized');
@@ -76,7 +167,7 @@ export async function createApplicationServices(
     work = new WorkRuntime({
       store,
       gateway: ownedGateway,
-      profileDirectory: config.profileDirectory,
+      profileDirectory,
       resolveWorkspace: (id) => workspaces.requireAvailable(id),
       command: (id, operation, allowActive) =>
         sessionRuntime().workCommand(id, operation, allowActive),
@@ -84,9 +175,12 @@ export async function createApplicationServices(
     });
     attachments = new AttachmentService(store, workspaces, config.profileDirectory);
     const tools = new ToolRuntime({
-      profileDirectory: config.profileDirectory,
+      ...(config.officePythonPath ? { officePythonPath: config.officePythonPath } : {}),
+      profileDirectory,
       resolveWorkspace: (id) => workspaces.requireAvailable(id),
       work,
+      externalTools,
+      connectionGateway: ownedConnections,
       reviewer: new ModelApprovalReviewer({
         gateway: ownedGateway,
         context: (id) => {
@@ -110,6 +204,10 @@ export async function createApplicationServices(
       onError: options.onError ?? (() => undefined),
       tools,
       work,
+      externalTools,
+      discovery: externalTools,
+      skills: skillPort,
+      connectionGateway: ownedConnections,
     });
     runtimeRef.current = runtime;
     const login = new LoginService([
@@ -141,15 +239,29 @@ export async function createApplicationServices(
       work: ownedWork,
       attachments: ownedAttachments,
       login,
+      mcp: ownedMcp,
+      remoteMcp: ownedRemoteMcp,
+      skills: ownedSkills,
+      plugins: ownedPlugins,
+      connections: ownedConnections,
       githubCallbackUrl: config.githubCallbackUrl,
       close(): Promise<void> {
         closing ??= (async () => {
           const failures: unknown[] = [];
+          ownedMcp.stopAccepting();
+          ownedRemoteMcp.stopAccepting();
+          ownedPlugins.stopAccepting();
+          ownedConnections.stopAccepting();
           ownedWork.close();
           for (const dispose of [
             () => login.close(),
             () => ownedAttachments.close(),
             () => runtime.close(),
+            () => ownedMcp.close(),
+            () => ownedRemoteMcp.close(),
+            () => ownedConnections.close(),
+            () => ownedPlugins.close(),
+            () => ownedSkills.close(),
             () => ownedGateway.close(),
           ]) {
             try {
@@ -173,6 +285,10 @@ export async function createApplicationServices(
     try {
       work?.close();
       await attachments?.close();
+      await mcp?.close();
+      await remoteMcp?.close();
+      await plugins?.close();
+      await skills?.close();
       await gateway?.close();
     } finally {
       store.close();

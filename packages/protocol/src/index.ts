@@ -1,5 +1,10 @@
 import { type Static, Type } from 'typebox';
 export * from './context.js';
+export * from './mcp.js';
+export * from './tool-results.js';
+export * from './skills.js';
+export * from './plugins.js';
+export * from './office.js';
 export {
   SessionChangeSchema,
   SessionPatchSchema,
@@ -111,6 +116,9 @@ export {
   ToolCallRecordSchema,
   ToolCallViewSchema,
   ToolDecisionInputSchema,
+  ToolSourceSchema,
+  ToolBindingSchema,
+  ToolDispatchSchema,
 } from './tools.js';
 export type {
   ApprovalMode,
@@ -118,10 +126,13 @@ export type {
   ToolCallRecord,
   ToolCallView,
   ToolDecisionInput,
+  ToolSource,
+  ToolBinding,
+  ToolDispatch,
 } from './tools.js';
 
 /** 跨端应用协议版本；不等同于产品版本。 */
-export const PROTOCOL_VERSION = 11;
+export const PROTOCOL_VERSION = 14;
 
 /** 本机服务完成监听后的可公开状态，不包含配置、路径或凭据。 */
 export const HealthResponseSchema = Type.Object(
@@ -187,6 +198,8 @@ export type DesktopInfo = Static<typeof DesktopInfoSchema>;
 export interface DesktopBridge {
   /** 返回产品版本和平台。 */
   getInfo(): Promise<DesktopInfo>;
+  /** Resolve a registered Skill on the host and reveal its directory; arbitrary paths are rejected. */
+  revealSkillDirectory(skillId: string, workspaceId: string | null): Promise<void>;
   /** Open the URL of an active daemon-owned authentication flow. */
   openAuth(flowId: string): Promise<void>;
   /** Open an explicit HTTP(S) link in the system browser; other protocols are rejected. */
@@ -196,3 +209,5 @@ export interface DesktopBridge {
   /** Resolve one actual dropped directory; synthetic files and regular files are rejected. */
   getDroppedWorkspaceDirectory(file: unknown): Promise<string>;
 }
+export * from './connections.js';
+export * from './frozen-tools.js';

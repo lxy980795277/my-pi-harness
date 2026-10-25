@@ -2,6 +2,7 @@ import { Type, type TSchema } from 'typebox';
 import { Value } from 'typebox/value';
 import { ExecutionError } from './errors.js';
 import type { ToolDescription } from './types.js';
+import { OFFICE_TOOL_DEFINITIONS, describeOfficeTool } from './office/catalog.js';
 
 const path = Type.String({ minLength: 1, maxLength: 2048 });
 const digest = Type.String({ pattern: '^[a-f0-9]{64}$' });
@@ -97,7 +98,9 @@ export const TOOL_DEFINITIONS: readonly {
 ];
 
 export function validateArguments(name: string, args: Record<string, unknown>): void {
-  const definition = TOOL_DEFINITIONS.find((entry) => entry.name === name);
+  const definition = [...TOOL_DEFINITIONS, ...OFFICE_TOOL_DEFINITIONS].find(
+    (entry) => entry.name === name,
+  );
   if (!definition) throw new ExecutionError('UNKNOWN_TOOL', 'The requested tool is not available');
   if (!Value.Check(definition.parameters, args))
     throw new ExecutionError('INVALID_ARGUMENTS', `Invalid arguments for ${name}`);
@@ -114,6 +117,8 @@ export function stringArgument(args: Record<string, unknown>, key: string, fallb
 /** Explain the exact requested operation without reading files or opening connections. */
 export function describeTool(name: string, args: Record<string, unknown>): ToolDescription {
   validateArguments(name, args);
+  if (OFFICE_TOOL_DEFINITIONS.some((tool) => tool.name === name))
+    return describeOfficeTool(name, args);
   const mutating =
     name === 'write_file' ||
     name === 'edit_file' ||

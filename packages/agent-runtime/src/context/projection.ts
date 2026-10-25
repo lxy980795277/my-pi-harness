@@ -12,7 +12,10 @@ const TOOL_TEXT_LIMIT = 8192;
 const ATTACHMENT_TEXT_LIMIT = 16_000;
 
 /** Shorten model-visible copies only; durable messages and attachment bytes retain their full contents. */
-export function pruneContext(messages: readonly Message[]): {
+export function pruneContext(
+  messages: readonly Message[],
+  supportsImages: boolean,
+): {
   messages: Message[];
   prunedMessages: number;
 } {
@@ -23,6 +26,13 @@ export function pruneContext(messages: readonly Message[]): {
     if (message.role === 'toolResult') {
       let changed = false;
       const content = message.content.map((part) => {
+        if (part.type === 'image' && !supportsImages) {
+          changed = true;
+          return {
+            type: 'text' as const,
+            text: '[Tool image retained in session data; the selected model does not support images.]',
+          };
+        }
         if (part.type !== 'text' || part.text.length <= TOOL_TEXT_LIMIT) return part;
         changed = true;
         return {

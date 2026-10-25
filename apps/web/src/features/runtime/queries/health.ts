@@ -7,7 +7,7 @@ import { fetchHealth } from '@/features/runtime/services/health';
 export const HEALTH_QUERY_KEY = ['runtime', 'health', PROTOCOL_VERSION] as const;
 
 /** Keeps daemon health in the request cache, separate from transient event state. */
-export const useHealth = (): UseQueryResult<HealthResponse, Error> => {
+export const useHealth = (enabled = true): UseQueryResult<HealthResponse, Error> => {
   return useQuery({
     queryKey: HEALTH_QUERY_KEY,
     queryFn: ({ signal }) => {
@@ -15,5 +15,6 @@ export const useHealth = (): UseQueryResult<HealthResponse, Error> => {
     },
     retry: false,
     staleTime: Number.POSITIVE_INFINITY,
+    enabled,
   });
 };

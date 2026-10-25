@@ -2,7 +2,7 @@ import type { SettingsDialogProps } from '@/features/settings/types/settings';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Suspense, type FC } from 'react';
-import { Settings2, Sparkles } from 'lucide-react';
+import { Plug, Settings2, Sparkles, BookOpen, Puzzle, Link } from 'lucide-react';
 import { Dialog } from '@/components/ui/dialog';
 import { DialogContent } from '@/components/ui/dialog/dialog-content';
 import { DialogTitle } from '@/components/ui/dialog/dialog-title';
@@ -15,6 +15,10 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Notice } from '@/components/ui/notice';
 import { LazyModelsPage } from '@/features/models/utils/load-models-page';
 import { SettingsLoading } from '@/features/settings/components/settings-loading';
+import { McpSettings } from '@/features/mcp/components/mcp-settings';
+import { ConnectionsSettings } from '@/features/connections/components/connections-settings';
+import { SkillsSettings } from '@/features/skills/components/skills-settings';
+import { PluginsSettings } from '@/features/plugins/components/plugins-settings';
 import { useSettingsDialog } from '@/features/settings/hooks/use-settings-dialog';
 
 /** A modal settings workspace leaves the conversation mounted behind it. */
@@ -45,6 +49,25 @@ export const SettingsDialog: FC<SettingsDialogProps> = ({ theme, onToggleTheme }
                 <Sparkles width={15} height={15} aria-hidden />
                 模型
               </TabsTrigger>
+              <TabsTrigger value="mcp" className="justify-start gap-2 rounded-xl px-3 py-2.5">
+                <Plug width={15} height={15} aria-hidden />
+                MCP
+              </TabsTrigger>
+              <TabsTrigger value="skills" className="justify-start gap-2 rounded-xl px-3 py-2.5">
+                <BookOpen width={15} height={15} aria-hidden />
+                Skills
+              </TabsTrigger>
+              <TabsTrigger value="plugins" className="justify-start gap-2 rounded-xl px-3 py-2.5">
+                <Puzzle width={15} height={15} aria-hidden />
+                插件
+              </TabsTrigger>
+              <TabsTrigger
+                value="connections"
+                className="justify-start gap-2 rounded-xl px-3 py-2.5"
+              >
+                <Link width={15} height={15} aria-hidden />
+                连接
+              </TabsTrigger>
             </TabsList>
           </aside>
           <ScrollArea className="my-5 mr-3 min-h-0 min-w-0 flex-1">
@@ -68,6 +91,18 @@ export const SettingsDialog: FC<SettingsDialogProps> = ({ theme, onToggleTheme }
               <Suspense fallback={<SettingsLoading />}>
                 <LazyModelsPage />
               </Suspense>
+            </TabsContent>
+            <TabsContent value="mcp" className="m-0">
+              <McpSettings />
+            </TabsContent>
+            <TabsContent value="skills" className="m-0">
+              <SkillsSettings />
+            </TabsContent>
+            <TabsContent value="plugins" className="m-0">
+              <PluginsSettings />
+            </TabsContent>
+            <TabsContent value="connections" className="m-0">
+              <ConnectionsSettings />
             </TabsContent>
             {state.closeError && <Notice tone="error">{state.closeError}</Notice>}
           </ScrollArea>

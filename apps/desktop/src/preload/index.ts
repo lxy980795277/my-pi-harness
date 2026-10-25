@@ -8,6 +8,17 @@ import {
 import { Value } from 'typebox/value';
 
 const bridge: DesktopBridge = {
+  async revealSkillDirectory(skillId, workspaceId): Promise<void> {
+    if (
+      typeof skillId !== 'string' ||
+      skillId.length === 0 ||
+      skillId.length > 160 ||
+      (workspaceId !== null &&
+        (typeof workspaceId !== 'string' || workspaceId.length === 0 || workspaceId.length > 160))
+    )
+      throw new Error('Skill目录请求无效');
+    await ipcRenderer.invoke('desktop:reveal-skill-directory', skillId, workspaceId);
+  },
   async openExternal(url: string): Promise<void> {
     await ipcRenderer.invoke('desktop:open-external', parseExternalUrl(url));
   },

@@ -225,7 +225,7 @@ test('停止保留队列，编辑后显式恢复；引导继续同一个 Run', a
     await expect(conversationStatistics).toBeVisible();
     await expect(conversationStatistics).toContainText('总对话 1 次');
     await page.getByLabel('消息', { exact: true }).fill('待修改输入');
-    await page.getByRole('button', { name: '发送', exact: true }).click();
+    await page.getByLabel('消息', { exact: true }).press('Enter');
     await expect(page.getByText('待执行输入 · 1', { exact: true })).toBeVisible();
     await expect(conversationStatistics).toContainText('总对话 1 次');
     await page.getByRole('button', { name: '停止', exact: true }).click();

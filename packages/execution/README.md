@@ -41,3 +41,9 @@ Web 工具只使用标准 80/443 端口，拒绝 URL 凭据、非公网地址、
 ## 验证
 
 使用 `pnpm --filter @my-pi-harness/execution test`、`typecheck`、`lint` 运行本包检查。真实 macOS 测试覆盖默认/显式沙箱的网络/越界/敏感文件拒绝、完整访问的受控工作区外读写与环境隔离，以及两种策略的取消、超时、输出上限、leader 提前退出与 TERM 升级；模拟平台分支检查 Windows/Linux 在两种策略下都拒绝执行，Windows/Linux实机尚未验证。测试使用独占临时工作区和假数据，不访问真实用户凭据或真实供应商账户。
+
+## 持久双向进程
+
+`resolvePersistentProcess` 在不启动程序的情况下解析真实可执行文件、文件身份与已注册工作根，拒绝相对程序路径、启动控制环境和非法参数。`startPersistentProcess` 只启动这份已解析配置，spawn 前后核对程序身份；stdin/stdout 双向通道交由明确拥有者处理，不暴露 ChildProcess。MCP 的协议、目录和请求身份由 integrations 拥有。
+
+持久进程与 Shell 共用进程组 TERM/KILL 和真实管道关闭检查。默认沙箱使用独占 HOME/TMPDIR、拒绝网络；full-access 单独传入，使用宿主权限。写队列最多 4 MiB，排队结束与实际写入前再次检查取消；stdout/stderr 分别有累计和速率上限，stderr 环形诊断过滤已知秘密。`close` 同步拒绝写入、幂等且可等待，完成进程组/管道回收后才删除临时目录；失败明确报告，leader exit 不算完成。执行器仅保证所属 POSIX 进程组，主动脱组后代不在该回收保证内。

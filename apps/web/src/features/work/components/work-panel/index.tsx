@@ -11,36 +11,19 @@ import { TabsTrigger } from '@/components/ui/tabs/tabs-trigger';
 import { TabsContent } from '@/components/ui/tabs/tabs-content';
 import { CheckpointPanel } from '@/features/work/components/checkpoint-panel';
 import { ContextPanel } from '@/features/work/components/context-panel';
-import { PlanReviewCard } from '@/features/work/components/plan-review-card';
 import { PlanPanel } from '@/features/work/components/plan-panel';
 import { QuestionCard } from '@/features/work/components/question-card';
-import { useWork } from '@/features/work/hooks/use-work';
+import type { WorkView } from '@/features/work/types/work';
 interface WorkPanelProps {
   session: SessionSnapshot;
+  state: WorkView;
   children?: ReactNode;
 }
-/** Keeps the conversation uncluttered while surfacing active human questions immediately. */
-export const WorkPanel: FC<WorkPanelProps> = ({ session, children }) => {
-  const state = useWork(session);
+/** Keeps context controls below the composer and detailed work records in their dialog. */
+export const WorkPanel: FC<WorkPanelProps> = ({ session, state, children }) => {
   const work = state.query.data;
   return (
     <>
-      {state.hasRequests && (
-        <div className="shrink-0 px-5 sm:px-6">
-          <div className="mx-auto max-h-[45svh] w-full max-w-4xl space-y-2 overflow-y-auto">
-            {work && state.reviewingPlan && work.state.plan !== null && (
-              <PlanReviewCard
-                key={work.state.plan.id}
-                state={work.state}
-                onCommand={state.command}
-              />
-            )}
-            {state.pendingQuestions.map((question) => {
-              return <QuestionCard key={question.id} question={question} onAnswer={state.answer} />;
-            })}
-          </div>
-        </div>
-      )}
       {children}
       <div className="shrink-0 px-5 pb-2 sm:px-6">
         <div className="mx-auto w-full max-w-4xl">

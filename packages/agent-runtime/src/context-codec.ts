@@ -2,6 +2,7 @@ import type { Message } from '@earendil-works/pi-ai';
 import { Type } from 'typebox';
 import { Value } from 'typebox/value';
 import { RuntimeError } from './errors.js';
+import { StoredToolResultSchema, type StoredToolResult } from '@my-pi-harness/protocol';
 
 const text = Type.Object({
   type: Type.Literal('text'),
@@ -117,9 +118,27 @@ export function decodeContextMessage(serialized: string): Message {
   } catch (cause) {
     throw new RuntimeError('CONTEXT_CORRUPT', 'Stored model context is not valid JSON', { cause });
   }
+  if (Value.Check(StoredToolResultSchema, input)) {
+    return {
+      role: 'toolResult',
+      toolCallId: input.providerCallId,
+      toolName: input.toolName,
+      content: input.content,
+      isError: input.isError,
+      timestamp: input.at,
+      details: { harnessOutcome: input.outcome, origin: input.origin },
+    };
+  }
   if (!Value.Check(envelope, input)) {
     throw new RuntimeError('CONTEXT_CORRUPT', 'Stored model context has an unsupported format');
   }
   // JSON.parse guarantees JSON-only tool arguments; schema validates SDK-required fields.
   return input.message as Message;
+}
+
+/** Canonical outcomes are committed with terminal facts before the SDK receives the result. */
+export function encodeToolResult(input: StoredToolResult): string {
+  if (!Value.Check(StoredToolResultSchema, input))
+    throw new RuntimeError('CONTEXT_CORRUPT', '工具结果事实无效。');
+  return JSON.stringify(input);
 }

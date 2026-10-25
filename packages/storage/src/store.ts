@@ -30,6 +30,10 @@ import {
 } from '@my-pi-harness/protocol';
 import { StorageError } from './errors.js';
 import { AuthRepository } from './auth.js';
+import { McpRepository } from './mcp.js';
+import { ExtensionRepository } from './extensions.js';
+import { RemoteMcpRepository } from './remote-mcp.js';
+import { ConnectionRepository } from './connections.js';
 import { applyMigrations } from './migrations.js';
 import { acquireProfileLock, type ProfileLock } from './profile-lock.js';
 import { ProjectionWriter } from './projector.js';
@@ -44,6 +48,8 @@ import {
 import { PrivateSessionFiles } from './private-files.js';
 import { AttachmentBlobs } from './attachment-blobs.js';
 import { interruptionEvents } from './interruption.js';
+import { validateToolBatch } from './tool-batch.js';
+import { ModelContextQuery } from './model-context.js';
 import { sessionLogDirectory, type ProfileStoreOptions } from './session-log-directory.js';
 import * as schema from './schema.js';
 import type { CreateSessionInput, EventInput, RequestAcceptance } from './types.js';
@@ -58,10 +64,15 @@ import {
 /** JSONL session facts, immutable attachments and SQLite configuration/projections for one daemon. */
 export class ProfileStore {
   public readonly auth: AuthRepository;
+  public readonly mcp: McpRepository;
+  public readonly extensions: ExtensionRepository;
+  public readonly remoteMcp: RemoteMcpRepository;
+  public readonly connections: ConnectionRepository;
   private readonly db: BetterSQLite3Database<typeof schema>;
   private readonly projector: ProjectionWriter;
   private readonly workspaces: WorkspaceRepository;
   private readonly tools: ToolProjection;
+  private readonly modelContext: ModelContextQuery;
   private readonly work: WorkRepository;
   private closed = false;
   private readonly files: PrivateSessionFiles;
@@ -77,10 +88,15 @@ export class ProfileStore {
     options: ProfileStoreOptions = {},
   ) {
     this.auth = new AuthRepository(sqlite, () => this.assertOpen());
+    this.mcp = new McpRepository(sqlite, () => this.assertOpen());
+    this.extensions = new ExtensionRepository(sqlite, () => this.assertOpen());
+    this.remoteMcp = new RemoteMcpRepository(sqlite, () => this.assertOpen());
+    this.connections = new ConnectionRepository(sqlite, () => this.assertOpen());
     this.db = drizzle(sqlite, { schema });
     this.projector = new ProjectionWriter(this.db);
     this.workspaces = new WorkspaceRepository(this.db);
     this.tools = new ToolProjection(this.db);
+    this.modelContext = new ModelContextQuery(this.db);
     this.work = new WorkRepository(this.db);
     this.files = new PrivateSessionFiles(lock.directory, options.sessionLogRoot);
     this.journal = new SessionJournal(this.files);
@@ -170,6 +186,9 @@ export class ProfileStore {
         }
         for (const id of ids) {
           for (const batch of this.journal.read(id)) {
+            validateToolBatch(
+              batch.records.map(({ event, privateData }) => ({ ...event, privateData })),
+            );
             for (const { event, privateData } of batch.records) {
               if (event.type === 'session.created') this.createProjection(event);
               else this.projector.apply(event, privateData ?? undefined);
@@ -699,6 +718,21 @@ export class ProfileStore {
     return row ? { runId: row.runId, inputId: row.inputId } : undefined;
   }
 
+  /** Host-only frozen input authority; browser responses never receive this column. */
+  public getQueuePrivateData(sessionId: string, inputId: string): string | null {
+    this.assertOpen();
+    const row = this.db
+      .select()
+      .from(schema.queue)
+      .where(and(eq(schema.queue.sessionId, sessionId), eq(schema.queue.id, inputId)))
+      .get();
+    if (row === undefined) throw new StorageError('CONFLICT', 'Queued input no longer exists');
+    if (row.privateData === null) return null;
+    const decoded: unknown = JSON.parse(row.privateData);
+    checked(QueueRequestSchema, decoded);
+    return row.privateData;
+  }
+
   /** Resolve pending input provenance from its immutable acceptance and original run. */
   public getQueueBranch(sessionId: string, inputId: string): string {
     this.assertOpen();
@@ -869,11 +903,12 @@ export class ProfileStore {
         accepted.push(event);
       }
 
+      validateToolBatch(inputs);
       return accepted;
     });
   }
 
-  /** Return only complete branch messages with private replay codecs; no streaming/error assistants. */
+  /** Return only complete branch messages with private replay codecs and canonical outcomes. */
   public getModelContext(
     sessionId: string,
     branchId: string,
@@ -883,66 +918,25 @@ export class ProfileStore {
     if (this.getSession(sessionId) === undefined)
       throw new StorageError('SESSION_NOT_FOUND', 'Session does not exist or is archived');
     this.projector.session(sessionId);
-    const branch = this.db
-      .select()
-      .from(schema.branches)
-      .where(and(eq(schema.branches.id, branchId), eq(schema.branches.sessionId, sessionId)))
-      .get();
-    if (!branch)
-      throw new StorageError('INVALID_RECORD', 'Context branch does not belong to this session');
-    const rows = this.db
-      .select({ data: schema.messages.data, privateData: schema.messages.privateData })
-      .from(schema.branchMessages)
-      .innerJoin(schema.messages, eq(schema.messages.id, schema.branchMessages.messageId))
-      .where(eq(schema.branchMessages.branchId, branchId))
-      .orderBy(asc(schema.branchMessages.ordinal))
-      .all()
-      .map((row) => ({
-        message: checked(MessageViewSchema, row.data),
-        privateData: row.privateData,
-      }));
-    const selected = messageIds === undefined ? undefined : new Set(messageIds);
-    const contexts = this.tools.contexts(sessionId);
-    if (
-      selected !== undefined &&
-      rows.filter((row) => selected.has(row.message.id)).length !== selected.size
-    )
-      throw new StorageError(
-        'INVALID_RECORD',
-        'Context messages must belong to the selected branch',
-      );
-    return rows.flatMap((row) => {
-      const message = row.message;
-      if (selected !== undefined && !selected.has(message.id)) return [];
-      const replayable =
-        message.status === 'complete' &&
-        (message.role === 'user' ||
-          message.stopReason === 'stop' ||
-          message.stopReason === 'length' ||
-          message.stopReason === 'toolUse');
-      if (replayable && row.privateData === null)
-        throw new StorageError(
-          'INVALID_RECORD',
-          'Replayable message is missing its provider codec',
-        );
-      if (!replayable || row.privateData === null) return [];
-      const toolContexts = contexts.get(message.id);
-      if (toolContexts === undefined) return [row.privateData];
-      return [row.privateData, ...toolContexts];
-    });
+    return this.modelContext.read(sessionId, branchId, messageIds);
   }
 
   /** Preserve partial output and queue; stale resources become interrupted, never retried. */
   public recoverInterrupted(): HarnessEvent[] {
     const output: HarnessEvent[] = [];
     for (const session of this.listSessions()) {
-      const tools =
-        session.activeRunId === null ? [] : this.tools.unfinished(session.id, session.activeRunId);
+      const at = Date.now();
+      const tools = this.db
+        .select({ id: schema.runs.id })
+        .from(schema.runs)
+        .where(eq(schema.runs.sessionId, session.id))
+        .all()
+        .flatMap(({ id }) => this.tools.recovery(session.id, id, at));
       const inputs = interruptionEvents(
         session,
         this.work.interruptedStates(session.id),
         tools,
-        Date.now(),
+        at,
       );
       if (inputs.length > 0) output.push(...this.append(session.id, inputs));
     }

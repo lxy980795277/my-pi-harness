@@ -223,3 +223,28 @@ describe('workspace source imports', () => {
     );
   });
 });
+
+describe('MCP integration ownership', () => {
+  it.each([
+    '@my-pi-harness/storage',
+    '@my-pi-harness/agent-runtime',
+    '@my-pi-harness/daemon',
+    'fastify',
+    'react',
+    'better-sqlite3',
+  ])('rejects %s from the integration implementation', async (dependency) => {
+    const root = await fixture({
+      'packages/integrations/src/adapter.ts': `import value from '${dependency}';`,
+    });
+    await expect(checkBoundaries(root)).rejects.toThrow(
+      'Integrations 不能拥有数据库、Runtime、HTTP 或 Renderer',
+    );
+  });
+  it('allows the public SDK, execution, schema and Node adapters', async () => {
+    const root = await fixture({
+      'packages/integrations/src/adapter.ts':
+        "import { Client } from '@modelcontextprotocol/client'; import { startPersistentProcess } from '@my-pi-harness/execution'; import { Type } from 'typebox'; import { Buffer } from 'node:buffer';",
+    });
+    await expect(checkBoundaries(root)).resolves.toBe(1);
+  });
+});

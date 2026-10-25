@@ -2,11 +2,13 @@ import type { AuthStatus } from '@my-pi-harness/protocol';
 import type { UseQueryResult } from '@tanstack/react-query';
 import type { RefObject } from 'react';
 import type { Action, ValueChange } from '@/types/events';
+import type { ApplicationInitialization } from '@/app/types/initialization';
 
 export type Theme = 'light' | 'dark';
 export type WorkspacePage = 'sessions' | 'runtime';
 
 export interface ApplicationShellState {
+  initialization: ApplicationInitialization;
   settingsOpen: boolean;
   startNewConversation: Action;
   newConversation: boolean;

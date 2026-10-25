@@ -24,6 +24,8 @@ const tool = (id: string, afterMessageId: string, createdAt: number): ToolCallVi
     sessionId: 'session',
     branchId: 'branch',
     runId: 'run',
+    binding: { kind: 'accepted', source: { kind: 'workspace' }, fingerprint: 'a'.repeat(64) },
+    dispatch: { state: 'not_applicable' },
     name: 'read_file',
     arguments: { path: id },
     status: 'completed',

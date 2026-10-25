@@ -89,6 +89,14 @@ export function importViolation(file, specifier, repoRoot = root) {
   }
 
   if (
+    path.startsWith('packages/integrations/src/') &&
+    (/^@my-pi-harness\/(?:storage|agent-runtime|daemon)(?:\/|$)/.test(specifier) ||
+      /^(?:fastify|react|react-dom|better-sqlite3|drizzle-orm)(?:\/|$)/.test(specifier))
+  ) {
+    return 'Integrations 不能拥有数据库、Runtime、HTTP 或 Renderer';
+  }
+
+  if (
     path.startsWith('apps/desktop/src/') &&
     /^@my-pi-harness\/(?:daemon|agent-runtime)(?:\/|$)/.test(specifier)
   ) {

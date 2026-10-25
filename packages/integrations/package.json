@@ -1,0 +1,38 @@
+{
+  "name": "@my-pi-harness/integrations",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "files": [
+    "dist",
+    "resources"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run --config vitest.config.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/client": "catalog:",
+    "@my-pi-harness/execution": "workspace:*",
+    "typebox": "catalog:",
+    "yaml": "catalog:",
+    "oauth4webapi": "catalog:",
+    "@my-pi-harness/protocol": "workspace:*"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/server": "catalog:",
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:",
+    "@earendil-works/pi-ai": "catalog:",
+    "@modelcontextprotocol/node": "catalog:"
+  }
+}

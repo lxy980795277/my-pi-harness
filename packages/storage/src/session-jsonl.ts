@@ -29,7 +29,7 @@ const StoredEventSchema = Type.Object(
 /** Exact disk batch format; public event readers never expose its private records. */
 export const SessionBatchSchema = Type.Object(
   {
-    version: Type.Literal(1),
+    version: Type.Literal(2),
     batchId: Type.String({ minLength: 1 }),
     previousBatchId: Type.Union([Type.String({ minLength: 1 }), Type.Null()]),
     sessionId: Type.String({ minLength: 1 }),
@@ -241,7 +241,7 @@ export class SessionJournal {
     if (records.length === 0) return;
     const cursor = this.cursors.get(sessionId);
     const body: Omit<SessionBatch, 'checksum'> = {
-      version: 1,
+      version: 2,
       batchId: randomUUID(),
       previousBatchId: cursor?.batchId ?? null,
       sessionId,

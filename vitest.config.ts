@@ -4,6 +4,9 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   resolve: {
     alias: {
+      '@my-pi-harness/integrations': fileURLToPath(
+        new URL('./packages/integrations/src/index.ts', import.meta.url),
+      ),
       '@': fileURLToPath(new URL('./apps/web/src', import.meta.url)),
       '@my-pi-harness/execution': fileURLToPath(
         new URL('./packages/execution/src/index.ts', import.meta.url),
@@ -27,6 +30,7 @@ export default defineConfig({
       'apps/web/test/**/*.test.ts',
       'packages/storage/test/**/*.test.ts',
       'packages/execution/test/**/*.test.ts',
+      'packages/integrations/test/**/*.test.ts',
       'packages/agent-runtime/test/**/*.test.ts',
       'apps/desktop/test/**/*.test.ts',
       'tests/unit/**/*.test.{ts,js}',

@@ -99,6 +99,8 @@ describe('session stream projection reducer', () => {
           sessionId: 'session',
           branchId: 'main',
           runId: 'run',
+          binding: { kind: 'accepted', source: { kind: 'workspace' }, fingerprint: 'a'.repeat(64) },
+          dispatch: { state: 'not_applicable' },
           name: 'read',
           arguments: {},
           status: 'running',

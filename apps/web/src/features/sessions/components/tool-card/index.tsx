@@ -4,6 +4,7 @@ import { memo, type FC } from 'react';
 import { Button } from '@/components/ui/button';
 import { Notice } from '@/components/ui/notice';
 import { ApprovalAudit } from '@/features/sessions/components/approval-audit';
+import { OfficeArtifact } from '@/features/office/components/office-artifact';
 import { useToolCard } from '@/features/sessions/hooks/use-tool-card';
 import { cn } from '@/utils/cn';
 
@@ -20,33 +21,33 @@ export const ToolCard: FC<ToolCardProps> = memo(({ tool, onDecide }) => {
       <Button
         type="button"
         variant="ghost"
-        className="group/tool-row h-8 w-full min-w-0 justify-start gap-2 border-0 px-0 text-sm font-normal text-muted-foreground transition-none hover:bg-transparent focus-visible:bg-muted/50 focus-visible:outline-none disabled:opacity-100"
+        className="group/tool-row h-8 w-full min-w-0 justify-start gap-2 border-0 px-0 text-xs font-normal text-muted-foreground/80 transition-none hover:bg-transparent focus-visible:bg-muted/50 focus-visible:outline-none disabled:opacity-100"
         onClick={state.toggleDetails}
         aria-expanded={state.detailsOpen}
         aria-controls={`tool-details-${tool.id}`}
         aria-label={state.detailsLabel}
         disabled={state.needsApproval}
       >
-        <span className="relative h-4 w-4 shrink-0" aria-hidden>
+        <span className="relative h-3.5 w-3.5 shrink-0" aria-hidden>
           {!state.busy && (
             <state.Icon
-              width={16}
-              height={16}
+              width={14}
+              height={14}
               data-slot="tool-icon"
               className="absolute inset-0 group-hover/tool-row:hidden group-focus-visible/tool-row:hidden"
             />
           )}
           {state.busy && (
             <LoaderCircle
-              width={16}
-              height={16}
+              width={14}
+              height={14}
               data-slot="tool-loading"
               className="absolute inset-0 animate-spin group-hover/tool-row:hidden group-focus-visible/tool-row:hidden motion-reduce:animate-none"
             />
           )}
           <ChevronRight
-            width={16}
-            height={16}
+            width={14}
+            height={14}
             data-slot="tool-chevron"
             className={cn(
               'absolute inset-0 hidden group-hover/tool-row:block group-focus-visible/tool-row:block',
@@ -85,6 +86,16 @@ export const ToolCard: FC<ToolCardProps> = memo(({ tool, onDecide }) => {
           id={`tool-details-${tool.id}`}
           className="ml-6 min-w-0 space-y-3 rounded-xl bg-muted/50 px-3 py-3"
         >
+          <section aria-label="工具来源" className="space-y-1 text-xs text-muted-foreground">
+            <p>{state.sourceLabel}</p>
+            <p>{state.dispatchLabel}</p>
+            {state.fingerprint && (
+              <p className="font-mono [overflow-wrap:anywhere]">定义指纹 · {state.fingerprint}</p>
+            )}
+          </section>
+          {state.unknown && (
+            <Notice tone="error">结果未知，操作可能已生效，需要核验。不会自动重试此操作。</Notice>
+          )}
           {tool.diff !== null && (
             <section aria-label="文件差异" className="min-w-0 space-y-2">
               <p className="text-xs text-muted-foreground">文件差异</p>
@@ -107,6 +118,7 @@ export const ToolCard: FC<ToolCardProps> = memo(({ tool, onDecide }) => {
               </pre>
             </section>
           )}
+          <OfficeArtifact tool={tool} />
           <ApprovalAudit approval={tool.approval} />
           {state.needsApproval && (
             <div className="space-y-3 border-t border-border/60 pt-3">

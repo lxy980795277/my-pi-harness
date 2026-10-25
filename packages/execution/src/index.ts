@@ -5,6 +5,13 @@ import { shellTool } from './shell.js';
 import type { ExecutionContext, ExecutionResult } from './types.js';
 import { webFetchTool } from './web.js';
 import { canonicalWorkspace } from './workspace-path.js';
+import { OFFICE_TOOL_DEFINITIONS, executeOfficeTool } from './office/index.js';
+export {
+  OFFICE_TOOL_DEFINITIONS,
+  describeOfficeTool,
+  executeOfficeTool,
+  type OfficeProcessOptions,
+} from './office/index.js';
 
 export { TOOL_DEFINITIONS, describeTool } from './catalog.js';
 export { ExecutionError } from './errors.js';
@@ -40,6 +47,13 @@ export async function executeTool(
   if (context.readOnly && describeTool(name, args).mutating)
     throw new ExecutionError('READ_ONLY', 'This operation is disabled by the current policy');
   if (name === 'web_fetch') return await webFetchTool(args, context);
+  if (OFFICE_TOOL_DEFINITIONS.some((tool) => tool.name === name))
+    return await executeOfficeTool(
+      name,
+      args,
+      context,
+      context.officePythonPath ? { pythonPath: context.officePythonPath } : {},
+    );
   try {
     const root = await canonicalWorkspace(context);
     switch (name) {
@@ -68,3 +82,11 @@ export async function executeTool(
   }
 }
 export { extractDocument } from './document.js';
+export { resolvePersistentProcess, startPersistentProcess } from './persistent-process.js';
+export type {
+  PersistentProcess,
+  PersistentProcessInput,
+  PersistentProcessLaunch,
+  PersistentProcessObserver,
+  ProcessScope,
+} from './persistent-process.js';

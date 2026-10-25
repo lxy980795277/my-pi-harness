@@ -67,10 +67,10 @@ describe('accepted tools through Pi requests, budgets and durable execution', ()
       const audit = JSON.parse(accepted.privateData) as AcceptedTools;
       expect(audit.tools).toEqual(JSON.parse(JSON.stringify(TOOL_DEFINITIONS)));
       expect(audit.toolSources.map(({ name, source }) => ({ name, source }))).toEqual(
-        TOOL_DEFINITIONS.map(({ name }) => ({ name, source: 'workspace' })),
+        TOOL_DEFINITIONS.map(({ name }) => ({ name, source: { kind: 'workspace' } })),
       );
       const frozen = new RunToolset(
-        TOOL_DEFINITIONS.map((definition) => ({ source: 'workspace', definition })),
+        TOOL_DEFINITIONS.map((definition) => ({ source: { kind: 'workspace' }, definition })),
       );
       expect(audit.toolSources.map(({ fingerprint }) => fingerprint)).toEqual(
         frozen.records.map(({ fingerprint }) => fingerprint),

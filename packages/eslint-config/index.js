@@ -45,6 +45,7 @@ export function createConfig(rootDirectory) {
             './packages/agent-runtime/tsconfig.json',
             './packages/storage/tsconfig.json',
             './packages/execution/tsconfig.json',
+            './packages/integrations/tsconfig.json',
           ],
           tsconfigRootDir: rootDirectory,
         },

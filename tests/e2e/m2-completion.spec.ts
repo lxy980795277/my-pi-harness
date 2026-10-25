@@ -45,7 +45,7 @@ test('完整工具链复用 SDK 调用ID，逐次审批、真实编辑与受限�
   try {
     await writeFile(join(directory, 'note.txt'), original, 'utf8');
     await page.goto(daemon.origin);
-    await configureTestProvider(page, model.origin);
+    await configureTestProvider(page, model.origin, 32768);
     const authorization = await page.request.get(`${daemon.origin}/api/auth/status`);
     const auth: unknown = await authorization.json();
     if (!Value.Check(AuthStatusSchema, auth) || !auth.csrfToken)
@@ -121,17 +121,11 @@ test('完整工具链复用 SDK 调用ID，逐次审批、真实编辑与受限�
       ]);
     expect(await readFile(join(directory, 'note.txt'), 'utf8')).toBe(edited);
     expect(model.requests).toHaveLength(5);
-    const difference = editCard.locator('details').filter({
-      has: page.getByText('文件差异', { exact: true }),
-    });
-    const result = editCard.locator('details').filter({
-      has: page.getByText('执行结果', { exact: true }),
-    });
-    await difference.locator('summary').click();
+    const difference = editCard.getByRole('region', { name: '文件差异', exact: true });
+    const result = editCard.getByRole('region', { name: '执行结果', exact: true });
     await expect(difference.locator('pre')).toBeVisible();
     await expect(difference.locator('pre')).toContainText('+Edited workspace text');
     await expect(difference.locator('pre')).toContainText('-Old workspace text');
-    await result.locator('summary').click();
     await expect(result.locator('pre')).toBeVisible();
     await expect(result.locator('pre')).toContainText('SHA-256:');
     await page

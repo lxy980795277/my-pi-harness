@@ -91,6 +91,8 @@ describe('committed session stream batches', () => {
         name: 'read',
         arguments: { path: 'a.txt' },
         status: 'completed',
+        binding: { kind: 'accepted', source: { kind: 'workspace' }, fingerprint: 'a'.repeat(64) },
+        dispatch: { state: 'not_applicable' },
         summary: 'read a.txt',
         result: 'body',
         diff: null,

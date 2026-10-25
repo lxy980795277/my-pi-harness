@@ -10,6 +10,7 @@ import {
   ListChecks,
   ListTodo,
   MessageCircleQuestion,
+  Plug,
   RotateCcw,
   Search,
   Terminal,
@@ -26,6 +27,23 @@ interface ToolDefinition {
 }
 
 const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
+  tool_search: { name: '检索工具', Icon: Search, argument: 'query' },
+  load_tools: { name: '加载工具', Icon: Plug },
+  skill_search: { name: '检索 Skill', Icon: Search, argument: 'query' },
+  load_skill: { name: '加载 Skill', Icon: FileText },
+  read_skill_resource: { name: '读取 Skill 资源', Icon: FileText, argument: 'path' },
+  request_skill_tools: { name: '申请 Skill 工具授权', Icon: Plug },
+  revoke_skill_tools: { name: '撤销 Skill 工具授权', Icon: Undo2 },
+  service_search: { name: '检索服务', Icon: Search, argument: 'query' },
+  request_service_access: { name: '申请服务授权', Icon: Plug },
+  revoke_service_access: { name: '撤销服务授权', Icon: Undo2 },
+  office_docx: { name: 'Word 文档', Icon: FileText, argument: 'output' },
+  office_pdf: { name: 'PDF 文档', Icon: FileText, argument: 'output' },
+  office_xlsx: { name: '工作簿', Icon: FileText, argument: 'output' },
+  office_pptx: { name: '演示文稿', Icon: FileText, argument: 'output' },
+  office_inspect: { name: '检查文档', Icon: Search, argument: 'source' },
+  office_render: { name: '渲染文档', Icon: FileText, argument: 'source' },
+  pdf_read_pages: { name: '读取 PDF 页图', Icon: FileText, argument: 'source' },
   read_file: { name: '读取文件', Icon: FileText, argument: 'path' },
   list_files: { name: '浏览目录', Icon: FolderSearch, argument: 'path' },
   search_files: { name: '搜索文件', Icon: Search, argument: 'query' },
@@ -51,6 +69,7 @@ const TOOL_STATUS_LABELS: Record<ToolCallView['status'], string> = {
   denied: '已拒绝',
   cancelled: '已取消',
   interrupted: '执行中断',
+  unknown: '结果未知',
 };
 
 const conciseSummary = (text: string): string => {
@@ -58,6 +77,9 @@ const conciseSummary = (text: string): string => {
 };
 
 const toolSummary = (tool: ToolCallView, definition: ToolDefinition): string => {
+  if (tool.status === 'unknown') {
+    return '操作可能已生效，需要核验';
+  }
   if (
     (tool.status === 'failed' || tool.status === 'denied' || tool.status === 'interrupted') &&
     tool.result !== null
@@ -116,14 +138,56 @@ export const toolPresentation = (tool: ToolCallView): ToolPresentation => {
   if (definition === undefined) {
     definition = { name: tool.name, Icon: Wrench };
   }
+  let sourceLabel = '调用未接受';
+  let fingerprint: string | null = null;
+  if (tool.binding.kind === 'accepted') {
+    fingerprint = tool.binding.fingerprint;
+    const source = tool.binding.source;
+    if (source.kind === 'mcp') {
+      definition = { name: source.remoteToolName, Icon: Plug };
+      sourceLabel = `MCP · ${source.serverId} · revision ${source.serverRevision} · ${source.remoteToolName}`;
+    } else if (source.kind === 'connection') {
+      definition = { name: '服务请求', Icon: Plug };
+      sourceLabel = `服务 · ${source.connectionId} · ${source.operation} · ${source.grantId}`;
+    } else if (source.kind === 'session') {
+      sourceLabel = '会话工具';
+    } else {
+      sourceLabel = '工作区工具';
+    }
+  }
+  let dispatchLabel = '尚未派发';
+  if (
+    tool.binding.kind === 'accepted' &&
+    tool.binding.source.kind !== 'mcp' &&
+    tool.binding.source.kind !== 'connection'
+  ) {
+    dispatchLabel = '内部工具';
+  }
+  if (tool.dispatch.state === 'not_started') {
+    dispatchLabel = '尚未派发';
+  }
+  if (tool.dispatch.state === 'may_have_started') {
+    dispatchLabel = '可能已经派发';
+    if (tool.dispatch.confirmedNotWritten === true) {
+      dispatchLabel = '已确认未写入';
+    }
+  }
   let statusClassName = 'text-muted-foreground';
   if (tool.status === 'failed' || tool.status === 'interrupted') {
     statusClassName = 'text-error-solid';
-  } else if (tool.status === 'awaiting_approval' || tool.status === 'denied') {
+  } else if (
+    tool.status === 'awaiting_approval' ||
+    tool.status === 'denied' ||
+    tool.status === 'unknown'
+  ) {
     statusClassName = 'text-warning-solid';
   }
   return {
     ...definition,
+    sourceLabel,
+    fingerprint,
+    dispatchLabel,
+    unknown: tool.status === 'unknown',
     summary: toolSummary(tool, definition),
     statusLabel: TOOL_STATUS_LABELS[tool.status],
     statusClassName,

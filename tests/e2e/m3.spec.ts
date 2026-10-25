@@ -63,7 +63,8 @@ const setupModel = async (
   image = false,
 ): Promise<ProviderConfig> => {
   await page.goto(origin);
-  const configured = await configureTestProvider(page, modelOrigin);
+  const contextWindow = image ? 32768 : 8192;
+  const configured = await configureTestProvider(page, modelOrigin, contextWindow);
   if (image) {
     const status: unknown = await (await page.request.get(`${origin}/api/auth/status`)).json();
     const current: unknown = await (
@@ -113,8 +114,8 @@ test('M3 上传文本随首发进入真实模型请求，刷新后可预览历�
     await page.getByRole('button', { name: '添加上下文', exact: true }).click();
     const menu = page.getByRole('dialog', { name: '添加上下文菜单', exact: true });
     await expect(menu.getByRole('button')).toHaveText(['上传文件', 'MCP', 'Skill']);
-    await expect(menu.getByRole('button', { name: 'MCP', exact: true })).toBeDisabled();
-    await expect(menu.getByRole('button', { name: 'Skill', exact: true })).toBeDisabled();
+    await expect(menu.getByRole('button', { name: 'MCP', exact: true })).toBeEnabled();
+    await expect(menu.getByRole('button', { name: 'Skill', exact: true })).toBeEnabled();
     await expect(menu).not.toContainText('引用工作区文件');
     await mkdir(join(process.cwd(), 'output', 'playwright'), { recursive: true });
     await page.screenshot({ path: 'output/playwright/m3-attachment-menu.png' });
