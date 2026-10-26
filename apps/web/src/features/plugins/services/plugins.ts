@@ -1,10 +1,22 @@
 import { Type } from 'typebox';
-import { PluginViewSchema, type PluginView } from '@my-pi-harness/protocol';
+import {
+  PluginViewSchema,
+  PluginDetailSchema,
+  type PluginView,
+  type PluginDetail,
+} from '@my-pi-harness/protocol';
 import { getJson, requestJson } from '@/services/base-request';
 import { parseResponse } from '@/utils/parse-response';
 /** Catalog reads finite built-in manifests and their exact installed references. */
 export const fetchPlugins = async (signal: AbortSignal): Promise<PluginView[]> => {
   return parseResponse(Type.Array(PluginViewSchema), await getJson('/plugins', signal));
+};
+/** Preview bundled instructions without installing or activating the plugin. */
+export const fetchPluginDetail = async (id: string, signal: AbortSignal): Promise<PluginDetail> => {
+  return parseResponse(
+    PluginDetailSchema,
+    await getJson(`/plugins/${encodeURIComponent(id)}`, signal),
+  );
 };
 export const installPlugin = async (id: string, signal: AbortSignal): Promise<PluginView> => {
   return parseResponse(

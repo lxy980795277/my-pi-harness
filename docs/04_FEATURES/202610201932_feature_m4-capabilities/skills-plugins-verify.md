@@ -28,3 +28,22 @@
 ## 未验证及限制
 
 真实 GitHub 网络下载、第三方 App OAuth、收费服务、Electron 新安装包中的目录打开，以及 Windows/Linux 未在本模块浏览器验证中执行。GitHub HTTP fixture 验证安装协议和失败处理，不替代真实网络可用性；App 安装完成也不等于账户已经连接或工具已经授权。Runtime 动态 Skill 激活、压缩保留和排队消费由 M4 Runtime 验证另行记录。
+
+## 插件市场三级导航（2026-10-26）
+
+本次为M4.6界面收尾，产品0.7.0、通信协议15，SQLite与JSONL格式不变。市场使用图标、名称、简介和独立安装/启停/卸载操作；插件详情按应用和Skills分组，Skill正文在同一设置内容区只读渲染Markdown。未安装或停用时可预览随包正文，预览不安装、创建快照或授予运行权限。M5尚未开发。
+
+实际检查环境仍为macOS arm64、Node24.20.0、pnpm10.34.6与Chromium，沿用隔离profile、动态端口、合成身份和受控模型，没有读取根 `.env` 或触碰用户开发服务。
+
+- 后端定向Vitest覆盖 `packages/integrations/test/plugin-preview.test.ts`、`apps/daemon/test/plugin-preview.test.ts` 与既有 `apps/daemon/test/skills-plugins.test.ts`：首轮14项通过；随后将符号链接边界分为平台定向用例，重跑资源预览4项通过。15个不同用例均有通过记录，两轮重叠不累加。覆盖九个插件预览、未安装/停用、鉴权、未知ID/额外query、零安装/快照/凭据读取、取消/关闭、坏UTF-8、超限与符号链接。
+- `pnpm build`：8个任务通过，含Web三个类型编译面、daemon与所有依赖；最后配置读取失败文案修正后另跑Web生产构建、类型和该Hook的ESLint通过。保留既有Vite大chunk与Electron独立renderer配置提示，不将构建视为打包验收。
+- 所改Web和宿主文件的定向ESLint、protocol/integrations/daemon类型、E2E类型、a11y、源码约定、依赖边界、文档及格式检查通过。
+- `pnpm exec playwright test tests/e2e/skills-plugins.spec.ts --workers=1 --output=output/playwright/plugin-market-navigation`：3个场景通过，17.3秒。既有Skill选择进入模型/JSONL路径保留；Documents覆盖未安装预览、安装不展开、两处Skill开关同步、刷新后的偏好、整体停用、卸载；Google覆盖真实多App目录、一次503后真实API重试、焦点/滚动复位、分类保留及深色展示。
+
+实际查看市场、Skill正文及Google深色详情截图，图标、简介和层级清晰，正文不是原始文本编辑器。截图位于未追踪的 `output/playwright/plugin-market-navigation/`，不提交浏览器输出。现有内置插件均包含一个Skill，分组与导航按数组处理；没有伪造多Skill插件作为真实目录证据。
+
+最后视觉复核修正了卸载按钮将背景token用作文字色的低对比问题，改用成对的error/error-foreground，并重建Web。随后的Documents复测在reload后目录断言失败：trace明确显示组件控制revision2/false已持久化，GET Skills也返回enabled:false；管理目录本来保留禁用项。原测试误用hidden断言，且可能在列表尚未加载时提前通过。现明确等待并校验真实Skills响应，区分组件停用后的管理行保留和插件整体停用后的目录移除；不为通过测试改变产品目录语义。
+
+修正后仅重跑Documents场景，1项通过、6.7秒，不与前述场景累加。最后Web三编译面/构建、所改组件ESLint以及测试ESLint/E2E类型通过。最终截图位于 `output/playwright/plugin-market-final-verified/`，实际查看 `plugin-details.png` 确认卸载文字清晰；此前失败trace保留在 `output/playwright/plugin-market-final-contrast/`。未重复全仓源码、全部浏览器或桌面验收。
+
+本次未启动新的Electron应用、重新打包安装目录或进行真实第三方账户授权。已有M4的Office视觉、真实账号、Windows执行与安装验收缺口保持原状态。协议15要求开发服务与共享Renderer同步更新；没有提交或推送代码。

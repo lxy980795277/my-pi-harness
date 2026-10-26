@@ -9,8 +9,14 @@ import {
   installSkillFiles,
   readSkillTree,
   syncSkillDirectory,
+  previewBuiltinPluginSkills,
 } from '@my-pi-harness/integrations';
-import type { PluginComponent, PluginManifest, PluginView } from '@my-pi-harness/protocol';
+import type {
+  PluginComponent,
+  PluginDetail,
+  PluginManifest,
+  PluginView,
+} from '@my-pi-harness/protocol';
 import type { ExtensionRepository, StoredPlugin } from '@my-pi-harness/storage';
 import type { SkillsService } from '../skills/service.js';
 
@@ -60,6 +66,15 @@ export class PluginService {
         revision: installed.revision,
         components: installed.components,
       };
+    });
+  }
+  public async detail(id: string, signal: AbortSignal): Promise<PluginDetail> {
+    this.manifest(id);
+    return await this.trackOperation(signal, async (owned) => {
+      const skills = await previewBuiltinPluginSkills(id, owned, this.resourceRoot());
+      const plugin = this.list().find((entry) => entry.manifest.id === id);
+      if (plugin === undefined) return this.missing();
+      return { plugin, skills };
     });
   }
   private stored(id: string, expectedRevision: number): StoredPlugin {
@@ -243,17 +258,13 @@ export class PluginService {
     await rm(plugin.directory, { recursive: true });
     this.options.repository.removePlugin(id, removing.revision);
   }
-  private async ownOperation<T>(
-    id: string,
+  private async trackOperation<T>(
     signal: AbortSignal,
     operation: (signal: AbortSignal) => Promise<T>,
   ): Promise<T> {
     if (this.stopped) throw new SkillError('PLUGIN_CLOSED', 'Plugin service is closing');
-    if (this.busy.has(id))
-      throw new SkillError('PLUGIN_BUSY', 'Another operation owns this plugin');
     const controller = new AbortController();
     this.operations.add(controller);
-    this.busy.add(id);
     let settle: () => void = () => undefined;
     const settlement = new Promise<void>((resolve) => {
       settle = resolve;
@@ -265,6 +276,19 @@ export class PluginService {
       settle();
       this.settlements.delete(settlement);
       this.operations.delete(controller);
+    }
+  }
+  private async ownOperation<T>(
+    id: string,
+    signal: AbortSignal,
+    operation: (signal: AbortSignal) => Promise<T>,
+  ): Promise<T> {
+    if (this.busy.has(id))
+      throw new SkillError('PLUGIN_BUSY', 'Another operation owns this plugin');
+    this.busy.add(id);
+    try {
+      return await this.trackOperation(signal, operation);
+    } finally {
       this.busy.delete(id);
     }
   }

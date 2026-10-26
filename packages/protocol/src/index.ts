@@ -132,7 +132,7 @@ export type {
 } from './tools.js';
 
 /** 跨端应用协议版本；不等同于产品版本。 */
-export const PROTOCOL_VERSION = 14;
+export const PROTOCOL_VERSION = 15;
 
 /** 本机服务完成监听后的可公开状态，不包含配置、路径或凭据。 */
 export const HealthResponseSchema = Type.Object(

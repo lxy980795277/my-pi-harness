@@ -29,14 +29,19 @@
 
 ## 插件管理
 
-| 方法与路径                                      | 行为                                         |
-| ----------------------------------------------- | -------------------------------------------- |
-| `GET /api/plugins`                              | 有限内置 manifest 与当前安装状态             |
-| `POST /api/plugins/:id/install`                 | 装配独立 Skill 资源与所属 MCP Apps           |
-| `POST /api/plugins/:id/control`                 | 按 `{expectedRevision,enabled}` 控制整个插件 |
-| `POST /api/plugins/:id/components/:componentId` | 按相同 revision 控制一个组件                 |
-| `DELETE /api/plugins/:id`                       | 按 `{expectedRevision}` 卸载所属资源与关联   |
+| 方法与路径                                      | 行为                                          |
+| ----------------------------------------------- | --------------------------------------------- |
+| `GET /api/plugins`                              | 有限内置 manifest 与当前安装状态              |
+| `GET /api/plugins/:id`                          | 当前插件状态及随包Skill简介与完整Markdown正文 |
+| `POST /api/plugins/:id/install`                 | 装配独立 Skill 资源与所属 MCP Apps            |
+| `POST /api/plugins/:id/control`                 | 按 `{expectedRevision,enabled}` 控制整个插件  |
+| `POST /api/plugins/:id/components/:componentId` | 按相同 revision 控制一个组件                  |
+| `DELETE /api/plugins/:id`                       | 按 `{expectedRevision}` 卸载所属资源与关联    |
 
 `PluginView` 返回 manifest、安装/启停、revision 和组件引用。Skill 组件为 `skill:<name>`，App 使用 manifest 中的独立 ID；相同名称不能混用控制入口。安装代次留在宿主配置与冻结授权中。每个插件只有一个管理操作，冲突返回错误；取消或关闭等待所属暂存清理。
+
+协议15新增只读 `PluginDetail`：`{plugin:PluginView,skills:[{name,description,content}]}`。`content`是随包 `SKILL.md` 解析后的完整Markdown正文，名称与manifest声明一一对应；Apps继续读取 `plugin.manifest.apps`。已安装组件的启停偏好保持在 `plugin.components`，预览不改变它们。未安装、插件停用及Skill组件停用都可预览；未知插件返回404，接口不接受路径或工作区查询参数。
+
+详情只读取有限内置manifest拥有的随包文件，拒绝链接、非法UTF-8、损坏元数据和超过128KiB的Skill文档。不返回宿主路径、资源字节、凭据或Run授权，不创建安装目录、Skill快照或配置记录，不触发MCP、账号授权或模型请求。预览随包正文不代表已安装版本获得执行权限；启用、安装与Run选择仍使用各自已有接口。
 
 安装只登记 App 配置，不授权本机启动、第三方账户或实际工具调用。精确 `referenceId` 由宿主拥有者验证，卸载不按名称匹配或删除手动 Server。远端授权和供应商连接遵守其所属协议；真实供应商、预注册客户端限制和平台验收不由本地安装成功推导。

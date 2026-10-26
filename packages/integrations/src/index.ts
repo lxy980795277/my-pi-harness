@@ -20,6 +20,7 @@ export { downloadGitHubSkill } from './skills/github.js';
 export { installSkillFiles } from './skills/install.js';
 export { readSkillTree } from './skills/files.js';
 export { BUILTIN_PLUGINS, BUILTIN_PLUGIN_RESOURCE_DIRECTORY } from './plugins/catalog.js';
+export { previewBuiltinPluginSkills } from './plugins/preview.js';
 export type { SkillRoot, SkillResourceContent } from './skills/types.js';
 export type {
   McpCallInput,

@@ -38,6 +38,25 @@ export const PluginViewSchema = Type.Object(
   object,
 );
 export type PluginView = Static<typeof PluginViewSchema>;
+/** Read-only bundled instructions; preview grants neither installation nor Run authority. */
+export const PluginSkillPreviewSchema = Type.Object(
+  {
+    name: Type.String({ pattern: '^[a-z0-9]+(-[a-z0-9]+)*$', maxLength: 64 }),
+    description: Type.String({ minLength: 1, maxLength: 1024 }),
+    content: Type.String({ minLength: 1, maxLength: 131072 }),
+  },
+  object,
+);
+export type PluginSkillPreview = Static<typeof PluginSkillPreviewSchema>;
+/** Current installation preferences and safe previews of this built-in manifest's Skills. */
+export const PluginDetailSchema = Type.Object(
+  {
+    plugin: PluginViewSchema,
+    skills: Type.Array(PluginSkillPreviewSchema, { maxItems: 32 }),
+  },
+  object,
+);
+export type PluginDetail = Static<typeof PluginDetailSchema>;
 export const PluginControlInputSchema = Type.Object(
   { expectedRevision: Type.Integer({ minimum: 1 }), enabled: Type.Boolean() },
   object,

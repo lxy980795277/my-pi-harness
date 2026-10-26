@@ -3,6 +3,7 @@ import {
   PluginControlInputSchema,
   PluginRemoveInputSchema,
   PluginViewSchema,
+  PluginDetailSchema,
   type PluginControlInput,
   type PluginRemoveInput,
 } from '@my-pi-harness/protocol';
@@ -20,6 +21,31 @@ const ComponentParams = Type.Object(
 export function registerPluginRoutes(server: FastifyInstance, plugins: PluginService): void {
   server.get('/api/plugins', { schema: { response: { 200: Type.Array(PluginViewSchema) } } }, () =>
     plugins.list(),
+  );
+  server.get<{ Params: { id: string } }>(
+    '/api/plugins/:id',
+    {
+      schema: {
+        params: Params,
+        querystring: Type.Object({}, { additionalProperties: false }),
+        response: { 200: PluginDetailSchema },
+      },
+    },
+    async (request, reply) => {
+      const controller = new AbortController();
+      const abort = (): void => controller.abort();
+      const close = (): void => {
+        if (!reply.raw.writableFinished) controller.abort();
+      };
+      request.raw.once('aborted', abort);
+      reply.raw.once('close', close);
+      try {
+        return await plugins.detail(request.params.id, controller.signal);
+      } finally {
+        request.raw.off('aborted', abort);
+        reply.raw.off('close', close);
+      }
+    },
   );
   server.post<{ Params: { id: string } }>(
     '/api/plugins/:id/install',
