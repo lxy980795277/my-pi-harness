@@ -100,8 +100,8 @@ export class ToolProjection {
     return recoverToolEvents(messages, tools, at);
   }
 
-  public contexts(sessionId: string): Map<string, string[]> {
-    const output = new Map<string, string[]>();
+  public contexts(sessionId: string): Map<string, Record<string, unknown>[]> {
+    const output = new Map<string, Record<string, unknown>[]>();
     const rows = this.db
       .select({
         value: schema.toolContexts.privateData,
@@ -300,7 +300,7 @@ export class ToolProjection {
       .run();
   }
 
-  public context(event: HarnessEvent, privateData: string | undefined): void {
+  public context(event: HarnessEvent, privateData: Record<string, unknown> | undefined): void {
     const input = checked(ContextEventSchema, event.data);
     const run = this.run(event);
     const tool = this.db
@@ -324,13 +324,7 @@ export class ToolProjection {
     const record = checked(ToolCallRecordSchema, tool.data);
     if (activeTool(record.status))
       throw new StorageError('INVALID_EVENT', 'Tool context requires a terminal outcome');
-    let decoded: unknown;
-    try {
-      decoded = JSON.parse(privateData);
-    } catch (cause) {
-      throw new StorageError('INVALID_RECORD', 'Tool result is invalid JSON', { cause });
-    }
-    const result = checked(StoredToolResultSchema, decoded);
+    const result = checked(StoredToolResultSchema, privateData);
     if (
       storedToolCallId(run.id, tool.anchorMessageId, result.providerCallId) !== tool.id ||
       (record.binding.kind === 'accepted'

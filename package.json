@@ -1,6 +1,6 @@
 {
   "name": "my-pi-harness",
-  "version": "0.9.1",
+  "version": "0.10.0",
   "private": true,
   "type": "module",
   "description": "Local-first PC agent harness built independently on Pi",

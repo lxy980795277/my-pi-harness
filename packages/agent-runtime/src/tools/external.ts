@@ -1,10 +1,7 @@
 import type { ExecutionContent } from '@my-pi-harness/execution';
 import type { ApprovalMode, McpToolSelection, WorkState } from '@my-pi-harness/protocol';
-import { Value } from 'typebox/value';
-import { FrozenMcpToolsSchema } from '@my-pi-harness/protocol';
 import type { ExternalToolAuthorization } from '@my-pi-harness/protocol';
 import type { RunToolDefinition } from './toolset.js';
-import { RuntimeError } from '../errors.js';
 /** Hydrated executable schemas retain TypeBox metadata; the shared journal schema validates JSON. */
 export interface FrozenMcpTool {
   selection: McpToolSelection;
@@ -43,19 +40,6 @@ export interface ExternalTools {
   ): Promise<readonly FrozenMcpTool[]>;
   assertBindingsCurrent(tools: readonly FrozenMcpTool[]): void;
   call(input: ExternalToolCall): Promise<ExternalToolOutcome>;
-}
-
-/** Read the private input binding; its schema is checked again by the host before use. */
-export function decodeFrozenMcpTools(encoded: string): readonly FrozenMcpTool[] {
-  let input: unknown;
-  try {
-    input = JSON.parse(encoded);
-  } catch (cause) {
-    throw new RuntimeError('MCP_BINDING_INVALID', '保存的MCP选择无效。', { cause });
-  }
-  if (!Value.Check(FrozenMcpToolsSchema, input))
-    throw new RuntimeError('MCP_BINDING_INVALID', '保存的MCP选择无效。');
-  return input;
 }
 
 /** Compare selected identities independently of object property and picker ordering. */

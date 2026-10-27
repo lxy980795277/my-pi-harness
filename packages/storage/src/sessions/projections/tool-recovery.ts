@@ -16,7 +16,7 @@ import { StorageError } from '../../shared/errors.js';
 
 export interface RecoveryAssistant {
   message: MessageView;
-  privateData: string | null;
+  privateData: Record<string, unknown> | null;
 }
 
 /** Pairs every durable assistant call without opening a Server or replaying a side effect. */
@@ -96,7 +96,7 @@ export function recoverToolEvents(
         runId: message.runId,
         at,
         data: { branchId: message.branchId, afterMessageId: message.id, toolCallId: id },
-        privateData: JSON.stringify(result),
+        privateData: result,
       });
     }
   }

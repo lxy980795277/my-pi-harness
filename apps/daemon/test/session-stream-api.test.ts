@@ -111,7 +111,7 @@ describe('private session projection SSE', () => {
           runId: null,
           at: 2,
           data: message,
-          privateData: 'private-host-metadata',
+          privateData: { marker: 'private-host-metadata' },
         },
       ]);
       const url = `${origin}/api/sessions/${session.id}/events`;

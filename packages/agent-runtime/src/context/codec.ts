@@ -4,6 +4,7 @@ import { Value } from 'typebox/value';
 import { RuntimeError } from '../errors.js';
 import { StoredToolResultSchema, type StoredToolResult } from '@my-pi-harness/protocol';
 
+const jsonObject = Type.Record(Type.String(), Type.Unknown());
 const text = Type.Object({
   type: Type.Literal('text'),
   text: Type.String(),
@@ -103,21 +104,24 @@ const envelope = Type.Object({
   message: Type.Union([message, toolResult]),
 });
 
+/** Detach private audit values and omit undefined fields before the journal JSON boundary. */
+export function snapshotPrivateData(input: Record<string, unknown>): Record<string, unknown> {
+  const snapshot: unknown = JSON.parse(JSON.stringify(input));
+  if (!Value.Check(jsonObject, snapshot))
+    throw new RuntimeError('CONTEXT_CORRUPT', 'Private audit data must be a JSON object');
+  return snapshot;
+}
+
 /** Preserve final provider-native fields privately; this is not a client DTO. */
-export function encodeContextMessage(input: Message): string {
-  const serialized = JSON.stringify({ codecVersion: 1, sdkVersion: '1.1.0', message: input });
-  decodeContextMessage(serialized);
-  return serialized;
+export function encodeContextMessage(input: Message): Record<string, unknown> {
+  const snapshot = snapshotPrivateData({ codecVersion: 1, sdkVersion: '1.1.0', message: input });
+  if (!Value.Check(envelope, snapshot))
+    throw new RuntimeError('CONTEXT_CORRUPT', 'Stored model context has an unsupported format');
+  return snapshot;
 }
 
 /** Read a supported durable generation without falling back to another format. */
-export function decodeContextMessage(serialized: string): Message {
-  let input: unknown;
-  try {
-    input = JSON.parse(serialized);
-  } catch (cause) {
-    throw new RuntimeError('CONTEXT_CORRUPT', 'Stored model context is not valid JSON', { cause });
-  }
+export function decodeContextMessage(input: unknown): Message {
   if (Value.Check(StoredToolResultSchema, input)) {
     return {
       role: 'toolResult',
@@ -132,13 +136,14 @@ export function decodeContextMessage(serialized: string): Message {
   if (!Value.Check(envelope, input)) {
     throw new RuntimeError('CONTEXT_CORRUPT', 'Stored model context has an unsupported format');
   }
-  // JSON.parse guarantees JSON-only tool arguments; schema validates SDK-required fields.
+  // The journal JSON reader owns JSON-only values; this schema checks SDK-required fields.
   return input.message as Message;
 }
 
 /** Canonical outcomes are committed with terminal facts before the SDK receives the result. */
-export function encodeToolResult(input: StoredToolResult): string {
-  if (!Value.Check(StoredToolResultSchema, input))
+export function encodeToolResult(input: StoredToolResult): Record<string, unknown> {
+  const snapshot = snapshotPrivateData(input);
+  if (!Value.Check(StoredToolResultSchema, snapshot))
     throw new RuntimeError('CONTEXT_CORRUPT', '工具结果事实无效。');
-  return JSON.stringify(input);
+  return snapshot;
 }

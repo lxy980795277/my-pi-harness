@@ -2,14 +2,14 @@ import { text as streamText } from 'node:stream/consumers';
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fauxAssistantMessage, type TranscriptContext } from '@earendil-works/pi-ai';
-import type { FrozenSkill, ToolSource } from '@my-pi-harness/protocol';
+import type { FrozenSkill } from '@my-pi-harness/protocol';
 import type { SessionBatch } from '@my-pi-harness/storage';
 import { Type } from 'typebox';
 import { describe, expect, it, vi } from 'vitest';
 import type { SkillsPort, ToolDiscoveryPort } from '../src/capabilities/ports.js';
 import type { ExternalTools, FrozenMcpTool } from '../src/tools/external.js';
-import type { RunToolDefinition } from '../src/tools/toolset.js';
 import { call, fixture, gate, idle, observe, summary } from './support/work-fixture.js';
+import { acceptedTools, loadedTools } from './support/session-audit.js';
 
 function catalog() {
   const tool: FrozenMcpTool = {
@@ -223,9 +223,9 @@ describe('progressive Run capabilities through real Pi requests and SQLite/JSONL
         expect(first).not.toContain('FROZEN_SKILL_BODY');
         expect(JSON.stringify(contexts[1])).toContain('FROZEN_SKILL_BODY');
         const logged = await records(f);
-        expect(logged.find(({ event }) => event.type === 'run.accepted')?.privateData).toContain(
-          'availableSkills',
-        );
+        expect(
+          JSON.stringify(logged.find(({ event }) => event.type === 'run.accepted')?.privateData),
+        ).toContain('availableSkills');
         expect(logged.filter(({ event }) => event.type === 'run.tools_loaded')).toHaveLength(1);
         expect(f.errors).toEqual([]);
       } finally {
@@ -256,10 +256,7 @@ describe('progressive Run capabilities through real Pi requests and SQLite/JSONL
       const snapshot = f.runtime.getSnapshot(f.session.id);
       const accepted = (await records(f)).find(({ event }) => event.type === 'run.accepted');
       if (!accepted?.privateData) throw new Error('Missing accepted tool audit');
-      const audit = JSON.parse(accepted.privateData) as {
-        tools: RunToolDefinition[];
-        toolSources: { name: string; source: ToolSource; fingerprint: string }[];
-      };
+      const audit = acceptedTools(accepted.privateData);
       const initial = audit.tools.map((definition) => {
         const identity = audit.toolSources.find((source) => source.name === definition.name);
         if (!identity) throw new Error('Missing source');
@@ -335,7 +332,7 @@ describe('progressive Run capabilities through real Pi requests and SQLite/JSONL
                 names: next.tools.map((tool) => tool.definition.name),
                 skills: [],
               },
-              privateData: JSON.stringify({ version: 1, ...next, skills: [] }),
+              privateData: { version: 1, ...next, skills: [] },
             },
           ]),
         ).toThrow();
@@ -387,12 +384,8 @@ describe('progressive Run capabilities through real Pi requests and SQLite/JSONL
       const accepted = logged.find(({ event }) => event.type === 'run.accepted');
       if (!accepted?.privateData || !loaded?.privateData)
         throw new Error('Missing capability audit');
-      const initial = JSON.parse(accepted.privateData) as {
-        toolSources: { name: string; fingerprint: string }[];
-      };
-      const next = JSON.parse(loaded.privateData) as {
-        tools: { definition: { name: string }; fingerprint: string }[];
-      };
+      const initial = acceptedTools(accepted.privateData);
+      const next = loadedTools(loaded.privateData);
       for (const source of initial.toolSources)
         expect(next.tools.find((tool) => tool.definition.name === source.name)?.fingerprint).toBe(
           source.fingerprint,
@@ -524,8 +517,8 @@ describe('progressive Run capabilities through real Pi requests and SQLite/JSONL
       expect(JSON.stringify(request)).toContain('FROZEN_SKILL_BODY');
       s.frozen.content = 'MUTATED_CATALOG_BODY';
       const accepted = (await records(f)).find(({ event }) => event.type === 'run.accepted');
-      expect(accepted?.privateData).toContain('FROZEN_SKILL_BODY');
-      expect(accepted?.privateData).not.toContain('MUTATED_CATALOG_BODY');
+      expect(JSON.stringify(accepted?.privateData)).toContain('FROZEN_SKILL_BODY');
+      expect(JSON.stringify(accepted?.privateData)).not.toContain('MUTATED_CATALOG_BODY');
       finish.release();
       await idle(f);
       expect(s.leases()).toBe(0);
@@ -758,11 +751,22 @@ describe('progressive Run capabilities through real Pi requests and SQLite/JSONL
         skills: [s.frozen.selection],
       });
       await entered.promise;
-      await f.runtime.send(f.session.id, {
+      const queued = await f.runtime.send(f.session.id, {
         text: 'Queued under same Skill',
         mode: 'follow-up',
         requestId: 'queue',
         skills: [s.frozen.selection],
+      });
+      if (!queued.inputId) throw new Error('Missing queued input identity');
+      const metadata = f.store.getQueuePrivateData(f.session.id, queued.inputId);
+      expect(metadata).toMatchObject({
+        requestId: 'queue',
+        mcpBindings: [],
+        candidateBindings: [],
+        skillBindings: [s.frozen],
+        discoveryDiagnostics: [],
+        mentionedSkillBindings: [],
+        inheritedSkillBindings: [],
       });
       s.disable();
       finish.release();

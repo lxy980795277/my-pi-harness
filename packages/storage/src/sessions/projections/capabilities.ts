@@ -55,24 +55,22 @@ const accepted = Type.Object({
   skills: Type.Optional(Type.Array(FrozenSkillSchema, { maxItems: 16 })),
   discoveryDiagnostics: Type.Optional(Type.Array(ToolDiscoveryDiagnosticSchema, { maxItems: 512 })),
 });
-function parse(value: string | null): unknown {
-  if (value === null)
+function requirePrivateData(
+  value: Record<string, unknown> | null | undefined,
+): Record<string, unknown> {
+  if (value === null || value === undefined)
     throw new StorageError('INVALID_EVENT', 'Capability changes require private definitions');
-  try {
-    return JSON.parse(value) as unknown;
-  } catch (cause) {
-    throw new StorageError('INVALID_RECORD', 'Capability audit is not valid JSON', { cause });
-  }
+  return value;
 }
 
 /** New model-visible tools must remain inside the accepted immutable candidate catalog. */
 export function projectCapabilityLoad(
   db: BetterSQLite3Database<typeof schema>,
   event: HarnessEvent,
-  privateData?: string,
+  privateData?: Record<string, unknown>,
 ): void {
   const data = checked(publicLoad, event.data);
-  const payload = checked(privateLoad, parse(privateData ?? null));
+  const payload = checked(privateLoad, requirePrivateData(privateData));
   const run =
     event.runId === null
       ? undefined
@@ -86,7 +84,7 @@ export function projectCapabilityLoad(
     .get();
   if (!acceptance)
     throw new StorageError('INVALID_EVENT', 'Capability change has no accepted input');
-  const frozen = checked(accepted, parse(acceptance.privateData));
+  const frozen = checked(accepted, requirePrivateData(acceptance.privateData));
   const previous = db
     .select()
     .from(schema.events)
@@ -94,7 +92,9 @@ export function projectCapabilityLoad(
     .orderBy(desc(schema.events.seq))
     .limit(1)
     .get();
-  const previousPayload = previous ? checked(privateLoad, parse(previous.privateData)) : undefined;
+  const previousPayload = previous
+    ? checked(privateLoad, requirePrivateData(previous.privateData))
+    : undefined;
   const previousRevision = previousPayload?.revision ?? 1;
   if (
     data.revision !== previousRevision + 1 ||

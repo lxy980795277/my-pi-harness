@@ -85,7 +85,7 @@ Web独立追踪当前连接的基线，逐批检查标识、分支、序号、�
 
 每个会话在<logRoot>/sessions/<profileHash>/<sessionId>.jsonl保存完整宿主批日志，作为会话执行事实源；路径由[架构](../01_ARCHITECTURE/overview.md#启动配置)定义。完整批次校验后先持久化JSONL，再提交SQLite投影和推送公开事件。宿主记录含恢复所需privateData，普通HTTP/SSE仅输出公开投影；附件内容保存在独立校验文件。写入或投影失败返回503/SESSION_LOG_UNAVAILABLE并冻结后续持久写入，重启校验日志并重建投影，不重复执行副作用。不能从SQLite回填或覆盖权威日志，完整坏行明确拒绝。存储规则见[storage](../../packages/storage/README.md)。
 
-日志下载是用户明确触发的受保护原始文件出口，沿用本机信任、应用登录与profile归属检查。响应为`application/x-ndjson; charset=utf-8`，以`<sessionId>.jsonl`作为attachment文件名，设置`Content-Length`、`Cache-Control: no-store`与`X-Content-Type-Options: nosniff`。storage在打开日志时固定已提交字节前缀，流式发送完整批记录；请求后的追加不会混入文件，下载不等待活动Run结束。文件包含全部分支及宿主恢复数据，附件字节、应用配置和认证凭据仍由各自存储拥有。未知/已归档会话、非法ID或查询、未登录及不可确定日志状态明确拒绝；前端下载失败保留重试入口。
+日志下载是用户明确触发的受保护原始文件出口，沿用本机信任、应用登录与profile归属检查。响应为`application/x-ndjson; charset=utf-8`，以`<sessionId>.jsonl`作为attachment文件名，设置`Content-Length`、`Cache-Control: no-store`与`X-Content-Type-Options: nosniff`。storage在打开日志时固定已提交字节前缀，流式发送完整批记录；请求后的追加不会混入文件，下载不等待活动Run结束。文件包含全部分支及宿主恢复数据，私有对象与请求/工具正文的磁盘引用由SessionJournal校验还原，不将原始行直接作为UI事件。附件字节、应用配置和认证凭据仍由各自存储拥有。未知/已归档会话、非法ID或查询、未登录及不可确定日志状态明确拒绝；前端下载失败保留重试入口。
 
 ## 桌面桥
 

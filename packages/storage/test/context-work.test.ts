@@ -34,7 +34,7 @@ function event(
   type: string,
   data: Record<string, unknown>,
   runId: string | null = null,
-  privateData?: string,
+  privateData?: Record<string, unknown>,
 ): EventInput {
   return { type, data, runId, at: 2, ...(privateData === undefined ? {} : { privateData }) };
 }
@@ -73,7 +73,7 @@ function start(store: ProfileStore): void {
         stopReason: null,
       },
       'run',
-      'private-user-codec',
+      { marker: 'private-user-codec' },
     ),
   ]);
 }
@@ -285,7 +285,8 @@ describe('M3 durable work state', () => {
   });
 
   it('requires prepared context to match an active branch and keeps request codecs private', async () => {
-    const { store } = await fixture();
+    const value = await fixture();
+    const { store } = value;
     start(store);
     const usage = {
       estimatedTokens: 10,
@@ -307,12 +308,11 @@ describe('M3 durable work state', () => {
       },
     };
     store.append('session', [
-      event(
-        'context.prepared',
-        { branchId: 'main', usage, messageIds: ['user'] },
-        'run',
-        JSON.stringify({ version: 1, systemPrompt: 'private-rules', messages: ['private-codec'] }),
-      ),
+      event('context.prepared', { branchId: 'main', usage, messageIds: ['user'] }, 'run', {
+        version: 1,
+        systemPrompt: 'private-rules',
+        messages: [{ marker: 'private-codec' }],
+      }),
     ]);
     expect(JSON.stringify(store.readEvents('session'))).not.toContain('private-rules');
     expect(() =>
@@ -321,7 +321,7 @@ describe('M3 durable work state', () => {
           'context.prepared',
           { branchId: 'main', usage, messageIds: ['user', 'user'] },
           'run',
-          JSON.stringify({ version: 1, systemPrompt: '', messages: [] }),
+          { version: 1, systemPrompt: '', messages: [] },
         ),
       ]),
     ).toThrow('ordered branch subset');
@@ -330,6 +330,30 @@ describe('M3 durable work state', () => {
         event('context.prepared', { branchId: 'main', usage, messageIds: [] }, 'run'),
       ]),
     ).toThrow('private request');
+    const expectPreparedProjection = (): void => {
+      const connection = new Database(join(value.directory, 'data.sqlite'), { readonly: true });
+      try {
+        expect(
+          connection
+            .prepare(
+              "SELECT private_data FROM events WHERE session_id = ? AND type = 'context.prepared'",
+            )
+            .all('session'),
+        ).toEqual([{ private_data: null }]);
+      } finally {
+        connection.close();
+      }
+      const prepared = value.store.readEvents('session').filter(({ type }) => {
+        return type === 'context.prepared';
+      });
+      expect(prepared).toHaveLength(1);
+      expect(prepared[0]?.data).toEqual({ branchId: 'main', usage, messageIds: ['user'] });
+      expect(JSON.stringify(prepared)).not.toContain('private-rules');
+    };
+    expectPreparedProjection();
+    store.close();
+    value.store = await openProfileStore(value.directory);
+    expectPreparedProjection();
   });
 
   it('retains immutable compaction versions and their parent chain across a restored branch', async () => {

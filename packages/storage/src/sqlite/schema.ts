@@ -70,14 +70,14 @@ export const runs = sqliteTable('runs', {
   sessionId: text('session_id').notNull(),
   branchId: text('branch_id').notNull(),
   data: text('data', { mode: 'json' }).$type<RunView>().notNull(),
-  privateData: text('private_data'),
+  privateData: text('private_data', { mode: 'json' }).$type<Record<string, unknown>>(),
 });
 
 export const messages = sqliteTable('messages', {
   id: text('id').primaryKey(),
   sessionId: text('session_id').notNull(),
   data: text('data', { mode: 'json' }).$type<MessageView>().notNull(),
-  privateData: text('private_data'),
+  privateData: text('private_data', { mode: 'json' }).$type<Record<string, unknown>>(),
 });
 
 export const toolCalls = sqliteTable('tool_calls', {
@@ -95,7 +95,7 @@ export const toolContexts = sqliteTable('tool_contexts', {
   runId: text('run_id').notNull(),
   afterMessageId: text('after_message_id').notNull(),
   seq: integer('seq').notNull(),
-  privateData: text('private_data').notNull(),
+  privateData: text('private_data', { mode: 'json' }).$type<Record<string, unknown>>().notNull(),
 });
 
 export const branchMessages = sqliteTable(
@@ -115,7 +115,7 @@ export const queue = sqliteTable('queued_inputs', {
   id: text('id').primaryKey(),
   sessionId: text('session_id').notNull(),
   data: text('data', { mode: 'json' }).$type<QueueInput>().notNull(),
-  privateData: text('private_data'),
+  privateData: text('private_data', { mode: 'json' }).$type<Record<string, unknown>>(),
 });
 
 export const events = sqliteTable('events', {
@@ -127,7 +127,7 @@ export const events = sqliteTable('events', {
   type: text('type').notNull(),
   at: integer('at').notNull(),
   data: text('data', { mode: 'json' }).$type<HarnessEvent['data']>().notNull(),
-  privateData: text('private_data'),
+  privateData: text('private_data', { mode: 'json' }).$type<Record<string, unknown>>(),
 });
 
 export const requests = sqliteTable(

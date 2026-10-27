@@ -2,6 +2,7 @@ import { Type, type Static } from 'typebox';
 import { Value } from 'typebox/value';
 import {
   FrozenSkillSchema,
+  FrozenMcpToolsSchema,
   ToolDiscoveryDiagnosticSchema,
   type FrozenSkill,
   type InputRequest,
@@ -10,12 +11,7 @@ import {
   type WorkState,
   type ToolDiscoveryDiagnostic,
 } from '@my-pi-harness/protocol';
-import {
-  decodeFrozenMcpTools,
-  externalBindingKey,
-  type ExternalTools,
-  type FrozenMcpTool,
-} from '../tools/external.js';
+import { externalBindingKey, type ExternalTools, type FrozenMcpTool } from '../tools/external.js';
 import type { SkillsPort, ToolDiscoveryPort } from './ports.js';
 import type { RuntimeStore } from '../sessions/ports.js';
 import { RuntimeError } from '../errors.js';
@@ -31,35 +27,31 @@ export interface FrozenInputCapabilities {
   inheritedSkills?: readonly FrozenSkill[];
   skillDiagnostics?: readonly SkillContextDiagnostic[];
 }
+
+interface InputCapabilityData {
+  mcpBindings: readonly FrozenMcpTool[];
+  candidateBindings: readonly FrozenMcpTool[];
+  skillBindings: readonly FrozenSkill[];
+  discoveryDiagnostics: readonly ToolDiscoveryDiagnostic[];
+  mentionedSkillBindings: readonly FrozenSkill[];
+  inheritedSkillBindings: readonly FrozenSkill[];
+}
+
+const frozenSkillsSchema = Type.Array(FrozenSkillSchema, { maxItems: 16 });
+const diagnosticsSchema = Type.Array(ToolDiscoveryDiagnosticSchema, { maxItems: 512 });
 const QueueCapabilityMetadataSchema = Type.Object(
   {
     version: Type.Literal(1),
     requestId: Type.String({ minLength: 1 }),
-    mcpBindings: Type.Optional(Type.String({ maxLength: 2_000_000 })),
-    candidateBindings: Type.Optional(Type.String({ maxLength: 4_000_000 })),
-    skillBindings: Type.Optional(Type.String({ maxLength: 3_000_000 })),
-    discoveryDiagnostics: Type.Optional(Type.String({ maxLength: 300_000 })),
-    mentionedSkillBindings: Type.Optional(Type.String({ maxLength: 3_000_000 })),
-    inheritedSkillBindings: Type.Optional(Type.String({ maxLength: 3_000_000 })),
+    mcpBindings: FrozenMcpToolsSchema,
+    candidateBindings: FrozenMcpToolsSchema,
+    skillBindings: frozenSkillsSchema,
+    discoveryDiagnostics: diagnosticsSchema,
+    mentionedSkillBindings: frozenSkillsSchema,
+    inheritedSkillBindings: frozenSkillsSchema,
   },
   { additionalProperties: false },
 );
-
-const frozenSkillsSchema = Type.Array(FrozenSkillSchema, { maxItems: 16 });
-
-function decodeSkillBindings(encoded: string | undefined, message: string): FrozenSkill[] {
-  let skills: unknown = [];
-  if (encoded) {
-    try {
-      skills = JSON.parse(encoded);
-    } catch (cause) {
-      throw new RuntimeError('SKILL_BINDING_INVALID', message, { cause });
-    }
-  }
-  if (!Value.Check(frozenSkillsSchema, skills))
-    throw new RuntimeError('SKILL_BINDING_INVALID', message);
-  return skills;
-}
 
 export function skillSelectionKey(skills: readonly SkillSelection[]): string {
   return JSON.stringify(
@@ -103,21 +95,14 @@ export function combinedSkills(
   return [...result.values()];
 }
 
-export function encodeInputCapabilities(input: FrozenInputCapabilities): {
-  mcpBindings: string;
-  candidateBindings: string;
-  skillBindings: string;
-  discoveryDiagnostics: string;
-  mentionedSkillBindings: string;
-  inheritedSkillBindings: string;
-} {
+export function encodeInputCapabilities(input: FrozenInputCapabilities): InputCapabilityData {
   return {
-    mcpBindings: JSON.stringify(input.external),
-    candidateBindings: JSON.stringify(input.candidates),
-    skillBindings: JSON.stringify(input.skills),
-    discoveryDiagnostics: JSON.stringify(input.diagnostics ?? []),
-    mentionedSkillBindings: JSON.stringify(input.mentionedSkills ?? []),
-    inheritedSkillBindings: JSON.stringify(input.inheritedSkills ?? []),
+    mcpBindings: input.external,
+    candidateBindings: input.candidates,
+    skillBindings: input.skills,
+    discoveryDiagnostics: input.diagnostics ?? [],
+    mentionedSkillBindings: input.mentionedSkills ?? [],
+    inheritedSkillBindings: input.inheritedSkills ?? [],
   };
 }
 
@@ -136,14 +121,8 @@ export class InputCapabilityResolver {
     sessionId: string,
     inputId: string,
   ): Static<typeof QueueCapabilityMetadataSchema> {
-    const encoded = this.options.store.getQueuePrivateData(sessionId, inputId);
-    if (encoded === null) throw new RuntimeError('INPUT_BINDING_INVALID', '排队输入缺少接受记录。');
-    let input: unknown;
-    try {
-      input = JSON.parse(encoded);
-    } catch (cause) {
-      throw new RuntimeError('INPUT_BINDING_INVALID', '排队输入私有数据无效。', { cause });
-    }
+    const input = this.options.store.getQueuePrivateData(sessionId, inputId);
+    if (input === null) throw new RuntimeError('INPUT_BINDING_INVALID', '排队输入缺少接受记录。');
     if (!Value.Check(QueueCapabilityMetadataSchema, input))
       throw new RuntimeError('INPUT_BINDING_INVALID', '排队输入私有数据无效。');
     return input;
@@ -151,34 +130,13 @@ export class InputCapabilityResolver {
 
   public queued(sessionId: string, inputId: string): FrozenInputCapabilities {
     const metadata = this.metadata(sessionId, inputId);
-    const skills = decodeSkillBindings(metadata.skillBindings, '保存的Skill无效。');
-    const mentionedSkills = decodeSkillBindings(
-      metadata.mentionedSkillBindings,
-      '保存的明确Skill调用无效。',
-    );
-    const inheritedSkills = decodeSkillBindings(
-      metadata.inheritedSkillBindings,
-      '保存的继承Skill上下文无效。',
-    );
-    let diagnostics: unknown = [];
-    if (metadata.discoveryDiagnostics) {
-      try {
-        diagnostics = JSON.parse(metadata.discoveryDiagnostics);
-      } catch (cause) {
-        throw new RuntimeError('INPUT_BINDING_INVALID', '保存的工具发现状态无效。', { cause });
-      }
-    }
-    if (!Value.Check(Type.Array(ToolDiscoveryDiagnosticSchema, { maxItems: 512 }), diagnostics))
-      throw new RuntimeError('INPUT_BINDING_INVALID', '保存的工具发现状态无效。');
     return {
-      external: metadata.mcpBindings ? decodeFrozenMcpTools(metadata.mcpBindings) : [],
-      candidates: metadata.candidateBindings
-        ? decodeFrozenMcpTools(metadata.candidateBindings)
-        : [],
-      skills,
-      diagnostics,
-      mentionedSkills,
-      inheritedSkills,
+      external: metadata.mcpBindings,
+      candidates: metadata.candidateBindings,
+      skills: metadata.skillBindings,
+      diagnostics: metadata.discoveryDiagnostics,
+      mentionedSkills: metadata.mentionedSkillBindings,
+      inheritedSkills: metadata.inheritedSkillBindings,
     };
   }
 

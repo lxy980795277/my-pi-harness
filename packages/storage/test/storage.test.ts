@@ -5,6 +5,7 @@ import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
 import type {
   BranchView,
+  FrozenMcpToolData,
   MessageView,
   ProviderConfig,
   QueueInput,
@@ -67,7 +68,7 @@ function event(
   type: string,
   runId: string | null,
   data: Record<string, unknown>,
-  privateData?: string,
+  privateData?: Record<string, unknown>,
 ): EventInput {
   return { type, runId, at: 2, data, ...(privateData === undefined ? {} : { privateData }) };
 }
@@ -111,9 +112,9 @@ function accept(store: ProfileStore, id = 'run', branchId = 'main'): void {
       'run.accepted',
       id,
       { run: run(id, branchId), requestId: `request-${id}` },
-      'private frozen model',
+      { marker: 'private frozen model' },
     ),
-    event('message.started', id, user(`user-${id}`, id, branchId), `user-codec-${id}`),
+    event('message.started', id, user(`user-${id}`, id, branchId), { marker: `user-codec-${id}` }),
   ]);
 }
 
@@ -121,6 +122,19 @@ function finish(store: ProfileStore, id = 'run'): void {
   store.append('session', [
     event('run.finished', id, { status: 'completed', finishedAt: 3, error: null }),
   ]);
+}
+
+function queueMetadata(requestId: string): Record<string, unknown> {
+  return {
+    version: 1,
+    requestId,
+    mcpBindings: [],
+    candidateBindings: [],
+    skillBindings: [],
+    mentionedSkillBindings: [],
+    inheritedSkillBindings: [],
+    discoveryDiagnostics: [],
+  };
 }
 
 afterEach(async () => {
@@ -146,7 +160,7 @@ describe('SQLite event and projection transactions', () => {
       stopReason: 'stop',
     };
     store.append('session', [
-      event('message.completed', 'run', { message: complete }, 'assistant-codec'),
+      event('message.completed', 'run', { message: complete }, { marker: 'assistant-codec' }),
       event('run.finished', 'run', { status: 'completed', finishedAt: 3, error: null }),
     ]);
     const snapshot = store.getSnapshot('session');
@@ -157,7 +171,10 @@ describe('SQLite event and projection transactions', () => {
     expect(events.map((value) => value.seq)).toEqual([1, 2, 3, 4, 5, 6, 7]);
     expect(JSON.stringify(events)).not.toContain('private frozen model');
     expect(JSON.stringify(snapshot)).not.toContain('assistant-codec');
-    expect(store.getModelContext('session', 'main')).toEqual(['user-codec-run', 'assistant-codec']);
+    expect(store.getModelContext('session', 'main')).toEqual([
+      { marker: 'user-codec-run' },
+      { marker: 'assistant-codec' },
+    ]);
   });
 
   it('rolls back every accepted input when a later event in the command fails', async () => {
@@ -177,7 +194,7 @@ describe('SQLite event and projection transactions', () => {
     const { store } = await fixture();
     const inputs = [
       event('run.accepted', 'run', { run: run(), requestId: 'repeat' }),
-      event('message.started', 'run', user(), 'user-codec'),
+      event('message.started', 'run', user(), { marker: 'user-codec' }),
     ];
     expect(store.append('session', inputs)).toHaveLength(2);
     expect(store.append('session', inputs)).toEqual([]);
@@ -198,7 +215,7 @@ describe('SQLite event and projection transactions', () => {
     const message = user();
     store.append('session', [
       event('run.accepted', 'run', { run: run(), requestId: 'immutable' }),
-      event('message.started', 'run', message, 'user-codec'),
+      event('message.started', 'run', message, { marker: 'user-codec' }),
     ]);
     message.text = 'Caller mutation';
     expect(store.getSnapshot('session').messages[0]?.text).toBe('Question');
@@ -256,7 +273,7 @@ describe('SQLite event and projection transactions', () => {
     value.store.append('session', [
       event('message.started', 'run', assistant()),
       event('message.delta', 'run', { messageId: 'assistant', text: 'Partial' }),
-      event('queue.added', 'run', queued(), JSON.stringify({ version: 1, requestId: 'queued' })),
+      event('queue.added', 'run', queued(), queueMetadata('queued')),
     ]);
     value.store.close();
     value.store = await openProfileStore(value.directory);
@@ -268,7 +285,7 @@ describe('SQLite event and projection transactions', () => {
     expect(snapshot.messages[1]).not.toHaveProperty('usage');
     expect(snapshot.queue).toHaveLength(1);
     expect(value.store.recoverInterrupted()).toEqual([]);
-    expect(value.store.getModelContext('session', 'main')).toEqual(['user-codec-run']);
+    expect(value.store.getModelContext('session', 'main')).toEqual([{ marker: 'user-codec-run' }]);
   });
 });
 
@@ -292,12 +309,7 @@ describe('persistent queue and revision branches', () => {
     const input = queued();
     accept(store, 'original-run');
     store.append('session', [
-      event(
-        'queue.added',
-        'original-run',
-        input,
-        JSON.stringify({ version: 1, requestId: 'original' }),
-      ),
+      event('queue.added', 'original-run', input, queueMetadata('original')),
     ]);
     finish(store, 'original-run');
     store.append('session', [
@@ -311,14 +323,16 @@ describe('persistent queue and revision branches', () => {
     store.append('session', [
       event('run.accepted', 'run', { run: run(), requestId: 'queue:queue' }),
       event('queue.consumed', 'run', { inputId: input.id }),
-      event('message.started', 'run', user('from-queue', 'run', 'main', 'Edited'), 'codec'),
+      event('message.started', 'run', user('from-queue', 'run', 'main', 'Edited'), {
+        marker: 'codec',
+      }),
     ]);
     expect(store.getSnapshot('session').queue).toEqual([]);
     expect(store.findRequest('session', 'original')).toEqual({ runId: null, inputId: 'queue' });
     expect(store.findRequest('session', 'queue:queue')).toEqual({ runId: 'run', inputId: null });
     const second = { ...input, id: 'queue-second' };
     store.append('session', [
-      event('queue.added', 'run', second, JSON.stringify({ version: 1, requestId: 'removed' })),
+      event('queue.added', 'run', second, queueMetadata('removed')),
       event('queue.deleted', 'run', { inputId: second.id }),
     ]);
     expect(store.findRequest('session', 'removed')).toEqual({ runId: null, inputId: second.id });
@@ -328,15 +342,18 @@ describe('persistent queue and revision branches', () => {
     const { store } = await fixture();
     accept(store);
     const input = { ...queued(), mode: 'steer' as const };
-    store.append('session', [
-      event('queue.added', 'run', input, JSON.stringify({ version: 1, requestId: 'steer' })),
-    ]);
+    store.append('session', [event('queue.added', 'run', input, queueMetadata('steer'))]);
     store.append('session', [
       event('queue.consumed', 'run', { inputId: input.id }),
-      event('message.started', 'run', user('steered', 'run', 'main', 'Later'), 'steer-codec'),
+      event('message.started', 'run', user('steered', 'run', 'main', 'Later'), {
+        marker: 'steer-codec',
+      }),
     ]);
     expect(store.getSnapshot('session').runs).toHaveLength(1);
-    expect(store.getModelContext('session', 'main')).toEqual(['user-codec-run', 'steer-codec']);
+    expect(store.getModelContext('session', 'main')).toEqual([
+      { marker: 'user-codec-run' },
+      { marker: 'steer-codec' },
+    ]);
   });
 
   it('retains the accepting branch after queue revision, branch selection and restart', async () => {
@@ -344,9 +361,7 @@ describe('persistent queue and revision branches', () => {
     const { store } = value;
     accept(store);
     const input = queued();
-    store.append('session', [
-      event('queue.added', 'run', input, JSON.stringify({ version: 1, requestId: 'provenance' })),
-    ]);
+    store.append('session', [event('queue.added', 'run', input, queueMetadata('provenance'))]);
     finish(store);
     store.append('session', [
       event('queue.updated', null, { ...input, text: 'Revised', revision: 2, updatedAt: 3 }),
@@ -372,12 +387,7 @@ describe('persistent queue and revision branches', () => {
     const { store } = await fixture();
     expect(() =>
       store.append('session', [
-        event(
-          'queue.added',
-          null,
-          queued(),
-          JSON.stringify({ version: 1, requestId: 'invalid-origin' }),
-        ),
+        event('queue.added', null, queued(), queueMetadata('invalid-origin')),
       ]),
     ).toThrow('requires a run ID');
     expect(store.getSnapshot('session').queue).toEqual([]);
@@ -389,12 +399,7 @@ describe('persistent queue and revision branches', () => {
     accept(store);
     const input = queued();
     store.append('session', [
-      event(
-        'queue.added',
-        'run',
-        input,
-        JSON.stringify({ version: 1, requestId: 'must-commit-message' }),
-      ),
+      event('queue.added', 'run', input, queueMetadata('must-commit-message')),
     ]);
     expect(() =>
       store.append('session', [event('queue.consumed', 'run', { inputId: input.id })]),
@@ -419,24 +424,21 @@ describe('persistent queue and revision branches', () => {
       event('branch.created', null, branch),
       event('branch.selected', null, { branchId: branch.id }),
       event('run.accepted', 'edited', { run: run('edited', branch.id), requestId: 'edit' }),
-      event(
-        'message.started',
-        'edited',
-        user('edited-user', 'edited', branch.id, 'Replacement'),
-        'replacement-codec',
-      ),
+      event('message.started', 'edited', user('edited-user', 'edited', branch.id, 'Replacement'), {
+        marker: 'replacement-codec',
+      }),
     ]);
     expect(store.getSnapshot('session').messages.map((message) => message.text)).toEqual([
       'Question',
       'Replacement',
     ]);
     expect(store.getModelContext('session', 'revision')).toEqual([
-      'user-codec-run',
-      'replacement-codec',
+      { marker: 'user-codec-run' },
+      { marker: 'replacement-codec' },
     ]);
     expect(store.getModelContext('session', 'main')).toEqual([
-      'user-codec-run',
-      'user-codec-second',
+      { marker: 'user-codec-run' },
+      { marker: 'user-codec-second' },
     ]);
     finish(store, 'edited');
     store.append('session', [event('branch.selected', null, { branchId: 'main' })]);
@@ -488,12 +490,7 @@ describe('session archive facts', () => {
     const { directory, store } = await fixture();
     accept(store);
     store.append('session', [
-      event(
-        'queue.added',
-        'run',
-        queued(),
-        JSON.stringify({ version: 1, requestId: 'archive-queue' }),
-      ),
+      event('queue.added', 'run', queued(), queueMetadata('archive-queue')),
     ]);
     finish(store);
     store.append('session', [event('session.deleted', null, {})]);
@@ -524,38 +521,64 @@ describe('session archive facts', () => {
 });
 
 describe('frozen queued MCP authority', () => {
+  it('rejects incomplete or string-encoded bindings before accepting a queued input', async () => {
+    const { store } = await fixture();
+    accept(store);
+    for (const metadata of [
+      { version: 1, requestId: 'invalid-queue' },
+      { ...queueMetadata('invalid-queue'), mcpBindings: '[]' },
+    ]) {
+      expect(() =>
+        store.append('session', [event('queue.added', 'run', queued(), metadata)]),
+      ).toThrow(expect.objectContaining({ code: 'INVALID_RECORD' }));
+    }
+    expect(store.getSnapshot('session').queue).toEqual([]);
+    expect(store.findRequest('session', 'invalid-queue')).toBeUndefined();
+  });
+
   it('retains private bindings through edits and projection rebuild without exposing them publicly', async () => {
     const value = await fixture();
     value.store.append('session', [
       event('run.accepted', 'run', { requestId: 'root', run: run() }),
     ]);
     const input = queued();
-    const first = JSON.stringify({
-      version: 1,
-      requestId: 'mcp-queue',
-      mcpBindings: '[{"private":"frozen-authority"}]',
-    });
+    const binding: FrozenMcpToolData = {
+      selection: {
+        serverId: 'server',
+        serverRevision: 1,
+        remoteToolName: 'read',
+        definitionFingerprint: 'a'.repeat(64),
+      },
+      definition: { name: 'read', description: 'Read', parameters: {} },
+      authorization: {
+        ownerId: 'owner',
+        identityEpoch: 1,
+        accessEpoch: 1,
+        credentialEpoch: 1,
+        grantId: 'frozen-authority',
+        workspaceId: 'workspace',
+        workspaceRoot: '/fixture',
+        scope: 'sandboxed',
+        startupFingerprint: 'b'.repeat(64),
+      },
+    };
+    const first = { ...queueMetadata('mcp-queue'), mcpBindings: [binding] };
     value.store.append('session', [event('queue.added', 'run', input, first)]);
-    expect(value.store.getQueuePrivateData('session', input.id)).toBe(first);
-    const next = JSON.stringify({ version: 1, requestId: 'mcp-queue', mcpBindings: '[]' });
+    expect(value.store.getQueuePrivateData('session', input.id)).toEqual(first);
+    const next = queueMetadata('mcp-queue');
     value.store.append('session', [
       event('queue.updated', 'run', { ...input, text: 'Edited', revision: 2 }, next),
     ]);
-    expect(value.store.getQueuePrivateData('session', input.id)).toBe(next);
+    expect(value.store.getQueuePrivateData('session', input.id)).toEqual(next);
     expect(JSON.stringify(value.store.getSnapshot('session'))).not.toContain('frozen-authority');
     expect(() =>
       value.store.append('session', [
-        event(
-          'queue.updated',
-          'run',
-          { ...input, revision: 3 },
-          JSON.stringify({ version: 1, requestId: 'replacement' }),
-        ),
+        event('queue.updated', 'run', { ...input, revision: 3 }, queueMetadata('replacement')),
       ]),
     ).toThrow('acceptance identity');
     value.store.close();
     value.store = await openProfileStore(value.directory);
-    expect(value.store.getQueuePrivateData('session', input.id)).toBe(next);
+    expect(value.store.getQueuePrivateData('session', input.id)).toEqual(next);
     expect(value.store.getSnapshot('session').queue[0]?.text).toBe('Edited');
   });
 });

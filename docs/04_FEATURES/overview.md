@@ -27,6 +27,8 @@ AC写可观察结果，不用「完善」「支持全部」代替具体条件。
 
 ## 当前Spec
 
+- [会话日志数据精简](202610271953_refactor_session-journal-compaction/spec.md)
+
 - [后端模块组织与职责治理](202610271743_refactor_backend-module-governance/spec.md)
 
 - [应用初始化与统一加载](202610221610_feature_application-initialization/spec.md)

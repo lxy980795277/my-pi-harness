@@ -44,7 +44,7 @@ const PreparedPrivateSchema = Type.Object(
   {
     version: Type.Literal(1),
     systemPrompt: Type.String(),
-    messages: Type.Array(Type.String()),
+    messages: Type.Array(Type.Record(Type.String(), Type.Unknown())),
   },
   { additionalProperties: false },
 );
@@ -271,7 +271,7 @@ export class WorkRepository {
       .run();
   }
 
-  public prepared(event: HarnessEvent, privateData?: string): void {
+  public prepared(event: HarnessEvent, privateData?: Record<string, unknown>): void {
     const input = checked(PreparedEventSchema, event.data);
     if (
       event.runId !== null &&
@@ -327,15 +327,7 @@ export class WorkRepository {
     }
     if (privateData === undefined)
       throw new StorageError('INVALID_EVENT', 'Prepared context requires its private request');
-    let decoded: unknown;
-    try {
-      decoded = JSON.parse(privateData);
-    } catch (cause) {
-      throw new StorageError('INVALID_RECORD', 'Prepared context must contain valid JSON', {
-        cause,
-      });
-    }
-    checked(PreparedPrivateSchema, decoded);
+    checked(PreparedPrivateSchema, privateData);
   }
 
   public restore(event: HarnessEvent): void {

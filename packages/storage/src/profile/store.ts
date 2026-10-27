@@ -189,16 +189,17 @@ export class ProfileStore {
           this.db.insert(schema.attachments).values({ id, data: content.attachment }).run();
         }
         for (const id of ids) {
-          for (const batch of this.journal.read(id)) {
-            validateToolBatch(
-              batch.records.map(({ event, privateData }) => ({ ...event, privateData })),
-            );
-            for (const { event, privateData } of batch.records) {
+          for (const records of this.journal.read(id)) {
+            validateToolBatch(records.map(({ event, privateData }) => ({ ...event, privateData })));
+            for (const { event, privateData } of records) {
               if (event.type === 'session.created') this.createProjection(event);
               else this.projector.apply(event, privateData ?? undefined);
               this.db
                 .insert(schema.events)
-                .values({ ...event, privateData })
+                .values({
+                  ...event,
+                  privateData: event.type === 'context.prepared' ? null : privateData,
+                })
                 .run();
             }
           }
@@ -643,7 +644,7 @@ export class ProfileStore {
   }
 
   /** Host-only frozen input authority; browser responses never receive this column. */
-  public getQueuePrivateData(sessionId: string, inputId: string): string | null {
+  public getQueuePrivateData(sessionId: string, inputId: string): Record<string, unknown> | null {
     this.assertOpen();
     const row = this.db
       .select()
@@ -652,8 +653,7 @@ export class ProfileStore {
       .get();
     if (row === undefined) throw new StorageError('CONFLICT', 'Queued input no longer exists');
     if (row.privateData === null) return null;
-    const decoded: unknown = JSON.parse(row.privateData);
-    checked(QueueRequestSchema, decoded);
+    checked(QueueRequestSchema, row.privateData);
     return row.privateData;
   }
 
@@ -753,8 +753,7 @@ export class ProfileStore {
         incoming = { runId: run.id, inputId: null };
       } else if (input.type === 'queue.added' && input.privateData !== undefined) {
         const value = checked(QueueInputSchema, input.data);
-        const metadata: unknown = JSON.parse(input.privateData);
-        requestId = checked(QueueRequestSchema, metadata).requestId;
+        requestId = checked(QueueRequestSchema, input.privateData).requestId;
         incoming = { runId: null, inputId: value.id };
       }
       if (requestId === undefined || incoming === undefined) continue;
@@ -807,6 +806,9 @@ export class ProfileStore {
       const accepted: HarnessEvent[] = [];
       for (const [index, input] of inputs.entries()) {
         assertJson(input.data);
+        if (input.privateData !== undefined) assertJson(input.privateData);
+        const privateData =
+          input.privateData === undefined ? undefined : structuredClone(input.privateData);
         const data: unknown = JSON.parse(JSON.stringify(input.data));
         const event = checked(HarnessEventSchema, {
           version: 1,
@@ -818,12 +820,15 @@ export class ProfileStore {
           at: input.at,
           data,
         });
-        this.projector.apply(event, input.privateData);
+        this.projector.apply(event, privateData);
         this.db
           .insert(schema.events)
-          .values({ ...event, privateData: input.privateData ?? null })
+          .values({
+            ...event,
+            privateData: event.type === 'context.prepared' ? null : (privateData ?? null),
+          })
           .run();
-        this.pendingRecords.push({ event, privateData: input.privateData ?? null });
+        this.pendingRecords.push({ event, privateData: privateData ?? null });
         accepted.push(event);
       }
 
@@ -837,7 +842,7 @@ export class ProfileStore {
     sessionId: string,
     branchId: string,
     messageIds?: readonly string[],
-  ): string[] {
+  ): Record<string, unknown>[] {
     this.assertOpen();
     if (this.getSession(sessionId) === undefined)
       throw new StorageError('SESSION_NOT_FOUND', 'Session does not exist or is archived');

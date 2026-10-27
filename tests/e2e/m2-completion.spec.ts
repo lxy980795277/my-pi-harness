@@ -68,6 +68,11 @@ test('完整工具链复用 SDK 调用ID，逐次审批、真实编辑与受限�
       page.getByRole('combobox', { name: '对话模型', exact: true }),
       'Queue Model · Chat',
     );
+    await chooseOption(
+      page,
+      page.getByRole('combobox', { name: '执行批准方式', exact: true }),
+      '请求批准',
+    );
     const creation = page.waitForResponse((response) => {
       return (
         response.request().method() === 'POST' &&

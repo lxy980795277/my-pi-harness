@@ -1,4 +1,9 @@
 import { Type } from 'typebox';
+import {
+  FrozenMcpToolSchema,
+  FrozenSkillSchema,
+  ToolDiscoveryDiagnosticSchema,
+} from '@my-pi-harness/protocol';
 
 export const RunAcceptedSchema = Type.Object(
   {
@@ -44,12 +49,12 @@ export const QueueRequestSchema = Type.Object(
   {
     version: Type.Literal(1),
     requestId: Type.String({ minLength: 1 }),
-    mcpBindings: Type.Optional(Type.String({ maxLength: 2_000_000 })),
-    candidateBindings: Type.Optional(Type.String({ maxLength: 4_000_000 })),
-    skillBindings: Type.Optional(Type.String({ maxLength: 3_000_000 })),
-    mentionedSkillBindings: Type.Optional(Type.String({ maxLength: 3_000_000 })),
-    inheritedSkillBindings: Type.Optional(Type.String({ maxLength: 3_000_000 })),
-    discoveryDiagnostics: Type.Optional(Type.String({ maxLength: 300_000 })),
+    mcpBindings: Type.Array(FrozenMcpToolSchema, { maxItems: 512 }),
+    candidateBindings: Type.Array(FrozenMcpToolSchema, { maxItems: 512 }),
+    skillBindings: Type.Array(FrozenSkillSchema, { maxItems: 16 }),
+    mentionedSkillBindings: Type.Array(FrozenSkillSchema, { maxItems: 16 }),
+    inheritedSkillBindings: Type.Array(FrozenSkillSchema, { maxItems: 16 }),
+    discoveryDiagnostics: Type.Array(ToolDiscoveryDiagnosticSchema, { maxItems: 512 }),
   },
   { additionalProperties: false },
 );

@@ -59,7 +59,7 @@ export class WorkRuntime {
     sessionId: string,
     state: WorkState,
     runId: string | null = null,
-    privateData?: string,
+    privateData?: Record<string, unknown>,
   ): WorkState {
     const current = this.options.store.getWorkState(sessionId, state.branchId);
     const next = { ...state, revision: current.revision + 1 };

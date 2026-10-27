@@ -8,6 +8,8 @@ Spec目录采用北京时间 `YYYYMMDDHHmm_category_name/`；历史补齐分钟�
 
 已完成[后端模块组织与职责治理](../04_FEATURES/202610271743_refactor_backend-module-governance/spec.md)的实现与本机工程验证：整理daemon与五个能力包的源码归属，清理无效内容及职责混放，结果见[验证](../04_FEATURES/202610271743_refactor_backend-module-governance/verify.md)。属于M0工程范式及M1–M4维护，不扩张里程碑范围，M5仍未开发。
 
+已完成[会话日志数据精简](../04_FEATURES/202610271953_refactor_session-journal-compaction/spec.md)的实现与本机工程验证：删除冗余批次字段、使用结构化私有数据并减少重复请求/工具正文，结果见[验证](../04_FEATURES/202610271953_refactor_session-journal-compaction/verify.md)。保持现有业务与事件链路，不迁移为参考项目架构，不启动M5。
+
 | 里程碑                                                                                      | 交付范围                                                                                                                      | 当前状态                                                              |
 | ------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
 | [M0 工程底座](../04_FEATURES/202610130900_feature_project-foundation/spec.md)               | Monorepo、开发约束、真实 Web / daemon / Electron 启动、health / SSE、检查与打包链                                             | 实现与macOS本机验证完成；Windows验证待执行                            |

@@ -126,7 +126,7 @@ describe('immutable attachment blobs', () => {
             status: 'complete',
             stopReason: null,
           },
-          privateData: 'codec',
+          privateData: { marker: 'codec' },
         },
       ]);
       store.close();

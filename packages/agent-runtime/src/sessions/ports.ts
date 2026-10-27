@@ -12,7 +12,7 @@ export interface EventInput {
   runId: string | null;
   at: number;
   data: HarnessEvent['data'];
-  privateData?: string;
+  privateData?: Record<string, unknown>;
 }
 
 /** Stored acceptance remains stable after an input is consumed. */
@@ -31,7 +31,11 @@ export interface RuntimeStore {
   getSnapshot(id: string): SessionSnapshot;
   append(sessionId: string, events: readonly EventInput[]): HarnessEvent[];
   readEvents(sessionId: string, afterSeq: number, limit: number): HarnessEvent[];
-  getModelContext(sessionId: string, branchId: string, messageIds?: readonly string[]): string[];
+  getModelContext(
+    sessionId: string,
+    branchId: string,
+    messageIds?: readonly string[],
+  ): Record<string, unknown>[];
   /** Read frozen instruction provenance only from the selected branch and retained history. */
   getSkillContext?(
     sessionId: string,
@@ -41,7 +45,7 @@ export interface RuntimeStore {
   /** Read the context reset marker recorded when this summary was first created. */
   getCompactionContextStart?(sessionId: string, compactionId: string): string | null;
   getQueueBranch(sessionId: string, inputId: string): string;
-  getQueuePrivateData(sessionId: string, inputId: string): string | null;
+  getQueuePrivateData(sessionId: string, inputId: string): Record<string, unknown> | null;
   findRequest(sessionId: string, requestId: string): RequestAcceptance | undefined;
   recoverInterrupted(): HarnessEvent[];
 }

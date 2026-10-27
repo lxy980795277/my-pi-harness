@@ -12,7 +12,11 @@ export class ModelContextQuery {
   public constructor(private readonly db: BetterSQLite3Database<typeof schema>) {
     this.tools = new ToolProjection(db);
   }
-  public read(sessionId: string, branchId: string, messageIds?: readonly string[]): string[] {
+  public read(
+    sessionId: string,
+    branchId: string,
+    messageIds?: readonly string[],
+  ): Record<string, unknown>[] {
     const branch = this.db
       .select()
       .from(schema.branches)

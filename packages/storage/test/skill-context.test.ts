@@ -2,6 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
+import Database from 'better-sqlite3';
 import type { FrozenSkill, MessageView, RunView } from '@my-pi-harness/protocol';
 import { afterEach, expect, it } from 'vitest';
 import { openProfileStore, type EventInput, type ProfileStore } from '../src/index.js';
@@ -29,7 +30,7 @@ function skill(name: string, content = name): FrozenSkill {
 function event(
   type: string,
   data: Record<string, unknown>,
-  privateData?: unknown,
+  privateData?: Record<string, unknown>,
   runId = 'run',
 ): EventInput {
   return {
@@ -37,7 +38,7 @@ function event(
     runId,
     at: 2,
     data,
-    ...(privateData === undefined ? {} : { privateData: JSON.stringify(privateData) }),
+    ...(privateData === undefined ? {} : { privateData }),
   };
 }
 function message(id: string, role: MessageView['role'], runId = 'run'): EventInput {
@@ -193,10 +194,15 @@ it('scans multiple event batches while retaining only the latest sixteen distinc
 it('rejects non-object activation payloads instead of treating their missing skills field as empty', async () => {
   for (const payload of ['[]', '"opaque"', '42', 'null', 'not-json']) {
     const entry = await fixture();
-    entry.store.append('session', [
-      { ...accept([]), privateData: payload },
-      message('user', 'user'),
-    ]);
+    entry.store.append('session', [accept([]), message('user', 'user')]);
+    const connection = new Database(join(entry.directory, 'data.sqlite'));
+    try {
+      connection
+        .prepare("UPDATE events SET private_data = ? WHERE type = 'run.accepted'")
+        .run(payload);
+    } finally {
+      connection.close();
+    }
     expect(() => entry.store.getSkillContext('session', 'main')).toThrow(
       expect.objectContaining({ code: 'INVALID_RECORD' }),
     );

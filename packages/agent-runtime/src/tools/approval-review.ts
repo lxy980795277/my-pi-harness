@@ -3,7 +3,7 @@ import type { UserMessage } from '@earendil-works/pi-ai';
 import type { SessionSummary, ToolCallRecord } from '@my-pi-harness/protocol';
 import { Type, type Static } from 'typebox';
 import { Value } from 'typebox/value';
-import { encodeContextMessage } from '../context/codec.js';
+import { encodeContextMessage, snapshotPrivateData } from '../context/codec.js';
 import { fitContext } from '../context/budget.js';
 import type { ModelGateway, ResolvedModel } from '../models/gateway.js';
 import type { EventInput } from '../sessions/ports.js';
@@ -93,7 +93,7 @@ export class ModelApprovalReviewer implements ApprovalReviewer {
           runId: input.runId,
           at: Date.now(),
           data: this.identity(input),
-          privateData: JSON.stringify({
+          privateData: snapshotPrivateData({
             version: 1,
             purpose: 'tool-approval',
             systemPrompt: REVIEW_PROMPT,

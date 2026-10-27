@@ -341,12 +341,12 @@ describe('durable Pi tool execution', () => {
     },
   );
 
-  it('reads both codec generations and removes an incomplete tool cycle after interruption', () => {
+  it('reads native context records and removes an incomplete tool cycle after interruption', () => {
     const user: Message = { role: 'user', content: 'Question', timestamp: 1 };
     const call = writeCall();
-    expect(
-      decodeContextMessage(JSON.stringify({ codecVersion: 1, sdkVersion: '1.1.0', message: user })),
-    ).toEqual(user);
+    expect(decodeContextMessage({ codecVersion: 1, sdkVersion: '1.1.0', message: user })).toEqual(
+      user,
+    );
     expect(decodeContextMessage(encodeContextMessage(call))).toEqual(call);
     expect(completeToolHistory([user, call])).toEqual([user]);
     const result: Message = {

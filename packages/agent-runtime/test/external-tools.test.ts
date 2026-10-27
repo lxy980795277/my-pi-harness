@@ -197,7 +197,7 @@ describe('external tool outcomes through the actual Pi loop and durable journal'
       const encoded = terminal?.records.find(
         ({ event }) => event.type === 'tool.context',
       )?.privateData;
-      expect(encoded && JSON.parse(encoded)).toMatchObject({
+      expect(encoded).toMatchObject({
         origin: 'server',
         outcome: 'completed',
         providerCallId: 'echo',

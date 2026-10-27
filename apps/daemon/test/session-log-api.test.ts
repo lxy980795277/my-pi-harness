@@ -2,7 +2,12 @@ import { mkdtemp, readFile, realpath, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { MessageView } from '@my-pi-harness/protocol';
-import { createMemoryCredentialStore, sessionLogDirectory } from '@my-pi-harness/storage';
+import {
+  createMemoryCredentialStore,
+  sessionLogDirectory,
+  SessionBatchSchema,
+} from '@my-pi-harness/storage';
+import { Value } from 'typebox/value';
 import { describe, expect, it } from 'vitest';
 import { loadDaemonConfig } from '../src/application/config.js';
 import { createDaemonApplication, type DaemonApplication } from '../src/http/server.js';
@@ -53,6 +58,11 @@ describe('authenticated original session JSONL download', () => {
         role: 'assistant',
         text: 'Original answer',
       };
+      const hostMetadata = {
+        marker: 'private-assistant-codec',
+        content: [{ type: 'text', text: 'private-native\n"content"' }],
+        attributes: { enabled: true, count: 2 },
+      };
       services.runtime.record(session.id, [
         { type: 'message.started', runId: null, at: 2, data: user },
         {
@@ -60,7 +70,7 @@ describe('authenticated original session JSONL download', () => {
           runId: null,
           at: 2,
           data: original,
-          privateData: 'private-assistant-codec',
+          privateData: hostMetadata,
         },
         {
           type: 'branch.created',
@@ -107,6 +117,22 @@ describe('authenticated original session JSONL download', () => {
       expect(response.headers.get('x-content-type-options')).toBe('nosniff');
       const text = await response.text();
       expect(text).toBe(persisted);
+      const batches = text
+        .trimEnd()
+        .split('\n')
+        .map((line) => {
+          const batch: unknown = JSON.parse(line);
+          if (!Value.Check(SessionBatchSchema, batch)) throw new Error('Invalid downloaded batch');
+          expect(Object.keys(batch).sort()).toEqual(['checksum', 'records', 'version']);
+          expect(batch.version).toBe(3);
+          return batch;
+        });
+      const privateRecord = batches
+        .flatMap(({ records }) => records)
+        .find(({ event }) => {
+          return event.type === 'message.started' && event.data.id === original.id;
+        });
+      expect(privateRecord?.privateData).toEqual(hostMetadata);
       expect(text).toContain('Original answer');
       expect(text).toContain('Revised answer');
       expect(text).toContain('private-assistant-codec');

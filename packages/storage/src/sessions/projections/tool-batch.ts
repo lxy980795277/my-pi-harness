@@ -10,7 +10,7 @@ import { StorageError } from '../../shared/errors.js';
 interface BatchRecord {
   type: string;
   data: Record<string, unknown>;
-  privateData?: string | null;
+  privateData?: Record<string, unknown> | null;
 }
 
 const ToolEventSchema = Type.Object({ tool: ToolCallRecordSchema });
@@ -43,13 +43,7 @@ export function validateToolBatch(records: readonly BatchRecord[]): void {
     contexts.add(toolCallId);
     if (record.privateData === undefined || record.privateData === null)
       throw new StorageError('INVALID_EVENT', 'Tool result requires canonical private content');
-    let decoded: unknown;
-    try {
-      decoded = JSON.parse(record.privateData);
-    } catch (cause) {
-      throw new StorageError('INVALID_RECORD', 'Tool result is invalid JSON', { cause });
-    }
-    checked(StoredToolResultSchema, decoded);
+    checked(StoredToolResultSchema, record.privateData);
   }
   for (const id of terminals)
     if (!contexts.has(id))

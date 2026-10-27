@@ -24,16 +24,8 @@ export function isRetainableToolArguments(value: unknown): value is Record<strin
 }
 
 /** Read only the durable call intent fields; full model codecs remain runtime-owned. */
-export function assistantToolIntents(serialized: string): StoredToolIntent[] {
-  let decoded: unknown;
-  try {
-    decoded = JSON.parse(serialized);
-  } catch (cause) {
-    throw new StorageError('INVALID_RECORD', 'Assistant call intents are not valid JSON', {
-      cause,
-    });
-  }
-  const envelope = checked(AssistantCallsSchema, decoded);
+export function assistantToolIntents(data: Record<string, unknown>): StoredToolIntent[] {
+  const envelope = checked(AssistantCallsSchema, data);
   const calls: StoredToolIntent[] = [];
   const ids = new Set<string>();
   for (const block of envelope.message.content) {

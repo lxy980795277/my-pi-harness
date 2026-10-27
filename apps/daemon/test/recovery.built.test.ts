@@ -664,7 +664,7 @@ describe('built daemon M3 work recovery', () => {
         sessionLogDirectory(await realpath(profile), join(profile, '.my-pi-harness')),
         `${sessionId}.jsonl`,
       );
-      await appendFile(log, '{"version":1,"eventId":"crash-tail');
+      await appendFile(log, '{"version":3,"records":[{"event":"crash-tail');
 
       const second = await startDaemon(profile, children, first);
       daemons.push(second);
@@ -688,7 +688,10 @@ describe('built daemon M3 work recovery', () => {
         .split('\n')
         .map((line) => {
           const value: unknown = JSON.parse(line);
-          return checked(SessionBatchSchema, value);
+          const batch = checked(SessionBatchSchema, value);
+          expect(Object.keys(batch).sort()).toEqual(['checksum', 'records', 'version']);
+          expect(batch.version).toBe(3);
+          return batch;
         });
       expect(replayed).toEqual(afterRestart);
       const journalEvents = diskBatches.flatMap((batch) =>

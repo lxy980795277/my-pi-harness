@@ -2,8 +2,7 @@ import { text as streamText } from 'node:stream/consumers';
 import { createServer } from 'node:http';
 import { fauxAssistantMessage, type TranscriptContext } from '@earendil-works/pi-ai';
 import type { FrozenSkill } from '@my-pi-harness/protocol';
-import type { SessionBatch } from '@my-pi-harness/storage';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { SkillsPort } from '../src/capabilities/ports.js';
 import { call, fixture, idle } from './support/work-fixture.js';
 
@@ -43,6 +42,7 @@ describe('plugin gateway instructions through the actual model and durable input
         skills: skills(),
         skillGateway: { origin: 'http://127.0.0.1:4311', token: 'private-host-capability' },
       });
+      const appends = vi.spyOn(f.store, 'append');
       let captured: TranscriptContext | undefined;
       try {
         f.faux.setResponses([
@@ -70,15 +70,12 @@ describe('plugin gateway instructions through the actual model and durable input
         expect(modelInput).toContain(skill.gatewayUrl);
         expect(modelInput).not.toContain('private-host-capability');
         const log = await streamText(f.store.exportSessionLog(f.session.id).content);
-        const records = log
-          .trim()
-          .split('\n')
-          .flatMap((line) => (JSON.parse(line) as SessionBatch).records);
-        expect(records.find(({ event }) => event.type === 'run.accepted')?.privateData).toContain(
-          skill.gatewayUrl,
-        );
+        const records = appends.mock.calls.flatMap(([, events]) => events);
         expect(
-          records.find(({ event }) => event.type === 'context.prepared')?.privateData,
+          JSON.stringify(records.find(({ type }) => type === 'run.accepted')?.privateData),
+        ).toContain(skill.gatewayUrl);
+        expect(
+          JSON.stringify(records.find(({ type }) => type === 'context.prepared')?.privateData),
         ).toContain(skill.gatewayUrl);
         expect(log).not.toContain('private-host-capability');
         expect(f.errors).toEqual([]);

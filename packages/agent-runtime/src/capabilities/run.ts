@@ -7,6 +7,7 @@ import type { EventInput } from '../sessions/ports.js';
 import { RuntimeError } from '../errors.js';
 import { RunToolset, type RunToolDefinition } from '../tools/toolset.js';
 import type { RunControls, SkillsPort } from './ports.js';
+import { snapshotPrivateData } from '../context/codec.js';
 import {
   DEFAULT_TOOL_SEARCH_LIMIT,
   MAX_TOOL_SEARCH_RESULTS,
@@ -419,7 +420,7 @@ export class RunCapabilities implements RunControls {
             names: next.definitions.map((tool) => tool.name),
             skills: skills.map((skill) => skill.selection),
           },
-          privateData: JSON.stringify({
+          privateData: snapshotPrivateData({
             version: 1,
             revision: this.revision + 1,
             tools: next.records,

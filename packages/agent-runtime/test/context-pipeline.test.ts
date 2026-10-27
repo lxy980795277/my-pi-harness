@@ -356,7 +356,7 @@ describe('model-visible M3 context lifecycle', () => {
       const state = f.work.snapshot(f.session.id).state;
       const commit = f.work.options.commit.bind(f.work.options);
       f.work.options.commit = (sessionId, events) => {
-        if (events.some((event) => event.privateData?.includes('"purpose":"compaction"')))
+        if (events.some((event) => event.privateData?.['purpose'] === 'compaction'))
           throw new Error('Synthetic durable audit failure');
         commit(sessionId, events);
       };

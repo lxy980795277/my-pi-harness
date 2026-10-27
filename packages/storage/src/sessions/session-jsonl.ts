@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import {
   closeSync,
   constants,
@@ -18,6 +18,11 @@ import { HarnessEventSchema } from '@my-pi-harness/protocol';
 import { StorageError } from '../shared/errors.js';
 import type { PrivateSessionFiles } from './private-files.js';
 import { checked } from '../shared/validation.js';
+import {
+  decodeJournalRecords,
+  encodeJournalRecords,
+  type JournalCodecState,
+} from './journal-codec.js';
 
 /** One command's complete public envelopes and private replay material. */
 export type StoredSessionEvent = Static<typeof StoredEventSchema>;
@@ -33,7 +38,7 @@ export interface SessionLogDownload {
 
 interface Cursor {
   seq: number;
-  batchId: string | null;
+  context: JournalCodecState;
   signature: string;
   byteLength: number;
 }
@@ -41,7 +46,7 @@ interface Cursor {
 const StoredEventSchema = Type.Object(
   {
     event: HarnessEventSchema,
-    privateData: Type.Union([Type.String(), Type.Null()]),
+    privateData: Type.Union([Type.Record(Type.String(), Type.Unknown()), Type.Null()]),
   },
   { additionalProperties: false },
 );
@@ -49,11 +54,7 @@ const StoredEventSchema = Type.Object(
 /** Exact disk batch format; public event readers never expose its private records. */
 export const SessionBatchSchema = Type.Object(
   {
-    version: Type.Literal(2),
-    batchId: Type.String({ minLength: 1 }),
-    previousBatchId: Type.Union([Type.String({ minLength: 1 }), Type.Null()]),
-    sessionId: Type.String({ minLength: 1 }),
-    firstSeq: Type.Integer({ minimum: 1 }),
+    version: Type.Literal(3),
     records: Type.Array(StoredEventSchema, { minItems: 1, maxItems: 10000 }),
     checksum: Type.String({ pattern: '^[a-f0-9]{64}$' }),
   },
@@ -119,37 +120,30 @@ export class SessionJournal {
     }
   }
 
-  /** Validate checksums and sequence while streaming; only a final incomplete JSON fragment is removed. */
-  public *read(sessionId: string): Generator<SessionBatch> {
+  /** Replay complete logical batches after checksum, sequence and disk-reference validation. */
+  public *read(sessionId: string): Generator<readonly StoredSessionEvent[]> {
     const { fd, path } = this.open(sessionId, false);
     let seq = 0;
-    let previousBatchId: string | null = null;
+    let context: JournalCodecState = new Map();
     let validBytes = 0;
     let position = 0;
     let lineLength = 0;
     let parts: Buffer[] = [];
     let changed = false;
-    const decode = (bytes: Buffer): SessionBatch => {
+    const decode = (bytes: Buffer): readonly StoredSessionEvent[] => {
       const decoded: unknown = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
       const value = checked(SessionBatchSchema, decoded);
       const { checksum: digest, ...body } = value;
-      if (
-        value.sessionId !== sessionId ||
-        value.firstSeq !== seq + 1 ||
-        value.previousBatchId !== previousBatchId ||
-        checksum(body) !== digest
-      )
-        throw new StorageError(
-          'SESSION_LOG_INVALID',
-          'Session batch identity, checksum or sequence is invalid',
-        );
+      if (checksum(body) !== digest)
+        throw new StorageError('SESSION_LOG_INVALID', 'Session batch checksum is invalid');
       for (const record of value.records) {
         if (record.event.sessionId !== sessionId || record.event.seq !== seq + 1)
           throw new StorageError('SESSION_LOG_INVALID', 'Session event sequence is invalid');
         seq += 1;
       }
-      previousBatchId = value.batchId;
-      return value;
+      const decodedRecords = decodeJournalRecords(value.records, context);
+      context = decodedRecords.state;
+      return decodedRecords.records;
     };
     try {
       this.files.checkFile(fd, path);
@@ -200,7 +194,7 @@ export class SessionJournal {
       const current = this.files.checkFile(fd, path);
       this.cursors.set(sessionId, {
         seq,
-        batchId: previousBatchId,
+        context,
         signature: signature(current),
         byteLength: current.size,
       });
@@ -249,18 +243,16 @@ export class SessionJournal {
   public append(sessionId: string, records: readonly StoredSessionEvent[]): void {
     if (records.length === 0) return;
     const cursor = this.cursors.get(sessionId);
+    const firstSeq = (cursor?.seq ?? 0) + 1;
+    for (const [index, record] of records.entries())
+      if (record.event.sessionId !== sessionId || record.event.seq !== firstSeq + index)
+        throw new StorageError('INVALID_RECORD', 'Session command sequence is invalid');
+    const encoded = encodeJournalRecords(records, cursor?.context ?? new Map());
     const body: Omit<SessionBatch, 'checksum'> = {
-      version: 2,
-      batchId: randomUUID(),
-      previousBatchId: cursor?.batchId ?? null,
-      sessionId,
-      firstSeq: (cursor?.seq ?? 0) + 1,
-      records: [...records],
+      version: 3,
+      records: encoded.records,
     };
     const batch = checked(SessionBatchSchema, { ...body, checksum: checksum(body) });
-    for (const [index, record] of records.entries())
-      if (record.event.sessionId !== sessionId || record.event.seq !== batch.firstSeq + index)
-        throw new StorageError('INVALID_RECORD', 'Session command sequence is invalid');
     const bytes = Buffer.from(`${JSON.stringify(batch)}\n`);
     if (bytes.length > MAXIMUM_LINE_BYTES)
       throw new StorageError('INVALID_RECORD', 'Session command exceeds the journal batch limit');
@@ -278,8 +270,8 @@ export class SessionJournal {
       if (created) this.files.syncDirectory(this.files.directory);
       const current = this.files.checkFile(fd, path);
       this.cursors.set(sessionId, {
-        seq: batch.firstSeq + batch.records.length - 1,
-        batchId: batch.batchId,
+        seq: firstSeq + batch.records.length - 1,
+        context: encoded.state,
         signature: signature(current),
         byteLength: current.size,
       });

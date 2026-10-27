@@ -19,7 +19,11 @@ import type {
   WorkState,
   FrozenSkill,
 } from '@my-pi-harness/protocol';
-import { decodeContextMessage, encodeContextMessage } from '../context/codec.js';
+import {
+  decodeContextMessage,
+  encodeContextMessage,
+  snapshotPrivateData,
+} from '../context/codec.js';
 import { RuntimeError } from '../errors.js';
 import type { ModelGateway } from '../models/gateway.js';
 import { RunExecution } from '../runs/execution.js';
@@ -227,7 +231,7 @@ export class SessionRuntime {
             runId: running.options.run.id,
             at,
             data: queued,
-            privateData: JSON.stringify({
+            privateData: snapshotPrivateData({
               version: 1,
               requestId: input.requestId,
               ...encodeInputCapabilities(frozen),
@@ -316,7 +320,7 @@ export class SessionRuntime {
           runId: snapshot.session.activeRunId,
           at: Date.now(),
           data: updated,
-          privateData: JSON.stringify({
+          privateData: snapshotPrivateData({
             ...this.capabilityInputs.metadata(sessionId, input.id),
             ...encodeInputCapabilities(frozen),
           }),
@@ -660,7 +664,7 @@ export class SessionRuntime {
           runId: run.id,
           at,
           data: { run, requestId: input.requestId },
-          privateData: JSON.stringify({
+          privateData: snapshotPrivateData({
             version: 1,
             model: resolved.model,
             thinkingLevel: session.thinkingLevel,

@@ -14,6 +14,18 @@ declare global {
   }
 }
 
+const expectSessionLogBatches = (text: string): void => {
+  expect(text.endsWith('\n')).toBe(true);
+  for (const line of text.trimEnd().split('\n')) {
+    const entry: unknown = JSON.parse(line);
+    expect(entry).toEqual({
+      version: 3,
+      records: expect.any(Array),
+      checksum: expect.stringMatching(/^[a-f0-9]{64}$/u),
+    });
+  }
+};
+
 const startSession = async (page: Page, text: string): Promise<SessionSnapshot> => {
   const created = page.waitForResponse((response) => {
     return (
@@ -114,12 +126,7 @@ test('会话标题栏全宽展示，下载完整 JSONL 并在失败后重试', a
     const bytes = await readFile(saved);
     expect(bytes.equals(expectedBytes)).toBe(true);
     const text = bytes.toString('utf8');
-    expect(text.endsWith('\n')).toBe(true);
-    for (const line of text.trimEnd().split('\n')) {
-      const entry: unknown = JSON.parse(line);
-      expect(typeof entry).toBe('object');
-      expect(entry).not.toBeNull();
-    }
+    expectSessionLogBatches(text);
     expect(text).toContain('对话日志下载验收');
     expect(text).toContain('分支里的新回复');
     expect(text).not.toContain('synthetic-account-key');
@@ -174,14 +181,9 @@ test('运行中下载固定已提交 JSONL 前缀，完成后再次下载包含�
     await firstFile.saveAs(firstPath);
     const firstBytes = await readFile(firstPath);
     const firstText = firstBytes.toString('utf8');
-    expect(firstText.endsWith('\n')).toBe(true);
+    expectSessionLogBatches(firstText);
     expect(firstText).toContain(prefix);
     expect(firstText).not.toContain(suffix);
-    for (const line of firstText.trimEnd().split('\n')) {
-      const entry: unknown = JSON.parse(line);
-      expect(typeof entry).toBe('object');
-      expect(entry).not.toBeNull();
-    }
     await expect(page.getByRole('button', { name: '停止', exact: true })).toBeVisible();
 
     model.finish();
@@ -197,12 +199,7 @@ test('运行中下载固定已提交 JSONL 前缀，完成后再次下载包含�
     expect(finalBytes.subarray(0, firstBytes.length).equals(firstBytes)).toBe(true);
     const finalText = finalBytes.toString('utf8');
     expect(finalText).toContain(suffix);
-    expect(finalText.endsWith('\n')).toBe(true);
-    for (const line of finalText.trimEnd().split('\n')) {
-      const entry: unknown = JSON.parse(line);
-      expect(typeof entry).toBe('object');
-      expect(entry).not.toBeNull();
-    }
+    expectSessionLogBatches(finalText);
     expect(model.requests).toBe(1);
   } finally {
     await model.close();

@@ -80,7 +80,7 @@ export class ProjectionWriter {
     return message;
   }
 
-  private addMessage(event: HarnessEvent, privateData: string | undefined): void {
+  private addMessage(event: HarnessEvent, privateData: Record<string, unknown> | undefined): void {
     const message = checked(MessageViewSchema, event.data);
     this.validateMessageStatistics(message);
     if (message.sessionId !== event.sessionId || message.runId !== event.runId) {
@@ -121,7 +121,7 @@ export class ProjectionWriter {
     }
   }
 
-  private acceptRun(event: HarnessEvent, privateData: string | undefined): void {
+  private acceptRun(event: HarnessEvent, privateData: Record<string, unknown> | undefined): void {
     const accepted = checked(RunAcceptedSchema, event.data);
     const run = checked(RunViewSchema, accepted.run);
     const session = this.session(event.sessionId);
@@ -247,7 +247,7 @@ export class ProjectionWriter {
     }
   }
 
-  private addQueue(event: HarnessEvent, privateData: string | undefined): void {
+  private addQueue(event: HarnessEvent, privateData: Record<string, unknown> | undefined): void {
     const input = checked(QueueInputSchema, event.data);
     if (input.sessionId !== event.sessionId || input.revision !== 1)
       throw new StorageError('INVALID_EVENT', 'Queued input identity or revision is invalid');
@@ -256,8 +256,7 @@ export class ProjectionWriter {
     const run = this.run(event);
     if (run.status !== 'running' || this.session(event.sessionId).activeRunId !== run.id)
       throw new StorageError('CONFLICT', 'Queued input must originate in the active run');
-    const metadata: unknown = JSON.parse(privateData);
-    const request = checked(QueueRequestSchema, metadata);
+    const request = checked(QueueRequestSchema, privateData);
     this.db
       .insert(schema.queue)
       .values({ id: input.id, sessionId: input.sessionId, data: input, privateData })
@@ -278,7 +277,7 @@ export class ProjectionWriter {
    * @param event Already validated public event envelope.
    * @param privateData Host-only codec or request metadata, omitted from public events.
    */
-  public apply(event: HarnessEvent, privateData?: string): void {
+  public apply(event: HarnessEvent, privateData?: Record<string, unknown>): void {
     switch (event.type) {
       case 'run.tools_loaded':
         projectCapabilityLoad(this.db, event, privateData);
@@ -376,11 +375,9 @@ export class ProjectionWriter {
         )
           throw new StorageError('CONFLICT', 'Queued input was modified or consumed');
         if (privateData !== undefined) {
-          const metadata: unknown = JSON.parse(privateData);
-          const nextMetadata = checked(QueueRequestSchema, metadata);
+          const nextMetadata = checked(QueueRequestSchema, privateData);
           if (row.privateData !== null) {
-            const previousMetadata: unknown = JSON.parse(row.privateData);
-            const original = checked(QueueRequestSchema, previousMetadata);
+            const original = checked(QueueRequestSchema, row.privateData);
             if (original.requestId !== nextMetadata.requestId)
               throw new StorageError(
                 'CONFLICT',

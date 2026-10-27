@@ -10,7 +10,7 @@ import type {
 } from '@my-pi-harness/protocol';
 import type { ResolvedModel } from '../models/gateway.js';
 import type { WorkRuntime } from '../work/runtime.js';
-import { encodeContextMessage } from './codec.js';
+import { encodeContextMessage, snapshotPrivateData } from './codec.js';
 import { contextSourceIds } from './sources.js';
 import { buildSystemContext } from './system-context.js';
 import { RuntimeError } from '../errors.js';
@@ -208,7 +208,7 @@ export class WorkContext {
           attachmentIds,
           capabilityRevision: input.capabilityRevision ?? 1,
         },
-        privateData: JSON.stringify({
+        privateData: snapshotPrivateData({
           version: 1,
           systemPrompt: prompt,
           messages: messages.map(encodeContextMessage),
@@ -260,7 +260,7 @@ export class WorkContext {
           sessionId,
           this.work.snapshot(sessionId).state,
           runId,
-          JSON.stringify({
+          snapshotPrivateData({
             version: 1,
             purpose: 'compaction',
             modelId: resolved.model.id,

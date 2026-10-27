@@ -7,7 +7,11 @@ import {
 import { createMemoryCredentialStore } from '@my-pi-harness/storage';
 import { describe, expect, it } from 'vitest';
 import { createPiCredentialStore, decodeCredential } from '../src/models/credentials.js';
-import { decodeContextMessage, encodeContextMessage } from '../src/context/codec.js';
+import {
+  decodeContextMessage,
+  encodeContextMessage,
+  encodeToolResult,
+} from '../src/context/codec.js';
 
 function gate(): { promise: Promise<void>; release(): void } {
   let release = (): void => {};
@@ -26,15 +30,55 @@ describe('private SDK persistence', () => {
       ],
       { responseId: 'provider-response' },
     );
-    const serialized = encodeContextMessage(message);
-    expect(decodeContextMessage(serialized)).toEqual(message);
-    expect(() =>
-      decodeContextMessage(serialized.replace('"codecVersion":1', '"codecVersion":99')),
-    ).toThrow('unsupported format');
-    expect(() => decodeContextMessage('{')).toThrow('not valid JSON');
+    const snapshot = encodeContextMessage(message);
+    expect(typeof snapshot).toBe('object');
+    expect(decodeContextMessage(snapshot)).toEqual(message);
+    expect(() => decodeContextMessage({ ...snapshot, codecVersion: 99 })).toThrow(
+      'unsupported format',
+    );
+    expect(() => decodeContextMessage(JSON.stringify(snapshot))).toThrow('unsupported format');
+    expect(() => decodeContextMessage({ codecVersion: 1, message: {} })).toThrow(
+      'unsupported format',
+    );
+    message.content.length = 0;
+    message.responseId = 'mutated-response';
+    expect(decodeContextMessage(snapshot)).toMatchObject({
+      responseId: 'provider-response',
+      content: [
+        { thinkingSignature: 'opaque-thinking-signature' },
+        { textSignature: 'opaque-text-signature' },
+      ],
+    });
     expect(() =>
       decodeCredential('{"version":1,"credential":{"type":"oauth","access":"only-access"}}'),
     ).toThrow('unsupported format');
+  });
+
+  it('snapshots canonical tool results as objects independently from later tool mutations', () => {
+    const content = { type: 'text' as const, text: 'Observed result' };
+    const result = {
+      toolResultVersion: 1 as const,
+      providerCallId: 'call',
+      toolName: 'read_file',
+      content: [content],
+      isError: false,
+      at: 1,
+      origin: 'tool' as const,
+      outcome: 'completed' as const,
+    };
+    const snapshot = encodeToolResult(result);
+    content.text = 'Later mutation';
+    expect(snapshot).toMatchObject({ content: [{ text: 'Observed result' }] });
+    expect(decodeContextMessage(snapshot)).toEqual({
+      role: 'toolResult',
+      toolCallId: 'call',
+      toolName: 'read_file',
+      content: [{ type: 'text', text: 'Observed result' }],
+      isError: false,
+      timestamp: 1,
+      details: { harnessOutcome: 'completed', origin: 'tool' },
+    });
+    expect(() => decodeContextMessage(JSON.stringify(snapshot))).toThrow('unsupported format');
   });
 
   it('continues an already-started Pi OAuth refresh after cancellation and drains its rotated token before close', async () => {

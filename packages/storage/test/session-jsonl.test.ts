@@ -65,7 +65,7 @@ function event(
   type: string,
   data: Record<string, unknown>,
   runId: string | null = null,
-  privateData?: string,
+  privateData?: Record<string, unknown>,
 ): EventInput {
   return { type, data, runId, at: 2, ...(privateData === undefined ? {} : { privateData }) };
 }
@@ -94,8 +94,8 @@ const user: MessageView = {
 };
 function accept(): EventInput[] {
   return [
-    event('run.accepted', { run, requestId: 'request' }, 'run', 'private-model-codec'),
-    event('message.started', user, 'run', 'private-user-codec'),
+    event('run.accepted', { run, requestId: 'request' }, 'run', { marker: 'private-model-codec' }),
+    event('message.started', user, 'run', { marker: 'private-user-codec' }),
   ];
 }
 afterEach(async () => {
@@ -173,7 +173,9 @@ describe('authoritative host session journals', () => {
     value.store.append('session', [
       ...accept(),
       event('message.started', assistant, 'run'),
-      event('message.completed', { message: completed }, 'run', 'private-assistant-codec'),
+      event('message.completed', { message: completed }, 'run', {
+        marker: 'private-assistant-codec',
+      }),
       event('run.finished', { status: 'completed', finishedAt: 5, error: null }, 'run'),
     ]);
     const journal = await readFile(logPath(value.directory), 'utf8');
@@ -255,8 +257,10 @@ describe('authoritative host session journals', () => {
     value.store.append('session', accept());
     const logged = await batches(value.directory);
     expect(logged).toHaveLength(2);
+    expect(Object.keys(logged[1] ?? {})).toEqual(['version', 'records', 'checksum']);
+    expect(logged[1]?.version).toBe(3);
     expect(logged[1]?.records).toHaveLength(2);
-    expect(logged[1]?.records[0]?.privateData).toBe('private-model-codec');
+    expect(logged[1]?.records[0]?.privateData).toEqual({ marker: 'private-model-codec' });
     expect(logged.flatMap((batch) => batch.records.map((record) => record.event))).toEqual(
       value.store.readEvents('session'),
     );
@@ -338,7 +342,9 @@ describe('authoritative host session journals', () => {
     }
     value.store = await openProfileStore(value.directory);
     expect(value.store.readEvents('session')).toEqual(events);
-    expect(value.store.getModelContext('session', 'main')).toEqual(['private-user-codec']);
+    expect(value.store.getModelContext('session', 'main')).toEqual([
+      { marker: 'private-user-codec' },
+    ]);
     expect(value.store.getSettings().revision).toBe(2);
     expect(value.store.getSnapshot('session').messages[0]?.text).toBe('Question');
   });
@@ -411,7 +417,7 @@ describe('authoritative host session journals', () => {
       value.store.close();
       await writeFile(
         logPath(value.directory),
-        kind === 'fragment' ? `${full}{"version":2,"records":[` : full.trimEnd(),
+        kind === 'fragment' ? `${full}{"version":3,"records":[` : full.trimEnd(),
       );
       value.store = await openProfileStore(value.directory);
       expect(value.store.readEvents('session')).toHaveLength(3);
@@ -428,7 +434,7 @@ describe('authoritative host session journals', () => {
       let damaged = full.replace('Logs', 'forged');
       if (kind === 'duplicate-batch') damaged = full + full;
       if (kind === 'invalid-line') damaged = '{not json}\n';
-      if (kind === 'unknown-version') damaged = full.replace('"version":2', '"version":99');
+      if (kind === 'unknown-version') damaged = full.replace('"version":3', '"version":2');
       await writeFile(logPath(value.directory), damaged);
       await expect(openProfileStore(value.directory)).rejects.toMatchObject({
         code: 'SESSION_LOG_INVALID',

@@ -1,10 +1,16 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { MessageView, ToolCallRecord, StoredToolResult } from '@my-pi-harness/protocol';
+import {
+  StoredToolResultSchema,
+  type MessageView,
+  type ToolCallRecord,
+  type StoredToolResult,
+} from '@my-pi-harness/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
 import { openProfileStore, type EventInput, type ProfileStore } from '../src/index.js';
 import { storedToolCallId } from '../src/sessions/projections/tool-intents.js';
+import { checked } from '../src/shared/validation.js';
 
 const owned: { directory: string; store: ProfileStore }[] = [];
 afterEach(async () => {
@@ -13,7 +19,11 @@ afterEach(async () => {
     await rm(item.directory, { recursive: true, force: true });
   }
 });
-function event(type: string, data: Record<string, unknown>, privateData?: string): EventInput {
+function event(
+  type: string,
+  data: Record<string, unknown>,
+  privateData?: Record<string, unknown>,
+): EventInput {
   return { type, runId: 'run', at: 2, data, ...(privateData === undefined ? {} : { privateData }) };
 }
 function message(
@@ -92,7 +102,7 @@ function result(
   return event(
     'tool.context',
     { branchId: 'main', afterMessageId: anchor, toolCallId: record.id },
-    JSON.stringify(value),
+    value,
   );
 }
 function terminal(
@@ -103,8 +113,8 @@ function terminal(
 ): EventInput[] {
   return [event('tool.updated', { tool: record }), result(record, providerCallId, anchor, origin)];
 }
-function codec(ids: readonly string[]): string {
-  return JSON.stringify({
+function codec(ids: readonly string[]): Record<string, unknown> {
+  return {
     codecVersion: 1,
     sdkVersion: '1.1.0',
     message: {
@@ -116,7 +126,7 @@ function codec(ids: readonly string[]): string {
         arguments: { path: 'file.txt' },
       })),
     },
-  });
+  };
 }
 async function fixture(ids: readonly string[] = ['call'], stopReason = 'toolUse') {
   const directory = await mkdtemp(join(tmpdir(), 'my-pi-tool-storage-'));
@@ -157,7 +167,7 @@ async function fixture(ids: readonly string[] = ['call'], stopReason = 'toolUse'
       event(
         'message.completed',
         { message: value },
-        value.role === 'assistant' ? codec(ids) : 'codec-user',
+        value.role === 'assistant' ? codec(ids) : { marker: 'codec-user' },
       ),
     ]);
   return { directory, store };
@@ -183,7 +193,7 @@ describe('durable tool outcomes and private result atomicity', () => {
     const next = message('next-user', 'user');
     value.store.append('session', [
       event('message.started', { ...next, status: 'streaming' }),
-      event('message.completed', { message: next }, 'codec-next-user'),
+      event('message.completed', { message: next }, { marker: 'codec-next-user' }),
       event('run.finished', { status: 'completed', finishedAt: 6, error: null }),
       {
         type: 'branch.created',
@@ -225,9 +235,11 @@ describe('durable tool outcomes and private result atomicity', () => {
       result(record, 'call', 'assistant-tool', 'host'),
     ]);
     expect(store.getSnapshot('session').tools[0]?.status).toBe('failed');
-    expect(
-      store.getModelContext('session', 'main').map((value) => value.includes('private-result')),
-    ).toEqual([false, false, true]);
+    expect(store.getModelContext('session', 'main')).toEqual([
+      { marker: 'codec-user' },
+      codec(['call']),
+      expect.objectContaining({ content: [{ type: 'text', text: 'private-result' }] }),
+    ]);
   });
 
   it('rejects terminal/context split transactions and inconsistent result fields without advancing the journal', async () => {
@@ -389,7 +401,7 @@ describe('durable tool outcomes and private result atomicity', () => {
     const contexts = store
       .getModelContext('session', 'main')
       .slice(2)
-      .map((value) => JSON.parse(value) as StoredToolResult);
+      .map((value) => checked(StoredToolResultSchema, value));
     expect(contexts.map(({ providerCallId, outcome }) => ({ providerCallId, outcome }))).toEqual([
       { providerCallId: 'dispatched', outcome: 'unknown' },
       { providerCallId: 'waiting', outcome: 'interrupted' },
@@ -459,7 +471,7 @@ describe('durable tool outcomes and private result atomicity', () => {
     const { store } = await fixture([]);
     const anchor = message('malformed-assistant', 'assistant', 'toolUse');
     const rawName = 'unknown_tool_'.repeat(20);
-    const rawCodec = JSON.stringify({
+    const rawCodec = {
       codecVersion: 1,
       sdkVersion: '1.1.0',
       message: {
@@ -468,7 +480,7 @@ describe('durable tool outcomes and private result atomicity', () => {
           { type: 'toolCall', id: 'malformed', name: rawName, arguments: 'invalid-json-object' },
         ],
       },
-    });
+    };
     store.append('session', [
       event('message.started', { ...anchor, status: 'streaming' }),
       event('message.completed', { message: anchor }, rawCodec),
@@ -492,17 +504,17 @@ describe('durable tool outcomes and private result atomicity', () => {
     };
     store.append('session', [
       event('tool.requested', { tool: rejected }),
-      { ...context, privateData: JSON.stringify(privateResult) },
+      { ...context, privateData: privateResult },
     ]);
     expect(store.getSnapshot('session').tools[0]?.name).toHaveLength(100);
-    expect(store.getModelContext('session', 'main').at(-1)).toContain(rawName);
+    expect(store.getModelContext('session', 'main').at(-1)).toMatchObject({ toolName: rawName });
   });
 
   it('persists a rejected oversized object as a bounded public argument preview', async () => {
     const { store } = await fixture([]);
     const anchor = message('oversized-assistant', 'assistant', 'toolUse');
     const rawArguments = { path: 'x'.repeat(256_000) };
-    const rawCodec = JSON.stringify({
+    const rawCodec = {
       codecVersion: 1,
       sdkVersion: '1.1.0',
       message: {
@@ -511,7 +523,7 @@ describe('durable tool outcomes and private result atomicity', () => {
           { type: 'toolCall', id: 'oversized', name: 'read_file', arguments: rawArguments },
         ],
       },
-    });
+    };
     store.append('session', [
       event('message.started', { ...anchor, status: 'streaming' }),
       event('message.completed', { message: anchor }, rawCodec),
@@ -527,6 +539,8 @@ describe('durable tool outcomes and private result atomicity', () => {
     ]);
     expect(store.getSnapshot('session').tools[0]?.arguments).toEqual({});
     expect(store.getSnapshot('session').tools[0]?.status).toBe('failed');
-    expect(store.getModelContext('session', 'main').at(-1)).toContain('oversized');
+    expect(store.getModelContext('session', 'main').at(-1)).toMatchObject({
+      providerCallId: 'oversized',
+    });
   });
 });

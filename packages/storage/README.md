@@ -29,7 +29,11 @@ JSONL是宿主私有数据，包含模型恢复所需的完整codec和工具结�
 
 一个命令的完整事件批先在SQLite短事务内验证关联、状态和revision；所有事件通过后，将公开envelope及其privateData编码为一行批记录，追加JSONL并fsync，最后提交SQLite投影。创建会话时的初始Plan模式更新属于同一行批。队列消费和对应用户消息也属于同一批；后续任一事件非法时不写日志、不提交任何投影。返回后调用者才发布SSE。
 
-每行格式版本2，包含batchId、previousBatchId、sessionId、firstSeq、records及SHA-256 checksum。记录中的公开event保留单会话递增seq和唯一eventId。一次事务只属于一个会话；中断恢复分别提交每个会话。单行最多32 MiB、10000个事件，读取按64 KiB分块，拒绝未知版本、无效UTF-8、校验和不符、重复或断序。
+每行格式版本3，仅包含version、records及SHA-256 checksum；session归属与连续seq由每条event校验，eventId仍唯一。一次事务只属于一个会话；中断恢复分别提交每个会话。单行最多32 MiB、10000个事件，读取按64 KiB分块，拒绝旧/未知版本、无效UTF-8、校验和不符、重复或断序。
+
+privateData使用原生JSON对象，模型codec、队列绑定和请求messages不再嵌套JSON字符串。磁盘工具展示result与同批canonical文本完全相同时，以`{from:'tool.context'}`引用正文；不同或更丰富的展示值仍完整保存。context.prepared.messages使用完整codec对象或同Run、同branch上一请求的消息索引，systemPrompt为字符串或指向首system消息内容的0。首次请求必须自包含，结束Run释放基线。SessionJournal.read先验证原始行checksum再还原完整记录，返回逐事务records数组；原始文件下载保留引用编码。
+
+SQLite的private_data列使用JSON对象映射，字段与表版本不变。完整请求审计仅保存在JSONL，事件查询投影不再额外保存context.prepared的完整私有历史；模型续聊继续从消息codec及canonical工具结果重建。
 
 文件写入或fsync失败时，SQLite事务回滚，但文件提交结果可能未知；本实例冻结后续持久写入并允许读取已有投影。JSONL成功而SQLite提交失败时，JSONL已经提交，同样冻结写入并明确报告；不能根据错误重执行工具或重复接受请求。修复文件或数据库问题并重启后，日志中完整的批会被回放。数据库与文件没有跨介质原子保证。
 

@@ -13,7 +13,7 @@ export interface EventInput {
   runId: string | null;
   at: number;
   data: HarnessEvent['data'];
-  privateData?: string;
+  privateData?: Record<string, unknown>;
 }
 
 /** An accepted request survives queue consumption, deletion and process restarts. */

@@ -1,32 +1,14 @@
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { text as streamText } from 'node:stream/consumers';
 import { fauxAssistantMessage, type TranscriptContext } from '@earendil-works/pi-ai';
 import { TOOL_DEFINITIONS } from '@my-pi-harness/execution';
-import type { ContextUsage, ToolSource } from '@my-pi-harness/protocol';
-import type { SessionBatch } from '@my-pi-harness/storage';
 import { describe, expect, it, vi } from 'vitest';
 import { decodeContextMessage } from '../src/context/codec.js';
 import { estimateContextUsage } from '../src/context/budget.js';
 import { SESSION_TOOL_DEFINITIONS } from '../src/work/tools.js';
 import { RunToolset, type RunToolDefinition } from '../src/tools/toolset.js';
 import { call, fixture, idle } from './support/work-fixture.js';
-
-interface AcceptedTools {
-  tools: RunToolDefinition[];
-  toolSources: { name: string; source: ToolSource; fingerprint: string }[];
-}
-
-async function records(f: Awaited<ReturnType<typeof fixture>>) {
-  const content = await streamText(f.store.exportSessionLog(f.session.id).content);
-  return content
-    .trim()
-    .split('\n')
-    .flatMap((line) => {
-      const batch = JSON.parse(line) as SessionBatch;
-      return batch.records;
-    });
-}
+import { acceptedTools } from './support/session-audit.js';
 
 function declarations(context: TranscriptContext): RunToolDefinition[] {
   return context.messages.flatMap((message) => {
@@ -41,6 +23,7 @@ const fileDefinitions = TOOL_DEFINITIONS.filter(({ name }) => name !== 'web_fetc
 describe('accepted tools through Pi requests, budgets and durable execution', () => {
   it('uses the executor capability selection for audit, actual requests, budget and file execution', async () => {
     const f = await fixture(true, { sessionTools: false });
+    const appends = vi.spyOn(f.store, 'append');
     try {
       const tools = f.tools;
       if (!tools) throw new Error('Missing tool runtime');
@@ -64,10 +47,10 @@ describe('accepted tools through Pi requests, budgets and durable execution', ()
       });
       await idle(f);
       expect(selection).toHaveBeenCalledTimes(1);
-      const committed = await records(f);
-      const accepted = committed.find(({ event }) => event.type === 'run.accepted');
+      const committed = appends.mock.calls.flatMap(([, events]) => events);
+      const accepted = committed.find(({ type }) => type === 'run.accepted');
       if (!accepted?.privateData) throw new Error('Missing acceptance audit');
-      const audit = JSON.parse(accepted.privateData) as AcceptedTools;
+      const audit = acceptedTools(accepted.privateData);
       const expected = [...networkDefinitions, ...fileDefinitions];
       expect(audit.tools).toEqual(JSON.parse(JSON.stringify(expected)));
       expect(audit.toolSources.map(({ name, source }) => ({ name, source }))).toEqual(
@@ -87,19 +70,20 @@ describe('accepted tools through Pi requests, budgets and durable execution', ()
       );
       expect(contexts).toHaveLength(2);
       for (const context of contexts) expect(declarations(context)).toEqual(audit.tools);
-      const prepared = committed.filter(({ event }) => event.type === 'context.prepared');
+      const prepared = committed.filter(({ type }) => type === 'context.prepared');
       expect(prepared).toHaveLength(contexts.length);
       for (const record of prepared) {
         if (!record.privateData) throw new Error('Missing prepared model request');
-        const request = JSON.parse(record.privateData) as { messages: string[] };
-        const modelTools = request.messages.flatMap((encoded) => {
+        const messages = record.privateData['messages'];
+        if (!Array.isArray(messages)) throw new Error('Missing native model messages');
+        const modelTools = messages.flatMap((encoded: unknown) => {
           const message = decodeContextMessage(encoded);
           if (message.role !== 'system' || message.toolsAdded === undefined) return [];
           return message.toolsAdded;
         });
         expect(modelTools).toEqual(audit.tools);
-        const usage = record.event.data['usage'] as ContextUsage;
-        expect(usage.categories.tools).toBe(
+        expect(record.data).toHaveProperty(
+          'usage.categories.tools',
           estimateContextUsage([], '', 20_000, 1024, audit.tools).categories.tools,
         );
       }
@@ -164,6 +148,7 @@ describe('accepted tools through Pi requests, budgets and durable execution', ()
     },
   ])('declares exactly the accepted collection with $name', async (scenario) => {
     const f = await fixture(scenario.workspace, scenario.options);
+    const appends = vi.spyOn(f.store, 'append');
     try {
       let request: TranscriptContext | undefined;
       f.faux.setResponses([
@@ -178,10 +163,10 @@ describe('accepted tools through Pi requests, budgets and durable execution', ()
         requestId: 'capability-selection',
       });
       await idle(f);
-      const committed = await records(f);
-      const accepted = committed.find(({ event }) => event.type === 'run.accepted');
+      const committed = appends.mock.calls.flatMap(([, events]) => events);
+      const accepted = committed.find(({ type }) => type === 'run.accepted');
       if (!accepted?.privateData || !request) throw new Error('Missing request facts');
-      const audit = JSON.parse(accepted.privateData) as AcceptedTools;
+      const audit = acceptedTools(accepted.privateData);
       const expected: RunToolDefinition[] = [];
       if (scenario.network) expected.push(...networkDefinitions);
       if (scenario.session) expected.push(...SESSION_TOOL_DEFINITIONS);
