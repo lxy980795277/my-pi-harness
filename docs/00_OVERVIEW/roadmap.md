@@ -48,6 +48,8 @@ Spec目录采用北京时间 `YYYYMMDDHHmm_category_name/`；历史补齐分钟�
 
 ## 第一阶段完成标准
 
+2026-10-28完成[技术专题拆分与全仓治理](../04_FEATURES/202610280040_refactor_technical-docs-governance/spec.md)的实现与本机工程验证，将插件体系与MCP连接分别沉淀，修复清理/关闭及旧异步结果影响新目标的问题，清除确证冗余；属于工程维护与M4收尾，不进入M5，既有账号、视觉与平台验收缺口保持原归属。
+
 2026-10-27已完成插件架构重构及macOS定向验证：插件专属OAuth/凭据、弹窗自行启动、只读HTTP网关和MCP共享Token取代默认账户桥接，目录发现由受管后台任务完成。范围见[完整重构Spec](../04_FEATURES/202610201932_feature_m4-capabilities/plugin-completion.md#插件完整流程重构2026-10-27)，实际结果及真实客户端/系统浏览器/平台缺口见[本轮验证](../04_FEATURES/202610201932_feature_m4-capabilities/plugin-completion-verify.md#插件完整流程重构2026-10-27)。M5尚未开始。
 
 2026-10-26已完成M4插件授权开窗收尾：Web同步打开独立中转页，再由原页面请求并导航授权地址；桌面继续系统浏览器。实现及验证见[补齐Spec](../04_FEATURES/202610201932_feature_m4-capabilities/plugin-completion.md#授权开窗补充2026-10-26)，不进入M5或新增默认供应商客户端。

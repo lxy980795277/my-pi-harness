@@ -8,7 +8,6 @@ import {
   SdkHttpError,
   SseError,
   type Transport,
-  type FetchLike,
 } from '@modelcontextprotocol/client';
 import { Value } from 'typebox/value';
 import { Type } from 'typebox';
@@ -38,7 +37,6 @@ interface Attempt {
 
 export interface RemoteMcpManagerOptions {
   fixtureOrigin?: string;
-  fetch?: FetchLike;
   startupDeadlineMs?: number;
 }
 

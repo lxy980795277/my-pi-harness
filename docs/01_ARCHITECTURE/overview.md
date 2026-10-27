@@ -105,4 +105,4 @@ MCP目录由宿主按当前身份、配置、凭据epoch和信任指纹保存至
 
 `RunCapabilities`冻结候选与当前定义，搜索自动暂存命中，`run.tools_loaded`持久化后推进模型请求。启用Skill摘要、显式提及及目录发现状态纳入模型可见且可回放的上下文，具体限额见[运行时能力协议](../03_API/capability-runtime.md)。daemon拥有懒加载的本地CPU向量Worker，缓存固定版本模型至profile的models目录；Worker不继承供应商凭据环境，关闭时终止推理与下载。语义不可用时保留BM25搜索。插件只读API通过web_fetch访问允许网关，写入通过明确开启的MCP App和原有工具审批；没有固定REST操作或逐Run服务grant工具。高级手动`ConnectionService`只管理独立账户与MCP凭据，不再参与插件默认授权。Office工具由激活Skill或动态加载提供。
 
-生产package包含`integrations/resources/plugins`与`execution/resources/office`；Python/LibreOffice等可选办公依赖按明确配置检测，不在Agent任务中静默安装。核心过程见[能力扩展设计](../09_TECHNICAL/能力扩展与授权设计.md)。
+生产package包含`integrations/resources/plugins`与`execution/resources/office`；Python/LibreOffice等可选办公依赖按明确配置检测，不在Agent任务中静默安装。资源、Skills及账号授权见[插件体系设计](../09_TECHNICAL/插件体系设计.md)，协议传输、目录与调用见[MCP连接设计](../09_TECHNICAL/MCP连接设计.md)。

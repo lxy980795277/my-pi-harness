@@ -198,6 +198,36 @@ it('disconnect wins an in-flight token exchange and leaves another plugin untouc
   expect(await f.service.status('google')).toMatchObject({ isConnected: true });
 });
 
+it('keeps concurrent close callers waiting for OAuth operations and credential writes', async () => {
+  const entered = gate();
+  const finish = gate();
+  const f = await fixture(async () => {
+    entered.release();
+    await finish.promise;
+    return Response.json({ access_token: 'cancelled-token' });
+  });
+  const credentialsClose = vi.spyOn(f.credentials, 'close');
+  const completion = f.callback(await f.start()).catch((error: unknown) => error);
+  await entered.promise;
+  const first = f.service.close();
+  let secondFinished = false;
+  const second = f.service.close().then(() => {
+    secondFinished = true;
+  });
+  try {
+    await Promise.resolve();
+    expect(secondFinished).toBe(false);
+    expect(credentialsClose).not.toHaveBeenCalled();
+    await expect(f.start()).rejects.toMatchObject({ code: 'SKILL_CONNECTION_CLOSED' });
+  } finally {
+    finish.release();
+    await Promise.all([first, second]);
+  }
+  expect(await completion).toBeInstanceOf(Error);
+  expect(f.credentials.read('github')).toBeUndefined();
+  expect(credentialsClose).toHaveBeenCalledTimes(1);
+});
+
 it('disconnect invalidates a refresh already waiting on the supplier and cannot restore a token', async () => {
   const f = await fixture();
   await f.callback(await f.start());

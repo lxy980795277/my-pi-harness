@@ -57,6 +57,7 @@ export class PluginConnectionService {
   private readonly shutdown = new AbortController();
   private readonly request: PluginOAuthFetch;
   private closed = false;
+  private closing: Promise<void> | undefined;
   public constructor(private readonly options: PluginConnectionServiceOptions) {
     this.request = options.request ?? pluginOAuthFetch(options.fixtureOrigin);
   }
@@ -340,8 +341,11 @@ export class PluginConnectionService {
     await this.options.credentials.delete(id);
     await this.options.onChanged?.(id);
   }
-  public async close(): Promise<void> {
-    if (this.closed) return;
+  public close(): Promise<void> {
+    this.closing ??= this.stop();
+    return this.closing;
+  }
+  private async stop(): Promise<void> {
     this.closed = true;
     this.shutdown.abort();
     for (const pending of this.pending.values()) {

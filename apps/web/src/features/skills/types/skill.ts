@@ -1,8 +1,13 @@
-import type { SkillSelection, SkillView, SkillDetail } from '@my-pi-harness/protocol';
+import type {
+  SkillSelection,
+  SkillView,
+  SkillDetail,
+  SkillResourceContent,
+} from '@my-pi-harness/protocol';
 import type { UseQueryResult } from '@tanstack/react-query';
 import type { ChangeEventHandler } from 'react';
 import type { Action, ValueChange } from '@/types/events';
-export type SkillSettingsAction = 'save' | 'toggle' | 'remove' | 'resource' | 'directory';
+export type SkillSettingsAction = 'save' | 'toggle' | 'remove' | 'directory';
 export type SkillFormMode = 'create' | 'install' | 'closed';
 export interface SkillDraft {
   name: string;
@@ -12,6 +17,12 @@ export interface SkillDraft {
   repository: string;
   ref: string;
   path: string;
+}
+export interface SkillResourcePreview {
+  skillId: string;
+  contentHash: string;
+  workspaceId: string | null;
+  resource: SkillResourceContent;
 }
 export interface SkillSelectionState {
   selected: SkillSelection[];

@@ -33,7 +33,6 @@
     "@types/node": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:",
-    "@earendil-works/pi-ai": "catalog:",
-    "@modelcontextprotocol/node": "catalog:"
+    "@earendil-works/pi-ai": "catalog:"
   }
 }

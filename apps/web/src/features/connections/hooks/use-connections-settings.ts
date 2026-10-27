@@ -39,27 +39,6 @@ export const useConnectionsSettings = (): ConnectionsSettingsState => {
   const [name, setName] = useState('GitHub');
   const [clientId, setClientId] = useState('');
   const [scopes, setScopes] = useState('read:user\nrepo');
-  const open = useCallback((): void => {
-    setEditing(null);
-    setServiceId('github');
-    setAuthMode('oauth');
-    setName('GitHub');
-    setClientId('');
-    setScopes('read:user\nrepo');
-  }, []);
-  const edit = useCallback((connection: ConnectionView): void => {
-    setEditing(connection);
-    setServiceId(connection.serviceId);
-    setAuthMode(connection.authMode);
-    setName(connection.name);
-    setClientId(connection.clientId);
-    setScopes(connection.scopes.join('\n'));
-  }, []);
-  const close = useCallback((open: boolean): void => {
-    if (!open) {
-      setEditing(undefined);
-    }
-  }, []);
   const changeService = useCallback(
     (value: string): void => {
       const provider = providers.data?.find((entry) => {
@@ -101,21 +80,55 @@ export const useConnectionsSettings = (): ConnectionsSettingsState => {
           clientId,
           scopes: scopes.split(/\s+/).filter(Boolean),
         };
-        if (editing === null) {
-          await createConnection(input, signal);
-        } else {
-          await updateConnection(
-            editing.id,
-            { ...input, expectedRevision: editing.revision },
-            signal,
-          );
+        try {
+          if (editing === null) {
+            await createConnection(input, signal);
+          } else {
+            await updateConnection(
+              editing.id,
+              { ...input, expectedRevision: editing.revision },
+              signal,
+            );
+          }
+        } finally {
+          await client.invalidateQueries({ queryKey: ['connections'] });
         }
-        await client.invalidateQueries({ queryKey: ['connections'] });
         signal.throwIfAborted();
         setEditing(undefined);
       },
       [authMode, client, clientId, editing, name, scopes, serviceId],
     ),
+  );
+  const { cancel: cancelSave } = save;
+  const open = useCallback((): void => {
+    cancelSave();
+    setEditing(null);
+    setServiceId('github');
+    setAuthMode('oauth');
+    setName('GitHub');
+    setClientId('');
+    setScopes('read:user\nrepo');
+  }, [cancelSave]);
+  const edit = useCallback(
+    (connection: ConnectionView): void => {
+      cancelSave();
+      setEditing(connection);
+      setServiceId(connection.serviceId);
+      setAuthMode(connection.authMode);
+      setName(connection.name);
+      setClientId(connection.clientId);
+      setScopes(connection.scopes.join('\n'));
+    },
+    [cancelSave],
+  );
+  const close = useCallback(
+    (open: boolean): void => {
+      if (!open) {
+        cancelSave();
+        setEditing(undefined);
+      }
+    },
+    [cancelSave],
   );
   const refresh = useAsyncEvent(
     useCallback(async (): Promise<void> => {

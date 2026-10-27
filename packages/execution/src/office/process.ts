@@ -105,7 +105,6 @@ export async function runOfficeProcess(
     return await new Promise<string>((accept, reject) => {
       const output: Buffer[] = [];
       let total = 0;
-      let stderr = '';
       let errorBytes = 0;
       abort = () => reject(new ExecutionError('CANCELLED', 'Office operation was cancelled'));
       context.signal.addEventListener('abort', abort, { once: true });
@@ -130,8 +129,6 @@ export async function runOfficeProcess(
           );
           return;
         }
-        if (stderr.length < 10_000)
-          stderr += chunk.toString('utf8').slice(0, 10_000 - stderr.length);
       });
       child.stdin.on('error', () =>
         reject(new ExecutionError('OFFICE_PROCESS_FAILED', 'Office input pipe closed')),

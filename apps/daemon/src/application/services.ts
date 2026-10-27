@@ -374,20 +374,28 @@ export async function createApplicationServices(
       },
     };
   } catch (error: unknown) {
-    try {
-      work?.close();
-      await attachments?.close();
-      await pluginConnections?.close();
-      await toolSearchEmbedder?.close();
-      await connections?.close();
-      await mcp?.close();
-      await remoteMcp?.close();
-      await plugins?.close();
-      await skills?.close();
-      await gateway?.close();
-    } finally {
-      store.close();
+    const failures: unknown[] = [error];
+    for (const dispose of [
+      () => work?.close(),
+      async () => await attachments?.close(),
+      async () => await pluginConnections?.close(),
+      async () => await toolSearchEmbedder?.close(),
+      async () => await connections?.close(),
+      async () => await mcp?.close(),
+      async () => await remoteMcp?.close(),
+      async () => await plugins?.close(),
+      async () => await skills?.close(),
+      async () => await gateway?.close(),
+      () => store.close(),
+    ]) {
+      try {
+        await dispose();
+      } catch (cleanupError: unknown) {
+        failures.push(cleanupError);
+      }
     }
+    if (failures.length > 1)
+      throw new AggregateError(failures, 'Application startup and cleanup failed');
     throw error;
   }
 }

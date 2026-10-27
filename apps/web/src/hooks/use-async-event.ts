@@ -12,6 +12,8 @@ export interface AsyncEvent<Arguments extends readonly unknown[]> {
   pending: boolean;
   error: string | null;
   clearError: () => void;
+  /** Ends this UI task and clears feedback; committed server facts still require reconciliation. */
+  cancel: () => void;
 }
 
 /** Owns one synchronous UI event bridge, including cancellation, duplicate clicks and failures. */
@@ -69,6 +71,15 @@ export const useAsyncEvent = <Arguments extends readonly unknown[]>(
   const clearError = useCallback((): void => {
     setError(null);
   }, []);
+  const cancel = useCallback((): void => {
+    const controller = active.current;
+    active.current = null;
+    controller?.abort();
+    if (mounted.current) {
+      setPending(false);
+      setError(null);
+    }
+  }, []);
 
-  return { run, pending, error, clearError };
+  return { run, pending, error, clearError, cancel };
 };

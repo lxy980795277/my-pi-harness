@@ -6,6 +6,8 @@
 
 随机 state 和 PKCE verifier 只在内存保存十分钟。state 绑定插件安装 generation、profile 用户和身份 epoch，只消费一次；重新开始、断开、卸载和关闭取消所属流程。授权码交换和账号读取受十秒截止及请求取消约束。回调成功后通知 Remote MCP 失效旧目录和连接，Apps 仍须各自显式开启。
 
+关闭拒绝新操作并取消在途流程，等待所属任务与凭据写入收束；所有并发close调用共享同一个完成结果，不能以取消信号已发出代替清理完成。
+
 插件 Token 独占 profile 的 `skill-credentials.json`，由 storage 校验并以 `0600` 文件原子替换保存；不进入 SQLite、系统账户列表、公开 DTO 或会话日志。记录包含私有用户、身份 epoch 和插件安装 generation；更换身份或重新安装不能复用旧授权。到期前六十秒刷新，同插件刷新合并；失败的 refresh grant 清除对应凭据。刷新发布前核对原凭据，旧刷新不能覆盖或删除后来完成的新授权。
 
 `routes.ts` 提供 `/api/skill-connections/:collectionId` 的状态、授权码发起、回调和断开接口。浏览器弹窗自己请求授权地址；桌面系统浏览器通过短时、一次性 launch ticket 启动，不获得应用会话。回调统一重定向至不带 Token 的结果页。

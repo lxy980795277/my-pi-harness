@@ -14,11 +14,13 @@ import {
 } from '@/features/skills/services/skills';
 import { useAsyncEvent } from '@/hooks/use-async-event';
 import { useWorkspaces } from '@/features/workspaces/hooks/use-workspaces';
+import { selectedSkillResource } from '@/features/skills/utils/skill-resource-preview';
 import type {
   SkillDraft,
   SkillFormMode,
   SkillSettingsAction,
   SkillsSettingsState,
+  SkillResourcePreview,
 } from '@/features/skills/types/skill';
 
 const INITIAL: SkillDraft = {
@@ -52,8 +54,7 @@ export const useSkillsSettings = (): SkillsSettingsState => {
     },
     enabled: selected !== null,
   });
-  const [resourceText, setResourceText] = useState<string | null>(null);
-  const [resourceImage, setResourceImage] = useState<string | null>(null);
+  const [resourcePreview, setResourcePreview] = useState<SkillResourcePreview | null>(null);
   const [mode, setMode] = useState<SkillFormMode>('closed');
   const [draft, setDraft] = useState<SkillDraft>(INITIAL);
   const [controller, setController] = useState<AbortController | null>(null);
@@ -61,24 +62,31 @@ export const useSkillsSettings = (): SkillsSettingsState => {
     await queryClient.invalidateQueries({ queryKey: ['skills'] });
     await queryClient.invalidateQueries({ queryKey: ['skill-detail'] });
   }, [queryClient]);
+  const previewResource = useAsyncEvent(
+    useCallback(
+      async (signal: AbortSignal, skill: SkillView, resourcePath: string): Promise<void> => {
+        const resource = await readSkillResource(skill, resourcePath, workspaceId, signal);
+        signal.throwIfAborted();
+        setResourcePreview({
+          skillId: skill.id,
+          contentHash: skill.contentHash,
+          workspaceId,
+          resource,
+        });
+      },
+      [workspaceId],
+    ),
+  );
+  const { cancel: cancelPreview } = previewResource;
   const operation = useAsyncEvent(
     useCallback(
       async (
         signal: AbortSignal,
         action: SkillSettingsAction,
         skill?: SkillView,
-        resourcePath?: string,
       ): Promise<void> => {
         if (action === 'directory' && skill !== undefined) {
           await revealSkillDirectory(skill, workspaceId, signal);
-          return;
-        }
-        if (action === 'resource' && skill !== undefined && resourcePath !== undefined) {
-          const resource = await readSkillResource(skill, resourcePath, workspaceId, signal);
-          setResourceText(null);
-          setResourceImage(null);
-          if (resource.type === 'text') setResourceText(resource.text);
-          else setResourceImage(`data:${resource.mimeType};base64,${resource.data}`);
           return;
         }
         if (action === 'save') {
@@ -122,7 +130,10 @@ export const useSkillsSettings = (): SkillsSettingsState => {
             await setSkillEnabled(skill, !skill.enabled, workspaceId, signal);
           if (action === 'remove') {
             await removeSkill(skill, workspaceId, signal);
-            setSelected(null);
+            setSelected((current) => {
+              if (current === skill.id) return null;
+              return current;
+            });
           }
           await refresh();
         }
@@ -157,7 +168,9 @@ export const useSkillsSettings = (): SkillsSettingsState => {
     return {
       skill,
       show: (): void => {
+        cancelPreview();
         setSelected(skill.id);
+        setResourcePreview(null);
       },
       toggle: (): void => {
         operation.run('toggle', skill);
@@ -182,12 +195,27 @@ export const useSkillsSettings = (): SkillsSettingsState => {
     return {
       ...resource,
       open: (): void => {
-        if (detail.data !== undefined) operation.run('resource', detail.data, resource.path);
+        if (detail.data !== undefined) previewResource.run(detail.data, resource.path);
       },
     };
   });
   let directoryLabel = '复制目录路径';
   if (window.desktop !== undefined) directoryLabel = '打开目录';
+  const changeWorkspace = useCallback(
+    (value: string): void => {
+      cancelPreview();
+      setWorkspace(value);
+      setSelected(null);
+      setResourcePreview(null);
+    },
+    [cancelPreview],
+  );
+  const resource = selectedSkillResource(resourcePreview, detail.data, workspaceId);
+  let resourceText: string | null = null;
+  let resourceImage: string | null = null;
+  if (resource?.type === 'text') resourceText = resource.text;
+  else if (resource?.type === 'image')
+    resourceImage = `data:${resource.mimeType};base64,${resource.data}`;
   return {
     directoryLabel,
     resources,
@@ -200,13 +228,13 @@ export const useSkillsSettings = (): SkillsSettingsState => {
     draft,
     workspace,
     workspaceOptions,
-    changeWorkspace: setWorkspace,
+    changeWorkspace,
     changeField,
     create,
     install,
     closeForm,
     save,
-    pending: operation.pending,
-    error: operation.error,
+    pending: operation.pending || previewResource.pending,
+    error: operation.error ?? previewResource.error,
   };
 };
