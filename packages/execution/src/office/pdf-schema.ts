@@ -1,7 +1,6 @@
-import { Type, type TSchema } from 'typebox';
+import { Type } from 'typebox';
+import { strictObjectSchema } from '../core/schema.js';
 
-const object = <T extends Record<string, TSchema>>(properties: T) =>
-  Type.Object(properties, { additionalProperties: false });
 const text = Type.String({ maxLength: 20_000 });
 const path = Type.String({ minLength: 1, maxLength: 2048 });
 const page = Type.Integer({ minimum: 1, maximum: 100 });
@@ -32,14 +31,14 @@ const flowStyle = {
 };
 
 /** Flow layout paginates plain text and tables; fields accept only known text, checkbox and choice values. */
-export const PDF_PARAMETERS = object({
+export const PDF_PARAMETERS = strictObjectSchema({
   source: Type.Optional(path),
   output: path,
   pages: Type.Optional(
     Type.Array(
-      object({
+      strictObjectSchema({
         text,
-        tables: Type.Optional(Type.Array(object({ rows }), { maxItems: 10 })),
+        tables: Type.Optional(Type.Array(strictObjectSchema({ rows }), { maxItems: 10 })),
         width: Type.Optional(Type.Number({ minimum: 72, maximum: 1440 })),
         height: Type.Optional(Type.Number({ minimum: 72, maximum: 1440 })),
       }),
@@ -47,11 +46,11 @@ export const PDF_PARAMETERS = object({
     ),
   ),
   layout: Type.Optional(
-    object({
+    strictObjectSchema({
       width: Type.Optional(Type.Number({ minimum: 144, maximum: 1440 })),
       height: Type.Optional(Type.Number({ minimum: 144, maximum: 1440 })),
       margins: Type.Optional(
-        object({
+        strictObjectSchema({
           top: Type.Number({ minimum: 18, maximum: 144 }),
           right: Type.Number({ minimum: 18, maximum: 144 }),
           bottom: Type.Number({ minimum: 18, maximum: 144 }),
@@ -69,14 +68,14 @@ export const PDF_PARAMETERS = object({
   flow: Type.Optional(
     Type.Array(
       Type.Union([
-        object({ kind: Type.Literal('paragraph'), text, ...flowStyle }),
-        object({
+        strictObjectSchema({ kind: Type.Literal('paragraph'), text, ...flowStyle }),
+        strictObjectSchema({
           kind: Type.Literal('heading'),
           text,
           level: Type.Optional(Type.Integer({ minimum: 1, maximum: 3 })),
           ...flowStyle,
         }),
-        object({
+        strictObjectSchema({
           kind: Type.Literal('table'),
           rows,
           headerRows: Type.Optional(Type.Integer({ minimum: 0, maximum: 3 })),
@@ -85,7 +84,7 @@ export const PDF_PARAMETERS = object({
           ),
           ...flowStyle,
         }),
-        object({ kind: Type.Literal('page_break') }),
+        strictObjectSchema({ kind: Type.Literal('page_break') }),
       ]),
       { minItems: 1, maxItems: 300 },
     ),
@@ -93,7 +92,7 @@ export const PDF_PARAMETERS = object({
   selectPages: Type.Optional(Type.Array(page, { minItems: 1, maxItems: 100 })),
   rotations: Type.Optional(
     Type.Array(
-      object({
+      strictObjectSchema({
         page,
         degrees: Type.Union([Type.Literal(90), Type.Literal(180), Type.Literal(270)]),
       }),
@@ -115,7 +114,7 @@ export const PDF_PARAMETERS = object({
   repairFields: Type.Optional(Type.Boolean()),
   overlays: Type.Optional(
     Type.Array(
-      object({
+      strictObjectSchema({
         page,
         x: Type.Number({ minimum: 0 }),
         y: Type.Number({ minimum: 0 }),

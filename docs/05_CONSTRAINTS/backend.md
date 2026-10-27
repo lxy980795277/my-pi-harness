@@ -4,6 +4,8 @@
 
 ## 类型与模块
 
+模块级类型、常量/schema和实现按[源码声明组织](source-layout.md)分区，保持运行时初始化依赖和声明作用域。
+
 - ESM、strict、noUncheckedIndexedAccess、exactOptionalPropertyTypes；包间用 `@my-pi-harness/*`，NodeNext 包内相对导入保留编译后 `.js`。Node 能力使用 node: 前缀，不深层跨 workspace 导入私有源码。
 - 类型 PascalCase，值与函数 camelCase，协议常量 UPPER_SNAKE_CASE，文件 kebab-case。interface 表达对象，type 表达联合/组合；闭合联合显式处理每个状态，扩展事件声明未知类型政策。
 - 共享 DTO 从 protocol schema 派生，不复制定义；protocol 不含 Node/Electron、环境读取、数据库对象、业务配置、凭据或 Pi 实例。内部类型留在真实所有者，不建万能共享包。

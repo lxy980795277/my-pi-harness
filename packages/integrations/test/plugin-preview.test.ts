@@ -36,6 +36,7 @@ it('returns complete authored Markdown for every finite built-in plugin without 
 
 it('rejects unknown identities and cancellation before touching resources', async () => {
   await expect(previewBuiltinPluginSkills('../github', signal, '/missing')).rejects.toMatchObject({
+    name: 'PluginError',
     code: 'PLUGIN_NOT_FOUND',
   });
   const controller = new AbortController();
@@ -53,14 +54,17 @@ it('rejects malformed, oversized or non-UTF8 bundled Skill documents', async () 
   const path = join(source, 'SKILL.md');
   await writeFile(path, '---\nname: other\ndescription: Fixture\n---\nBody');
   await expect(previewBuiltinPluginSkills('github', signal, directory)).rejects.toMatchObject({
+    name: 'SkillError',
     code: 'SKILL_NAME',
   });
   await writeFile(path, Buffer.from([0xff, 0xfe]));
   await expect(previewBuiltinPluginSkills('github', signal, directory)).rejects.toMatchObject({
+    name: 'PluginError',
     code: 'PLUGIN_RESOURCE',
   });
   await writeFile(path, 'x'.repeat(131073));
   await expect(previewBuiltinPluginSkills('github', signal, directory)).rejects.toMatchObject({
+    name: 'SkillError',
     code: 'SKILL_TOO_LARGE',
   });
 });
@@ -75,6 +79,7 @@ it.skipIf(process.platform === 'win32')('rejects linked bundled Skill files', as
   await writeFile(outside, '---\nname: github\ndescription: Fixture\n---\nBody');
   await symlink(outside, path);
   await expect(previewBuiltinPluginSkills('github', signal, directory)).rejects.toMatchObject({
+    name: 'SkillError',
     code: 'SKILL_SYMLINK',
   });
 });

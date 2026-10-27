@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { projectMcpResult } from '../src/result.js';
+import { projectMcpResult } from '../src/mcp/result.js';
 
 describe('bounded MCP content projection', () => {
   it('retains structured reasoning data and text resource origins without fetching links or casting audio', () => {

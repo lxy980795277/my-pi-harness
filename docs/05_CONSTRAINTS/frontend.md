@@ -4,6 +4,8 @@
 
 ## 类型、导入与目录
 
+模块级类型、常量和组件/Hook实现按[源码声明组织](source-layout.md)分区；函数内状态和局部变量保持原作用域。
+
 - 使用 strict、noUncheckedIndexedAccess、exactOptionalPropertyTypes。禁止 any、非空断言、双重 unknown 断言或 ts-ignore 掩盖输入问题；未知输入先用 unknown，再解析。
 - 参数和返回值有准确类型；FC、已声明回调与库接口的上下文可提供类型，不重复同一签名。interface 描述对象，type 描述联合与组合；可辨识联合表达生命周期。
 - DTO/schema 使用 `@my-pi-harness/protocol`，不重复声明，不共享数据库 Entity、宿主配置、凭据或 Pi 内部对象。HTTP、SSE、IPC 和本地持久化读取必须实际校验；同进程已声明类型不堆猜测性可选链、typeof 和空值兜底。

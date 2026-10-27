@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { GitHubIdentityProvider } from '../src/features/auth/github-provider.js';
-import { LoginService } from '../src/features/auth/login-service.js';
-import type { IdentityProvider } from '../src/features/auth/identity-provider.js';
+import { GitHubIdentityProvider } from '../src/auth/github-provider.js';
+import { LoginService } from '../src/auth/login-service.js';
+import type { IdentityProvider } from '../src/auth/identity-provider.js';
 import type { VerifiedIdentity } from '@my-pi-harness/storage';
 
 vi.mock('node:timers/promises', () => ({

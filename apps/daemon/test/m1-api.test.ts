@@ -4,9 +4,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createMemoryCredentialStore } from '@my-pi-harness/storage';
 import { afterEach, describe, expect, it } from 'vitest';
-import { loadDaemonConfig } from '../src/config.js';
-import { createApplicationServices, type ApplicationServices } from '../src/services.js';
-import { createDaemonApplication, type DaemonApplication } from '../src/server.js';
+import { loadDaemonConfig } from '../src/application/config.js';
+import {
+  createApplicationServices,
+  type ApplicationServices,
+} from '../src/application/services.js';
+import { createDaemonApplication, type DaemonApplication } from '../src/http/server.js';
 import { loginFixture, pairFixture } from './support/login.js';
 
 const owned: {

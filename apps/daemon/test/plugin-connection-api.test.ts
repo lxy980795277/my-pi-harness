@@ -13,9 +13,9 @@ import {
 } from '@my-pi-harness/protocol';
 import { createMemoryCredentialStore } from '@my-pi-harness/storage';
 import type { EventInput } from '@my-pi-harness/agent-runtime';
-import { loadDaemonConfig } from '../src/config.js';
-import { createApplicationServices } from '../src/services.js';
-import { createDaemonApplication } from '../src/server.js';
+import { loadDaemonConfig } from '../src/application/config.js';
+import { createApplicationServices } from '../src/application/services.js';
+import { createDaemonApplication } from '../src/http/server.js';
 import { loginFixture } from './support/login.js';
 import { connectionUpstream } from './support/connections.js';
 

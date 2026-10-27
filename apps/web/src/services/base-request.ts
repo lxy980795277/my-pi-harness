@@ -1,8 +1,9 @@
 import type { HttpMethod } from '@/types/http';
 import { API_PREFIX } from '@/constants/api';
 
-let csrfToken: string | null = null;
 const authorizationListeners = new Set<() => void>();
+const authorizationCheckListeners = new Set<() => void>();
+let csrfToken: string | null = null;
 
 /** Notifies the authorization owner immediately when a protected request rejects its cookie. */
 export const subscribeAuthorizationLoss = (listener: () => void): (() => void) => {
@@ -11,8 +12,6 @@ export const subscribeAuthorizationLoss = (listener: () => void): (() => void) =
     authorizationListeners.delete(listener);
   };
 };
-
-const authorizationCheckListeners = new Set<() => void>();
 
 /** Registers an authorization status check after an SSE transport disconnects. */
 export const subscribeAuthorizationCheck = (listener: () => void): (() => void) => {

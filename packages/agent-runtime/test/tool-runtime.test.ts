@@ -10,10 +10,10 @@ import {
 } from '@earendil-works/pi-ai';
 import { openProfileStore } from '@my-pi-harness/storage';
 import { describe, expect, it } from 'vitest';
-import { ToolRuntime } from '../src/tool-runtime.js';
-import { SessionRuntime } from '../src/session-runtime.js';
-import { decodeContextMessage, encodeContextMessage } from '../src/context-codec.js';
-import { completeToolHistory } from '../src/tool-history.js';
+import { ToolRuntime } from '../src/tools/runtime.js';
+import { SessionRuntime } from '../src/sessions/runtime.js';
+import { decodeContextMessage, encodeContextMessage } from '../src/context/codec.js';
+import { completeToolHistory } from '../src/context/tool-history.js';
 
 async function until(predicate: () => boolean): Promise<void> {
   const deadline = Date.now() + 5000;

@@ -8,6 +8,13 @@ export interface ProfilePaths {
   localAppData?: string;
 }
 
+/** Launch-owned JSONL location; profile databases and credential namespaces stay in place. */
+export interface SessionLogPaths {
+  packaged: boolean;
+  developmentRoot: string;
+  configuredRoot?: string;
+}
+
 /** Use local Windows data consistently with standalone daemon; other desktops use userData. */
 export function resolveProfileDirectory(paths: ProfilePaths): string {
   if (paths.platform === 'win32') {
@@ -15,13 +22,6 @@ export function resolveProfileDirectory(paths: ProfilePaths): string {
     return win32.join(local, 'My Pi Harness', 'profiles', 'default');
   }
   return join(paths.userData, 'profiles', 'default');
-}
-
-/** Launch-owned JSONL location; profile databases and credential namespaces stay in place. */
-export interface SessionLogPaths {
-  packaged: boolean;
-  developmentRoot: string;
-  configuredRoot?: string;
 }
 
 /** Packaged apps require an explicit repository log root; daemon validates any override. */

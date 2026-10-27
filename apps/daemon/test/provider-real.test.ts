@@ -3,8 +3,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createMemoryCredentialStore } from '@my-pi-harness/storage';
 import { expect, it } from 'vitest';
-import { loadDaemonConfig } from '../src/config.js';
-import { createApplicationServices } from '../src/services.js';
+import { loadDaemonConfig } from '../src/application/config.js';
+import { createApplicationServices } from '../src/application/services.js';
 
 // Only this explicit test namespace authorizes a billed request; no .env or ambient vendor key is read.
 const apiKey = process.env.MY_PI_HARNESS_TEST_API_KEY;

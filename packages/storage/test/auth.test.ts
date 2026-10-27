@@ -10,7 +10,7 @@ import {
   type ProfileStore,
   type VerifiedIdentity,
 } from '../src/index.js';
-import { FOUNDATION_SQL } from '../src/migrations/0001-foundation.js';
+import { FOUNDATION_SQL } from '../src/sqlite/migrations/0001-foundation.js';
 
 interface Fixture {
   directory: string;

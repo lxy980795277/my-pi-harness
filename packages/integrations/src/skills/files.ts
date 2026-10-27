@@ -22,7 +22,7 @@ export function skillResourcePath(input: string): string {
 export function skillHash(bytes: string | Uint8Array): string {
   return createHash('sha256').update(bytes).digest('hex');
 }
-export function resourceMediaType(path: string): string {
+function resourceMediaType(path: string): string {
   switch (extname(path).toLowerCase()) {
     case '.png':
       return 'image/png';

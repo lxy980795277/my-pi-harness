@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createWebDocumentRenderer } from '../src/web-document.js';
+import { createWebDocumentRenderer } from '../src/http/web-document.js';
 
 const entry =
   "<!doctype html><html><head><meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'self'; script-src 'self'; style-src 'self'; object-src 'none'\"></head><body><div id=\"root\"></div></body></html>";

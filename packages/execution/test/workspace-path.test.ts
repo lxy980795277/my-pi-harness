@@ -13,12 +13,12 @@ import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { executeTool, resolveWorkspaceRoot, type ExecutionContext } from '../src/index.js';
-import { hashBytes } from '../src/file-tools.js';
+import { hashBytes } from '../src/filesystem/tools.js';
 import {
   canonicalWorkspace,
   parseWorkspaceRelativePath,
   toWorkspaceRelativePath,
-} from '../src/workspace-path.js';
+} from '../src/filesystem/workspace-path.js';
 
 let directory: string;
 let context: ExecutionContext;

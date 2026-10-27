@@ -2,7 +2,7 @@ import { createServer } from 'node:http';
 import { ModelGateway } from '@my-pi-harness/agent-runtime';
 import { createMemoryCredentialStore, openProfileStore } from '@my-pi-harness/storage';
 import type { CustomProtocol } from '@my-pi-harness/protocol';
-import { clearAmbientModelEnvironment } from '../../src/model-environment.js';
+import { clearAmbientModelEnvironment } from '../../src/application/model-environment.js';
 
 const directory = process.argv[2];
 if (!directory) throw new Error('A private fixture directory is required');

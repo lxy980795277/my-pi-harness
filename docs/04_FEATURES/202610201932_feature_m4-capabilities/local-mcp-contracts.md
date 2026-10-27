@@ -24,7 +24,7 @@
 | daemon/features/mcp | 配置/凭据/工作根装配、管理API及显式撤销；services拥有关闭次序                                         |
 | web/features/mcp    | 设置、启动确认、目录选择及安全诊断；Query管理宿主事实，composer保存未发送选择                         |
 
-现有锚点包括[工具协议](../../../packages/protocol/src/tools.ts)、[输入协议](../../../packages/protocol/src/sessions.ts)、[工具执行](../../../packages/agent-runtime/src/tool-runtime.ts)、[日志事务](../../../packages/storage/src/store.ts)、[恢复](../../../packages/storage/src/interruption.ts)、[进程回收](../../../packages/execution/src/shell-process.ts)及[服务装配](../../../apps/daemon/src/services.ts)。storage不导入Pi codec；模型消息由runtime从中立持久结果组装。
+现有锚点包括[工具协议](../../../packages/protocol/src/tools/tools.ts)、[输入协议](../../../packages/protocol/src/sessions/sessions.ts)、[工具执行](../../../packages/agent-runtime/src/tools/runtime.ts)、[日志事务](../../../packages/storage/src/profile/store.ts)、[恢复](../../../packages/storage/src/sessions/interruption.ts)、[进程回收](../../../packages/execution/src/process/collect.ts)及[服务装配](../../../apps/daemon/src/application/services.ts)。storage不导入Pi codec；模型消息由runtime从中立持久结果组装。
 
 ### 2. Server、秘密与启动授权
 

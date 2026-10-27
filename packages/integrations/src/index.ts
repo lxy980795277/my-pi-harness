@@ -1,20 +1,21 @@
-export { McpConnectionManager } from './manager.js';
-export type { McpConnectionManagerOptions } from './manager.js';
-export { McpError } from './errors.js';
-export { compileMcpInputSchema } from './schema.js';
-export { encodeMcpCatalog, decodeMcpCatalog } from './catalog-snapshot.js';
-export { RemoteMcpManager, type RemoteMcpBinding, type RemoteMcpManagerOptions } from './remote.js';
+export { McpConnectionManager } from './mcp/manager.js';
+export type { McpConnectionManagerOptions } from './mcp/manager.js';
+export { McpError } from './mcp/errors.js';
+export { NetworkError } from './network/errors.js';
+export { PluginError } from './plugins/errors.js';
+export { compileMcpInputSchema } from './mcp/schema.js';
+export { encodeMcpCatalog, decodeMcpCatalog } from './mcp/catalog-snapshot.js';
+export {
+  RemoteMcpManager,
+  type RemoteMcpBinding,
+  type RemoteMcpManagerOptions,
+} from './mcp/remote.js';
 export {
   RemoteOAuthSession,
   type RemoteOAuthStore,
   type RemoteOAuthOptions,
-} from './remote-oauth.js';
-export {
-  createRemoteFetch,
-  parseRemoteUrl,
-  assertRemoteAddress,
-  type RemoteNetworkOptions,
-} from './remote-network.js';
+} from './mcp/remote-oauth.js';
+export { parseRemoteUrl } from './network/remote-fetch.js';
 export { SkillCatalog } from './skills/catalog.js';
 export { SkillError } from './skills/errors.js';
 export { downloadGitHubSkill } from './skills/github.js';
@@ -55,7 +56,7 @@ export type {
   McpLease,
   McpResultContent,
   McpSecretDescriptor,
-} from './types.js';
+} from './mcp/types.js';
 
 export { CONNECTION_PROVIDERS, connectionProvider } from './connections/providers.js';
 export {

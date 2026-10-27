@@ -2,13 +2,13 @@ import { text as streamText } from 'node:stream/consumers';
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fauxAssistantMessage, type TranscriptContext } from '@earendil-works/pi-ai';
-import type { FrozenSkill } from '@my-pi-harness/protocol';
+import type { FrozenSkill, ToolSource } from '@my-pi-harness/protocol';
 import type { SessionBatch } from '@my-pi-harness/storage';
 import { Type } from 'typebox';
 import { describe, expect, it, vi } from 'vitest';
-import type { SkillsPort, ToolDiscoveryPort } from '../src/capability-ports.js';
-import type { ExternalTools, FrozenMcpTool } from '../src/external-tools.js';
-import type { RunToolDefinition, RunToolSource } from '../src/run-toolset.js';
+import type { SkillsPort, ToolDiscoveryPort } from '../src/capabilities/ports.js';
+import type { ExternalTools, FrozenMcpTool } from '../src/tools/external.js';
+import type { RunToolDefinition } from '../src/tools/toolset.js';
 import { call, fixture, gate, idle, observe, summary } from './support/work-fixture.js';
 
 function catalog() {
@@ -258,7 +258,7 @@ describe('progressive Run capabilities through real Pi requests and SQLite/JSONL
       if (!accepted?.privateData) throw new Error('Missing accepted tool audit');
       const audit = JSON.parse(accepted.privateData) as {
         tools: RunToolDefinition[];
-        toolSources: { name: string; source: RunToolSource; fingerprint: string }[];
+        toolSources: { name: string; source: ToolSource; fingerprint: string }[];
       };
       const initial = audit.tools.map((definition) => {
         const identity = audit.toolSources.find((source) => source.name === definition.name);

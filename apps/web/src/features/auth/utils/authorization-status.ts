@@ -1,9 +1,6 @@
 import type { AuthStatus } from '@my-pi-harness/protocol';
 import type { QueryClient } from '@tanstack/react-query';
-
 import { fetchAuthStatus } from '@/features/auth/services/auth';
-
-export const AUTH_STATUS_QUERY_KEY = ['auth-status'] as const;
 
 interface AuthorizationStatus {
   read: (signal: AbortSignal) => Promise<AuthStatus>;
@@ -14,6 +11,8 @@ interface AuthorizationStatus {
   /** An explicit generation permits only that transition's recovery read. */
   refresh: (signal: AbortSignal, generation?: number) => Promise<void>;
 }
+
+export const AUTH_STATUS_QUERY_KEY = ['auth-status'] as const;
 
 /** Owns reads and publication of this renderer's application authorization. */
 export const createAuthorizationStatus = (

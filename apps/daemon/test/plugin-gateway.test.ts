@@ -3,7 +3,7 @@ import {
   type PluginConnectionDefinition,
 } from '@my-pi-harness/integrations';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { requestPluginGateway } from '../src/features/plugin-connections/gateway.js';
+import { requestPluginGateway } from '../src/plugin-connections/gateway.js';
 
 function definition(id: string): PluginConnectionDefinition {
   const found = pluginConnectionDefinition(id);

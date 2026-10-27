@@ -7,9 +7,9 @@ import { openAICompletionsApi } from '@earendil-works/pi-ai/api/openai-completio
 import type { CustomProtocol, ProviderInput } from '@my-pi-harness/protocol';
 import { createMemoryCredentialStore, openProfileStore } from '@my-pi-harness/storage';
 import { describe, expect, it } from 'vitest';
-import { ModelGateway } from '../src/model-gateway.js';
-import { decodeCredential } from '../src/credential-adapter.js';
-import { SessionRuntime } from '../src/session-runtime.js';
+import { ModelGateway } from '../src/models/gateway.js';
+import { decodeCredential } from '../src/models/credentials.js';
+import { SessionRuntime } from '../src/sessions/runtime.js';
 
 function sendEvent(response: ServerResponse, type: string, data: unknown): void {
   response.write(`event: ${type}\ndata: ${JSON.stringify(data)}\n\n`);

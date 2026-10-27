@@ -8,7 +8,7 @@ import {
   TOOL_DEFINITIONS,
   type ExecutionContext,
 } from '../src/index.js';
-import { hashBytes } from '../src/file-tools.js';
+import { hashBytes } from '../src/filesystem/tools.js';
 
 let directory: string;
 let context: ExecutionContext;

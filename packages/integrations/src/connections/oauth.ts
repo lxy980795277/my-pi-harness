@@ -2,10 +2,26 @@ import * as oauth from 'oauth4webapi';
 import { Type, type Static } from 'typebox';
 import { Value } from 'typebox/value';
 import type { ConnectionProvider } from './providers.js';
-import { createRemoteFetch } from '../remote-network.js';
+import { createRemoteFetch } from '../network/remote-fetch.js';
+
+export type ConnectionCredential = Static<typeof ConnectionCredentialSchema>;
+
+export interface OAuthClientConfiguration {
+  clientId: string;
+  redirectUrl: string;
+  scopes: readonly string[];
+  clientSecret?: string;
+  fixtureOrigin?: string;
+}
+
+export interface ConnectionOAuthFlow {
+  state: string;
+  url: string;
+  complete(params: URLSearchParams, signal: AbortSignal): Promise<ConnectionCredential>;
+}
 
 /** This secret JSON is only written through the system CredentialStore. */
-export const ConnectionCredentialSchema = Type.Object(
+const ConnectionCredentialSchema = Type.Object(
   {
     version: Type.Literal(1),
     clientSecret: Type.Optional(Type.String({ minLength: 1, maxLength: 65536 })),
@@ -16,19 +32,6 @@ export const ConnectionCredentialSchema = Type.Object(
   },
   { additionalProperties: false },
 );
-export type ConnectionCredential = Static<typeof ConnectionCredentialSchema>;
-export interface OAuthClientConfiguration {
-  clientId: string;
-  redirectUrl: string;
-  scopes: readonly string[];
-  clientSecret?: string;
-  fixtureOrigin?: string;
-}
-export interface ConnectionOAuthFlow {
-  state: string;
-  url: string;
-  complete(params: URLSearchParams, signal: AbortSignal): Promise<ConnectionCredential>;
-}
 
 export function parseConnectionCredential(encoded: string | undefined): ConnectionCredential {
   if (encoded === undefined) return { version: 1 };
@@ -68,9 +71,11 @@ function metadata(provider: ConnectionProvider): oauth.AuthorizationServer {
     code_challenge_methods_supported: ['S256'],
   };
 }
+
 function client(config: OAuthClientConfiguration): oauth.Client {
   return { client_id: config.clientId };
 }
+
 function authentication(
   provider: ConnectionProvider,
   config: OAuthClientConfiguration,
@@ -80,6 +85,7 @@ function authentication(
     return oauth.ClientSecretBasic(config.clientSecret);
   return oauth.ClientSecretPost(config.clientSecret);
 }
+
 function options(
   provider: ConnectionProvider,
   config: OAuthClientConfiguration,
@@ -104,6 +110,7 @@ function options(
     },
   };
 }
+
 function credential(
   tokens: oauth.TokenEndpointResponse,
   previous: ConnectionCredential,

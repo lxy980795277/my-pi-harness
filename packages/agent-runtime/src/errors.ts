@@ -1,4 +1,4 @@
-/** Stable runtime failures; transport owners choose safe HTTP responses. */
+/** Runtime and host capability failures share this public code; transport owners choose safe HTTP responses. */
 export class RuntimeError extends Error {
   public constructor(
     public readonly code: string,

@@ -1,5 +1,5 @@
-import { SkillError } from '../skills/errors.js';
-import { McpError } from '../errors.js';
+import { PluginError } from './errors.js';
+import { NetworkError } from '../network/errors.js';
 
 export type PluginOAuthPhase = 'authorization-response' | 'token-exchange' | 'account';
 export type PluginOAuthFailureReason =
@@ -47,7 +47,7 @@ const REASON_MESSAGES: Record<PluginOAuthFailureReason, string> = {
 };
 
 /** Safe diagnostics contain only owned labels, finite categories and an optional HTTP status. */
-export class PluginOAuthError extends SkillError {
+export class PluginOAuthError extends PluginError {
   public readonly upstreamStatus?: number;
   public constructor(
     public readonly phase: PluginOAuthPhase,
@@ -95,7 +95,7 @@ export function pluginOAuthNetworkFailure(
     return new PluginOAuthError(phase, 'timeout', upstreamStatus);
   if (error instanceof DOMException && error.name === 'AbortError')
     return new PluginOAuthError(phase, 'cancelled', upstreamStatus);
-  if (error instanceof McpError) {
+  if (error instanceof NetworkError) {
     switch (error.code) {
       case 'DNS_FAILED':
         return new PluginOAuthError(phase, 'dns-failed', upstreamStatus);

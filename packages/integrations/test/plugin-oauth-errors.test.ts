@@ -4,7 +4,9 @@ import {
   refreshPluginOAuth,
   pluginConnectionDefinition,
   PluginOAuthError,
-  McpError,
+  NetworkError,
+  PluginError,
+  SkillError,
   type PluginOAuthFetch,
   type PluginOAuthFailureReason,
 } from '../src/index.js';
@@ -17,6 +19,8 @@ const client = {
 };
 const signal = new AbortController().signal;
 function safe(error: PluginOAuthError): void {
+  expect(error).toBeInstanceOf(PluginError);
+  expect(error).not.toBeInstanceOf(SkillError);
   expect(JSON.stringify({ ...error, message: error.message, stack: error.stack })).not.toContain(
     SECRET,
   );
@@ -104,7 +108,7 @@ it.each([
   ['NETWORK_FAILED', 'network-failed'],
   ['CANCELLED', 'cancelled'],
 ] as const)('classifies %s without exposing the transport message', async (code, reason) => {
-  const error = await failure(() => Promise.reject(new McpError(code, SECRET)));
+  const error = await failure(() => Promise.reject(new NetworkError(code, SECRET)));
   expect(error).toMatchObject({ phase: 'token-exchange', reason });
   expect(error.upstreamStatus).toBeUndefined();
 });

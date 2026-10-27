@@ -1,6 +1,6 @@
 import type { Usage } from '@earendil-works/pi-ai';
 import { describe, expect, it } from 'vitest';
-import { messageUsage } from '../src/message-usage.js';
+import { messageUsage } from '../src/runs/message-usage.js';
 
 const empty: Usage = {
   input: 0,

@@ -37,6 +37,23 @@
 
 `agent-runtime`通过明确RuntimeStore/ProviderStore与SecretStore接口接入宿主，ToolRuntime按冻结策略逐次确认、调用独立ModelApprovalReviewer或使用用户明确选择的full-access，再调用execution；daemon提供注册工作区解析和复核资料，Renderer只消费公开工具事件。`storage`拥有JSONL会话事实、不可变附件以及SQLite配置/会话投影；完整批次校验后先写日志并fsync，再提交SQLite投影，Runtime随后发布公开SSE。失败冻结写入，重启从日志重建会话投影，不重执行副作用。其他package在真实职责出现时创建，避免无边界共享工具包。跨包导入使用`@my-pi-harness/*`；相对导入仅留在同一app/package，源码检查拒绝跨workspace私有源码引用。
 
+## 源码模块组织
+
+源码目录表达实际拥有者，领域内直接引用具体实现。package根`index.ts`只提供公开导出，daemon根`bootstrap.ts`保留进程启动；生成的protocol版本文件和真正包级错误可留在根目录。没有旧路径兼容转发文件，也不以utils收纳未判断归属的代码。
+
+| 源码目录                     | 内部职责                                                                                                                                                                                      |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/daemon/src`            | `application`负责配置、启动准备和服务装配；`http`负责Fastify、访问校验、错误映射、请求/SSE及Web资源；auth、models、sessions、mcp等领域直接位于src                                             |
+| `packages/execution/src`     | `core`负责执行入口与公共定义；`filesystem`负责文件和路径；`process`负责Shell、持久进程、沙箱和回收；`documents`负责内容提取；`web`负责抓取；`office`负责办公生成和编辑                        |
+| `packages/integrations/src`  | `mcp`负责传输、目录、schema与租约；`network`提供受限远端访问；`skills`、`plugins`、`connections`及`search`分别拥有资源、插件声明、手动账户和本地向量适配                                      |
+| `packages/protocol/src`      | `application`、`sessions`、`tools`、`extensions`和`host`按协议领域提供浏览器安全schema/DTO；host命名不授予Node能力                                                                            |
+| `packages/storage/src`       | `profile`负责打开与跨介质提交/恢复；`sqlite`负责表和迁移；`sessions`负责JSONL、附件、查询及派生投影；`repositories`负责独立配置；`credentials`负责凭据；`shared`仅放包级错误与校验            |
+| `packages/agent-runtime/src` | `models`负责Provider及模型认证；`sessions`负责会话；`runs`负责执行编排；`tools`负责执行与审批；`capabilities`负责发现、绑定和动态加载；`work`负责计划/提问等状态；`context`负责模型请求上下文 |
+
+ProfileStore保留JSONL、SQLite、锁和失败冻结的单一编排，模型配置仓储通过它的事务入口写入。模型Provider认证、应用登录与插件OAuth继续由各自领域拥有；共享网络访问不归入某一个供应商或MCP传输。
+
+集成错误由实际领域拥有：McpError位于mcp，NetworkError位于network，插件自身错误与OAuth阶段错误位于plugins，Skill资源错误位于skills。宿主在明确调用处完成安全诊断映射；共用HTTP授权启动ticket由http拥有，插件和独立MCP路由分别注册，避免用跨域错误继承或路由混放连接模块。
+
 M3由agent-runtime内的WorkRuntime/context模块拥有规则、预算、摘要和会话工具；WorkStore扩展宿主存储端口，工作状态按分支持久化。daemon的AttachmentService接收显式上传或安全工作区引用，保存冻结内容并提供受保护预览；Renderer仅缓存元数据/ID，base64仅在上传与局部预览操作中存在。人工提问和Plan/Todos不要求工作区；文件/Shell仍执行M2策略。每次模型请求前统一处理预算、压缩与工作状态。自动上下文检查点选择摘要版本；手动会话快照通过新增分支恢复消息前缀和工作状态。二者都不撤销磁盘或外部副作用。
 
 MCP由daemon的`McpService`管理配置、系统秘密与启动授权，`ExternalTools`端口把冻结定义和非秘密授权交给runtime。`integrations`使用官方Client管理协议与租约，stdio字节交给`execution`的受监管持久进程；runtime仍拥有审批、派发前持久屏障及终态。普通GET不创建进程，最后租约释放等待进程组和管道关闭。MCP连接/进程不进入Renderer或storage；接口与平台范围见[本地MCP协议](../03_API/local-mcp.md)。
@@ -53,7 +70,7 @@ main/preload 只开放明确列举的桌面能力，校验调用来源与输入�
 
 ## 源码与发布产物
 
-lint、typecheck 和源码测试通过 TypeScript paths 解析工作区 `src`，必须能在没有旧构建产物时执行。发布 Node 解析真实 package exports，`packages/protocol` 导出 `dist/*.js`；发布验证使用构建产物，不能以源码路径别名代替。
+lint、typecheck 和源码测试通过 TypeScript paths 解析工作区 `src`，必须能在没有旧构建产物时执行。发布 Node 解析真实 package exports，`packages/protocol`根入口导出`dist/index.js`，内部目录随源码编译至dist；发布验证使用构建产物，不能以源码路径别名代替。
 
 Web源码及其单测使用Bundler编译面；浏览器E2E使用单独的NodeNext测试配置，同时提供DOM类型以检查page.evaluate回调。根Node工具程序不通过测试入口追入Renderer源码，ESLint和typecheck覆盖这几个实际编译面。
 

@@ -2,6 +2,22 @@
 
 Node端的模型接入与持久会话运行层，使用固定的Pi core/ai 1.1.0公开接口。HTTP、SQLite、OS凭据和页面由宿主提供；本包不导入Fastify、Electron、React或SQL驱动。源码测试通过paths消费protocol/storage，生产仅导出dist。
 
+## 源码职责
+
+| 目录            | 职责                                                              |
+| --------------- | ----------------------------------------------------------------- |
+| `models/`       | 模型清单、Provider实例、模型认证与凭据适配；不负责应用或插件OAuth |
+| `sessions/`     | 单会话命令串行、队列、分支、持久事实发布与宿主存储端口            |
+| `runs/`         | 单Run的Pi Agent生命周期、流式事件、工具结果及消息用量             |
+| `tools/`        | 冻结工具集合、执行路由、逐次审批复核与外部工具端口                |
+| `capabilities/` | 接受输入时冻结Skill和候选目录、检索、激活及下一请求可见版本       |
+| `work/`         | Plan、Todos、用户提问、检查点和相应会话工具                       |
+| `context/`      | 消息codec、附件输入、规则、预算、摘要及每次请求的上下文投影       |
+
+根`index.ts`是跨包公开入口，`errors.ts`定义包级运行失败。包内直接导入所属模块，不通过根入口或内部转发层回引；`ProviderStore`由`models/ports.ts`声明，`RuntimeStore`与会话接受记录由`sessions/ports.ts`声明。
+
+## 模型与会话运行
+
 `ModelGateway`装配账户实例、模型清单、连接探测与认证。OpenAI（Codex）、Anthropic、Google、DeepSeek、MiniMax、Kimi六个内置Provider按公开factory固定为单例入口，名称、端点和模型目录只读；自定义Provider允许空模型列表，模型Dialog草稿一次提交整个Provider，保留未提交的同ID模型headers/compat，切换协议同步已有模型API。自定义Provider使用Pi的Chat Completions、Responses或Anthropic lazy API。请求HTTP与模型SSE解析由Pi负责。OpenAI兼容Base URL通常含`/v1`；Anthropic SDK会追加`/v1/messages`，通常配置不含`/v1`的服务根地址。HTTPS及显式回环HTTP可用，地址不得含用户信息、query或fragment。
 
 公开providerKind、配置实例ID与credentialRef分别表示协议/厂商、账户配置和秘密存储引用。不同实例使用独立Pi注册ID与凭据；生产默认AuthContext不读取供应商环境变量或其他应用认证文件。requiresApiKey=false跳过保存及环境凭据，通过Pi公开fetch注入剥除SDK认证头；恢复Key要求可继续使用原保存凭据。模型定义显式指定真实modelId、能力、上下文和compat，保存配置不证明远端可用。`testConnection`发起有超时的真实请求，可能产生供应商用量；它返回脱敏结果。

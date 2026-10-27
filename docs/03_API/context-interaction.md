@@ -1,6 +1,6 @@
 # 上下文与工作状态协议
 
-共享协议版本见[API入口](overview.md)；DTO和schema由packages/protocol/src/context.ts及sessions.ts拥有。开发期不保留旧协议/日志/codec适配，全部消费者同步更新。接口复用[应用登录](application-auth.md)、Host/Origin与CSRF校验，未知字段拒绝。存储权威与恢复由[storage](../../packages/storage/README.md)说明。
+共享协议版本见[API入口](overview.md)；DTO和schema由packages/protocol/src/sessions/context.ts及sessions.ts拥有。开发期不保留旧协议/日志/codec适配，全部消费者同步更新。接口复用[应用登录](application-auth.md)、Host/Origin与CSRF校验，未知字段拒绝。存储权威与恢复由[storage](../../packages/storage/README.md)说明。
 
 ## 附件与规则
 

@@ -5,7 +5,7 @@ import {
   sessionProjection,
   projectionMessage,
 } from '../../../tests/fixtures/session-projection.js';
-import { createSessionUpdate } from '../src/features/sessions/stream-update.js';
+import { createSessionUpdate } from '../src/sessions/stream-update.js';
 
 const patch = (update: SessionStreamUpdate | undefined) => {
   if (!update || update.kind !== 'patch') throw new Error('Expected projection patch');

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { assertPublicAddress, parseWebUrl } from '../src/web.js';
+import { assertPublicAddress, parseWebUrl } from '../src/web/fetch.js';
 import { executeTool } from '../src/index.js';
 
 describe('public web targets', () => {

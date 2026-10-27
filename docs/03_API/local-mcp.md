@@ -1,6 +1,6 @@
 # MCP目录与本地协议
 
-共享协议版本由[API入口](overview.md)维护。`packages/protocol/src/mcp.ts`拥有管理DTO、隔离范围与工具选择schema；`tools.ts`和`tool-results.ts`拥有调用来源、派发事实与私有中立结果。所有接口复用[应用登录](application-auth.md)、Host/Origin和写请求CSRF校验，未知字段拒绝。
+共享协议版本由[API入口](overview.md)维护。`packages/protocol/src/extensions/mcp.ts`拥有管理DTO、隔离范围与工具选择schema；`tools.ts`和`tool-results.ts`拥有调用来源、派发事实与私有中立结果。所有接口复用[应用登录](application-auth.md)、Host/Origin和写请求CSRF校验，未知字段拒绝。
 
 ## 配置与安全DTO
 

@@ -8,7 +8,7 @@ import type {
   McpLease,
   McpDiscoveredTool,
 } from '@my-pi-harness/integrations';
-import type { McpManager } from '../../src/features/mcp/types.js';
+import type { McpManager } from '../../src/mcp/types.js';
 
 /** Controllable protocol adapter for management tests; integration tests own actual SDK bytes. */
 export function mcpManagerFixture(): {

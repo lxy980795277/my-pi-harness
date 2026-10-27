@@ -1,6 +1,6 @@
 # Skills 与插件协议
 
-全部接口沿用应用登录 Cookie 与写请求 CSRF 检查，输入、查询与响应由 `packages/protocol/src/skills.ts` 和 `plugins.ts` 校验。读取目录不执行脚本、不启动 MCP 或进行账号授权。
+全部接口沿用应用登录 Cookie 与写请求 CSRF 检查，输入、查询与响应由 `packages/protocol/src/extensions/skills.ts` 和 `plugins.ts` 校验。读取目录不执行脚本、不启动 MCP 或进行账号授权。
 
 ## Skills 管理
 

@@ -2,7 +2,7 @@ import { ChildProcess } from 'node:child_process';
 import { PassThrough } from 'node:stream';
 import { finished } from 'node:stream/promises';
 import { expect, it } from 'vitest';
-import { collectShellProcess } from '../src/shell-process.js';
+import { collectShellProcess } from '../src/process/collect.js';
 
 function processFixture(): { child: ChildProcess; stdout: PassThrough; stderr: PassThrough } {
   // No PID or OS process is created; only the documented exit/data/close ordering is driven.

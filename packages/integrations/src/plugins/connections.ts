@@ -3,8 +3,8 @@ import { join } from 'node:path';
 import { Type } from 'typebox';
 import { Value } from 'typebox/value';
 import { parseDocument } from 'yaml';
-import { SkillError } from '../skills/errors.js';
-import { parseRemoteUrl } from '../remote-network.js';
+import { PluginError } from './errors.js';
+import { parseRemoteUrl } from '../network/remote-fetch.js';
 import { BUILTIN_PLUGINS, BUILTIN_PLUGIN_RESOURCE_DIRECTORY } from './catalog.js';
 
 /** Deployment-owned OAuth clients override the declarative plugin's client fields. */
@@ -13,7 +13,9 @@ export interface PluginOAuthClient {
   clientSecret: string;
   callbackUrl?: string;
 }
+
 export type PluginOAuthClients = Readonly<Record<string, PluginOAuthClient>>;
+
 export interface PluginOAuthProfile {
   source: 'userinfo' | 'id-token' | 'token';
   path?: string;
@@ -23,6 +25,7 @@ export interface PluginOAuthProfile {
   displayNameField?: string;
   avatarUrlField?: string;
 }
+
 export interface PluginConnectionDefinition {
   id: string;
   name: string;
@@ -51,12 +54,15 @@ export interface PluginConnectionDefinition {
 
 const object = { additionalProperties: false } as const;
 const text = Type.String({ minLength: 1, maxLength: 4096 });
+
 const fields = Type.Record(
   Type.String({ minLength: 1, maxLength: 100 }),
   Type.String({ maxLength: 4096 }),
   { maxProperties: 32 },
 );
+
 const paths = Type.Array(Type.String({ minLength: 3, maxLength: 2048 }), { maxItems: 64 });
+
 const ManifestSchema = Type.Object(
   {
     id: Type.String({ pattern: '^[a-z][a-z0-9-]{0,63}$' }),
@@ -113,9 +119,20 @@ const ManifestSchema = Type.Object(
   },
   object,
 );
+
+/** The finite packaged resource set is read once; clients are merged privately by the daemon. */
+export const PLUGIN_CONNECTION_DEFINITIONS: readonly PluginConnectionDefinition[] =
+  BUILTIN_PLUGINS.filter((plugin) => plugin.category === 'services').map((plugin) => {
+    const path = join(BUILTIN_PLUGIN_RESOURCE_DIRECTORY, plugin.id, 'manifest.yaml');
+    const file = lstatSync(path);
+    if (!file.isFile() || file.isSymbolicLink() || file.size > 65536) return invalid();
+    return parsePluginConnectionManifest(readFileSync(path, 'utf8'), plugin.id);
+  });
+
 function invalid(): never {
-  throw new SkillError('PLUGIN_MANIFEST_INVALID', '插件 OAuth 或网关配置无效。');
+  throw new PluginError('PLUGIN_MANIFEST_INVALID', '插件 OAuth 或网关配置无效。');
 }
+
 function httpsEndpoint(value: string): URL {
   let url: URL;
   try {
@@ -212,18 +229,9 @@ export function parsePluginConnectionManifest(
   return value;
 }
 
-/** The finite packaged resource set is read once; clients are merged privately by the daemon. */
-export const PLUGIN_CONNECTION_DEFINITIONS: readonly PluginConnectionDefinition[] =
-  BUILTIN_PLUGINS.filter((plugin) => plugin.category === 'services').map((plugin) => {
-    const path = join(BUILTIN_PLUGIN_RESOURCE_DIRECTORY, plugin.id, 'manifest.yaml');
-    const file = lstatSync(path);
-    if (!file.isFile() || file.isSymbolicLink() || file.size > 65536) return invalid();
-    return parsePluginConnectionManifest(readFileSync(path, 'utf8'), plugin.id);
-  });
-
 export function pluginConnectionDefinition(id: string): PluginConnectionDefinition {
   const definition = PLUGIN_CONNECTION_DEFINITIONS.find((entry) => entry.id === id);
   if (definition === undefined)
-    throw new SkillError('SKILL_COLLECTION_NOT_FOUND', '此插件不提供服务授权。');
+    throw new PluginError('SKILL_COLLECTION_NOT_FOUND', '此插件不提供服务授权。');
   return definition;
 }

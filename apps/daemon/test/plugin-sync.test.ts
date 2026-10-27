@@ -3,8 +3,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
 import { openProfileStore } from '@my-pi-harness/storage';
-import { SkillsService } from '../src/features/skills/service.js';
-import { PluginService, type PluginAppPort } from '../src/features/plugins/service.js';
+import { SkillsService } from '../src/skills/service.js';
+import { PluginService, type PluginAppPort } from '../src/plugins/service.js';
 
 const cleanup: (() => Promise<void>)[] = [];
 const signal = new AbortController().signal;

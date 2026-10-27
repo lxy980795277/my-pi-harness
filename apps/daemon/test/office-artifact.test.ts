@@ -7,7 +7,7 @@ import type { ToolCallView } from '@my-pi-harness/protocol';
 import { RuntimeError } from '@my-pi-harness/agent-runtime';
 import { openProfileStore } from '@my-pi-harness/storage';
 import { describe, expect, it } from 'vitest';
-import { registerOfficeArtifactRoute } from '../src/features/sessions/artifact-route.js';
+import { registerOfficeArtifactRoute } from '../src/sessions/artifact-route.js';
 
 async function fixture() {
   const directory = await realpath(await mkdtemp(join(tmpdir(), 'my-pi-office-download-')));

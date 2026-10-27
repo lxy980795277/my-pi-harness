@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
 import { PluginCredentialStore } from '@my-pi-harness/storage';
 import type { PluginOAuthFetch } from '@my-pi-harness/integrations';
-import { PluginConnectionService } from '../src/features/plugin-connections/service.js';
+import { PluginConnectionService } from '../src/plugin-connections/service.js';
 
 const cleanups: (() => Promise<void>)[] = [];
 afterEach(async () => {

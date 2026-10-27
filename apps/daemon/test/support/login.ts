@@ -1,7 +1,7 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { AuthStatusSchema } from '@my-pi-harness/protocol';
 import { Value } from 'typebox/value';
-import type { ApplicationServices } from '../../src/services.js';
+import type { ApplicationServices } from '../../src/application/services.js';
 
 /** Cookies and CSRF for a test client; bearer values remain outside application DTOs. */
 export interface FixtureAuthorization {

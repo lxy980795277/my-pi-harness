@@ -7,7 +7,7 @@ import { promisify } from 'node:util';
 import { Type } from 'typebox';
 import { Value } from 'typebox/value';
 import { describe, expect, it } from 'vitest';
-import { clearAmbientModelEnvironment } from '../src/model-environment.js';
+import { clearAmbientModelEnvironment } from '../src/application/model-environment.js';
 
 const execute = promisify(execFile);
 const CapturedRequests = Type.Array(

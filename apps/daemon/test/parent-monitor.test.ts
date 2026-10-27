@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { watchParentProcess } from '../src/parent-monitor.js';
+import { watchParentProcess } from '../src/application/parent-monitor.js';
 
 const disposers: Array<() => void> = [];
 

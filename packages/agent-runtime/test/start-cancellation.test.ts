@@ -4,8 +4,8 @@ import { join } from 'node:path';
 import { createModels, fauxProvider } from '@earendil-works/pi-ai';
 import { openProfileStore } from '@my-pi-harness/storage';
 import { describe, expect, it } from 'vitest';
-import type { SessionRuntimeOptions } from '../src/session-runtime.js';
-import { SessionRuntime } from '../src/session-runtime.js';
+import type { SessionRuntimeOptions } from '../src/sessions/runtime.js';
+import { SessionRuntime } from '../src/sessions/runtime.js';
 
 function gate() {
   let release = (): void => {};

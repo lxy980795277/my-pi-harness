@@ -26,6 +26,41 @@ afterEach(async () => {
 });
 
 describe('source file conventions', () => {
+  it('accepts grouped module types, constants, state and implementations', async () => {
+    const root = await fixture({
+      'apps/daemon/src/service.ts': [
+        'type Result = typeof defaults;',
+        'interface Options { enabled: boolean }',
+        'const defaults = { enabled: true };',
+        'let current = defaults;',
+        'const read = (): Result => current;',
+        'function reset() { current = defaults; }',
+        'reset();',
+      ].join('\n'),
+    });
+    await expect(checkSourceConventions(root)).resolves.toBe(1);
+  });
+
+  it.each([
+    ['const enabled = true;\ninterface Options {}', '模块级 type/interface 必须集中'],
+    ['function read() {}\nconst enabled = true;', '模块级非函数 const 必须集中'],
+    ['let current = true;\nconst enabled = true;', '模块级非函数 const 必须集中'],
+    ['function read() {}\nlet current = true;', '模块级 let/var 状态必须集中'],
+  ])('rejects interleaved module declarations: %s', async (content, message) => {
+    const root = await fixture({ 'packages/execution/src/service.ts': content });
+    await expect(checkSourceConventions(root)).rejects.toThrow(message);
+  });
+
+  it('keeps local declarations scoped and does not impose production layout on test fixtures', async () => {
+    const content = [
+      'function read() { const value = 1; type Value = typeof value; return value; }',
+      'const example = 1;',
+      'type Example = typeof example;',
+    ].join('\n');
+    const root = await fixture({ 'packages/execution/test/service.test.ts': content });
+    await expect(checkSourceConventions(root)).resolves.toBe(1);
+  });
+
   it.each(['BadName.ts', 'bad_name.ts', 'mixedCase.config.js'])(
     'rejects non-kebab source filename %s',
     async (name) => {

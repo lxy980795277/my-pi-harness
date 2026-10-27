@@ -23,8 +23,8 @@ import {
   type EventInput,
   type ProfileStore,
 } from '../src/index.js';
-import { SessionBatchSchema, type SessionBatch } from '../src/session-jsonl.js';
-import { checked } from '../src/validation.js';
+import { SessionBatchSchema, type SessionBatch } from '../src/sessions/session-jsonl.js';
+import { checked } from '../src/shared/validation.js';
 
 vi.mock('node:fs', async (importOriginal) => ({ ...(await importOriginal<typeof fs>()) }));
 const fixtures: { directory: string; store: ProfileStore }[] = [];
@@ -364,12 +364,18 @@ describe('authoritative host session journals', () => {
       'Restart before retrying',
     );
     expect(() => value.store.exportSessionLog('session')).toThrow('Restart before retrying');
+    expect(value.store.getSettings()).toEqual({ revision: 1, defaultModel: null });
+    expect(() => value.store.putSettings({ expectedRevision: 1, defaultModel: null })).toThrow(
+      'Restart before retrying',
+    );
+    expect(() => value.store.deleteProvider('provider')).toThrow('Restart before retrying');
     value.store.close();
     const repair = new Database(join(value.directory, 'data.sqlite'));
     repair.exec('DROP TRIGGER fail_commit');
     repair.close();
     value.store = await openProfileStore(value.directory);
     expect(value.store.readEvents('session').at(-1)?.type).toBe('audit.commit-failure');
+    expect(value.store.putSettings({ expectedRevision: 1, defaultModel: null }).revision).toBe(2);
   });
 
   it('freezes writes after uncertain fsync; restart replays the complete written batch once', async () => {

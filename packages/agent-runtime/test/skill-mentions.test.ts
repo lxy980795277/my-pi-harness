@@ -3,8 +3,8 @@ import { text as streamText } from 'node:stream/consumers';
 import { fauxAssistantMessage, type TranscriptContext } from '@earendil-works/pi-ai';
 import type { FrozenSkill, SkillView } from '@my-pi-harness/protocol';
 import { describe, expect, it, vi } from 'vitest';
-import type { SkillsPort } from '../src/capability-ports.js';
-import { explicitSkillNames } from '../src/skill-mentions.js';
+import type { SkillsPort } from '../src/capabilities/ports.js';
+import { explicitSkillNames } from '../src/capabilities/skill-mentions.js';
 import { RuntimeError } from '../src/errors.js';
 import { call, fixture, gate, idle } from './support/work-fixture.js';
 

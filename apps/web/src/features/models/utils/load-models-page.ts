@@ -5,9 +5,7 @@ interface ModelsModule {
 }
 
 /** Model settings load on demand inside the already mounted settings dialog. */
-const loadModelsPage = async (): Promise<ModelsModule> => {
+export const LazyModelsPage = lazy(async (): Promise<ModelsModule> => {
   const module = await import('@/features/models/components/models-page');
   return { default: module.ModelsPage };
-};
-
-export const LazyModelsPage = lazy(loadModelsPage);
+});

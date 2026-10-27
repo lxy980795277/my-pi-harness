@@ -2,6 +2,12 @@
 
 Node 24 宿主使用的同步存储。JSONL保存会话执行事实，独立不可变文件保存冻结附件，better-sqlite3/Drizzle保存应用配置和会话查询投影。Renderer不得导入本包。
 
+## 源码职责
+
+`src/index.ts`是唯一公开入口。`profile/`拥有打开、锁、关闭、恢复及跨JSONL与SQLite的提交编排；`sqlite/`保存Drizzle表和按版本校验的迁移；`sessions/`保存日志、附件、上下文查询和事件校验，`sessions/projections/`维护可重建的会话、工具、能力及工作状态投影。`repositories/`保存身份、模型配置、工作区、MCP、扩展及高级账户的SQLite仓储；`credentials/`拥有系统凭据和插件私有凭据；`shared/`仅放存储错误和通用持久数据校验。
+
+模型配置、厂商绑定和默认模型由`ModelSettingsRepository`查询与更新，`ProfileStore`保持对外方法和事务所有权。配置更新通过宿主提供的事务函数执行，继续服从profile关闭状态和日志写入失败后的写入冻结，不另建提交或恢复路径。
+
 ## 数据所有权
 
 | 数据                                                                  | 权威位置             | SQLite职责                           |

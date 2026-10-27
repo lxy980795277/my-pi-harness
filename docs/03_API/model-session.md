@@ -1,6 +1,6 @@
 # 模型、授权与会话协议
 
-共享协议版本见[API入口](overview.md)，公开事件envelope保持version:1，宿主JSONL批次格式独立管理。M1的公开schema由 `packages/protocol/src/models.ts`、`auth.ts` 、`sessions.ts` 和 `session-stream.ts` 拥有。HTTP返回公开DTO，SDK对象、模型上下文codec、凭据和数据库Entity不跨入Renderer。列表接口直接返回数组，写会话接口返回已提交的SessionSnapshot；失败返回 `{code,message}`。
+共享协议版本见[API入口](overview.md)，公开事件envelope保持version:1，宿主JSONL批次格式独立管理。M1的公开schema由 `packages/protocol/src/application/models.ts`、`auth.ts` 、`sessions.ts` 和 `session-stream.ts` 拥有。HTTP返回公开DTO，SDK对象、模型上下文codec、凭据和数据库Entity不跨入Renderer。列表接口直接返回数组，写会话接口返回已提交的SessionSnapshot；失败返回 `{code,message}`。
 
 ## 授权
 

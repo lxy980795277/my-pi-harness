@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import type { MessageView, ToolCallRecord, StoredToolResult } from '@my-pi-harness/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
 import { openProfileStore, type EventInput, type ProfileStore } from '../src/index.js';
-import { storedToolCallId } from '../src/tool-intents.js';
+import { storedToolCallId } from '../src/sessions/projections/tool-intents.js';
 
 const owned: { directory: string; store: ProfileStore }[] = [];
 afterEach(async () => {

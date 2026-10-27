@@ -4,7 +4,7 @@ import { fauxAssistantMessage, type TranscriptContext } from '@earendil-works/pi
 import type { FrozenSkill } from '@my-pi-harness/protocol';
 import type { SessionBatch } from '@my-pi-harness/storage';
 import { describe, expect, it } from 'vitest';
-import type { SkillsPort } from '../src/capability-ports.js';
+import type { SkillsPort } from '../src/capabilities/ports.js';
 import { call, fixture, idle } from './support/work-fixture.js';
 
 const skill: FrozenSkill = {

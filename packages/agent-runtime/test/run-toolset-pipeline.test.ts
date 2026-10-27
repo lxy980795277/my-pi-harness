@@ -3,18 +3,18 @@ import { join } from 'node:path';
 import { text as streamText } from 'node:stream/consumers';
 import { fauxAssistantMessage, type TranscriptContext } from '@earendil-works/pi-ai';
 import { TOOL_DEFINITIONS } from '@my-pi-harness/execution';
-import type { ContextUsage } from '@my-pi-harness/protocol';
+import type { ContextUsage, ToolSource } from '@my-pi-harness/protocol';
 import type { SessionBatch } from '@my-pi-harness/storage';
 import { describe, expect, it, vi } from 'vitest';
-import { decodeContextMessage } from '../src/context-codec.js';
+import { decodeContextMessage } from '../src/context/codec.js';
 import { estimateContextUsage } from '../src/context/budget.js';
-import { SESSION_TOOL_DEFINITIONS } from '../src/session-tools.js';
-import { RunToolset, type RunToolDefinition, type RunToolSource } from '../src/run-toolset.js';
+import { SESSION_TOOL_DEFINITIONS } from '../src/work/tools.js';
+import { RunToolset, type RunToolDefinition } from '../src/tools/toolset.js';
 import { call, fixture, idle } from './support/work-fixture.js';
 
 interface AcceptedTools {
   tools: RunToolDefinition[];
-  toolSources: { name: string; source: RunToolSource; fingerprint: string }[];
+  toolSources: { name: string; source: ToolSource; fingerprint: string }[];
 }
 
 async function records(f: Awaited<ReturnType<typeof fixture>>) {

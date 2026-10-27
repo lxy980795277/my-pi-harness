@@ -6,8 +6,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
-import { executeOfficeTool } from '../../src/office/index.js';
-import type { ExecutionContext, ExecutionResult } from '../../src/types.js';
+import { executeOfficeTool } from '../../src/office/executor.js';
+import type { ExecutionContext, ExecutionResult } from '../../src/core/types.js';
 
 const python =
   process.env['MY_PI_HARNESS_OFFICE_TEST_PYTHON'] ??

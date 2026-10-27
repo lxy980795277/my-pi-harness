@@ -5,8 +5,8 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { RemoteMcpManager, decodeMcpCatalog } from '@my-pi-harness/integrations';
 import { createMemoryCredentialStore, openProfileStore } from '@my-pi-harness/storage';
 import { remoteFixture } from '../../../tests/fixtures/remote-mcp.js';
-import { RemoteMcpService } from '../src/features/mcp/remote-service.js';
-import { McpService } from '../src/features/mcp/service.js';
+import { RemoteMcpService } from '../src/mcp/remote-service.js';
+import { McpService } from '../src/mcp/service.js';
 import { mcpManagerFixture } from './support/mcp.js';
 
 const cleanups: (() => Promise<void>)[] = [];

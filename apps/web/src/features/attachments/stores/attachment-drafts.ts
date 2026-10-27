@@ -1,7 +1,6 @@
 import { create } from 'zustand';
 import type { Attachment } from '@my-pi-harness/protocol';
 
-export const EMPTY_ATTACHMENTS: Attachment[] = [];
 interface AttachmentDrafts {
   drafts: Readonly<Record<string, Attachment[]>>;
   busy: Readonly<Record<string, boolean>>;
@@ -11,6 +10,9 @@ interface AttachmentDrafts {
   clear: (key: string) => void;
   reset: () => void;
 }
+
+export const EMPTY_ATTACHMENTS: Attachment[] = [];
+
 /** Stores metadata for unsubmitted drafts; encoded bytes never enter this Store. */
 export const useAttachmentDrafts = create<AttachmentDrafts>((set) => {
   return {

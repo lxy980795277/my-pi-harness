@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3';
 import { expect, it } from 'vitest';
-import { applyMigrations, SCHEMA_VERSION } from '../src/migrations.js';
-import { McpDirectoryRepository } from '../src/mcp-directory.js';
+import { applyMigrations, SCHEMA_VERSION } from '../src/sqlite/migrations/apply.js';
+import { McpDirectoryRepository } from '../src/repositories/mcp-directory.js';
 
 it('adds rebuildable catalog storage to schema seven while preserving existing configuration', () => {
   const database = new Database(':memory:');

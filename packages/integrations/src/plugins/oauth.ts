@@ -1,7 +1,7 @@
 import * as oauth from 'oauth4webapi';
 import type { SkillConnectionAccount } from '@my-pi-harness/protocol';
-import { SkillError } from '../skills/errors.js';
-import { createRemoteFetch } from '../remote-network.js';
+import { PluginError } from './errors.js';
+import { createRemoteFetch } from '../network/remote-fetch.js';
 import type { PluginConnectionDefinition, PluginOAuthClient } from './connections.js';
 import {
   PluginOAuthError,
@@ -146,7 +146,7 @@ async function tokenRequest(
     typeof parsed.error === 'string' &&
     ['invalid_grant', 'invalid_token', 'bad_refresh_token'].includes(parsed.error)
   )
-    throw new SkillError('SKILL_CONNECTION_REQUIRED', '服务授权已失效，请重新授权。');
+    throw new PluginError('SKILL_CONNECTION_REQUIRED', '服务授权已失效，请重新授权。');
   if (parsed.error !== undefined)
     throw new PluginOAuthError(
       'token-exchange',
@@ -303,7 +303,7 @@ export async function refreshPluginOAuth(
   request: PluginOAuthFetch = pluginOAuthFetch(),
 ): Promise<PluginOAuthTokens> {
   if (previous.refreshToken === undefined)
-    throw new SkillError('SKILL_CONNECTION_REQUIRED', '服务授权已过期，请重新授权。');
+    throw new PluginError('SKILL_CONNECTION_REQUIRED', '服务授权已过期，请重新授权。');
   const body = new URLSearchParams({
     grant_type: 'refresh_token',
     refresh_token: previous.refreshToken,

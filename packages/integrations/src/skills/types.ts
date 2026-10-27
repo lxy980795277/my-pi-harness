@@ -1,37 +1,20 @@
+import type {
+  FrozenSkill as ProtocolFrozenSkill,
+  SkillResource,
+  SkillScope,
+} from '@my-pi-harness/protocol';
+export type { SkillResource, SkillScope, SkillResourceContent } from '@my-pi-harness/protocol';
+
+/** Source snapshots do not own the gateway URL later attached by the daemon. */
+export type FrozenSkill = Omit<ProtocolFrozenSkill, 'gatewayUrl'>;
+
 /** Scope precedence is project, user, plugin, system; directories within a scope are explicit. */
-export type SkillScope = 'project' | 'user' | 'plugin' | 'system';
 export interface SkillRoot {
   path: string;
   scope: SkillScope;
   pluginId: string | null;
   workspaceId: string | null;
   managed: boolean;
-}
-export interface SkillSelection {
-  id: string;
-  contentHash: string;
-}
-export interface SkillResource {
-  path: string;
-  hash: string;
-  size: number;
-  mediaType: string;
-}
-export interface FrozenSkill {
-  selection: SkillSelection;
-  authorization: {
-    skillEpoch: number;
-    pluginId: string | null;
-    pluginEpoch: number;
-    pluginGeneration: string | null;
-  };
-  name: string;
-  description: string;
-  scope: SkillScope;
-  source: string;
-  content: string;
-  resources: SkillResource[];
-  allowedTools: string[];
 }
 export interface ParsedSkill {
   name: string;
@@ -52,9 +35,6 @@ export interface DiscoveredSkill extends ParsedSkill {
   shadowed: boolean;
   source: string;
 }
-export type SkillResourceContent =
-  | { type: 'text'; text: string; path: string; hash: string }
-  | { type: 'image'; data: string; mimeType: string; path: string; hash: string };
 export interface SkillCatalogOptions {
   snapshotDirectory: string;
 }

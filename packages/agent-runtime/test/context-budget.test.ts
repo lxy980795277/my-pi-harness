@@ -1,6 +1,6 @@
 import { fauxAssistantMessage, type Message } from '@earendil-works/pi-ai';
 import { describe, expect, it } from 'vitest';
-import { estimateContextUsage, fitContext } from '../src/context/index.js';
+import { estimateContextUsage, fitContext } from '../src/context/budget.js';
 
 function user(content: string): Message {
   return { role: 'user', content, timestamp: 1 };

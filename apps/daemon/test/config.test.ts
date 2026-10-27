@@ -3,7 +3,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { DaemonConfigError, loadDaemonConfig } from '../src/config.js';
+import { DaemonConfigError, loadDaemonConfig } from '../src/application/config.js';
 
 const temporaryLogRoot = join(tmpdir(), 'my-pi-config-fixture', '.my-pi-harness');
 

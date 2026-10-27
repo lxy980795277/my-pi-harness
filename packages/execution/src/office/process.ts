@@ -1,10 +1,10 @@
 import { spawn } from 'node:child_process';
 import { access, realpath } from 'node:fs/promises';
 import { dirname, isAbsolute } from 'node:path';
-import { ExecutionError, checkCancelled } from '../errors.js';
-import { stopOwnedProcessGroup, waitForProcessClose } from '../process-cleanup.js';
-import { sandboxProfile } from '../shell.js';
-import type { ExecutionContext } from '../types.js';
+import { ExecutionError, checkCancelled } from '../core/errors.js';
+import { stopOwnedProcessGroup, waitForProcessClose } from '../process/cleanup.js';
+import { sandboxProfile } from '../process/sandbox.js';
+import type { ExecutionContext } from '../core/types.js';
 
 export interface OfficeProcessOptions {
   /** Explicitly installed interpreter; no Run installs Python packages. */

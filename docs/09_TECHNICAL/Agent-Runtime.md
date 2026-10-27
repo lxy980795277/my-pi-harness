@@ -2,7 +2,7 @@
 
 **日期**：2026-10-20
 
-**模块**：`packages/agent-runtime/`、`apps/daemon/src/services.ts`
+**模块**：`packages/agent-runtime/`、`apps/daemon/src/application/services.ts`
 
 **实现锚点**：`ModelGateway`、`SessionRuntime`、`RunExecution`、`ToolRuntime`、`WorkInteractions`
 
@@ -253,18 +253,18 @@ daemon关闭先封禁新的MCP管理操作，终止WorkRuntime生命周期，再
 
 ## 八、关键实现与验证入口
 
-| 实现                                                                            | 负责的机制                                  |
-| ------------------------------------------------------------------------------- | ------------------------------------------- |
-| [`session-runtime.ts`](../../packages/agent-runtime/src/session-runtime.ts)     | 串行命令、接受幂等、队列、分支、取消和发布  |
-| [`run-execution.ts`](../../packages/agent-runtime/src/run-execution.ts)         | Agent配置、SDK事件映射、Run终态、请求前投影 |
-| [`model-gateway.ts`](../../packages/agent-runtime/src/model-gateway.ts)         | 模型选择、Provider与认证lease               |
-| [`provider-instance.ts`](../../packages/agent-runtime/src/provider-instance.ts) | Pi公开Provider工厂与自定义API装配           |
-| [`tool-runtime.ts`](../../packages/agent-runtime/src/tool-runtime.ts)           | 单次工具记录、策略、审批和执行              |
-| [`work-interactions.ts`](../../packages/agent-runtime/src/work-interactions.ts) | 同Run提问、计划审核与取消等待               |
-| [`session-tools.ts`](../../packages/agent-runtime/src/session-tools.ts)         | 模型工具参数及Plan/Todos操作                |
-| [`external-tools.ts`](../../packages/agent-runtime/src/external-tools.ts)       | 冻结外部定义/授权、恢复与执行端口           |
-| [`tool-history.ts`](../../packages/agent-runtime/src/tool-history.ts)           | 工具调用/结果配对检查                       |
-| [`services.ts`](../../apps/daemon/src/services.ts)                              | daemon资源装配和关闭顺序                    |
+| 实现                                                                                   | 负责的机制                                  |
+| -------------------------------------------------------------------------------------- | ------------------------------------------- |
+| [`session-runtime.ts`](../../packages/agent-runtime/src/sessions/runtime.ts)           | 串行命令、接受幂等、队列、分支、取消和发布  |
+| [`run-execution.ts`](../../packages/agent-runtime/src/runs/execution.ts)               | Agent配置、SDK事件映射、Run终态、请求前投影 |
+| [`model-gateway.ts`](../../packages/agent-runtime/src/models/gateway.ts)               | 模型选择、Provider与认证lease               |
+| [`provider-instance.ts`](../../packages/agent-runtime/src/models/provider-instance.ts) | Pi公开Provider工厂与自定义API装配           |
+| [`tool-runtime.ts`](../../packages/agent-runtime/src/tools/runtime.ts)                 | 单次工具记录、策略、审批和执行              |
+| [`work-interactions.ts`](../../packages/agent-runtime/src/work/interactions.ts)        | 同Run提问、计划审核与取消等待               |
+| [`session-tools.ts`](../../packages/agent-runtime/src/work/tools.ts)                   | 模型工具参数及Plan/Todos操作                |
+| [`external-tools.ts`](../../packages/agent-runtime/src/tools/external.ts)              | 冻结外部定义/授权、恢复与执行端口           |
+| [`tool-history.ts`](../../packages/agent-runtime/src/context/tool-history.ts)          | 工具调用/结果配对检查                       |
+| [`services.ts`](../../apps/daemon/src/application/services.ts)                         | daemon资源装配和关闭顺序                    |
 
 验收重点是状态所有权和可观察结果：
 

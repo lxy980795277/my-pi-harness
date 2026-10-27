@@ -3,6 +3,7 @@ import { basename, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import ts from 'typescript';
+import { declarationOrderViolations } from './source-declarations.mjs';
 
 const defaultRoot = fileURLToPath(new URL('../', import.meta.url));
 const ignoredDirectories = new Set([
@@ -183,6 +184,11 @@ export async function checkSourceConventions(repoRoot = defaultRoot) {
     const webSource = path.startsWith('apps/web/src/');
     const webModule = webSource || path.startsWith('apps/web/test/');
     const source = ts.createSourceFile(file, content, ts.ScriptTarget.Latest, true);
+    if (/^(?:apps|packages)\/[^/]+\/src\/.+\.[cm]?tsx?$/.test(path)) {
+      for (const diagnostic of declarationOrderViolations(source)) {
+        report(`${diagnostic.line}:${diagnostic.column} ${diagnostic.message}`);
+      }
+    }
     if (webSource) {
       const directives = lintDirectives(content, source);
       for (const directive of directives) {

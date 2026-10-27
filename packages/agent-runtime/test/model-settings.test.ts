@@ -10,7 +10,7 @@ import {
 } from '@my-pi-harness/protocol';
 import { createMemoryCredentialStore, openProfileStore } from '@my-pi-harness/storage';
 import { describe, expect, it } from 'vitest';
-import { ModelGateway } from '../src/model-gateway.js';
+import { ModelGateway } from '../src/models/gateway.js';
 
 function custom(): ProviderInput {
   return {

@@ -1,10 +1,10 @@
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
-import type { FrozenMcpTool } from '../src/external-tools.js';
-import { RunCapabilities } from '../src/run-capabilities.js';
-import { RunToolset } from '../src/run-toolset.js';
-import { ToolCatalogSearch } from '../src/tool-catalog-search.js';
-import type { EventInput } from '../src/runtime-ports.js';
+import type { FrozenMcpTool } from '../src/tools/external.js';
+import { RunCapabilities } from '../src/capabilities/run.js';
+import { RunToolset } from '../src/tools/toolset.js';
+import { ToolCatalogSearch } from '../src/capabilities/search.js';
+import type { EventInput } from '../src/sessions/ports.js';
 import type { ExecutionContent } from '@my-pi-harness/execution';
 
 function candidate(index: number): FrozenMcpTool {

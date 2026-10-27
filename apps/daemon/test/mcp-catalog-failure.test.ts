@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest';
 import { RuntimeError } from '@my-pi-harness/agent-runtime';
-import { McpError } from '@my-pi-harness/integrations';
-import { catalogFailure } from '../src/features/mcp/catalog-failure.js';
+import { McpError, NetworkError } from '@my-pi-harness/integrations';
+import { catalogFailure } from '../src/mcp/catalog-failure.js';
 
 it.each([
   [
@@ -9,8 +9,12 @@ it.each([
     'MCP_CATALOG_AUTH_REQUIRED',
   ],
   [new McpError('INVALID_CATALOG', 'private-provider-secret'), 'MCP_CATALOG_INVALID'],
+  [new NetworkError('DNS_FAILED', 'private-provider-secret'), 'MCP_CATALOG_CONNECTION_FAILED'],
+  [new NetworkError('NETWORK_FAILED', 'private-provider-secret'), 'MCP_CATALOG_CONNECTION_FAILED'],
+  [new NetworkError('RESPONSE_LIMIT', 'private-provider-secret'), 'MCP_CATALOG_INVALID'],
   [new Error('private-provider-secret'), 'MCP_CATALOG_FAILED'],
   [{ code: 'OAUTH_REQUIRED', message: 'private-provider-secret' }, 'MCP_CATALOG_FAILED'],
+  [{ code: 'NETWORK_FAILED', message: 'private-provider-secret' }, 'MCP_CATALOG_FAILED'],
 ])('publishes only owned discovery categories and fixed messages', (error, code) => {
   const diagnostic = catalogFailure(error);
   expect(diagnostic.code).toBe(code);

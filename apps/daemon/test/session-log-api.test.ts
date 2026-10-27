@@ -4,9 +4,9 @@ import { join } from 'node:path';
 import type { MessageView } from '@my-pi-harness/protocol';
 import { createMemoryCredentialStore, sessionLogDirectory } from '@my-pi-harness/storage';
 import { describe, expect, it } from 'vitest';
-import { loadDaemonConfig } from '../src/config.js';
-import { createDaemonApplication, type DaemonApplication } from '../src/server.js';
-import { createApplicationServices } from '../src/services.js';
+import { loadDaemonConfig } from '../src/application/config.js';
+import { createDaemonApplication, type DaemonApplication } from '../src/http/server.js';
+import { createApplicationServices } from '../src/application/services.js';
 import { loginFixture, pairFixture } from './support/login.js';
 
 describe('authenticated original session JSONL download', () => {

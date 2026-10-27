@@ -6,8 +6,8 @@ import {
 } from '@earendil-works/pi-ai';
 import { createMemoryCredentialStore } from '@my-pi-harness/storage';
 import { describe, expect, it } from 'vitest';
-import { createPiCredentialStore, decodeCredential } from '../src/credential-adapter.js';
-import { decodeContextMessage, encodeContextMessage } from '../src/context-codec.js';
+import { createPiCredentialStore, decodeCredential } from '../src/models/credentials.js';
+import { decodeContextMessage, encodeContextMessage } from '../src/context/codec.js';
 
 function gate(): { promise: Promise<void>; release(): void } {
   let release = (): void => {};

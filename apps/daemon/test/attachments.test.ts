@@ -3,8 +3,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { openProfileStore, type ProfileStore } from '@my-pi-harness/storage';
-import { WorkspaceService } from '../src/features/workspaces/service.js';
-import { AttachmentService } from '../src/features/attachments/service.js';
+import { WorkspaceService } from '../src/workspaces/service.js';
+import { AttachmentService } from '../src/attachments/service.js';
 
 const fixtures: { directory: string; store: ProfileStore }[] = [];
 async function fixture() {
@@ -208,7 +208,7 @@ describe('attachment HTTP schemas', () => {
   it('rejects unknown upload fields and exposes content only through the dedicated route', async () => {
     const { attachments } = await fixture();
     const { default: Fastify } = await import('fastify');
-    const { registerAttachmentRoutes } = await import('../src/features/attachments/routes.js');
+    const { registerAttachmentRoutes } = await import('../src/attachments/routes.js');
     const { AttachmentSchema, AttachmentContentSchema } = await import('@my-pi-harness/protocol');
     const { Value } = await import('typebox/value');
     const server = Fastify({

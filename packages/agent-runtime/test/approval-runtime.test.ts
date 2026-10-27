@@ -11,10 +11,10 @@ import {
 import { type ApprovalMode } from '@my-pi-harness/protocol';
 import { openProfileStore } from '@my-pi-harness/storage';
 import { describe, expect, it } from 'vitest';
-import { ModelApprovalReviewer } from '../src/approval-review.js';
-import { SessionRuntime } from '../src/session-runtime.js';
-import { ToolRuntime } from '../src/tool-runtime.js';
-import type { EventInput } from '../src/runtime-ports.js';
+import { ModelApprovalReviewer } from '../src/tools/approval-review.js';
+import { SessionRuntime } from '../src/sessions/runtime.js';
+import { ToolRuntime } from '../src/tools/runtime.js';
+import type { EventInput } from '../src/sessions/ports.js';
 
 function gate() {
   let release = (): void => {};

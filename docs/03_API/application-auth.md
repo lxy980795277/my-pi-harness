@@ -1,6 +1,6 @@
 # 应用身份与登录协议
 
-共享协议版本见[API入口](overview.md)，schema由`packages/protocol/src/auth.ts`拥有。应用登录、模型Provider OAuth与MCP/服务启动授权分别管理；应用登录不会创建模型或GitHub仓库访问凭据。
+共享协议版本见[API入口](overview.md)，schema由`packages/protocol/src/application/auth.ts`拥有。应用登录、模型Provider OAuth与MCP/服务启动授权分别管理；应用登录不会创建模型或GitHub仓库访问凭据。
 
 ## 访问控制
 

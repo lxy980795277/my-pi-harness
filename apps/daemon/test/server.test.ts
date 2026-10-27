@@ -13,8 +13,8 @@ import { Value } from 'typebox/value';
 import type { FastifyBaseLogger } from 'fastify';
 import pino from 'pino';
 import { afterEach, describe, expect, it } from 'vitest';
-import { loadDaemonConfig } from '../src/config.js';
-import { createDaemonApplication, type DaemonApplication } from '../src/server.js';
+import { loadDaemonConfig } from '../src/application/config.js';
+import { createDaemonApplication, type DaemonApplication } from '../src/http/server.js';
 import { readSseRecord } from './support/sse.js';
 
 const applications: DaemonApplication[] = [];

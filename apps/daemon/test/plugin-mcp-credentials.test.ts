@@ -13,12 +13,12 @@ import {
   createMemoryCredentialStore,
   openProfileStore,
 } from '@my-pi-harness/storage';
-import { PluginConnectionService } from '../src/features/plugin-connections/service.js';
-import { RemoteMcpService } from '../src/features/mcp/remote-service.js';
-import type { PluginRefreshDiagnostic } from '../src/features/mcp/remote-options.js';
-import { SkillsService } from '../src/features/skills/service.js';
-import { PluginService } from '../src/features/plugins/service.js';
-import { createPluginAppPort } from '../src/features/plugins/apps.js';
+import { PluginConnectionService } from '../src/plugin-connections/service.js';
+import { RemoteMcpService } from '../src/mcp/remote-service.js';
+import type { PluginRefreshDiagnostic } from '../src/mcp/remote-options.js';
+import { SkillsService } from '../src/skills/service.js';
+import { PluginService } from '../src/plugins/service.js';
+import { createPluginAppPort } from '../src/plugins/apps.js';
 
 const cleanups: (() => Promise<void>)[] = [];
 afterEach(async () => {

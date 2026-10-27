@@ -8,8 +8,8 @@ import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 import { afterEach, describe, expect, it } from 'vitest';
 import { runOfficeProcess } from '../../src/office/process.js';
-import { executeOfficeTool } from '../../src/office/index.js';
-import type { ExecutionContext, ExecutionResult } from '../../src/types.js';
+import { executeOfficeTool } from '../../src/office/executor.js';
+import type { ExecutionContext, ExecutionResult } from '../../src/core/types.js';
 
 const python =
   process.env['MY_PI_HARNESS_OFFICE_TEST_PYTHON'] ??

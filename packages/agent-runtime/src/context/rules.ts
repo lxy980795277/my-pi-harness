@@ -12,16 +12,16 @@ import {
 import type { RuleSource } from '@my-pi-harness/protocol';
 import { abortError, RuntimeError } from '../errors.js';
 
-const MAXIMUM_RULES = 16;
-const MAXIMUM_RULE_BYTES = 65_536;
-const MAXIMUM_REFERENCE_PATHS = 64;
-
 export interface WorkspaceRulesInput {
   workspaceRoot: string;
   profileDirectory: string;
   referencePaths?: readonly string[];
   signal: AbortSignal;
 }
+
+const MAXIMUM_RULES = 16;
+const MAXIMUM_RULE_BYTES = 65_536;
+const MAXIMUM_REFERENCE_PATHS = 64;
 
 function checkCancelled(signal: AbortSignal): void {
   if (signal.aborted) throw abortError();

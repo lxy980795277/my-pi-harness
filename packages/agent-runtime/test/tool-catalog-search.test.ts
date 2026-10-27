@@ -4,7 +4,7 @@ import {
   ToolCatalogSearch,
   type ToolSearchDocument,
   type ToolSearchEmbedder,
-} from '../src/tool-catalog-search.js';
+} from '../src/capabilities/search.js';
 
 function document(
   name: string,

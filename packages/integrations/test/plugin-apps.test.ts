@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { afterEach, expect, it } from 'vitest';
 import {
   BUILTIN_PLUGINS,
+  PluginError,
   BUILTIN_PLUGIN_APPS,
   CONNECTION_PROVIDERS,
   loadBuiltinPluginApps,
@@ -93,6 +94,7 @@ it('rejects duplicate IDs, extra root fields, traversal, oversized or malformed 
   ])
     expect(() => parseBuiltinPluginApps(source, 'github')).toThrow('应用声明无效');
   expect(() => loadBuiltinPluginApps('../github')).toThrow('应用声明无效');
+  expect(() => loadBuiltinPluginApps('../github')).toThrow(PluginError);
 });
 
 it('refuses linked, invalid UTF-8 and oversized resource files', async () => {

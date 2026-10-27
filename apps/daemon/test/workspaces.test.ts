@@ -12,7 +12,7 @@ import { homedir, tmpdir } from 'node:os';
 import { join, parse } from 'node:path';
 import { openProfileStore, type ProfileStore } from '@my-pi-harness/storage';
 import { afterEach, describe, expect, it } from 'vitest';
-import { WorkspaceService } from '../src/features/workspaces/service.js';
+import { WorkspaceService } from '../src/workspaces/service.js';
 
 const owned: { directory: string; store: ProfileStore }[] = [];
 afterEach(async () => {

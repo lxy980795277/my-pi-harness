@@ -1,5 +1,5 @@
 import type { ConnectionServiceId } from '@my-pi-harness/protocol';
-import { BUILTIN_PLUGIN_APPS } from '../plugins/catalog.js';
+import { loadBuiltinPluginApps } from '../plugins/apps.js';
 
 export type ClientAuthentication = 'basic' | 'post';
 export interface ConnectionProvider {
@@ -100,7 +100,7 @@ const providers: readonly Omit<ConnectionProvider, 'mcpEndpoints' | 'apps'>[] = 
 
 /** Official MCP targets and App labels come from the same bundled declarations as plugin installation. */
 export const CONNECTION_PROVIDERS: readonly ConnectionProvider[] = providers.map((provider) => {
-  const apps = BUILTIN_PLUGIN_APPS.filter((app) => app.provider === provider.serviceId);
+  const apps = loadBuiltinPluginApps(provider.serviceId);
   return {
     ...provider,
     mcpEndpoints: apps.map((app) => app.endpoint),

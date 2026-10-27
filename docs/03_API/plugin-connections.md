@@ -1,6 +1,6 @@
 # 插件授权与只读网关
 
-每个内置服务插件拥有一份授权，Skill网关和声明为plugin-oauth的MCP App共用它。应用登录、模型和通用MCP独立OAuth不读取该凭据。公开schema由`packages/protocol/src/skill-connections.ts`拥有，宿主声明由integrations的插件manifest拥有。
+每个内置服务插件拥有一份授权，Skill网关和声明为plugin-oauth的MCP App共用它。应用登录、模型和通用MCP独立OAuth不读取该凭据。公开schema由`packages/protocol/src/extensions/skill-connections.ts`拥有，宿主声明由integrations的插件manifest拥有。
 
 ## HTTP
 

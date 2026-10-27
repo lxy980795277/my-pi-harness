@@ -1,7 +1,7 @@
 import { createServer } from 'node:http';
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { RemoteOAuthSession } from '../src/remote-oauth.js';
+import { RemoteOAuthSession } from '../src/mcp/remote-oauth.js';
 
 async function fixture() {
   let issuer = '';

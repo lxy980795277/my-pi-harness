@@ -1,6 +1,6 @@
 import Database from 'better-sqlite3';
 import { expect, it } from 'vitest';
-import { applyMigrations, SCHEMA_VERSION } from '../src/migrations.js';
+import { applyMigrations, SCHEMA_VERSION } from '../src/sqlite/migrations/apply.js';
 
 it('retires the plugin account marker without removing independent accounts, credential references or saved fields', () => {
   const db = new Database(':memory:');

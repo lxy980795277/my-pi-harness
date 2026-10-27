@@ -2,7 +2,7 @@ import { expect, it } from 'vitest';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { extractPdf } from '../src/pdf.js';
+import { extractPdf } from '../src/documents/extract-pdf.js';
 
 function samplePdf(script?: string): Buffer {
   const stream = 'BT /F1 12 Tf 20 100 Td (Hello workspace) Tj ET';

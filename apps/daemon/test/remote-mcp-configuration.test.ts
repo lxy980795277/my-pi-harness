@@ -7,9 +7,9 @@ import { Value } from 'typebox/value';
 import { RemoteMcpDraftTestResultSchema, type RemoteMcpInput } from '@my-pi-harness/protocol';
 import { createMemoryCredentialStore } from '@my-pi-harness/storage';
 import { remoteFixture } from '../../../tests/fixtures/remote-mcp.js';
-import { loadDaemonConfig } from '../src/config.js';
-import { createApplicationServices } from '../src/services.js';
-import { createDaemonApplication } from '../src/server.js';
+import { loadDaemonConfig } from '../src/application/config.js';
+import { createApplicationServices } from '../src/application/services.js';
+import { createDaemonApplication } from '../src/http/server.js';
 import { loginFixture } from './support/login.js';
 
 async function fixture(remoteFixtureOrigin?: string) {
@@ -186,10 +186,14 @@ describe('remote MCP draft connection and configuration ownership', () => {
         { ...draft, headers: { Authorization: 'secret', authorization: 'different' } },
         { ...draft, headers: { Authorization: 'secret\r\nInjected: value' } },
       ];
-      for (const body of rejected)
-        expect(
-          (await f.send('/api/mcp/remote-servers/test-draft', body)).status,
-        ).toBeGreaterThanOrEqual(400);
+      for (const body of rejected) {
+        const response = await f.send('/api/mcp/remote-servers/test-draft', body);
+        expect(response.status).toBeGreaterThanOrEqual(400);
+        if (body.endpoint === 'https://127.0.0.1/mcp') {
+          expect(response.status).toBe(422);
+          expect(await response.json()).toMatchObject({ code: 'PRIVATE_NETWORK' });
+        }
+      }
       expect(requests).toBe(0);
       expect(f.services.remoteMcp.list()).toEqual([]);
     } finally {

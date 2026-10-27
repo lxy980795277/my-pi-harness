@@ -4,8 +4,23 @@ import { Type } from 'typebox';
 import { Value } from 'typebox/value';
 import { LOCAL_EMBEDDING_WORKER } from './local-embedding-worker.js';
 
+interface Request {
+  count: number;
+  signal: AbortSignal;
+  abort: () => void;
+  resolve(value: readonly (readonly number[])[]): void;
+  reject(error: Error): void;
+}
+
+export interface LocalToolSearchEmbedderOptions {
+  cacheDirectory: string;
+  /** Explicit host test injection; never populated from a tool, manifest or environment. */
+  moduleUrl?: string;
+}
+
 const MODEL = 'Xenova/multilingual-e5-small';
 const REVISION = '761b726dd34fb83930e26aab4e9ac3899aa1fa78';
+
 const ReplySchema = Type.Union([
   Type.Object({ id: Type.Integer(), error: Type.Literal(true) }, { additionalProperties: false }),
   Type.Object(
@@ -18,18 +33,6 @@ const ReplySchema = Type.Union([
     { additionalProperties: false },
   ),
 ]);
-interface Request {
-  count: number;
-  signal: AbortSignal;
-  abort: () => void;
-  resolve(value: readonly (readonly number[])[]): void;
-  reject(error: Error): void;
-}
-export interface LocalToolSearchEmbedderOptions {
-  cacheDirectory: string;
-  /** Explicit host test injection; never populated from a tool, manifest or environment. */
-  moduleUrl?: string;
-}
 
 /** Lazy CPU embeddings run outside the daemon loop; shutdown terminates owned model work. */
 export class LocalToolSearchEmbedder {

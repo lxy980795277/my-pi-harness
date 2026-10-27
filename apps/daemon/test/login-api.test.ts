@@ -11,9 +11,12 @@ import {
 import { createMemoryCredentialStore } from '@my-pi-harness/storage';
 import { Value } from 'typebox/value';
 import { afterEach, describe, expect, it } from 'vitest';
-import { loadDaemonConfig } from '../src/config.js';
-import { createApplicationServices, type ApplicationServices } from '../src/services.js';
-import { createDaemonApplication, type DaemonApplication } from '../src/server.js';
+import { loadDaemonConfig } from '../src/application/config.js';
+import {
+  createApplicationServices,
+  type ApplicationServices,
+} from '../src/application/services.js';
+import { createDaemonApplication, type DaemonApplication } from '../src/http/server.js';
 import { pairFixture, type FixtureAuthorization } from './support/login.js';
 import { readSseRecord } from './support/sse.js';
 

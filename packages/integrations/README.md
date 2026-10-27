@@ -2,6 +2,10 @@
 
 `@my-pi-harness/integrations` 使用官方 `@modelcontextprotocol/client` 2.3.1，将本地 MCP stdio 连接适配到 execution 的持久双向进程，并通过官方远端Transport提供Streamable HTTP与显式兼容SSE。它不依赖数据库、Agent Runtime、Fastify 或 React；配置、系统凭据、启动授权与 JSONL 事务由 daemon/storage/runtime 拥有。
 
+## 源码组织
+
+`src/index.ts`仅导出包API；`mcp/`拥有本地与远端连接、传输、目录及快照、协议schema和结果投影，`network/`拥有MCP和服务OAuth共用的受控远端网络访问。`skills/`、`plugins/`、`connections/`和`search/`分别拥有Skill资源、插件声明和OAuth、独立服务连接以及本地向量Worker。McpError、NetworkError、PluginError和SkillError由各自领域的errors模块定义；插件网络诊断只识别NetworkError，不依赖MCP或Skill错误继承。Skill公开数据类型复用protocol，资源扫描和安装类型由本包拥有；插件资源仍从`resources/plugins/`读取。
+
 ## 启动与租约
 
 `previewLaunch` 只解析真实工作根、绝对可执行程序和程序身份，不启动进程。启动指纹包括参数、普通环境、秘密 slot/ref/epoch、隔离范围和资源策略，排除秘密字节。daemon 在每次租约前核对 profile 身份、配置 revision、access/credential epoch 与对应范围的授权，再调用 `acquire`。同进程调用者仍负责这些持久权限事实。

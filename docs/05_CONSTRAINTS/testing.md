@@ -29,7 +29,7 @@ CI桌面打包步骤显式提供合成GitHub Client ID，验证资源装配与�
 - 类型感知no-deprecated拒绝实际弃用使用，源码gate拒绝types目录冗余-view文件名；合法/非法fixture必须实际运行。
 - ESLint 对所有 TS/TSX/CTS/MTS 配置明确编译面，no-floating-promises/no-misused-promises 保持类型感知；JS/MJS/CJS 也执行实际规则。测试和构建配置不排除在检查外。
 - Web 全禁三目、void 运算符和 then/catch/finally 调用；检查 TSX Service/Query 编排、裸交互控件、内联事件、组件声明、Hook 与 Store 选择器。唯一 use-async-event.ts 启动豁免由源码 gate 限定路径、单条说明和对应调用，不开放全局 Promise 例外。
-- 源码 gate 检查命名、组件目录、helper 聚合、样式 import 顺序、1000 行上限，以及 Web 无后缀/Node 显式 .js。生成代码例外必须登记具体路径，不整片排除手写目录。
+- 源码 gate 检查命名、组件目录、helper 聚合、样式 import 顺序、[模块声明分组](source-layout.md)、1000 行上限，以及 Web 无后缀/Node 显式 .js。生成代码例外必须登记具体路径，不整片排除手写目录。
 - 每个新增或调整的硬规则同时有合法与非法 fixture，必须执行规则并看到拒绝；只比对配置文本或错误字符串不算规则生效。配置覆盖测试检查每类真实文件适用实际规则。
 - Oxlint a11y 检查 HTML/ARIA 基础约束；shadcn 仍需真实页面检查名称、键盘、焦点及 Dialog 状态。不能以可点击 div/span 规避裸控件门禁。
 - 行数不能证明职责，静态检查不做完整别名或所有权证明。TSX 复杂度、是否值得抽 Hook、Store/Query 单一来源、取消责任和凭据不进入缓存由 review 与行为检查共同确认。

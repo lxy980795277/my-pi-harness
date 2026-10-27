@@ -212,7 +212,7 @@ export function renderSummary(summary: ContextSummary): string {
 }
 
 /** Apply one global JSON and rendered-text budget across all seven semantic fields. */
-export function boundSummary(summary: ContextSummary): ContextSummary {
+function boundSummary(summary: ContextSummary): ContextSummary {
   const fields = ['constraints', 'decisions', 'completed', 'pending', 'blockers'] as const;
   const result: ContextSummary = {
     ...summary,

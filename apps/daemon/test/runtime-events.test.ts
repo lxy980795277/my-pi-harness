@@ -2,7 +2,7 @@ import { IncomingMessage, ServerResponse } from 'node:http';
 import { Socket } from 'node:net';
 import { PROTOCOL_VERSION, type RuntimeReadyEvent } from '@my-pi-harness/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { RuntimeEventStreams } from '../src/runtime-events.js';
+import { RuntimeEventStreams } from '../src/http/runtime-events.js';
 
 const identity: RuntimeReadyEvent = {
   type: 'runtime.ready',

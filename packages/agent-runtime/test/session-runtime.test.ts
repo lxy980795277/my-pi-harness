@@ -9,8 +9,8 @@ import {
 } from '@earendil-works/pi-ai';
 import { openProfileStore } from '@my-pi-harness/storage';
 import { describe, expect, it } from 'vitest';
-import { SessionRuntime } from '../src/session-runtime.js';
-import type { RuntimeStore } from '../src/runtime-ports.js';
+import { SessionRuntime } from '../src/sessions/runtime.js';
+import type { RuntimeStore } from '../src/sessions/ports.js';
 
 function gate(): { promise: Promise<void>; release(): void } {
   let release = (): void => {};

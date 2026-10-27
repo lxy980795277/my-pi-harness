@@ -2,6 +2,10 @@
 
 `@my-pi-harness/execution` 实现 M2 的确定工具与本机执行，不创建 Pi Agent、保存会话、处理 HTTP 路由或拥有审批。daemon / agent-runtime 在执行前持久化 intent 并完成当前策略要求的审批，再传入已注册的工作区真实路径、私有 profile 路径、只读策略、冻结的 Shell 策略与 AbortSignal。
 
+## 源码组织
+
+`src/index.ts`仅导出包API；`core/`拥有工具声明、参数校验、执行入口及共用执行类型和错误。`filesystem/`拥有工作区路径和文件工具，`process/`拥有Shell、持久双向进程及共用沙箱、输出收集和回收，`documents/`拥有受限Worker内容提取，`web/`拥有受控网络访问，`office/`拥有办公参数和Python执行。办公资源仍随包位于`resources/office/`；Office、Shell和持久进程直接依赖共用进程机制，不通过彼此的工具入口获取沙箱。
+
 ## 接口与工具
 
 `TOOL_DEFINITIONS` 使用 TypeBox 1.3，与 Pi 1.1 的 schema 类型一致。`describeTool` 只解释参数，不读文件；`executeTool` 校验完整参数并执行。`resolveWorkspaceRoot({rootPath, profileDirectory, signal?})` 供注册与执行共用，检查绝对路径、目录存在与可读、系统根/Home祖先、profile重叠与敏感目录。注册可以使用目录别名并保存返回的realpath；执行另外要求真实路径仍等于该保存身份，不能把后来替换的别名当原工作区。

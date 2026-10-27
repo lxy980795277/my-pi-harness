@@ -2,7 +2,7 @@ import { Type } from 'typebox';
 import { Compile } from 'typebox/compile';
 import { Value } from 'typebox/value';
 import { describe, expect, it } from 'vitest';
-import { RunToolset, type RunToolSelection } from '../src/run-toolset.js';
+import { RunToolset, type RunToolSelection } from '../src/tools/toolset.js';
 
 describe('accepted Run tool definitions', () => {
   it('owns a deep frozen copy while retaining TypeBox optional and kind metadata', () => {
