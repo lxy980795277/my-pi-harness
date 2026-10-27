@@ -21,6 +21,19 @@ const DaemonConfigSchema = Type.Object({
   webDistPath: Type.Union([Type.String({ minLength: 1 }), Type.Null()]),
   parentPid: Type.Union([Type.Integer({ minimum: 1, maximum: 2_147_483_647 }), Type.Null()]),
   officePythonPath: Type.Optional(Type.String({ minLength: 1, maxLength: 4096 })),
+  skillOAuthClients: Type.Optional(
+    Type.Record(
+      Type.String(),
+      Type.Object(
+        {
+          clientId: Type.String({ minLength: 1, maxLength: 200 }),
+          clientSecret: Type.String({ minLength: 1, maxLength: 4096 }),
+          callbackUrl: Type.Optional(Type.String({ minLength: 1, maxLength: 2048 })),
+        },
+        { additionalProperties: false },
+      ),
+    ),
+  ),
 });
 
 /** Validated startup settings. Port zero requests an available port. */
@@ -100,6 +113,7 @@ export function loadDaemonConfig(
   if (githubClientSecret !== undefined && githubClientId === undefined)
     throw new DaemonConfigError('GitHub Client Secret requires MY_PI_HARNESS_GITHUB_CLIENT_ID');
   const candidate = {
+    skillOAuthClients: skillOAuthClients(environment),
     ...(officePythonPath === undefined ? {} : { officePythonPath }),
     profileDirectory:
       configuredProfile ?? join(defaultData, 'My Pi Harness', 'profiles', 'default'),
@@ -124,6 +138,51 @@ export function loadDaemonConfig(
     throw new DaemonConfigError('MY_PI_HARNESS_PARENT_PID must identify a different process');
   }
   return candidate;
+}
+
+function skillOAuthClients(
+  environment: Readonly<Record<string, string | undefined>>,
+): NonNullable<DaemonConfig['skillOAuthClients']> {
+  const clients: NonNullable<DaemonConfig['skillOAuthClients']> = {};
+  for (const serviceId of ['github', 'google', 'notion', 'supabase', 'vercel']) {
+    const prefix = `MY_PI_HARNESS_SKILL_${serviceId.toUpperCase()}`;
+    const clientId = environment[`${prefix}_CLIENT_ID`];
+    const clientSecret = environment[`${prefix}_CLIENT_SECRET`];
+    const callbackUrl = environment[`${prefix}_CALLBACK_URL`];
+    if (
+      (clientId === undefined) !== (clientSecret === undefined) ||
+      (callbackUrl !== undefined && clientId === undefined)
+    )
+      throw new DaemonConfigError(`${prefix} requires a Client ID and Client Secret pair`);
+    if (callbackUrl !== undefined) validateSkillCallbackUrl(serviceId, callbackUrl);
+    if (clientId !== undefined && clientSecret !== undefined) {
+      clients[serviceId] = {
+        clientId,
+        clientSecret,
+        ...(callbackUrl === undefined ? {} : { callbackUrl }),
+      };
+    }
+  }
+  return clients;
+}
+
+function validateSkillCallbackUrl(serviceId: string, value: string): void {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new DaemonConfigError('Plugin OAuth callback must be an absolute loopback URL');
+  }
+  if (
+    !['http:', 'https:'].includes(url.protocol) ||
+    !['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname) ||
+    url.pathname !== `/api/skill-connections/${serviceId}/oauth/callback` ||
+    url.username ||
+    url.password ||
+    url.search ||
+    url.hash
+  )
+    throw new DaemonConfigError('Plugin OAuth callback must use its owned loopback callback path');
 }
 
 function validateGitHubCallbackUrl(value: string): void {

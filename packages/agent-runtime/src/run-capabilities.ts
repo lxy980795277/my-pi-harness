@@ -1,14 +1,19 @@
 import { Type } from 'typebox';
 import { Value } from 'typebox/value';
 import type { ExecutionContent } from '@my-pi-harness/execution';
-import type { FrozenSkill, SkillSelection } from '@my-pi-harness/protocol';
+import type { FrozenSkill, SkillSelection, ToolDiscoveryDiagnostic } from '@my-pi-harness/protocol';
 import type { FrozenMcpTool } from './external-tools.js';
 import type { EventInput } from './runtime-ports.js';
 import { RuntimeError } from './errors.js';
 import { RunToolset, type RunToolDefinition } from './run-toolset.js';
 import type { RunControls, SkillsPort } from './capability-ports.js';
-import { ConnectionCapabilities } from './connection-capabilities.js';
-import type { ConnectionGatewayPort } from './connection-ports.js';
+import {
+  DEFAULT_TOOL_SEARCH_LIMIT,
+  MAX_TOOL_SEARCH_RESULTS,
+  MAX_VISIBLE_TOOLS,
+  ToolCatalogSearch,
+  type ToolSearchDocument,
+} from './tool-catalog-search.js';
 
 const empty = { additionalProperties: false } as const;
 const names = Type.Array(Type.String({ minLength: 1, maxLength: 100 }), {
@@ -20,11 +25,11 @@ export const DISCOVERY_TOOL_DEFINITIONS: readonly RunToolDefinition[] = [
   {
     name: 'tool_search',
     description:
-      'Search the frozen authorized MCP catalog by words. Results are metadata; load_tools must make a tool visible before it can be called.',
+      "Find and automatically load matching tools from this Run's frozen authorized catalog. Search by service, original tool name, or task. Default 8 results, maximum 10; complete schemas become available in the next model request. Loading does not grant execution permission.",
     parameters: Type.Object(
       {
-        query: Type.String({ maxLength: 200 }),
-        limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 30 })),
+        query: Type.String({ minLength: 1, maxLength: 200 }),
+        limit: Type.Optional(Type.Integer({ minimum: 1, maximum: MAX_TOOL_SEARCH_RESULTS })),
       },
       empty,
     ),
@@ -89,7 +94,8 @@ export interface RunCapabilitiesOptions {
   workspaceCandidates?: readonly RunToolDefinition[];
   skills: readonly FrozenSkill[];
   skillPort?: SkillsPort;
-  connectionGateway?: ConnectionGatewayPort;
+  search?: ToolCatalogSearch;
+  diagnostics?: readonly ToolDiscoveryDiagnostic[];
   commit(events: readonly EventInput[]): void;
 }
 
@@ -97,7 +103,7 @@ export interface RunCapabilitiesOptions {
 export class RunCapabilities implements RunControls {
   public active: RunToolset;
   public revision = 1;
-  private pendingNames = new Set<string>();
+  private readonly pendingNames = new Set<string>();
   private readonly candidates = new Map<string, FrozenMcpTool>();
   private readonly workspaceCandidates = new Map<string, RunToolDefinition>();
   private readonly activeSkills = new Map<string, FrozenSkill>();
@@ -105,16 +111,15 @@ export class RunCapabilities implements RunControls {
   private readonly releases: (() => void)[] = [];
   private readonly grants = new Map<string, Set<string>>();
   private closed = false;
-  private readonly connections: ConnectionCapabilities | undefined;
+  private readonly search: ToolCatalogSearch;
+  private readonly diagnostics: readonly ToolDiscoveryDiagnostic[];
 
   public constructor(private readonly options: RunCapabilitiesOptions) {
     this.active = options.initial;
-    if (options.connectionGateway)
-      this.connections = new ConnectionCapabilities({
-        ...options,
-        gateway: options.connectionGateway,
-        skills: () => this.skills(),
-      });
+    this.search = options.search ?? new ToolCatalogSearch();
+    this.diagnostics = Value.Clone(options.diagnostics ?? []);
+    if (this.active.records.length > MAX_VISIBLE_TOOLS)
+      throw new RuntimeError('TOOL_LIMIT', '本次运行最多同时提供64个工具。');
     for (const tool of options.workspaceCandidates ?? [])
       this.workspaceCandidates.set(tool.name, tool);
     for (const tool of options.candidates) {
@@ -134,7 +139,6 @@ export class RunCapabilities implements RunControls {
     return [...this.activeSkills.values()];
   }
   public has(name: string): boolean {
-    if (this.connections?.has(name)) return true;
     return [...DISCOVERY_TOOL_DEFINITIONS, ...SKILL_TOOL_DEFINITIONS].some(
       (tool) => tool.name === name,
     );
@@ -150,6 +154,44 @@ export class RunCapabilities implements RunControls {
       await this.options.skillPort.validateBindings(this.skills(), signal);
   }
 
+  /** Validate text-invoked additions before their owning user input is committed. */
+  public assertSkillAdditions(skills: readonly FrozenSkill[]): void {
+    if (this.closed) throw new RuntimeError('RUN_CLOSED', '本次运行已结束。');
+    const selections = new Map([...this.activeSkills, ...this.pendingSkills]);
+    for (const skill of skills) {
+      const previous = selections.get(skill.selection.id);
+      if (
+        previous &&
+        (previous.selection.contentHash !== skill.selection.contentHash ||
+          JSON.stringify(previous.authorization) !== JSON.stringify(skill.authorization))
+      )
+        throw new RuntimeError('SKILL_CONFLICT', '不能替换本次运行已冻结的Skill版本。');
+      selections.set(skill.selection.id, skill);
+    }
+    if (selections.size > 16) throw new RuntimeError('SKILL_LIMIT', '最多激活16个Skill。');
+    this.assertStageLimit(this.skillToolNames(skills));
+  }
+
+  /** Staging text-invoked instructions still requires the next-request durable visibility barrier. */
+  public stageSkills(skills: readonly FrozenSkill[]): void {
+    this.assertSkillAdditions(skills);
+    for (const skill of skills)
+      if (!this.activeSkills.has(skill.selection.id))
+        this.pendingSkills.set(skill.selection.id, Value.Clone(skill));
+    this.stage(this.skillToolNames(skills));
+  }
+
+  private skillToolNames(skills: readonly FrozenSkill[]): string[] {
+    if (this.options.workspaceId === null) return [];
+    return [
+      ...new Set(
+        skills
+          .flatMap((skill) => skill.allowedTools)
+          .filter((name) => this.workspaceCandidates.has(name)),
+      ),
+    ];
+  }
+
   public async execute(
     name: string,
     args: Record<string, unknown>,
@@ -157,38 +199,67 @@ export class RunCapabilities implements RunControls {
   ): Promise<ExecutionContent[]> {
     signal.throwIfAborted();
     if (this.closed) throw new RuntimeError('RUN_CLOSED', '本次运行已结束。');
-    if (this.connections?.has(name)) return await this.connections.execute(name, args, signal);
     let result: unknown;
     if (name === 'tool_search') {
-      const words = String(args['query']).toLowerCase().split(/\s+/).filter(Boolean);
-      const limit = typeof args['limit'] === 'number' ? args['limit'] : 20;
-      const matches = [...this.candidates.values()]
-        .filter(({ definition }) =>
-          words.every((word) =>
-            `${definition.name} ${definition.description}`.toLowerCase().includes(word),
-          ),
-        )
-        .slice(0, limit)
-        .map(({ definition, selection }) => ({
+      const query = args['query'];
+      const limit = args['limit'] ?? DEFAULT_TOOL_SEARCH_LIMIT;
+      if (
+        typeof query !== 'string' ||
+        query.trim().length === 0 ||
+        query.length > 200 ||
+        typeof limit !== 'number' ||
+        !Number.isInteger(limit) ||
+        limit < 1 ||
+        limit > MAX_TOOL_SEARCH_RESULTS
+      )
+        throw new RuntimeError(
+          'TOOL_ARGUMENTS_INVALID',
+          '搜索内容不能为空，limit须为1到10的整数。',
+        );
+      const visible = this.visibleNames();
+      const remaining = MAX_VISIBLE_TOOLS - visible.size;
+      if (remaining <= 0) throw new RuntimeError('TOOL_LIMIT', '本次运行的工具数量已达64个上限。');
+      const documents: ToolSearchDocument[] = [
+        ...[...this.candidates.values()].map((tool) => ({
+          definition: tool.definition,
+          label:
+            tool.displayName ?? `${tool.selection.serverId} / ${tool.selection.remoteToolName}`,
+          source: 'mcp',
+          originalName: tool.selection.remoteToolName,
+        })),
+        ...[...this.workspaceCandidates.values()].map((definition) => ({
+          definition,
+          label: definition.name,
+          originalName: definition.name,
+          source: 'workspace',
+        })),
+      ].filter(({ definition }) => !visible.has(definition.name));
+      const matches = await this.search.search(documents, query, signal);
+      signal.throwIfAborted();
+      if (this.closed) throw new RuntimeError('RUN_CLOSED', '本次运行已结束。');
+      const currentVisible = this.visibleNames();
+      const selected = matches
+        .filter(({ definition }) => !currentVisible.has(definition.name))
+        .slice(0, Math.min(limit, MAX_VISIBLE_TOOLS - currentVisible.size));
+      const loaded = selected.map(({ definition }) => definition.name);
+      this.stage(loaded);
+      result = {
+        loaded,
+        availableFrom: 'next-model-request',
+        matches: selected.map(({ definition, label, source }) => ({
           name: definition.name,
-          description: definition.description,
-          source: selection,
-          loaded: this.active.records.some((tool) => tool.definition.name === definition.name),
-        }));
-      result = [
-        ...matches,
-        ...[...this.workspaceCandidates.values()]
-          .filter((tool) =>
-            words.every((word) => `${tool.name} ${tool.description}`.toLowerCase().includes(word)),
-          )
-          .slice(0, limit)
-          .map((tool) => ({
-            name: tool.name,
-            description: tool.description,
-            source: 'workspace',
-            loaded: this.active.records.some((record) => record.definition.name === tool.name),
-          })),
-      ].slice(0, limit);
+          label,
+          description: definition.description.slice(0, 160),
+          source,
+        })),
+        ...(selected.length === 0
+          ? {
+              message:
+                'No matching unloaded tools. Inspect discovery status, try another service or task phrase, or use an already loaded tool. A missing result does not establish an OAuth failure.',
+              discovery: this.diagnostics,
+            }
+          : {}),
+      };
     } else if (name === 'load_tools') {
       const input = args['names'];
       if (!Value.Check(names, input))
@@ -196,13 +267,7 @@ export class RunCapabilities implements RunControls {
       for (const item of input)
         if (!this.candidates.has(item) && !this.workspaceCandidates.has(item))
           throw new RuntimeError('TOOL_NOT_AVAILABLE', `候选中没有工具：${item}`);
-      const requested = new Set([
-        ...this.active.records.filter((tool) => tool.external).map((tool) => tool.definition.name),
-        ...this.pendingNames,
-        ...input,
-      ]);
-      if (requested.size > 64) throw new RuntimeError('TOOL_LIMIT', '最多同时加载64个外部工具。');
-      this.pendingNames = requested;
+      this.stage(input);
       result = { stagedForNextRequest: input };
     } else {
       const port = this.options.skillPort;
@@ -227,9 +292,7 @@ export class RunCapabilities implements RunControls {
           return [{ type: 'text' as const, text: '此Skill版本已激活。' }];
         }
         const loaded = await port.freezeSelections(this.options.workspaceId, [selection], signal);
-        if (this.activeSkills.size + this.pendingSkills.size + loaded.length > 16)
-          throw new RuntimeError('SKILL_LIMIT', '最多激活16个Skill。');
-        for (const skill of loaded) this.pendingSkills.set(skill.selection.id, Value.Clone(skill));
+        this.stageSkills(loaded);
         result = { stagedForNextRequest: selection };
       } else {
         const skill = this.activeSkills.get(String(args['skillId']));
@@ -253,6 +316,7 @@ export class RunCapabilities implements RunControls {
             !this.active.records.some((tool) => tool.definition.name === item)
           )
             throw new RuntimeError('TOOL_NOT_AVAILABLE', `本次运行未授权候选：${item}`);
+        this.assertStageLimit(requested);
         this.options.commit([
           {
             type: 'run.skill_tools_granted',
@@ -262,9 +326,11 @@ export class RunCapabilities implements RunControls {
           },
         ]);
         this.grants.set(skill.selection.id, new Set(requested));
-        for (const item of requested)
-          if (this.candidates.has(item) || this.workspaceCandidates.has(item))
-            this.pendingNames.add(item);
+        this.stage(
+          requested.filter(
+            (item) => this.candidates.has(item) || this.workspaceCandidates.has(item),
+          ),
+        );
         result = {
           grantedForThisRun: requested,
           skill: skill.selection,
@@ -289,15 +355,25 @@ export class RunCapabilities implements RunControls {
     this.grants.delete(skillId);
   }
 
+  private visibleNames(): Set<string> {
+    return new Set([...this.active.definitions.map(({ name }) => name), ...this.pendingNames]);
+  }
+
+  private stage(names: readonly string[]): void {
+    this.assertStageLimit(names);
+    for (const name of names)
+      if (!this.active.records.some(({ definition }) => definition.name === name))
+        this.pendingNames.add(name);
+  }
+
+  private assertStageLimit(names: readonly string[]): void {
+    if (new Set([...this.visibleNames(), ...names]).size > MAX_VISIBLE_TOOLS)
+      throw new RuntimeError('TOOL_LIMIT', '本次运行最多同时提供64个工具。');
+  }
+
   /** Persist the next visible version before publishing it to Pi, budget or execution. */
   public advance(): boolean {
-    const pendingConnections = this.connections?.pending() ?? [];
-    if (
-      this.pendingNames.size === 0 &&
-      this.pendingSkills.size === 0 &&
-      pendingConnections.length === 0
-    )
-      return false;
+    if (this.pendingNames.size === 0 && this.pendingSkills.size === 0) return false;
     const records = [...this.active.records];
     for (const name of this.pendingNames) {
       if (records.some((tool) => tool.definition.name === name)) continue;
@@ -320,24 +396,14 @@ export class RunCapabilities implements RunControls {
         },
       });
     }
-    for (const record of pendingConnections) {
-      const index = records.findIndex((item) => item.definition.name === record.definition.name);
-      const nextRecord = { ...record, fingerprint: '' };
-      if (index < 0) records.push(nextRecord);
-      else records[index] = nextRecord;
-    }
     const next = new RunToolset(
-      records.map(({ definition, source, external, connection }) => ({
+      records.map(({ definition, source, external }) => ({
         definition,
         source,
         ...(external ? { external } : {}),
-        ...(connection ? { connection } : {}),
       })),
     );
-    const skills = [...this.activeSkills.values(), ...this.pendingSkills.values()].filter(
-      (item, index, values) =>
-        values.findIndex((other) => other.selection.id === item.selection.id) === index,
-    );
+    const skills = [...this.activeSkills.values(), ...this.pendingSkills.values()];
     const pendingSkills = [...this.pendingSkills.values()];
     this.options.skillPort?.assertBindingsCurrent(skills);
     const release =
@@ -371,7 +437,6 @@ export class RunCapabilities implements RunControls {
     this.active = next;
     for (const skill of this.pendingSkills.values())
       this.activeSkills.set(skill.selection.id, skill);
-    this.connections?.committed();
     this.pendingSkills.clear();
     this.pendingNames.clear();
     this.revision += 1;
@@ -382,7 +447,6 @@ export class RunCapabilities implements RunControls {
     if (this.closed) return;
     this.closed = true;
     this.grants.clear();
-    this.connections?.close();
     for (const release of this.releases.splice(0).reverse()) release();
   }
 }

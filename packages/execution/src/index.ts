@@ -2,7 +2,7 @@ import { describeTool, validateArguments } from './catalog.js';
 import { ExecutionError, checkCancelled } from './errors.js';
 import { listFilesTool, readFileTool, searchFilesTool, writeFileTool } from './file-tools.js';
 import { shellTool } from './shell.js';
-import type { ExecutionContext, ExecutionResult } from './types.js';
+import type { ExecutionContext, ExecutionResult, WebFetchContext } from './types.js';
 import { webFetchTool } from './web.js';
 import { canonicalWorkspace } from './workspace-path.js';
 import { OFFICE_TOOL_DEFINITIONS, executeOfficeTool } from './office/index.js';
@@ -34,7 +34,19 @@ export type {
   ShellAccess,
   ToolDescription,
   WorkspacePathPlatform,
+  WebFetchGatewayAccess,
+  WebFetchContext,
 } from './types.js';
+
+/** Execute a validated public or host-authorized gateway request without filesystem access. */
+export async function executeWebFetch(
+  args: Record<string, unknown>,
+  context: WebFetchContext,
+): Promise<ExecutionResult> {
+  validateArguments('web_fetch', args);
+  checkCancelled(context.signal);
+  return await webFetchTool(args, context);
+}
 
 /** Execute only after the caller has persisted intent and obtained any required approval. */
 export async function executeTool(

@@ -70,39 +70,3 @@ export const ConnectionProviderViewSchema = Type.Object(
   object,
 );
 export type ConnectionProviderView = Static<typeof ConnectionProviderViewSchema>;
-export const ConnectionOperationViewSchema = Type.Object(
-  {
-    id,
-    connectionId: Type.Optional(id),
-    accountId: Type.Optional(id),
-    serviceId: ConnectionServiceIdSchema,
-    app: Type.String(),
-    name: Type.String(),
-    readOnly: Type.Boolean(),
-    description: Type.String(),
-    parameters: Type.Record(Type.String(), Type.Unknown()),
-  },
-  object,
-);
-export type ConnectionOperationView = Static<typeof ConnectionOperationViewSchema>;
-export const ConnectionGrantSchema = Type.Object(
-  {
-    id,
-    runId: id,
-    skillId: id,
-    skillHash: Type.String({ pattern: '^[a-f0-9]{64}$' }),
-    pluginId: id,
-    pluginEpoch: Type.Integer({ minimum: 0 }),
-    connectionId: id,
-    serviceId: ConnectionServiceIdSchema,
-    accountId: id,
-    ownerId: id,
-    identityEpoch: epoch,
-    revision: epoch,
-    accessEpoch: epoch,
-    operations: Type.Array(id, { minItems: 1, maxItems: 30, uniqueItems: true }),
-    expiresAt: Type.Integer({ minimum: 0 }),
-  },
-  object,
-);
-export type ConnectionGrant = Static<typeof ConnectionGrantSchema>;

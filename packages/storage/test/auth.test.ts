@@ -300,7 +300,7 @@ describe('application login schema migration', () => {
     );
     expect(
       inspect(value, (connection) => connection.pragma('user_version', { simple: true })),
-    ).toBe(6);
+    ).toBe(8);
     await reopen(value);
     expect(value.store.auth.profileOwner()?.name).toBe(identity.name);
   });

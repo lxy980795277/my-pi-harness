@@ -6,6 +6,7 @@ import type {
   ResolvedSessionCreateInput,
   SessionSnapshot,
   SessionSummary,
+  FrozenSkill,
 } from '@my-pi-harness/protocol';
 
 /** One short local transaction; privateData never enters the public event. */
@@ -34,6 +35,14 @@ export interface RuntimeStore {
   append(sessionId: string, events: readonly EventInput[]): HarnessEvent[];
   readEvents(sessionId: string, afterSeq: number, limit: number): HarnessEvent[];
   getModelContext(sessionId: string, branchId: string, messageIds?: readonly string[]): string[];
+  /** Read frozen instruction provenance only from the selected branch and retained history. */
+  getSkillContext?(
+    sessionId: string,
+    branchId: string,
+    messageIds?: readonly string[],
+  ): readonly FrozenSkill[];
+  /** Read the context reset marker recorded when this summary was first created. */
+  getCompactionContextStart?(sessionId: string, compactionId: string): string | null;
   getQueueBranch(sessionId: string, inputId: string): string;
   getQueuePrivateData(sessionId: string, inputId: string): string | null;
   findRequest(sessionId: string, requestId: string): RequestAcceptance | undefined;

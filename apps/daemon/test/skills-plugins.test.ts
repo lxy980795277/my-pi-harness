@@ -16,7 +16,9 @@ async function fixture() {
   const profile = join(directory, 'profile');
   const project = join(directory, 'project');
   await mkdir(project);
-  const store = await openProfileStore(profile);
+  const store = await openProfileStore(profile, {
+    sessionLogRoot: join(directory, '.my-pi-harness'),
+  });
   const skills = new SkillsService({
     repository: store.extensions,
     profileDirectory: profile,
@@ -159,7 +161,7 @@ describe('Skill and plugin installation ownership', () => {
     const f = await fixture();
     expect(f.plugins.list()).toHaveLength(9);
     const installed = await f.plugins.install('github', signal);
-    expect(installed.components).toHaveLength(2);
+    expect(installed.components).toHaveLength(5);
     expect(installed.revision).toBe(1);
     const [skill] = await f.skills.list(null, signal);
     if (!skill) throw new Error('missing');
@@ -269,11 +271,53 @@ describe('Skill and plugin installation ownership', () => {
   it('keeps same-name App and Skill component controls separate', async () => {
     const f = await fixture();
     const plugin = await f.plugins.install('github', signal);
-    expect(new Set(plugin.components.map((entry) => entry.id)).size).toBe(2);
-    const updated = await f.plugins.component('github', 'skill:github', plugin.revision, false);
-    expect(f.enabled).toEqual([]);
+    expect(new Set(plugin.components.map((entry) => entry.id)).size).toBe(plugin.components.length);
+    expect(plugin.components.find((entry) => entry.kind === 'app')?.enabled).toBe(false);
+    const appEnabled = await f.plugins.component('github', 'github', plugin.revision, true);
+    const updated = await f.plugins.component('github', 'skill:github', appEnabled.revision, false);
+    expect(f.enabled).toEqual(['github/github/github:github:owned-server']);
     expect(updated.components.find((entry) => entry.kind === 'app')?.enabled).toBe(true);
     expect((await f.skills.list(null, signal))[0]?.enabled).toBe(false);
+  });
+  it('treats the plugin switch as a batch control and permits individual activation after all components stop', async () => {
+    const f = await fixture();
+    const plugin = await f.plugins.install('github', signal);
+    const disabled = await f.plugins.control('github', plugin.revision, false);
+    expect(disabled.enabled).toBe(false);
+    expect(disabled.components.every((component) => !component.enabled)).toBe(true);
+    const active = await f.plugins.component('github', 'skill:github', disabled.revision, true);
+    expect(active.enabled).toBe(true);
+    expect(
+      active.components.filter((component) => component.enabled).map((component) => component.id),
+    ).toEqual(['skill:github']);
+    const enabled = await f.plugins.control('github', active.revision, true);
+    expect(enabled.components.every((component) => component.enabled)).toBe(true);
+    let current = enabled;
+    for (const component of enabled.components)
+      current = await f.plugins.component('github', component.id, current.revision, false);
+    expect(current.enabled).toBe(false);
+    expect((await f.skills.list(null, signal)).every((skill) => !skill.enabled)).toBe(true);
+  });
+  it('does not activate an unregistered Skill added inside an owned plugin directory', async () => {
+    const f = await fixture();
+    await f.plugins.install('documents', signal);
+    await mkdir(join(f.profile, 'plugins', 'documents', 'skills', 'unregistered'));
+    await writeFile(
+      join(f.profile, 'plugins', 'documents', 'skills', 'unregistered', 'SKILL.md'),
+      '---\nname: unregistered\ndescription: Not registered by the plugin\n---\nExternal instructions\n',
+    );
+    const unregistered = (await f.skills.list(null, signal)).find(
+      (skill) => skill.name === 'unregistered',
+    );
+    expect(unregistered).toMatchObject({ enabled: false });
+    if (unregistered === undefined) throw new Error('missing unregistered fixture Skill');
+    await expect(
+      f.skills.freezeSelections(
+        null,
+        [{ id: unregistered.id, contentHash: unregistered.contentHash }],
+        signal,
+      ),
+    ).rejects.toMatchObject({ code: 'SKILL_STALE' });
   });
   it('aborts an owned plugin installation and waits for staging cleanup before close', async () => {
     const f = await fixture();

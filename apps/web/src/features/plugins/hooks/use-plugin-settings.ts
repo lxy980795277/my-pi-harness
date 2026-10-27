@@ -1,9 +1,9 @@
 import { useCallback, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { PluginView } from '@my-pi-harness/protocol';
-import { useSettingsStore } from '@/features/settings/stores/settings';
 import { fetchRemoteMcpServers } from '@/features/mcp/services/remote-mcp';
-import { pluginAppStatus } from '@/features/plugins/utils/plugin-status';
+import { fetchPluginAuthorization } from '@/features/plugins/services/plugin-authorization';
+import { pluginAppConnectionLabel } from '@/features/plugins/utils/plugin-connections';
 import { useAsyncEvent } from '@/hooks/use-async-event';
 import {
   fetchPlugins,
@@ -15,6 +15,7 @@ import {
 } from '@/features/plugins/services/plugins';
 import type {
   PluginAction,
+  PluginAppRow,
   PluginCategoryFilter,
   PluginPage,
   PluginSettingsRow,
@@ -54,15 +55,34 @@ export const usePluginSettings = (): PluginSettingsState => {
   });
   if (detail.data !== undefined) plugin = detail.data.plugin;
   const needsRemote = plugin !== undefined && plugin.installed && plugin.manifest.apps.length > 0;
+  const usesPluginAuthorization =
+    plugin !== undefined &&
+    plugin.manifest.apps.some((app) => {
+      return app.credentialSource === 'plugin-oauth';
+    });
   const remote = useQuery({
     queryKey: ['mcp', 'remote-servers'],
     queryFn: ({ signal }) => {
       return fetchRemoteMcpServers(signal);
     },
     enabled: needsRemote,
+    refetchInterval: (query) => {
+      if (
+        query.state.data?.some((server) => {
+          return server.catalogStatus === 'loading';
+        })
+      )
+        return 1000;
+      return false;
+    },
   });
-  const openSettings = useSettingsStore((state) => {
-    return state.openSettings;
+  const authorization = useQuery({
+    queryKey: ['skill-connections', pluginId],
+    queryFn: ({ signal }) => {
+      if (pluginId === null) throw new Error('未选择插件');
+      return fetchPluginAuthorization(pluginId, signal);
+    },
+    enabled: needsRemote && usesPluginAuthorization,
   });
   const refresh = useCallback(async (): Promise<void> => {
     await Promise.all([
@@ -134,7 +154,7 @@ export const usePluginSettings = (): PluginSettingsState => {
       ...skill,
       enabled: component !== undefined && component.enabled,
       disabled:
-        operation.pending || current === undefined || !current.enabled || component === undefined,
+        operation.pending || current === undefined || !current.installed || component === undefined,
       open: (): void => {
         if (current === undefined) return;
         clearError();
@@ -148,40 +168,61 @@ export const usePluginSettings = (): PluginSettingsState => {
   });
   const apps = (plugin?.manifest.apps ?? []).map((app) => {
     const current = plugin;
+    const usesPluginOAuth = app.credentialSource === 'plugin-oauth';
     const component = current?.components.find((entry) => {
       return entry.kind === 'app' && entry.id === app.id;
     });
     const server = remote.data?.find((entry) => {
       return entry.id === component?.referenceId;
     });
+    const enabled = component !== undefined && component.enabled && server?.enabled === true;
     let status = '安装后可配置';
     if (current?.installed) {
-      status = pluginAppStatus(server, remote.isPending);
+      status = '所属配置已移除';
+      if (server !== undefined) {
+        status = pluginAppConnectionLabel(server, authorization.data ?? null, usesPluginOAuth);
+        if (usesPluginOAuth && server.enabled) {
+          if (authorization.isPending) status = '正在读取授权';
+          if (authorization.error !== null) status = '读取授权失败';
+        }
+      }
+      if (remote.isPending) status = '正在读取配置';
       if (remote.error !== null) status = '读取配置失败';
       if (!current.enabled) status = '插件已停用';
-      else if (component !== undefined && !component.enabled) status = '已停用';
+      else if (component !== undefined && !component.enabled) status = '未开启';
+      else if (server !== undefined && !server.enabled) status = '需要重新开启';
     }
     let description = `使用已授权的 ${app.name} 资源。`;
     if (current !== undefined && current.manifest.apps.length === 1)
       description = current.manifest.description;
+    if (app.description !== undefined) description = app.description;
     return {
       id: app.id,
       name: app.name,
       description,
-      enabled: component !== undefined && component.enabled,
+      enabled,
       disabled:
-        operation.pending || current === undefined || !current.enabled || component === undefined,
+        operation.pending ||
+        remote.isPending ||
+        current === undefined ||
+        !current.installed ||
+        component === undefined,
       status,
+      server: server ?? null,
+      usesPluginOAuth,
+      open: (): void => {
+        if (current === undefined) return;
+        clearError();
+        setPage({ type: 'app', pluginId: current.manifest.id, appId: app.id });
+      },
       change: (): void => {
         if (current !== undefined && component !== undefined)
-          operation.run('component', current, component.id, !component.enabled);
-      },
-      manage: (): void => {
-        openSettings('mcp');
+          operation.run('component', current, component.id, !enabled);
       },
     };
   });
   let activeSkill: PluginSkillRow | null = null;
+  let activeApp: PluginAppRow | null = null;
   let pageKey = 'market';
   let pageLabel = '插件市场';
   let backLabel = '返回插件市场';
@@ -198,17 +239,24 @@ export const usePluginSettings = (): PluginSettingsState => {
     pageLabel = 'Skill 详情';
     if (plugin !== undefined) backLabel = `返回 ${plugin.manifest.name}`;
   }
+  if (page.type === 'app') {
+    activeApp =
+      apps.find((entry) => {
+        return entry.id === page.appId;
+      }) ?? null;
+    pageKey += `:app:${page.appId}`;
+    pageLabel = '应用详情';
+    if (plugin !== undefined) backLabel = `返回 ${plugin.manifest.name}`;
+  }
   const back = (): void => {
     clearError();
-    if (page.type === 'skill') setPage({ type: 'plugin', pluginId: page.pluginId });
+    if (page.type === 'skill' || page.type === 'app')
+      setPage({ type: 'plugin', pluginId: page.pluginId });
     else setPage({ type: 'market' });
   };
   const changeCategory = useCallback((value: string): void => {
     if (value === 'all' || value === 'services' || value === 'office') setCategory(value);
   }, []);
-  const connections = useCallback((): void => {
-    openSettings('connections');
-  }, [openSettings]);
   const mountPage = useCallback((element: HTMLElement | null): void => {
     if (element === null) return;
     const viewport = element.closest('[data-radix-scroll-area-viewport]');
@@ -230,12 +278,12 @@ export const usePluginSettings = (): PluginSettingsState => {
     apps,
     skills,
     activeSkill,
+    activeApp,
     page,
     pageKey,
     pageLabel,
     backLabel,
     back,
-    connections,
     mountPage,
     loading,
     error,

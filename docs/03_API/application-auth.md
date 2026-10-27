@@ -45,6 +45,8 @@ Web发起接口要求本机信任与CSRF；再次显式发起会取消同客户�
 
 OAuth回调的查询字段遵守上游协议：可选 `iss` 由宿主流程与适配器声明的 `authorizationIssuer` 精确比较，GitHub为 `https://github.com/login/oauth`；不匹配在兑换code前返回400 `LOGIN_ISSUER_MISMATCH`。未携带iss时仍执行绑定state/nonce/PKCE验证。该授权服务器标识不替换持久外部身份的issuer。仅此OAuth响应查询允许未知扩展并忽略它们，已知参数的类型、长度及重复值仍严格拒绝；普通业务接口不放宽字段约束。依据：[RFC 9207](https://www.rfc-editor.org/rfc/rfc9207.html#section-2.4)、[RFC 6749](https://www.rfc-editor.org/rfc/rfc6749.html#section-4.1.2)。
 
+插件OAuth使用独立客户端、凭据与回调，见[插件连接协议](plugin-connections.md)。应用登录回调不再分发插件state，也不读取插件凭据。
+
 临时授权流程不跨daemon重启恢复；用户重新开始登录。持久客户端和应用会话可以用原Cookie恢复，有效本地登录无需访问GitHub。离线使用不表示已检查上游撤销；本地退出只撤销本地客户端会话，不自动撤销GitHub侧授权，不删除业务数据。
 
 退出立即撤销数据库记录，再取消所属流程；晚到验证结果不能签发会话。私有SSE在撤销或到期时结束；客户端重新读取status并清理私有缓存、导航和草稿。已接受后台Run保留，未登录无法读取或响应审批。传输网络失败与401区分：网络失败不能自行撤销仍未到期的本地登录。

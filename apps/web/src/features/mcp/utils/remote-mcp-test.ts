@@ -27,7 +27,7 @@ export const prepareRemoteMcpTest = (
       throw new Error('请填写本次测试的全部请求头值，或保存配置并完成授权后再测试。');
     }
     if (original === null || !original.enabled) {
-      throw new Error('请填写本次测试的请求头值，或保存并完成远端授权后再测试。');
+      throw new Error('请填写本次测试的请求头值，或保存并信任此服务后再测试。');
     }
     const baseline = prepareRemoteMcpDraft(createRemoteMcpDraft(original), original).input;
     const comparable: RemoteMcpInput = { ...prepared.input, name: baseline.name };

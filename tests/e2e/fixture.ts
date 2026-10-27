@@ -19,6 +19,7 @@ interface RunningDaemon {
   token: string;
   loginToken: string;
   stop: () => Promise<void>;
+  restart: () => Promise<void>;
 }
 
 /** Starts built daemon exports and static Web with an isolated listener per test. */
@@ -58,6 +59,9 @@ export const test = base.extend<{ daemon: RunningDaemon }>({
     const ownerSecret = randomBytes(32).toString('base64url');
     const environment = { ...process.env };
     delete environment['MY_PI_HARNESS_GITHUB_CALLBACK_URL'];
+    for (const name of Object.keys(environment)) {
+      if (name.startsWith('MY_PI_HARNESS_SKILL_')) delete environment[name];
+    }
     const child = spawn(
       process.execPath,
       [fileURLToPath(new URL('./start-daemon.mjs', import.meta.url))],
@@ -68,6 +72,10 @@ export const test = base.extend<{ daemon: RunningDaemon }>({
           MY_PI_HARNESS_PORT: '0',
           MY_PI_HARNESS_GITHUB_CLIENT_ID: 'synthetic-e2e-client-id',
           MY_PI_HARNESS_GITHUB_CLIENT_SECRET: 'synthetic-e2e-client-secret',
+          MY_PI_HARNESS_SKILL_GITHUB_CLIENT_ID: 'synthetic-browser-oauth-client-github',
+          MY_PI_HARNESS_SKILL_GITHUB_CLIENT_SECRET: 'synthetic-browser-oauth-secret',
+          MY_PI_HARNESS_SKILL_GOOGLE_CLIENT_ID: 'synthetic-browser-oauth-client-google',
+          MY_PI_HARNESS_SKILL_GOOGLE_CLIENT_SECRET: 'synthetic-browser-oauth-secret',
           MY_PI_HARNESS_PROFILE_DIRECTORY: profile,
           MY_PI_HARNESS_SESSION_LOG_ROOT: join(profile, '.my-pi-harness'),
           MY_PI_HARNESS_DESKTOP_SECRET: ownerSecret,
@@ -152,7 +160,48 @@ export const test = base.extend<{ daemon: RunningDaemon }>({
       await authorization.body?.cancel();
       if (!authorization.ok || !token) throw new Error('Fixture authorization failed');
       const loginToken = await loginFixture(origin, token);
-      await use({ origin, token, loginToken, stop });
+      const restart = async (): Promise<void> => {
+        const requestId = randomBytes(12).toString('hex');
+        await new Promise<void>((resolve, reject) => {
+          const timer = setTimeout(
+            () => fail(new Error(`Fixture restart timed out: ${stderr}`)),
+            15_000,
+          );
+          const cleanup = (): void => {
+            clearTimeout(timer);
+            child.removeListener('message', receive);
+            child.removeListener('exit', earlyExit);
+          };
+          const fail = (error: Error): void => {
+            cleanup();
+            reject(error);
+          };
+          const earlyExit = (): void =>
+            fail(new Error(`Fixture exited while restarting: ${stderr}`));
+          const receive = (value: unknown): void => {
+            if (
+              typeof value !== 'object' ||
+              value === null ||
+              !('requestId' in value) ||
+              value.requestId !== requestId ||
+              !('type' in value)
+            )
+              return;
+            if (value.type === 'fixture.restarted') {
+              cleanup();
+              resolve();
+            }
+            if (value.type === 'fixture.restart-failed')
+              fail(new Error(`Fixture restart failed: ${stderr}`));
+          };
+          child.on('message', receive);
+          child.once('exit', earlyExit);
+          child.send({ type: 'fixture.restart', requestId }, (error) => {
+            if (error) fail(error);
+          });
+        });
+      };
+      await use({ origin, token, loginToken, stop, restart });
     } finally {
       await stop();
       await rm(profile, { recursive: true, force: true });

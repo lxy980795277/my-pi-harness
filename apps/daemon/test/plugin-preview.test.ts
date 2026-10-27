@@ -89,7 +89,9 @@ it('keeps installed component preferences and Markdown available when the plugin
     detail.plugin.components.find((component) => component.id === 'skill:google')?.enabled,
   ).toBe(false);
   expect(detail.plugin.manifest.apps).toHaveLength(5);
-  expect(await f.services.skills.list(null, new AbortController().signal)).toEqual([]);
+  const skills = await f.services.skills.list(null, new AbortController().signal);
+  expect(skills).toHaveLength(6);
+  expect(skills.every((skill) => !skill.enabled)).toBe(true);
   expect(await readdir(f.profile, { recursive: true })).toEqual(before);
 });
 

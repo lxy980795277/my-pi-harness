@@ -1,11 +1,11 @@
 import { text as streamText } from 'node:stream/consumers';
+import { createServer } from 'node:http';
 import { fauxAssistantMessage, type TranscriptContext } from '@earendil-works/pi-ai';
-import type { ConnectionOperationView, FrozenSkill } from '@my-pi-harness/protocol';
+import type { FrozenSkill } from '@my-pi-harness/protocol';
 import type { SessionBatch } from '@my-pi-harness/storage';
-import { describe, expect, it, vi } from 'vitest';
-import type { ConnectionGatewayPort } from '../src/connection-ports.js';
+import { describe, expect, it } from 'vitest';
 import type { SkillsPort } from '../src/capability-ports.js';
-import { call, fixture, idle, observe } from './support/work-fixture.js';
+import { call, fixture, idle } from './support/work-fixture.js';
 
 const skill: FrozenSkill = {
   selection: { id: 'plugin:github', contentHash: 'a'.repeat(64) },
@@ -19,60 +19,13 @@ const skill: FrozenSkill = {
   description: 'Service Skill',
   scope: 'plugin',
   source: '/registered/plugin/github',
-  content: 'Use explicit service grants for this task.',
+  content: 'Read service API paths using web_fetch GET and this active Skill gatewayUrl.',
+  gatewayUrl: 'http://127.0.0.1:4311/api/skill-gateway/github',
   resources: [],
-  allowedTools: [],
+  allowedTools: ['web_fetch'],
 };
-function gateway() {
-  const operations: ConnectionOperationView[] = [
-    {
-      id: 'service_github_user',
-      connectionId: 'connection',
-      accountId: 'account',
-      serviceId: 'github',
-      app: 'GitHub',
-      name: 'Read account',
-      description: 'Read the current account',
-      readOnly: true,
-      parameters: { type: 'object', properties: {}, additionalProperties: false },
-    },
-  ];
-  const freeze = vi.fn<ConnectionGatewayPort['freezeGrant']>((request) =>
-    Promise.resolve({
-      id: 'grant',
-      runId: request.runId,
-      skillId: skill.selection.id,
-      skillHash: skill.selection.contentHash,
-      pluginId: 'github',
-      pluginEpoch: 1,
-      connectionId: 'connection',
-      serviceId: 'github',
-      accountId: 'account',
-      ownerId: 'owner',
-      identityEpoch: 1,
-      revision: 1,
-      accessEpoch: 1,
-      operations: [...request.operations],
-      expiresAt: request.expiresAt,
-    }),
-  );
-  const execute = vi.fn<ConnectionGatewayPort['call']>(async (input) => {
-    await input.beforeDispatch();
-    return {
-      kind: 'known',
-      isError: false,
-      content: [{ type: 'text', text: 'ACCOUNT_RESULT' }],
-      summary: 'Account read',
-    };
-  });
-  const revoke = vi.fn<ConnectionGatewayPort['revokeRun']>();
-  const port: ConnectionGatewayPort = {
-    catalog: () => Promise.resolve(operations),
-    freezeGrant: freeze,
-    call: execute,
-    revokeRun: revoke,
-  };
-  const skills: SkillsPort = {
+function skills(): SkillsPort {
+  return {
     list: () => Promise.resolve([]),
     freezeSelections: () => Promise.resolve([skill]),
     validateBindings: () => Promise.resolve(),
@@ -80,136 +33,138 @@ function gateway() {
     retainBindings: () => () => undefined,
     loadResource: () => Promise.resolve([]),
   };
-  return { port, skills, freeze, execute, revoke };
-}
-const grantArgs = {
-  skillId: skill.selection.id,
-  connectionId: 'connection',
-  operations: ['service_github_user'],
-};
-function grantedName(context: TranscriptContext): string {
-  const name = context.messages
-    .flatMap((message) =>
-      message.role === 'system' ? (message.toolsAdded ?? []).map((tool) => tool.name) : [],
-    )
-    .find((name) => name.startsWith('service_') && name !== 'service_search');
-  if (!name) throw new Error('Missing offered service operation');
-  return name;
 }
 
-describe('service grants in the actual Pi and durable tool pipeline', () => {
-  it('keeps a denied grant out of the model and never requests a credentialed call', async () => {
-    const g = gateway();
-    const f = await fixture(false, { skills: g.skills, connectionGateway: g.port });
-    try {
-      await f.runtime.updateSession(f.session.id, { approvalMode: 'full-access' });
-      f.faux.setResponses([
-        call('request_service_access', grantArgs),
-        fauxAssistantMessage('Denied'),
-      ]);
-      await f.runtime.send(f.session.id, {
-        text: 'Read account',
-        mode: 'send',
-        requestId: 'deny',
-        skills: [skill.selection],
+describe('plugin gateway instructions through the actual model and durable input', () => {
+  it.each([true, false])(
+    'offers the recorded read-only gateway without account grants or private capabilities, workspace=%s',
+    async (withWorkspace) => {
+      const f = await fixture(withWorkspace, {
+        skills: skills(),
+        skillGateway: { origin: 'http://127.0.0.1:4311', token: 'private-host-capability' },
       });
-      await observe(
-        f.runtime,
-        f.session.id,
-        (snapshot) => snapshot.tools[0]?.status === 'awaiting_approval',
-      );
-      const pending = f.runtime.getSnapshot(f.session.id).tools[0];
-      if (!pending || !f.tools) throw new Error('Missing approval');
-      f.tools.decide(f.session.id, pending.id, { decision: 'deny' });
-      await idle(f);
-      expect(g.freeze).not.toHaveBeenCalled();
-      expect(g.execute).not.toHaveBeenCalled();
-      expect(f.runtime.getSnapshot(f.session.id).tools[0]?.status).toBe('denied');
-      expect(f.errors).toEqual([]);
-    } finally {
-      await f.close();
-    }
-  });
-
-  it.each(['known', 'unknown'] as const)(
-    'offers a finite account-bound tool only after approval and records %s result',
-    async (kind) => {
-      const g = gateway();
-      const f = await fixture(false, { skills: g.skills, connectionGateway: g.port });
-      let requests = 0;
+      let captured: TranscriptContext | undefined;
       try {
-        await f.runtime.updateSession(f.session.id, { approvalMode: 'full-access' });
-        if (kind === 'unknown')
-          g.execute.mockImplementation(async (input) => {
-            await input.beforeDispatch();
-            return { kind: 'unknown', message: 'May have taken effect; verify it.' };
-          });
         f.faux.setResponses([
-          () => {
-            requests += 1;
-            return call('request_service_access', grantArgs);
-          },
           (context) => {
-            requests += 1;
-            return call(grantedName(context), {});
-          },
-          () => {
-            requests += 1;
-            return fauxAssistantMessage('Account result observed');
+            captured = context;
+            return fauxAssistantMessage('Ready to read the authorized service.');
           },
         ]);
         await f.runtime.send(f.session.id, {
-          text: 'Read account',
+          text: 'Read the current GitHub account',
           mode: 'send',
-          requestId: kind,
+          requestId: 'plugin-gateway-model-input',
           skills: [skill.selection],
         });
-        await observe(
-          f.runtime,
-          f.session.id,
-          (snapshot) => snapshot.tools[0]?.status === 'awaiting_approval',
-        );
-        const pending = f.runtime.getSnapshot(f.session.id).tools[0];
-        if (!pending || !f.tools) throw new Error('Missing approval');
-        f.tools.decide(f.session.id, pending.id, { decision: 'allow' });
         await idle(f);
-        expect(g.freeze).toHaveBeenCalledTimes(1);
-        expect(g.execute).toHaveBeenCalledTimes(1);
-        const snapshot = f.runtime.getSnapshot(f.session.id);
-        const child = snapshot.tools[1];
-        if (!child) throw new Error('Missing service tool result');
-        expect(child.binding).toMatchObject({
-          kind: 'accepted',
-          source: {
-            kind: 'connection',
-            connectionId: 'connection',
-            grantId: 'grant',
-            operation: 'service_github_user',
-          },
-        });
-        expect(child.dispatch.state).toBe('may_have_started');
-        expect(child.status).toBe(kind === 'known' ? 'completed' : 'unknown');
-        expect(g.execute.mock.calls[0]?.[0]).toMatchObject({
-          parentToolCallId: child.id,
-          runId: snapshot.runs[0]?.id,
-        });
-        expect(requests).toBe(kind === 'known' ? 3 : 2);
-        expect(g.revoke).toHaveBeenCalledWith(snapshot.runs[0]?.id);
-        const records = (await streamText(f.store.exportSessionLog(f.session.id).content))
+        if (captured === undefined) throw new Error('Missing actual model request');
+        const toolNames = captured.messages.flatMap((message) =>
+          message.role === 'system' ? (message.toolsAdded ?? []).map((tool) => tool.name) : [],
+        );
+        expect(toolNames).toContain('web_fetch');
+        expect(toolNames).not.toContain('service_search');
+        expect(toolNames).not.toContain('request_service_access');
+        expect(toolNames).not.toContain('revoke_service_access');
+        const modelInput = JSON.stringify(captured);
+        expect(modelInput).toContain(skill.gatewayUrl);
+        expect(modelInput).not.toContain('private-host-capability');
+        const log = await streamText(f.store.exportSessionLog(f.session.id).content);
+        const records = log
           .trim()
           .split('\n')
           .flatMap((line) => (JSON.parse(line) as SessionBatch).records);
+        expect(records.find(({ event }) => event.type === 'run.accepted')?.privateData).toContain(
+          skill.gatewayUrl,
+        );
         expect(
-          records.find(({ event }) => event.type === 'run.service_access_granted')?.privateData,
-        ).toContain('account');
-        expect(
-          records.find(({ event }) => event.type === 'run.tools_loaded')?.event.data['revision'],
-        ).toBe(2);
-        expect(() => f.store.recoverInterrupted()).not.toThrow();
+          records.find(({ event }) => event.type === 'context.prepared')?.privateData,
+        ).toContain(skill.gatewayUrl);
+        expect(log).not.toContain('private-host-capability');
         expect(f.errors).toEqual([]);
       } finally {
         await f.close();
       }
     },
   );
+
+  it('executes the exact gateway without a workspace and keeps the private host capability out of the model and log', async () => {
+    const headers: (string | string[] | undefined)[] = [];
+    const server = createServer((request, response) => {
+      headers.push(request.headers['x-pi-harness-skill-gateway']);
+      response.writeHead(200, { 'content-type': 'application/json' });
+      response.end(JSON.stringify({ login: 'synthetic-oauth-account', repositoryCount: 3 }));
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const address = server.address();
+    if (address === null || typeof address === 'string') throw new Error('Missing fixture port');
+    const origin = `http://127.0.0.1:${address.port}`;
+    const token = 'private-synthetic-gateway-capability';
+    const localSkill = { ...skill, gatewayUrl: `${origin}/api/skill-gateway/github` };
+    const port = skills();
+    port.freezeSelections = () => Promise.resolve([localSkill]);
+    const f = await fixture(false, { skills: port, skillGateway: { origin, token } });
+    const requests: TranscriptContext[] = [];
+    try {
+      await f.runtime.updateSession(f.session.id, { approvalMode: 'full-access' });
+      f.faux.setResponses([
+        (context) => {
+          requests.push(context);
+          return call('web_fetch', { url: `${localSkill.gatewayUrl}/user` });
+        },
+        (context) => {
+          requests.push(context);
+          return fauxAssistantMessage('Read the authorized account');
+        },
+      ]);
+      await f.runtime.send(f.session.id, {
+        text: 'Read GitHub',
+        mode: 'send',
+        requestId: 'workspace-free-gateway',
+        skills: [skill.selection],
+      });
+      await idle(f);
+      expect(headers).toEqual([token]);
+      const model = JSON.stringify(requests);
+      expect(model).toContain('synthetic-oauth-account');
+      expect(model).not.toContain(token);
+      const offered =
+        requests[0]?.messages.flatMap((message) =>
+          message.role === 'system' ? (message.toolsAdded ?? []).map(({ name }) => name) : [],
+        ) ?? [];
+      expect(offered).toContain('web_fetch');
+      expect(offered).not.toContain('read_file');
+      expect(offered).not.toContain('shell');
+      expect(f.runtime.getSnapshot(f.session.id).tools[0]).toMatchObject({
+        name: 'web_fetch',
+        status: 'completed',
+        binding: { source: { kind: 'session' } },
+      });
+      expect(await streamText(f.store.exportSessionLog(f.session.id).content)).not.toContain(token);
+      expect(f.errors).toEqual([]);
+
+      await f.runtime.updateSession(f.session.id, { approvalMode: 'read-only' });
+      f.faux.setResponses([
+        call('web_fetch', { url: `${localSkill.gatewayUrl}/user`, method: 'POST', body: '{}' }),
+        fauxAssistantMessage('Network write was denied'),
+      ]);
+      await f.runtime.send(f.session.id, {
+        text: 'Try a write',
+        mode: 'send',
+        requestId: 'workspace-free-write',
+        skills: [skill.selection],
+      });
+      await idle(f);
+      expect(headers).toHaveLength(1);
+      expect(f.runtime.getSnapshot(f.session.id).tools.at(-1)).toMatchObject({
+        name: 'web_fetch',
+        status: 'denied',
+      });
+    } finally {
+      await f.close();
+      await new Promise<void>((resolve, reject) =>
+        server.close((error) => (error ? reject(error) : resolve())),
+      );
+    }
+  });
 });

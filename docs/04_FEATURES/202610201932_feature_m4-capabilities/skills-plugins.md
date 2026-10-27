@@ -43,6 +43,10 @@ Tasks：
 
 ### 验证范围
 
+2026-10-26插件详情账户、任务型Skills和显式随包资源更新由[补齐Spec](plugin-completion.md)拥有。GitHub包含路由、审查、Actions、提交发布四个Skills；Google包含路由及五个子App共六个Skills。更新资源保留原App引用与账户，同名Skill保留启停偏好；已接受Run依照原授权版本失效，不热换正文。
+
+2026-10-27插件默认流程完整重构：daemon托管专用客户端配置和每插件一份凭据，由弹窗自行发起授权；共享App按声明读取Token，不创建默认通用账户或手动关联。App安装后关闭，由其开关显式开启；公开credentialSource区分插件授权、独立MCP OAuth和无OAuth。范围和验证由[补齐Spec](plugin-completion.md)及[插件协议](../../03_API/plugin-connections.md)拥有。
+
 真实临时文件系统覆盖格式、同名优先级、无工作区、符号链接、穿越、版本变更、不可变资源及活动卸载；临时 SQLite 覆盖 CAS 与精确所属。GitHub fixture 覆盖固定提交、取消、坏文件和失败清理；HTTP 与浏览器证明设置可以完成安装并选用。真实第三方账号和跨平台证据分别记录，不以 fixture 宣称外部供应商已验收。
 
 ### 实现补充

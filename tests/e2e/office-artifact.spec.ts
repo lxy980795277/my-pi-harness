@@ -45,6 +45,11 @@ test('按需加载办公工具、审批创建 DOCX 并从详情下载原始产�
       page.getByRole('combobox', { name: '选择工作区', exact: true }),
       '文档工作区',
     );
+    await chooseOption(
+      page,
+      page.getByRole('combobox', { name: '执行批准方式', exact: true }),
+      '请求批准',
+    );
     await page.getByLabel('消息', { exact: true }).fill('创建一份 Word 文档');
     await page.getByRole('button', { name: '发送', exact: true }).click();
     const row = page.getByLabel('office_docx 工具调用', { exact: true });

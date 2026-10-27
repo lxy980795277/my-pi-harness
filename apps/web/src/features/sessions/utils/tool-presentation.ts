@@ -34,9 +34,6 @@ const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
   read_skill_resource: { name: '读取 Skill 资源', Icon: FileText, argument: 'path' },
   request_skill_tools: { name: '申请 Skill 工具授权', Icon: Plug },
   revoke_skill_tools: { name: '撤销 Skill 工具授权', Icon: Undo2 },
-  service_search: { name: '检索服务', Icon: Search, argument: 'query' },
-  request_service_access: { name: '申请服务授权', Icon: Plug },
-  revoke_service_access: { name: '撤销服务授权', Icon: Undo2 },
   office_docx: { name: 'Word 文档', Icon: FileText, argument: 'output' },
   office_pdf: { name: 'PDF 文档', Icon: FileText, argument: 'output' },
   office_xlsx: { name: '工作簿', Icon: FileText, argument: 'output' },
@@ -146,9 +143,6 @@ export const toolPresentation = (tool: ToolCallView): ToolPresentation => {
     if (source.kind === 'mcp') {
       definition = { name: source.remoteToolName, Icon: Plug };
       sourceLabel = `MCP · ${source.serverId} · revision ${source.serverRevision} · ${source.remoteToolName}`;
-    } else if (source.kind === 'connection') {
-      definition = { name: '服务请求', Icon: Plug };
-      sourceLabel = `服务 · ${source.connectionId} · ${source.operation} · ${source.grantId}`;
     } else if (source.kind === 'session') {
       sourceLabel = '会话工具';
     } else {
@@ -156,11 +150,7 @@ export const toolPresentation = (tool: ToolCallView): ToolPresentation => {
     }
   }
   let dispatchLabel = '尚未派发';
-  if (
-    tool.binding.kind === 'accepted' &&
-    tool.binding.source.kind !== 'mcp' &&
-    tool.binding.source.kind !== 'connection'
-  ) {
+  if (tool.binding.kind === 'accepted' && tool.binding.source.kind !== 'mcp') {
     dispatchLabel = '内部工具';
   }
   if (tool.dispatch.state === 'not_started') {

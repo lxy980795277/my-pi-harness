@@ -80,6 +80,9 @@ export const QueueRequestSchema = Type.Object(
     mcpBindings: Type.Optional(Type.String({ maxLength: 2_000_000 })),
     candidateBindings: Type.Optional(Type.String({ maxLength: 4_000_000 })),
     skillBindings: Type.Optional(Type.String({ maxLength: 3_000_000 })),
+    mentionedSkillBindings: Type.Optional(Type.String({ maxLength: 3_000_000 })),
+    inheritedSkillBindings: Type.Optional(Type.String({ maxLength: 3_000_000 })),
+    discoveryDiagnostics: Type.Optional(Type.String({ maxLength: 300_000 })),
   },
   { additionalProperties: false },
 );

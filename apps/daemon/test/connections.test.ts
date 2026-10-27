@@ -78,29 +78,14 @@ async function body(response: Response): Promise<ConnectionView> {
     throw new Error('Invalid public connection response');
   return value;
 }
-async function connect(
+async function enablePluginApp(
   value: Awaited<ReturnType<typeof fixture>>,
-  service: ConnectionServiceId = 'github',
+  service: ConnectionServiceId,
 ) {
-  const created = await value.create(service);
-  const connected = await body(
-    await value.send(`/api/connections/${created.id}/token`, 'POST', {
-      ...control(created),
-      value: `fixture-${service}-token`,
-    }),
-  );
-  await value.services.plugins.install(service, new AbortController().signal);
-  const skills = await value.services.skills.list(null, new AbortController().signal);
-  const skill = skills.find((entry) => entry.pluginId === service);
-  if (skill === undefined) throw new Error('Plugin has no Skill');
-  const frozen = await value.services.skills.freezeSelections(
-    null,
-    [{ id: skill.id, contentHash: skill.contentHash }],
-    new AbortController().signal,
-  );
-  const selected = frozen[0];
-  if (selected === undefined) throw new Error('No frozen Skill');
-  return { connection: connected, skill: selected };
+  const plugin = await value.services.plugins.install(service, new AbortController().signal);
+  const app = plugin.components.find((entry) => entry.kind === 'app');
+  if (app === undefined) throw new Error('Missing plugin App');
+  await value.services.plugins.component(service, app.id, plugin.revision, true);
 }
 
 it('keeps protected GET inert and rejects unknown HTTP fields without exposing fake secrets', async () => {
@@ -139,149 +124,43 @@ it('keeps protected GET inert and rejects unknown HTTP fields without exposing f
 });
 
 it.each(['github', 'google', 'vercel', 'notion', 'supabase'] as const)(
-  'connects %s and sends only fixed gateway operations with one-run/Skill authority',
+  'keeps advanced %s credentials private and restricts their MCP endpoint',
   async (service) => {
     const value = await fixture();
-    const selected = await connect(value, service);
+    const created = await value.create(service);
+    const connected = await body(
+      await value.send(`/api/connections/${created.id}/token`, 'POST', {
+        ...control(created),
+        value: `fixture-${service}-token`,
+      }),
+    );
+    expect(connected.accountId).toBe(`${service}-account`);
+    expect(JSON.stringify(connected)).not.toContain(`fixture-${service}-token`);
+    await enablePluginApp(value, service);
+    const endpoint = value.services.connections
+      .providers()
+      .find((entry) => entry.serviceId === service)?.mcpEndpoints[0];
+    if (endpoint === undefined) throw new Error('Missing provider endpoint');
     const signal = new AbortController().signal;
-    const catalog = await value.services.connections.catalog(null, [selected.skill], signal);
-    expect(catalog.length).toBeGreaterThan(0);
-    if (service === 'google')
-      expect(new Set(catalog.map((entry) => entry.app))).toEqual(
-        new Set(['Drive', 'Docs', 'Sheets', 'Slides', 'Calendar']),
-      );
-    const operation = catalog.find((entry) =>
-      [
-        'service_github_user',
-        'service_google_drive_list',
-        'service_vercel_projects',
-        'service_notion_search',
-        'service_supabase_projects',
-      ].includes(entry.id),
+    expect(await value.services.connections.read(connected.id, endpoint, signal)).toBe(
+      `fixture-${service}-token`,
     );
-    if (operation === undefined) throw new Error('No sample fixed operation');
-    const grant = await value.services.connections.freezeGrant(
-      {
-        runId: 'fixture-run',
-        skill: selected.skill,
-        connectionId: selected.connection.id,
-        operations: [operation.id],
-        expiresAt: Date.now() + 60_000,
-      },
-      signal,
+    for (const invalid of [
+      'https://attacker.invalid/mcp',
+      `${endpoint}unexpected`,
+      endpoint.replace('https://', 'https://user:secret@'),
+    ]) {
+      expect(() => value.services.connections.authority(connected.id, invalid)).toThrow();
+    }
+    const disconnected = await value.services.connections.disconnect(
+      connected.id,
+      control(connected),
     );
-    let barriers = 0;
-    const args: Record<string, unknown> = service === 'notion' ? { body: {} } : {};
-    const input = {
-      grant,
-      runId: 'fixture-run',
-      parentToolCallId: 'parent-call',
-      operation: operation.id,
-      arguments: args,
-      signal,
-      beforeDispatch: () => {
-        barriers += 1;
-        return Promise.resolve();
-      },
-    };
-    const result = await value.services.connections.call(input);
-    expect(result.kind).toBe('known');
-    expect(barriers).toBe(1);
-    expect(JSON.stringify(result)).not.toContain(`fixture-${service}-token`);
-    expect((await value.services.connections.call({ ...input, runId: 'other-run' })).kind).toBe(
-      'not-dispatched',
-    );
-    expect(
-      (
-        await value.services.connections.call({
-          ...input,
-          arguments: { ...args, url: 'https://attacker.invalid' },
-        })
-      ).kind,
-    ).toBe('not-dispatched');
-    value.services.connections.revokeRun('fixture-run');
-    expect((await value.services.connections.call(input)).kind).toBe('not-dispatched');
+    expect(disconnected.connected).toBe(false);
+    expect(disconnected.accessEpoch).toBeGreaterThan(connected.accessEpoch);
+    await expect(value.services.connections.read(connected.id, endpoint, signal)).rejects.toThrow();
   },
 );
-
-it('does not retry a write whose HTTP socket closed after dispatch and refuses old grants after disconnect/reconnect', async () => {
-  const value = await fixture();
-  const selected = await connect(value);
-  const signal = new AbortController().signal;
-  const operation = 'service_github_issue_create';
-  const grant = await value.services.connections.freezeGrant(
-    {
-      runId: 'run',
-      skill: selected.skill,
-      connectionId: selected.connection.id,
-      operations: [operation],
-      expiresAt: Date.now() + 60_000,
-    },
-    signal,
-  );
-  const input = {
-    grant,
-    runId: 'run',
-    parentToolCallId: 'parent',
-    operation,
-    arguments: { owner: 'fixture', repo: 'demo', body: { title: 'No retry' } },
-    signal,
-    beforeDispatch: () => Promise.resolve(),
-  };
-  value.upstream.dropWrites();
-  expect((await value.services.connections.call(input)).kind).toBe('unknown');
-  expect(value.upstream.calls.filter((entry) => entry.path.endsWith('/issues'))).toHaveLength(1);
-  const disconnected = await value.services.connections.disconnect(
-    selected.connection.id,
-    control(selected.connection),
-  );
-  expect(disconnected.connected).toBe(false);
-  expect((await value.services.connections.call(input)).kind).toBe('not-dispatched');
-  const reconnected = await value.services.connections.writeToken(
-    disconnected.id,
-    { ...control(disconnected), value: 'fixture-github-token' },
-    signal,
-  );
-  expect(reconnected.accessEpoch).toBeGreaterThan(selected.connection.accessEpoch);
-  expect((await value.services.connections.call(input)).kind).toBe('not-dispatched');
-});
-
-it('retains known HTTP status and valid bounded JSON for large upstream results', async () => {
-  const value = await fixture();
-  const selected = await connect(value);
-  const signal = new AbortController().signal;
-  const grant = await value.services.connections.freezeGrant(
-    {
-      runId: 'large-result',
-      skill: selected.skill,
-      connectionId: selected.connection.id,
-      operations: ['service_github_repos'],
-      expiresAt: Date.now() + 60_000,
-    },
-    signal,
-  );
-  value.upstream.largeResponse();
-  const result = await value.services.connections.call({
-    grant,
-    runId: 'large-result',
-    parentToolCallId: 'parent-large',
-    operation: 'service_github_repos',
-    arguments: {},
-    signal,
-    beforeDispatch: () => Promise.resolve(),
-  });
-  if (result.kind !== 'known' || result.content[0]?.type !== 'text')
-    throw new Error('Expected a known text result');
-  expect(result.isError).toBe(false);
-  expect(result.content[0].text.length).toBeLessThanOrEqual(100_000);
-  const decoded: unknown = JSON.parse(result.content[0].text);
-  expect(decoded).toMatchObject({
-    parentToolCallId: 'parent-large',
-    operation: 'service_github_repos',
-    status: 200,
-    result: { truncated: true },
-  });
-});
 
 it('uses real OAuth state/PKCE/code exchange and serializes token refresh without exposing credentials', async () => {
   const value = await fixture();
@@ -323,7 +202,7 @@ it('uses real OAuth state/PKCE/code exchange and serializes token refresh withou
   );
   const connected = value.services.connections.get(configured.id);
   expect(connected.connected).toBe(true);
-  await value.services.plugins.install('github', signal);
+  await enablePluginApp(value, 'github');
   const stored = value.services.store.connections.get(configured.id);
   if (stored?.credentialRef === null || stored?.credentialRef === undefined)
     throw new Error('No opaque credential');
@@ -450,95 +329,4 @@ it('rejects issuer mismatch, wrong-provider and expired OAuth states before toke
     ),
   ).rejects.toMatchObject({ code: 'CONNECTION_OAUTH_EXPIRED' });
   expect(value.upstream.calls).toHaveLength(0);
-});
-
-it('propagates a failed durable dispatch barrier and preserves the connection when one Run cancels before dispatch', async () => {
-  const value = await fixture();
-  const selected = await connect(value);
-  const signal = new AbortController().signal;
-  const grant = await value.services.connections.freezeGrant(
-    {
-      runId: 'barrier-run',
-      skill: selected.skill,
-      connectionId: selected.connection.id,
-      operations: ['service_github_user'],
-      expiresAt: Date.now() + 60_000,
-    },
-    signal,
-  );
-  const input = {
-    grant,
-    runId: 'barrier-run',
-    parentToolCallId: 'parent',
-    operation: 'service_github_user',
-    arguments: {},
-    signal,
-    beforeDispatch: () => Promise.reject(new Error('fsync fixture failure')),
-  };
-  const count = value.upstream.calls.length;
-  await expect(value.services.connections.call(input)).rejects.toThrow('fsync fixture failure');
-  expect(value.upstream.calls).toHaveLength(count);
-  const cancelled = new AbortController();
-  cancelled.abort();
-  expect((await value.services.connections.call({ ...input, signal: cancelled.signal })).kind).toBe(
-    'not-dispatched',
-  );
-  expect(value.services.connections.get(selected.connection.id).connected).toBe(true);
-  expect(() =>
-    value.services.connections.authority(
-      selected.connection.id,
-      'https://api.githubcopilot.com/other',
-    ),
-  ).toThrow();
-  expect(() =>
-    value.services.connections.authority(
-      selected.connection.id,
-      'https://user:secret@api.githubcopilot.com/mcp/',
-    ),
-  ).toThrow();
-});
-
-it('does not grant a connection to another plugin Skill and rejects expired grants', async () => {
-  const value = await fixture();
-  const selected = await connect(value);
-  const signal = new AbortController().signal;
-  await expect(
-    value.services.connections.freezeGrant(
-      {
-        runId: 'run',
-        skill: {
-          ...selected.skill,
-          authorization: { ...selected.skill.authorization, pluginId: 'google' },
-        },
-        connectionId: selected.connection.id,
-        operations: ['service_github_user'],
-        expiresAt: Date.now() + 10000,
-      },
-      signal,
-    ),
-  ).rejects.toThrow();
-  await expect(
-    value.services.connections.freezeGrant(
-      {
-        runId: 'run',
-        skill: selected.skill,
-        connectionId: selected.connection.id,
-        operations: ['service_github_user'],
-        expiresAt: Date.now() - 1,
-      },
-      signal,
-    ),
-  ).rejects.toMatchObject({ code: 'CONNECTION_GRANT_INVALID' });
-  await expect(
-    value.services.connections.freezeGrant(
-      {
-        runId: 'run',
-        skill: selected.skill,
-        connectionId: selected.connection.id,
-        operations: ['service_google_docs_get'],
-        expiresAt: Date.now() + 10000,
-      },
-      signal,
-    ),
-  ).rejects.toMatchObject({ code: 'CONNECTION_OPERATION_FORBIDDEN' });
 });

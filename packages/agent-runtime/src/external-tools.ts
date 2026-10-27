@@ -12,6 +12,7 @@ export interface FrozenMcpTool {
   selection: McpToolSelection;
   definition: RunToolDefinition;
   authorization: ExternalToolAuthorization;
+  displayName?: string;
 }
 
 export type ExternalToolOutcome =

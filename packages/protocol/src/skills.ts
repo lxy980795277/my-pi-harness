@@ -52,6 +52,7 @@ export const FrozenSkillSchema = Type.Object(
     scope: SkillScopeSchema,
     source: Type.String(),
     content: Type.String({ maxLength: 131072 }),
+    gatewayUrl: Type.Optional(Type.String({ minLength: 1, maxLength: 4096 })),
     resources: Type.Array(SkillResourceSchema, { maxItems: 256 }),
     allowedTools: Type.Array(Type.String(), { maxItems: 128 }),
   },

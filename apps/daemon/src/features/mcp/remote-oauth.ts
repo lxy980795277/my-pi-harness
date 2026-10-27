@@ -19,7 +19,11 @@ interface OAuthFlow {
   identityEpoch: number;
   expiresAt: number;
   session: RemoteOAuthSession;
+  credential: PendingCredential;
   controller: AbortController;
+}
+interface PendingCredential {
+  value?: string;
 }
 interface RemoteMcpOAuthOptions {
   store: ProfileStore;
@@ -32,35 +36,51 @@ interface RemoteMcpOAuthOptions {
   assertAuthority(server: StoredRemoteMcpServer): void;
   catalogChanged(id: string): void;
 }
+type OAuthOperation = 'authorization' | 'refresh';
 /** OAuth flows and refreshes are profile-owned, bounded and cancelled before credential storage closes. */
 export class RemoteMcpOAuth {
   private readonly flows = new Map<string, OAuthFlow>();
   private readonly refreshes = new Map<string, Promise<string>>();
   private readonly operations = new Map<
     Promise<unknown>,
-    { id: string; controller: AbortController }
+    { id: string; kind: OAuthOperation; controller: AbortController }
   >();
   private closed = false;
   public constructor(private readonly options: RemoteMcpOAuthOptions) {}
   private track<T>(
     id: string,
+    kind: OAuthOperation,
     signal: AbortSignal,
     operation: (signal: AbortSignal) => Promise<T>,
   ): Promise<T> {
     if (this.closed) fail('MCP_CLOSED', 'MCP OAuth服务正在关闭。');
     const controller = new AbortController();
     const task = operation(AbortSignal.any([signal, controller.signal]));
-    this.operations.set(task, { id, controller });
+    this.operations.set(task, { id, kind, controller });
     return task.finally(() => {
       this.operations.delete(task);
     });
   }
-  public cancel(id: string): void {
+  private cancelFlows(id: string): void {
     for (const [state, flow] of this.flows)
       if (flow.serverId === id) {
         this.flows.delete(state);
         flow.controller.abort();
       }
+  }
+  /** Cancels only interactive authorization; refreshes and saved credentials remain available. */
+  public async cancelAuthorization(id: string): Promise<void> {
+    this.cancelFlows(id);
+    const pending: Promise<unknown>[] = [];
+    for (const [task, entry] of this.operations)
+      if (entry.id === id && entry.kind === 'authorization') {
+        entry.controller.abort();
+        pending.push(task);
+      }
+    await Promise.allSettled(pending);
+  }
+  public cancel(id: string): void {
+    this.cancelFlows(id);
     for (const entry of this.operations.values()) if (entry.id === id) entry.controller.abort();
   }
   public beginOAuth(
@@ -72,18 +92,22 @@ export class RemoteMcpOAuth {
     if ([...this.operations.values()].some((entry) => entry.id === id))
       fail('MCP_BUSY', '此服务器的OAuth操作正在进行，请完成或取消后重试。');
     this.cancel(id);
-    return this.track(id, signal, (owned) => this.begin(id, input, redirectUrl, owned));
+    return this.track(id, 'authorization', signal, (owned) =>
+      this.begin(id, input, redirectUrl, owned),
+    );
   }
   public completeOAuth(params: URLSearchParams, signal: AbortSignal): Promise<void> {
     const state = params.get('state');
     const flow = state === null ? undefined : this.flows.get(state);
     if (flow === undefined) fail('MCP_OAUTH_EXPIRED', 'OAuth流程已过期或已经使用。');
-    return this.track(flow.serverId, signal, (owned) => this.complete(params, owned));
+    return this.track(flow.serverId, 'authorization', signal, (owned) =>
+      this.complete(params, owned),
+    );
   }
   public async accessToken(server: StoredRemoteMcpServer, signal: AbortSignal): Promise<string> {
     let refresh = this.refreshes.get(server.id);
     if (refresh === undefined) {
-      refresh = this.track(server.id, signal, async (owned) => {
+      refresh = this.track(server.id, 'refresh', signal, async (owned) => {
         const session = await this.session(server, 'http://127.0.0.1/api/mcp/oauth/callback');
         return await session.accessToken(owned);
       });
@@ -108,6 +132,7 @@ export class RemoteMcpOAuth {
   private async session(
     server: StoredRemoteMcpServer,
     redirectUrl: string,
+    pending?: PendingCredential,
   ): Promise<RemoteOAuthSession> {
     const ref = server.oauthCredentialRef ?? `mcp-oauth:${server.id}:${randomUUID()}`;
     let client:
@@ -156,6 +181,10 @@ export class RemoteMcpOAuth {
             server.revision,
             server.accessEpoch,
           );
+          if (pending !== undefined) {
+            pending.value = value;
+            return;
+          }
           await this.options.credentials.write(ref, value);
           let current: StoredRemoteMcpServer;
           try {
@@ -190,8 +219,12 @@ export class RemoteMcpOAuth {
     if (!server.oauth) fail('MCP_OAUTH_DISABLED', '此服务器没有启用OAuth。');
     const identity = this.options.identity();
     const controller = new AbortController();
-    const session = await this.session(server, redirectUrl);
+    const credential: PendingCredential = {};
+    const session = await this.session(server, redirectUrl, credential);
     const result = await session.begin(AbortSignal.any([signal, controller.signal]));
+    signal.throwIfAborted();
+    this.options.expected(this.options.require(id), server.revision, server.accessEpoch);
+    this.options.assertAuthority(this.options.require(id));
     for (const [state, flow] of this.flows)
       if (flow.expiresAt < Date.now()) {
         flow.controller.abort();
@@ -207,6 +240,7 @@ export class RemoteMcpOAuth {
       identityEpoch: identity.epoch,
       expiresAt,
       session,
+      credential,
       controller,
     });
     return { ...result, expiresAt };
@@ -225,12 +259,31 @@ export class RemoteMcpOAuth {
     if (identity.ownerId !== flow.ownerId || identity.epoch !== flow.identityEpoch)
       fail('MCP_OAUTH_STATE_INVALID', 'OAuth回调身份不匹配。');
     await flow.session.complete(params, AbortSignal.any([signal, flow.controller.signal]));
-    const current = this.options.require(server.id);
-    this.options.repository.save(
-      { ...current, oauthConnected: true, updatedAt: Date.now() },
-      current.revision,
-      current.accessEpoch,
-    );
+    signal.throwIfAborted();
+    flow.controller.signal.throwIfAborted();
+    const encoded = flow.credential.value;
+    if (encoded === undefined) fail('MCP_CREDENTIAL_REQUIRED', 'OAuth没有返回可保存的凭据。');
+    const reference = `mcp-oauth:${server.id}:${randomUUID()}`;
+    let committed = false;
+    let previous: string | null = null;
+    try {
+      await this.options.credentials.write(reference, encoded);
+      signal.throwIfAborted();
+      flow.controller.signal.throwIfAborted();
+      const current = this.options.require(server.id);
+      this.options.expected(current, flow.revision, flow.accessEpoch);
+      this.options.assertAuthority(current);
+      this.options.repository.save(
+        { ...current, oauthCredentialRef: reference, oauthConnected: true, updatedAt: Date.now() },
+        current.revision,
+        current.accessEpoch,
+      );
+      previous = current.oauthCredentialRef;
+      committed = true;
+    } finally {
+      if (!committed) await this.options.credentials.delete(reference);
+    }
+    if (previous !== null) await this.options.credentials.delete(previous);
     this.options.catalogChanged(server.id);
   }
 }

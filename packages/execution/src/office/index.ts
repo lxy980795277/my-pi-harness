@@ -91,13 +91,17 @@ async function copyInput(
   temporary: string,
   number: number,
   signal: AbortSignal,
+  image = false,
 ): Promise<string> {
-  const format = formatFor(relative);
+  const format = image ? extname(relative).slice(1).toLowerCase() : formatFor(relative);
+  if (image && !['png', 'jpg', 'jpeg'].includes(format))
+    throw new ExecutionError('OFFICE_UNSUPPORTED_FORMAT', 'DOCX images must be PNG or JPEG files');
+  const limit = image ? 5_242_880 : MAX_FILE;
   const source = await workspacePath(root, relative);
-  const handle = await openRegular(source, MAX_FILE);
+  const handle = await openRegular(source, limit);
   try {
     const before = await handle.stat();
-    const buffer = Buffer.alloc(MAX_FILE + 1);
+    const buffer = Buffer.alloc(limit + 1);
     let length = 0;
     while (length < buffer.length) {
       checkCancelled(signal);
@@ -106,7 +110,7 @@ async function copyInput(
       length += chunk.bytesRead;
     }
     const after = await handle.stat();
-    if (length > MAX_FILE)
+    if (length > limit)
       throw new ExecutionError('FILE_TOO_LARGE', 'Office input grew beyond its size limit');
     if (before.size !== after.size || before.mtimeMs !== after.mtimeMs)
       throw new ExecutionError('FILE_CHANGED', 'Office input changed while being copied');
@@ -205,6 +209,24 @@ export async function executeOfficeTool(
         copied.push(await copyInput(root, input, temporary, number++, context.signal));
       }
       request[key] = copied;
+    }
+    if (Array.isArray(args['images'])) {
+      const images: readonly unknown[] = args['images'];
+      const copied = [];
+      for (const image of images) {
+        if (
+          typeof image !== 'object' ||
+          image === null ||
+          !('source' in image) ||
+          typeof image.source !== 'string'
+        )
+          throw new ExecutionError('INVALID_ARGUMENTS', 'Invalid DOCX image path');
+        copied.push({
+          ...image,
+          source: await copyInput(root, image.source, temporary, number++, context.signal, true),
+        });
+      }
+      request['images'] = copied;
     }
     let output: string | undefined;
     if (typeof args['output'] === 'string') {

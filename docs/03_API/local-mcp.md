@@ -29,11 +29,19 @@
 | POST /:id/revoke-trust      | 同disable；撤销授权并停用                                                                |
 | POST /:id/discover          | {expectedRevision,expectedAccessEpoch,scope} → McpToolCatalog；明确启动并发现工具        |
 | POST /:id/test              | 同discover，执行连接与目录检查，不调用具体工具                                           |
-| GET /:id/tools?scope=...    | McpToolCatalog或null；只读当前revision/accessEpoch匹配的内存目录缓存                     |
+| GET /:id/tools?scope=...    | McpToolCatalog或null；只读当前revision/accessEpoch匹配的已恢复目录缓存                   |
 
 `scope`为`sandboxed`或`full-access`。预览返回有效程序、参数、工作根、环境变量名、网络范围与启动指纹；指纹覆盖程序和显式文件入口身份、参数、根、普通环境、秘密slot/ref/epoch、隔离及资源策略，排除秘密内容。两种scope分别授权，不能相互继承。授权只允许启动这组配置，不能替代每次工具调用审批，也不承诺外部程序所有隐式磁盘依赖不可变化。
 
 发现和测试使用短租约，结束等待连接及进程关闭；目录缓存独立保留。普通GET、打开设置与页面聚焦不隐式启动程序。缓存工具含`serverId`、`serverRevision`、`remoteToolName`、模型别名`name`、描述、`definitionFingerprint`及可选状态、工具开关和精确只读授权提示；不支持的schema显示不可选。实际调用新进程重新发现并核对完整定义指纹，不能悄悄替换旧选择。
+
+## 目录恢复与准备
+
+本地与远端目录保存为SQLite可重建快照，绑定profile身份、Server配置、scope、凭据epoch和实际信任指纹；恢复重新校验官方SDK数据和可执行输入schema。普通列表、详情、工具及metadata GET只读取当前有效缓存，不进行发现。启动后只为已授权远端服务后台准备；本地程序按输入接受或明确发现动作启动，不能因打开页面而运行。
+
+相同目标与授权的准备共享一个任务，最多4路并发，每项30秒截止。调用者取消只停止自己的等待，服务关闭和授权失效取消所属任务并等待收束；无法中断的前置文件操作仍由服务持有至结算，随后不得启动连接。输入接受按工作区及scope收集成功候选和固定诊断；单个服务失败不会抹去其他目录。失效、禁用、改配置、换凭据或撤销会清除快照，迟到结果不能重新发布。
+
+远端安全View增加`catalogStatus:idle|loading|ready|error`和可选`catalogError:{code,message}`，与OAuth连接状态分开。运行私有事实保存同范围的`discoveryDiagnostics`，记录serverId/name、status、toolCount和固定安全错误；不保存原始SDK错误、网络正文或Token。
 
 ## 目录控制与JSON交换
 
@@ -51,7 +59,7 @@
 
 本地外部工具仅用于所属工作区；ask/auto对应受监管隔离，full-access使用单独授权。Plan与内部read-only模式仅允许当前用户明确授权的工具定义及精确参数；Server自报readOnlyHint不授予权限。
 
-接受Run时从已启用、已信任的缓存目录冻结最多512个候选和非秘密授权，不启动Server。显式选择最多16项，先进入模型可见集合；Agent可通过tool_search检索冻结候选，再用load_tools加载完整定义，最多64项外部工具同时可见。工具集revision及新定义先写JSONL，下一次真实Pi请求、预算、审计与执行读取同一revision；未加载的候选不能直接调用。新发现或配置变化不修改旧Run内容。
+接受Run前按当前工作区及审批scope等待有界目录准备；已启用且精确信任的本地Server可在此阶段启动发现，已恢复目录避免重复启动。冻结最多512个候选和非秘密授权；显式选择最多16项，先进入模型可见集合，`tool_search`命中自动暂存并在下一请求提供完整定义。全部可调用工具（含内置）最多64项，详细检索与加载规则见[运行时能力协议](capability-runtime.md)。工具集revision及新定义先写JSONL，下一次真实Pi请求、预算、审计与执行读取同一revision；未加载的候选不能直接调用。新发现或配置变化不修改旧Run内容。
 
 ## 调用终态与撤销
 

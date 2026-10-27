@@ -1,4 +1,4 @@
-import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 import { Type } from 'typebox';
 import {
   ConnectionControlSchema,
@@ -15,34 +15,12 @@ import {
   type ConnectionServiceId,
 } from '@my-pi-harness/protocol';
 import type { ConnectionService } from './service.js';
+import { requestOperation } from '../request-operation.js';
 const Params = Type.Object(
   { id: Type.String({ minLength: 1, maxLength: 160 }) },
   { additionalProperties: false },
 );
 const ok = Type.Object({ ok: Type.Literal(true) }, { additionalProperties: false });
-
-/** Network work follows the owning HTTP request; cleanup removes both close listeners. */
-async function requestOperation<T>(
-  request: FastifyRequest,
-  reply: FastifyReply,
-  operation: (signal: AbortSignal) => Promise<T>,
-): Promise<T> {
-  const controller = new AbortController();
-  const abort = (): void => controller.abort();
-  const close = (): void => {
-    if (!reply.raw.writableEnded) controller.abort();
-  };
-  request.raw.once('aborted', abort);
-  reply.raw.once('close', close);
-  const timer = setTimeout(abort, 30_000);
-  try {
-    return await operation(controller.signal);
-  } finally {
-    clearTimeout(timer);
-    request.raw.removeListener('aborted', abort);
-    reply.raw.removeListener('close', close);
-  }
-}
 
 /** All writes use the application CSRF/auth hooks; OAuth callback has one-use provider/state binding. */
 export function registerConnectionRoutes(
@@ -199,9 +177,9 @@ export function registerConnectionRoutes(
       const params = new URLSearchParams();
       for (const [name, value] of Object.entries(request.query))
         if (value !== undefined) params.set(name, value);
-      await requestOperation(request, reply, (signal) =>
-        connections.completeOAuth(request.params.serviceId, params, signal),
-      );
+      await requestOperation(request, reply, async (signal) => {
+        await connections.completeOAuth(request.params.serviceId, params, signal);
+      });
       return reply.type('text/plain; charset=utf-8').send('账户授权完成，请返回应用刷新连接状态。');
     },
   );

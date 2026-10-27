@@ -4,7 +4,7 @@ import { request as httpsRequest } from 'node:https';
 import { BlockList, isIP } from 'node:net';
 import { stringArgument } from './catalog.js';
 import { ExecutionError, checkCancelled } from './errors.js';
-import type { ExecutionContext, ExecutionResult } from './types.js';
+import type { WebFetchContext, ExecutionResult, WebFetchGatewayAccess } from './types.js';
 
 const deniedV4 = new BlockList();
 for (const [address, prefix] of [
@@ -78,6 +78,28 @@ export function parseWebUrl(input: string): URL {
   return url;
 }
 
+/** Only the host-declared daemon gateway can bypass ordinary public-network validation. */
+function gatewayTarget(input: string, access: WebFetchGatewayAccess | undefined): URL | undefined {
+  if (access === undefined) return undefined;
+  let url: URL;
+  try {
+    url = new URL(input);
+  } catch {
+    return undefined;
+  }
+  if (
+    url.origin !== access.origin ||
+    url.protocol !== 'http:' ||
+    url.hostname !== '127.0.0.1' ||
+    url.username !== '' ||
+    url.password !== '' ||
+    !/^\/api\/skill-gateway\/[a-z][a-z0-9-]*\/.+/.test(url.pathname)
+  )
+    return undefined;
+  url.hash = '';
+  return url;
+}
+
 /** Resolve through an owned resolver so abort cancels DNS; the returned address is used by the socket. */
 async function publicAddresses(
   url: URL,
@@ -123,14 +145,15 @@ function readResponse(
   response: IncomingMessage,
   accept: (value: WebResponse) => void,
   reject: (error: Error) => void,
+  maximumBytes: number,
 ): void {
   const fail = (error: Error): void => {
     response.destroy();
     reject(error);
   };
   const length = Number(response.headers['content-length'] ?? 0);
-  if (length > 500_000) {
-    fail(new ExecutionError('RESPONSE_LIMIT', 'Web response exceeds 500000 bytes'));
+  if (length > maximumBytes) {
+    fail(new ExecutionError('RESPONSE_LIMIT', `Web response exceeds ${maximumBytes} bytes`));
     return;
   }
   const encoding = response.headers['content-encoding'];
@@ -157,8 +180,8 @@ function readResponse(
   let size = 0;
   response.on('data', (chunk: Buffer) => {
     size += chunk.length;
-    if (size > 500_000)
-      fail(new ExecutionError('RESPONSE_LIMIT', 'Web response exceeds 500000 bytes'));
+    if (size > maximumBytes)
+      fail(new ExecutionError('RESPONSE_LIMIT', `Web response exceeds ${maximumBytes} bytes`));
     else chunks.push(chunk);
   });
   response.on('error', () => {
@@ -180,8 +203,11 @@ async function requestUrl(
   body: string | undefined,
   contentType: string,
   signal: AbortSignal,
+  gateway?: WebFetchGatewayAccess,
 ): Promise<WebResponse> {
-  const addresses = await publicAddresses(url, signal);
+  const addresses = gateway
+    ? [{ address: '127.0.0.1', family: 4 }]
+    : await publicAddresses(url, signal);
   const selected = addresses[0];
   if (!selected) throw new ExecutionError('DNS_FAILED', 'The web hostname has no public address');
   const request = url.protocol === 'https:' ? httpsRequest : httpRequest;
@@ -195,6 +221,7 @@ async function requestUrl(
         headers: {
           'accept-encoding': 'identity',
           'user-agent': 'MyPiHarness/0.1',
+          ...(gateway === undefined ? {} : { 'x-pi-harness-skill-gateway': gateway.token }),
           ...(body === undefined
             ? {}
             : { 'content-type': contentType, 'content-length': Buffer.byteLength(body) }),
@@ -205,7 +232,7 @@ async function requestUrl(
         },
       },
       (response) => {
-        readResponse(response, accept, reject);
+        readResponse(response, accept, reject, gateway === undefined ? 500_000 : 5 * 1024 * 1024);
       },
     );
     client.on('error', (cause) => {
@@ -225,13 +252,18 @@ async function requestUrl(
 /** No cookies, ambient proxy, auth headers, automatic retry, or unchecked redirects. */
 export async function webFetchTool(
   args: Record<string, unknown>,
-  context: ExecutionContext,
+  context: WebFetchContext,
 ): Promise<ExecutionResult> {
   const method = stringArgument(args, 'method', 'GET');
   if (context.readOnly && method !== 'GET')
     throw new ExecutionError('READ_ONLY', 'Network writes are disabled by the current policy');
   const signal = AbortSignal.any([context.signal, AbortSignal.timeout(15_000)]);
-  let url = parseWebUrl(stringArgument(args, 'url'));
+  const input = stringArgument(args, 'url');
+  const gatewayUrl = gatewayTarget(input, context.skillGateway);
+  const gateway = gatewayUrl === undefined ? undefined : context.skillGateway;
+  let url = gatewayUrl ?? parseWebUrl(input);
+  if (gateway !== undefined && (method !== 'GET' || args['body'] !== undefined))
+    throw new ExecutionError('READ_ONLY', 'Plugin gateways accept read-only GET requests only');
   for (let redirects = 0; redirects <= 4; redirects += 1) {
     checkCancelled(signal);
     const response = await requestUrl(
@@ -240,8 +272,11 @@ export async function webFetchTool(
       args['body'] === undefined ? undefined : stringArgument(args, 'body'),
       stringArgument(args, 'contentType', 'text/plain'),
       signal,
+      gateway,
     );
     if (response.status >= 300 && response.status < 400 && response.location !== undefined) {
+      if (gateway !== undefined)
+        throw new ExecutionError('UNSAFE_REDIRECT', 'Plugin gateway redirects are not followed');
       const target = parseWebUrl(new URL(response.location, url).href);
       if (url.protocol === 'https:' && target.protocol === 'http:')
         throw new ExecutionError('UNSAFE_REDIRECT', 'HTTPS redirects cannot downgrade to HTTP');

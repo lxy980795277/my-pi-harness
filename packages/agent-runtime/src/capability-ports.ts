@@ -3,13 +3,19 @@ import type {
   FrozenSkill,
   SkillSelection,
   SkillView,
+  ToolDiscoveryDiagnostic,
   WorkState,
 } from '@my-pi-harness/protocol';
 import type { ExecutionContent } from '@my-pi-harness/execution';
 import type { FrozenMcpTool } from './external-tools.js';
 
-/** Candidate discovery reads explicitly authorized cached metadata without starting a Server. */
+/** Host-authorized discovery prepares catalogs before freezing their non-secret metadata. */
 export interface ToolDiscoveryPort {
+  /** A bounded safe snapshot; reading diagnostics never starts a Server. */
+  diagnostics?(
+    workspaceId: string | null,
+    approvalMode: ApprovalMode,
+  ): readonly ToolDiscoveryDiagnostic[];
   freezeCandidates(
     workspaceId: string | null,
     approvalMode: ApprovalMode,

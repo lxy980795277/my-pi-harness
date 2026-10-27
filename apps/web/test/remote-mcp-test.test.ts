@@ -17,6 +17,7 @@ const server: RemoteMcpView = {
   ],
   oauth: false,
   oauthConnected: false,
+  catalogStatus: 'idle',
   enabled: true,
   trusted: true,
   createdAt: 1,
@@ -73,6 +74,6 @@ describe('remote MCP connection test selection', () => {
     }).toThrow('配置已修改');
     expect(() => {
       prepareRemoteMcpTest(createRemoteMcpDraft(server), { ...server, enabled: false });
-    }).toThrow('完成远端授权');
+    }).toThrow('信任此服务');
   });
 });

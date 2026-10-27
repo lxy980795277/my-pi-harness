@@ -1,4 +1,6 @@
-# M4.7 外部服务连接与受限REST网关
+# M4.7 外部服务连接设计（初版记录）
+
+2026-10-27用户确认完整重构插件授权与消费路径。本文的固定operation、Run grant和插件账户关联已被[当前重构设计](plugin-completion.md#插件完整流程重构2026-10-27实施中)取代；高级手动账户仍保留独立管理，当前接口见[插件协议](../../03_API/plugin-connections.md)。
 
 状态：工程实现与本机协议、账户连接界面验证已完成，具体证据及真实供应商缺口见[外部连接验证](connections-verify.md)。覆盖GitHub、Google（Drive/Docs/Sheets/Slides/Calendar）、Vercel、Notion和Supabase。属于M4.7；与应用GitHub登录、模型OAuth和MCP专用授权分别拥有记录。真实供应商验证需要用户注册的客户端及账号，不使用用户现有登录Token或测试Key。
 

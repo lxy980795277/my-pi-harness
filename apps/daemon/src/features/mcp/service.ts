@@ -1,5 +1,4 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { isAbsolute } from 'node:path';
 import {
   RuntimeError,
   type ExternalTools,
@@ -10,11 +9,11 @@ import {
 import {
   McpConnectionManager,
   compileMcpInputSchema,
-  type McpCatalog,
   type McpConnectionBinding,
   type McpLaunchInput,
 } from '@my-pi-harness/integrations';
 import type {
+  ToolDiscoveryDiagnostic,
   ApprovalMode,
   McpControlInput,
   McpMetadata,
@@ -43,37 +42,10 @@ import {
 } from '@my-pi-harness/storage';
 import type { McpManager } from './types.js';
 import { McpDirectoryPolicy, mcpMetadata } from './directory.js';
-
-const forbiddenEnvironment = new Set([
-  'PATH',
-  'HOME',
-  'TMPDIR',
-  'TMP',
-  'TEMP',
-  'NODE_OPTIONS',
-  'NODE_PATH',
-  'BASH_ENV',
-  'ENV',
-  'DYLD_INSERT_LIBRARIES',
-  'DYLD_LIBRARY_PATH',
-  'LD_PRELOAD',
-  'LD_LIBRARY_PATH',
-  'SHELL',
-  'ZDOTDIR',
-  'PYTHONPATH',
-  'PYTHONHOME',
-  'RUBYOPT',
-  'PERL5OPT',
-]);
-const MAX_ENVIRONMENT_VARIABLES = 64;
-
-interface CatalogEntry {
-  revision: number;
-  accessEpoch: number;
-  startupFingerprint: string;
-  value: McpCatalog;
-  discoveredAt: number;
-}
+import { LocalCatalogs, type LocalCatalogEntry as CatalogEntry } from './local-catalogs.js';
+import { closeMcpResources } from './lifecycle.js';
+import { validateLocalMcpInput } from './local-input.js';
+import { LocalPreflights } from './local-preflights.js';
 
 export interface McpServiceOptions {
   store: ProfileStore;
@@ -100,8 +72,9 @@ function credentialEpoch(server: StoredMcpServer): number {
 export class McpService implements ExternalTools {
   private readonly manager: McpManager;
   private readonly directory: McpDirectoryPolicy;
-  private readonly catalogs = new Map<string, CatalogEntry>();
-  private readonly diagnostics = new Map<string, string>();
+  private readonly catalogs: LocalCatalogs;
+  private readonly preflights = new LocalPreflights();
+  private readonly connectionDiagnostics = new Map<string, string>();
   private readonly mutations = new Set<string>();
   private readonly pendingMutations = new Set<Promise<unknown>>();
   private closed = false;
@@ -109,6 +82,18 @@ export class McpService implements ExternalTools {
 
   public constructor(private readonly options: McpServiceOptions) {
     this.manager = options.manager ?? new McpConnectionManager();
+    this.catalogs = new LocalCatalogs(options.store, {
+      require: (id) => this.require(id),
+      identity: () => this.identity(),
+      connection: (server, scope, signal) => this.inspectConnection(server, scope, false, signal),
+      validate: (binding) => this.validateConnection(binding),
+      discover: async (id, input, signal) => {
+        const server = this.require(id);
+        this.expected(server, input.expectedRevision, input.expectedAccessEpoch);
+        const binding = await this.inspectConnection(server, input.scope, true, signal);
+        return await this.discoverPrepared(server, input.scope, binding, signal);
+      },
+    });
     this.directory = new McpDirectoryPolicy(options.store, {
       server: (id) => this.require(id),
       identity: () => this.identity(),
@@ -157,35 +142,6 @@ export class McpService implements ExternalTools {
     this.pendingMutations.add(task);
     return task;
   }
-  private validateInput(input: McpServerInput): McpServerInput {
-    if (!isAbsolute(input.command) || input.command.includes('\0'))
-      fail('MCP_COMMAND_INVALID', '请选择可检查的绝对程序路径。');
-    const name = input.name.trim();
-    if (!name) fail('MCP_NAME_INVALID', 'MCP服务器名称不能为空。');
-    const names = new Set(Object.keys(input.publicEnvironment));
-    if (names.size + input.secretSlots.length > MAX_ENVIRONMENT_VARIABLES)
-      fail('MCP_ENVIRONMENT_INVALID', '环境变量数量超过限制。');
-    const slots = new Set<string>();
-    for (const slot of input.secretSlots) {
-      if (slots.has(slot.slotId) || names.has(slot.environmentName))
-        fail('MCP_ENVIRONMENT_INVALID', '秘密槽位或环境变量名称重复。');
-      slots.add(slot.slotId);
-      names.add(slot.environmentName);
-    }
-    for (const key of names) {
-      if (
-        !/^[A-Za-z_][A-Za-z0-9_]*$/.test(key) ||
-        forbiddenEnvironment.has(key.toUpperCase()) ||
-        key.startsWith('DYLD_') ||
-        key.startsWith('LD_')
-      )
-        fail('MCP_ENVIRONMENT_INVALID', '配置不能覆盖宿主的启动控制环境变量。');
-    }
-    for (const value of [...input.args, ...Object.values(input.publicEnvironment)]) {
-      if (value.includes('\0')) fail('MCP_ENVIRONMENT_INVALID', '配置不能包含空字符。');
-    }
-    return { ...input, name };
-  }
   private view(server: StoredMcpServer): McpServerView {
     const owner = this.options.store.auth.profileOwner();
     const grants = this.options.store.mcp.grants(server.id);
@@ -214,7 +170,7 @@ export class McpService implements ExternalTools {
         )
         .map((grant) => grant.scope),
       connectionState: this.manager.hasActiveLeases(server.id) ? 'connected' : 'disconnected',
-      diagnostic: this.diagnostics.get(server.id) ?? null,
+      diagnostic: this.connectionDiagnostics.get(server.id) ?? null,
       createdAt: server.createdAt,
       updatedAt: server.updatedAt,
     };
@@ -229,7 +185,7 @@ export class McpService implements ExternalTools {
 
   public async prepareInput(input: McpServerInput): Promise<McpServerInput> {
     this.identity();
-    const configuration = this.validateInput(input);
+    const configuration = validateLocalMcpInput(input);
     await this.options.resolveWorkspace(configuration.workspaceId);
     this.assertOpen();
     return configuration;
@@ -237,7 +193,7 @@ export class McpService implements ExternalTools {
   public async create(input: McpServerInput): Promise<McpServerView> {
     this.assertOpen();
     this.identity();
-    const configuration = this.validateInput(input);
+    const configuration = validateLocalMcpInput(input);
     await this.options.resolveWorkspace(configuration.workspaceId);
     this.assertOpen();
     const at = Date.now();
@@ -266,7 +222,7 @@ export class McpService implements ExternalTools {
       const server = this.require(id);
       this.expected(server, input.expectedRevision);
       const { expectedRevision: _expected, ...configuration } = input;
-      const next = this.validateInput(configuration);
+      const next = validateLocalMcpInput(configuration);
       await this.options.resolveWorkspace(next.workspaceId);
       this.expected(this.require(id), server.revision, server.accessEpoch);
       const bindings = next.secretSlots.map((slot) => {
@@ -394,9 +350,9 @@ export class McpService implements ExternalTools {
     return this.view(revoked);
   }
   private clearCatalog(id: string): void {
-    this.catalogs.delete(`${id}:sandboxed`);
-    this.catalogs.delete(`${id}:full-access`);
-    this.diagnostics.delete(id);
+    this.catalogs.delete(`${id}:sandboxed`, id, 'sandboxed');
+    this.catalogs.delete(`${id}:full-access`, id, 'full-access');
+    this.connectionDiagnostics.delete(id);
   }
 
   private async launch(
@@ -507,7 +463,10 @@ export class McpService implements ExternalTools {
     this.options.store.mcp.revokeIdentity(identity.ownerId);
     this.catalogs.clear();
     await Promise.all(
-      this.options.store.mcp.list().map((server) => this.manager.invalidateServer(server.id)),
+      this.options.store.mcp.list().map((server) => {
+        this.clearCatalog(server.id);
+        return this.manager.invalidateServer(server.id);
+      }),
     );
   }
 
@@ -515,7 +474,21 @@ export class McpService implements ExternalTools {
     server: StoredMcpServer,
     scope: McpScope,
     readSecrets = true,
+    signal?: AbortSignal,
   ): Promise<McpConnectionBinding> {
+    return await this.preflights.prepare(
+      (owned) => this.inspectConnection(server, scope, readSecrets, owned),
+      signal,
+    );
+  }
+  private async inspectConnection(
+    server: StoredMcpServer,
+    scope: McpScope,
+    readSecrets: boolean,
+    owned: AbortSignal,
+  ): Promise<McpConnectionBinding> {
+    owned.throwIfAborted();
+    this.assertOpen();
     const identity = this.identity();
     const grant = this.options.store.mcp.grant(server.id, scope);
     if (
@@ -528,7 +501,9 @@ export class McpService implements ExternalTools {
     )
       fail('MCP_DISABLED', '请先确认此隔离范围的启动授权。');
     const launch = await this.launch(server, scope, readSecrets);
+    owned.throwIfAborted();
     const preview = await this.previewLaunch(launch);
+    owned.throwIfAborted();
     this.expected(this.require(server.id), server.revision, server.accessEpoch);
     if (
       grant.workspaceRoot !== launch.workspaceRoot ||
@@ -569,24 +544,38 @@ export class McpService implements ExternalTools {
   ): Promise<McpToolCatalog> {
     const server = this.require(id);
     this.expected(server, input.expectedRevision, input.expectedAccessEpoch);
-    const binding = await this.connection(server, input.scope);
+    const binding = await this.connection(server, input.scope, true, signal);
+    return await this.discoverPrepared(server, input.scope, binding, signal);
+  }
+  private async discoverPrepared(
+    server: StoredMcpServer,
+    scope: McpScope,
+    binding: McpConnectionBinding,
+    signal: AbortSignal,
+  ): Promise<McpToolCatalog> {
+    signal.throwIfAborted();
     this.validateConnection(binding);
     try {
       const value = await this.manager.discover(binding, { signal });
+      signal.throwIfAborted();
       this.validateConnection(binding);
       const entry = {
+        authority: this.catalogs.authority(server, scope),
         revision: server.revision,
         accessEpoch: server.accessEpoch,
         startupFingerprint: binding.startupFingerprint,
         value,
         discoveredAt: Date.now(),
       };
-      this.catalogs.set(`${id}:${input.scope}`, entry);
-      this.diagnostics.delete(id);
-      return this.catalogView(server, input.scope, entry);
+      this.catalogs.publish(`${server.id}:${scope}`, server.id, scope, entry);
+      this.connectionDiagnostics.delete(server.id);
+      return this.catalogView(server, scope, entry);
     } catch (cause) {
       if (cause instanceof RuntimeError || cause instanceof StorageError) throw cause;
-      this.diagnostics.set(id, 'MCP连接或工具发现失败，请检查启动配置与隔离范围。');
+      this.connectionDiagnostics.set(
+        server.id,
+        'MCP连接或工具发现失败，请检查启动配置与隔离范围。',
+      );
       fail('MCP_DISCOVERY_FAILED', 'MCP连接或工具发现失败，请检查启动配置与隔离范围。');
     }
   }
@@ -629,6 +618,7 @@ export class McpService implements ExternalTools {
     const entry = this.catalogs.get(`${id}:${scope}`);
     if (
       entry === undefined ||
+      entry.authority !== this.catalogs.authority(server, scope) ||
       !server.enabled ||
       entry.revision !== server.revision ||
       entry.accessEpoch !== server.accessEpoch
@@ -662,7 +652,7 @@ export class McpService implements ExternalTools {
         fail('MCP_SELECTION_FORBIDDEN', '外部工具不属于当前工作区。');
       let binding = connections.get(server.id);
       if (binding === undefined) {
-        binding = await this.connection(server, scope, false);
+        binding = await this.connection(server, scope, false, signal);
         connections.set(server.id, binding);
       }
       this.validateConnection(binding);
@@ -700,6 +690,7 @@ export class McpService implements ExternalTools {
       signal.throwIfAborted();
       output.push({
         selection: { ...selection },
+        displayName: `${server.name} / ${tool.remoteToolName}`,
         definition: {
           name: modelName(server.id, tool.remoteToolName),
           description: tool.description,
@@ -723,7 +714,13 @@ export class McpService implements ExternalTools {
     await this.validateBindings(output, signal);
     return output;
   }
-  /** Candidate freezing only reads the already discovered, trusted directory. */
+  public diagnostics(
+    workspaceId: string | null,
+    approvalMode: ApprovalMode,
+  ): readonly ToolDiscoveryDiagnostic[] {
+    return this.catalogs.diagnostics(this.list(), workspaceId, approvalMode);
+  }
+  /** Preparation joins owned discovery before freezing the current authorized directory. */
   public async freezeCandidates(
     workspaceId: string | null,
     approvalMode: ApprovalMode,
@@ -732,6 +729,16 @@ export class McpService implements ExternalTools {
   ): Promise<readonly FrozenMcpTool[]> {
     if (workspaceId === null) return [];
     const scope: McpScope = approvalMode === 'full-access' ? 'full-access' : 'sandboxed';
+    await Promise.all(
+      this.list()
+        .filter(
+          (server) =>
+            server.workspaceId === workspaceId &&
+            server.enabled &&
+            server.trustedScopes.includes(scope),
+        )
+        .map((server) => this.catalogs.prepareServer(server.id, scope, signal)),
+    );
     const result: FrozenMcpTool[] = [];
     for (const server of this.list()) {
       if (
@@ -763,16 +770,25 @@ export class McpService implements ExternalTools {
         }));
       if (result.length + selections.length > 512)
         fail('MCP_CATALOG_LIMIT', '已启用工具目录超过512项，请停用不需要的工具。');
-      for (let offset = 0; offset < selections.length; offset += 16)
-        result.push(
-          ...(await this.freezeSelections(
-            workspaceId,
-            approvalMode,
-            workMode,
-            selections.slice(offset, offset + 16),
-            signal,
-          )),
-        );
+      const frozen: FrozenMcpTool[] = [];
+      try {
+        for (let offset = 0; offset < selections.length; offset += 16)
+          frozen.push(
+            ...(await this.freezeSelections(
+              workspaceId,
+              approvalMode,
+              workMode,
+              selections.slice(offset, offset + 16),
+              signal,
+            )),
+          );
+      } catch (error: unknown) {
+        signal.throwIfAborted();
+        this.assertOpen();
+        this.catalogs.fail(`${server.id}:${scope}`, error);
+        continue;
+      }
+      result.push(...frozen);
     }
     return result;
   }
@@ -850,19 +866,20 @@ export class McpService implements ExternalTools {
       ]);
       if (checked.has(key)) continue;
       checked.add(key);
-      await this.boundConnection(tool, false);
+      await this.boundConnection(tool, false, signal);
     }
     signal.throwIfAborted();
   }
   private async boundConnection(
     frozen: FrozenMcpTool,
     readSecrets = true,
+    signal?: AbortSignal,
   ): Promise<McpConnectionBinding> {
     const { selection, authorization } = frozen;
     this.assertBindingsCurrent([frozen]);
     const server = this.require(selection.serverId);
     this.expected(server, selection.serverRevision, authorization.accessEpoch);
-    const binding = await this.connection(server, authorization.scope, readSecrets);
+    const binding = await this.connection(server, authorization.scope, readSecrets, signal);
     this.validateConnection(binding);
     if (
       binding.ownerId !== authorization.ownerId ||
@@ -879,7 +896,7 @@ export class McpService implements ExternalTools {
   }
   public async call(input: ExternalToolCall): Promise<ExternalToolOutcome> {
     const frozen = input.tool;
-    const binding = await this.boundConnection(frozen);
+    const binding = await this.boundConnection(frozen, true, input.signal);
     this.validateConnection(binding);
     const lease = await this.manager.acquire(binding, { signal: input.signal });
     const authority = new AbortController();
@@ -923,7 +940,7 @@ export class McpService implements ExternalTools {
       try {
         await lease.release();
       } catch {
-        this.diagnostics.set(
+        this.connectionDiagnostics.set(
           binding.serverId,
           '调用结果已记录，但MCP进程清理失败；请检查本机服务。',
         );
@@ -955,17 +972,17 @@ export class McpService implements ExternalTools {
   /** Block new management and runtime operations before closing SDK-owned resources. */
   public stopAccepting(): void {
     this.closed = true;
+    this.preflights.stop();
+    this.catalogs.stop();
   }
   public close(): Promise<void> {
     this.stopAccepting();
-    this.closing ??= (async () => {
-      const settled = await Promise.allSettled([this.manager.close(), ...this.pendingMutations]);
-      const failures = settled
-        .filter((result): result is PromiseRejectedResult => result.status === 'rejected')
-        .map((result) => result.reason as unknown)
-        .filter((error) => !(error instanceof RuntimeError && error.code === 'MCP_CLOSED'));
-      if (failures.length > 0) throw new AggregateError(failures, 'MCP shutdown failed');
-    })();
+    this.closing ??= closeMcpResources([
+      this.manager.close(),
+      this.catalogs.close(),
+      this.preflights.close(),
+      ...this.pendingMutations,
+    ]);
     return this.closing;
   }
 }

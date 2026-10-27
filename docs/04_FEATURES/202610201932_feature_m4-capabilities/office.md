@@ -19,6 +19,8 @@
 
 ## 受监管执行与依赖
 
+2026-10-26[插件工作流补齐](plugin-completion.md)增加DOCX字体、命名样式、富文本、段落格式、页面布局、页眉页脚和受控图片；尺寸使用point，图片只在新建时从工作区复制后内嵌，保留已有source中追加图片的拒绝。精确tracked_replace只处理一个纯文本run，生成真实w:ins/w:del；复杂跨run替换拒绝。PDF新增Platypus的flow自动分页、跨页表格/重复表头及布局控制，原pages固定页模式保留；表单增加受支持的choice导出值/显示值和多选校验。Documents/PDF技能提供独立编写的创建、编辑和验收参考，Documents显式声明渲染与页图工具。新增能力实际证据另记，既有视觉验收缺口不自动消失。
+
 Python使用维护中的公开库python-docx、pypdf、reportlab、openpyxl、python-pptx、pypdfium2、lxml及Pillow；固定开发验证版本记录在 `packages/execution/resources/office/requirements.txt`。宿主显式配置 `pythonPath` 时使用该绝对路径；默认只查已安装python3。缺程序或缺包返回 `OFFICE_DEPENDENCY_MISSING`，不隐式联网下载。安装指令只供用户明确准备环境。LibreOffice为可选渲染依赖；请求必需视觉检查但缺该依赖时明确失败，不用结构检查代替。
 
 子进程使用固定argv、白名单环境、独立临时HOME、sandbox模式无网络、固定时间/输出/输入界限和所属进程组回收；ask/auto使用现有macOS Seatbelt，隔离缺失拒绝。full-access仍要求工作区路径校验和新文件发布，不授予模型任意Python。输入单文件32MiB，ZIP解压64MiB/5000部件、单XML8MiB、禁止实体/DTD、拒绝宏/活动内容；最多100页/100幻灯片/20工作表/20000单元格。图像一次最多4页，单页最大2000像素。

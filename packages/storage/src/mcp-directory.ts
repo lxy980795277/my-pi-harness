@@ -25,6 +25,18 @@ const ReadOnlyGrantSchema = Type.Object(
 );
 export type McpReadOnlyGrant = Static<typeof ReadOnlyGrantSchema>;
 const Row = Type.Object({ data: Type.String() });
+const CatalogRow = Type.Object({
+  authority: Type.String({ pattern: '^[a-f0-9]{64}$' }),
+  discovered_at: Type.Integer({ minimum: 0 }),
+  data: Type.String({ maxLength: 8 * 1024 * 1024 }),
+});
+
+/** The owning host validates the opaque catalog JSON using the official MCP schemas. */
+export interface StoredMcpCatalog {
+  authority: string;
+  discoveredAt: number;
+  data: string;
+}
 
 /** Per-tool controls and exact argument authorizations never contain credentials. */
 export class McpDirectoryRepository {
@@ -90,5 +102,41 @@ export class McpDirectoryRepository {
     this.assertOpen();
     this.sqlite.prepare('DELETE FROM mcp_readonly_grants WHERE server_id=?').run(serverId);
     this.sqlite.prepare('DELETE FROM mcp_tool_controls WHERE server_id=?').run(serverId);
+    this.removeCatalog(serverId);
+  }
+  public catalog(serverId: string, scope: string): StoredMcpCatalog | undefined {
+    this.assertOpen();
+    const row = this.sqlite
+      .prepare(
+        'SELECT authority,discovered_at,data FROM mcp_catalog_snapshots WHERE server_id=? AND scope=?',
+      )
+      .get(serverId, scope);
+    if (row === undefined) return undefined;
+    const value = checked(CatalogRow, row);
+    return { authority: value.authority, discoveredAt: value.discovered_at, data: value.data };
+  }
+  public saveCatalog(serverId: string, scope: string, input: StoredMcpCatalog): void {
+    this.assertOpen();
+    const value = checked(CatalogRow, {
+      authority: input.authority,
+      discovered_at: input.discoveredAt,
+      data: input.data,
+    });
+    if (Buffer.byteLength(value.data) > 8 * 1024 * 1024)
+      throw new StorageError('INVALID_RECORD', 'MCP catalog snapshot exceeds its limit');
+    this.sqlite
+      .prepare(
+        'INSERT INTO mcp_catalog_snapshots(server_id,scope,authority,discovered_at,data) VALUES(?,?,?,?,?) ON CONFLICT(server_id,scope) DO UPDATE SET authority=excluded.authority,discovered_at=excluded.discovered_at,data=excluded.data',
+      )
+      .run(serverId, scope, value.authority, value.discovered_at, value.data);
+  }
+  public removeCatalog(serverId: string, scope?: string): void {
+    this.assertOpen();
+    if (scope === undefined)
+      this.sqlite.prepare('DELETE FROM mcp_catalog_snapshots WHERE server_id=?').run(serverId);
+    else
+      this.sqlite
+        .prepare('DELETE FROM mcp_catalog_snapshots WHERE server_id=? AND scope=?')
+        .run(serverId, scope);
   }
 }

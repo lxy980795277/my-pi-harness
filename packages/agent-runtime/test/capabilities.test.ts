@@ -1,4 +1,6 @@
 import { text as streamText } from 'node:stream/consumers';
+import { writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { fauxAssistantMessage, type TranscriptContext } from '@earendil-works/pi-ai';
 import type { FrozenSkill } from '@my-pi-harness/protocol';
 import type { SessionBatch } from '@my-pi-harness/storage';
@@ -117,6 +119,121 @@ function names(context: TranscriptContext | undefined): string[] {
 }
 
 describe('progressive Run capabilities through real Pi requests and SQLite/JSONL', () => {
+  it.each([true, false])(
+    'loads only declared local Office candidates alongside dynamic Skill instructions, workspace=%s',
+    async (withWorkspace) => {
+      const s = skills();
+      const c = catalog();
+      s.frozen.allowedTools = ['office_inspect', 'mcp_echo'];
+      const f = await fixture(withWorkspace, {
+        skills: s.port,
+        discovery: c.discovery,
+        externalTools: c.external,
+      });
+      let afterLoad: TranscriptContext | undefined;
+      try {
+        await writeFile(
+          join(f.root, 'input.txt'),
+          'This file deliberately has an unsupported Office extension.',
+        );
+        f.faux.setResponses([
+          call('load_skill', s.frozen.selection),
+          (context) => {
+            afterLoad = context;
+            return withWorkspace
+              ? call('office_inspect', { source: 'input.txt' })
+              : fauxAssistantMessage('No filesystem capability');
+          },
+          fauxAssistantMessage('Reported the inspection limit'),
+        ]);
+        await f.runtime.send(f.session.id, {
+          text: 'Use local Office instructions',
+          mode: 'send',
+          requestId: `dynamic-office-${String(withWorkspace)}`,
+        });
+        await idle(f);
+        expect(names(afterLoad).includes('office_inspect')).toBe(withWorkspace);
+        expect(names(afterLoad)).not.toContain('mcp_echo');
+        if (withWorkspace) {
+          const inspection = f.runtime
+            .getSnapshot(f.session.id)
+            .tools.find((tool) => tool.name === 'office_inspect');
+          expect(inspection?.binding).toMatchObject({
+            kind: 'accepted',
+            source: { kind: 'workspace' },
+          });
+          expect(inspection?.result).toContain('Use a DOCX, PDF, XLSX or PPTX file');
+        }
+        expect(c.invoke).not.toHaveBeenCalled();
+        expect(f.errors).toEqual([]);
+      } finally {
+        await f.close();
+      }
+    },
+  );
+  it.each([true, false])(
+    'lists enabled Skill summaries before selection and loads their frozen instructions on the next actual request, context=%s',
+    async (withContext) => {
+      const s = skills();
+      const view = {
+        id: s.frozen.selection.id,
+        name: s.frozen.name,
+        description: s.frozen.description,
+        contentHash: s.frozen.selection.contentHash,
+        scope: s.frozen.scope,
+        pluginId: null,
+        workspaceId: null,
+        enabled: true,
+        shadowed: false,
+        managed: true,
+        resourceCount: 0,
+        source: s.frozen.source,
+      };
+      s.port.list = () =>
+        Promise.resolve([
+          view,
+          { ...view, id: 'skill:disabled', name: 'HIDDEN_DISABLED_SKILL', enabled: false },
+          { ...view, id: 'skill:shadowed', name: 'HIDDEN_SHADOWED_SKILL', shadowed: true },
+        ]);
+      const f = await fixture(false, { skills: s.port, context: withContext });
+      const contexts: TranscriptContext[] = [];
+      try {
+        f.faux.setResponses([
+          (context) => {
+            contexts.push(context);
+            return call('load_skill', s.frozen.selection);
+          },
+          (context) => {
+            contexts.push(context);
+            return fauxAssistantMessage('Instructions are now active');
+          },
+        ]);
+        await f.runtime.send(f.session.id, {
+          text: 'Use the test instructions',
+          mode: 'send',
+          requestId: `skill-discovery-${String(withContext)}`,
+        });
+        await idle(f);
+        const first = JSON.stringify(contexts[0]);
+        expect(first).toContain('availableSkills');
+        expect(first).toContain(s.frozen.selection.id);
+        expect(first).toContain(s.frozen.selection.contentHash);
+        expect(first).not.toContain('HIDDEN_DISABLED_SKILL');
+        expect(first).not.toContain('HIDDEN_SHADOWED_SKILL');
+        expect(first).not.toContain('FROZEN_SKILL_BODY');
+        expect(JSON.stringify(contexts[1])).toContain('FROZEN_SKILL_BODY');
+        const logged = await records(f);
+        expect(logged.find(({ event }) => event.type === 'run.accepted')?.privateData).toContain(
+          'availableSkills',
+        );
+        expect(logged.filter(({ event }) => event.type === 'run.tools_loaded')).toHaveLength(1);
+        expect(f.errors).toEqual([]);
+      } finally {
+        await f.close();
+      }
+    },
+  );
+
   it('rejects skipped revisions, replaced schemas, native sources and removed initial tools before journal writes', async () => {
     const c = catalog();
     const f = await fixture(false, { externalTools: c.external, discovery: c.discovery });
@@ -154,6 +271,21 @@ describe('progressive Run capabilities through real Pi requests and SQLite/JSONL
         { revision: 3, tools: initial },
         { revision: 2, tools: [] },
         { revision: 2, tools: [{ ...first, source: { kind: 'workspace' } }, ...initial.slice(1)] },
+        {
+          revision: 2,
+          tools: [
+            {
+              ...first,
+              source: {
+                kind: 'connection',
+                connectionId: 'account',
+                grantId: 'grant',
+                operation: 'read',
+              },
+            },
+            ...initial.slice(1),
+          ],
+        },
         {
           revision: 2,
           tools: [
@@ -216,8 +348,10 @@ describe('progressive Run capabilities through real Pi requests and SQLite/JSONL
       await f.close();
     }
   });
-  it('searches metadata, loads only for the next request and keeps prior tool fingerprints stable', async () => {
+  it('searches and automatically loads for the next request while keeping prior tool fingerprints stable', async () => {
     const c = catalog();
+    const diagnostics = vi.fn<NonNullable<ToolDiscoveryPort['diagnostics']>>(() => []);
+    c.discovery.diagnostics = diagnostics;
     const f = await fixture(false, { externalTools: c.external, discovery: c.discovery });
     const contexts: TranscriptContext[] = [];
     try {
@@ -226,10 +360,6 @@ describe('progressive Run capabilities through real Pi requests and SQLite/JSONL
         (ctx) => {
           contexts.push(ctx);
           return call('tool_search', { query: 'evidence' });
-        },
-        (ctx) => {
-          contexts.push(ctx);
-          return call('load_tools', { names: ['mcp_echo'] });
         },
         (ctx) => {
           contexts.push(ctx);
@@ -246,11 +376,11 @@ describe('progressive Run capabilities through real Pi requests and SQLite/JSONL
         requestId: 'load',
       });
       await idle(f);
+      expect(diagnostics).toHaveBeenCalledWith(null, 'full-access');
       expect(c.invoke).toHaveBeenCalledTimes(1);
-      expect(contexts).toHaveLength(4);
+      expect(contexts).toHaveLength(3);
       expect(names(contexts[0])).not.toContain('mcp_echo');
-      expect(names(contexts[1])).not.toContain('mcp_echo');
-      expect(names(contexts[2])).toContain('mcp_echo');
+      expect(names(contexts[1])).toContain('mcp_echo');
       const logged = await records(f);
       const loaded = logged.find(({ event }) => event.type === 'run.tools_loaded');
       expect(loaded?.event.data).toMatchObject({ revision: 2 });
@@ -271,9 +401,8 @@ describe('progressive Run capabilities through real Pi requests and SQLite/JSONL
         logged
           .filter(({ event }) => event.type === 'context.prepared')
           .map(({ event }) => event.data['capabilityRevision']),
-      ).toEqual([1, 1, 2, 2]);
+      ).toEqual([1, 2, 2]);
       expect(f.runtime.getSnapshot(f.session.id).tools.map((tool) => tool.status)).toEqual([
-        'completed',
         'completed',
         'completed',
       ]);
@@ -283,47 +412,50 @@ describe('progressive Run capabilities through real Pi requests and SQLite/JSONL
     }
   });
 
-  it('cannot call a newly staged tool in the assistant that requested the load', async () => {
-    const c = catalog();
-    const f = await fixture(false, { externalTools: c.external, discovery: c.discovery });
-    try {
-      await f.runtime.updateSession(f.session.id, { approvalMode: 'full-access' });
-      f.faux.setResponses([
-        fauxAssistantMessage(
-          [
-            {
-              type: 'toolCall',
-              id: 'load',
-              name: 'load_tools',
-              arguments: { names: ['mcp_echo'] },
-            },
-            {
-              type: 'toolCall',
-              id: 'early',
-              name: 'mcp_echo',
-              arguments: { text: 'not offered yet' },
-            },
-          ],
-          { stopReason: 'toolUse' },
-        ),
-        fauxAssistantMessage('Wait for the new declaration'),
-      ]);
-      await f.runtime.send(f.session.id, {
-        text: 'Stage a tool',
-        mode: 'send',
-        requestId: 'early',
-      });
-      await idle(f);
-      expect(c.invoke).not.toHaveBeenCalled();
-      expect(
-        f.runtime.getSnapshot(f.session.id).tools.find((tool) => tool.name === 'mcp_echo')?.binding
-          .kind,
-      ).toBe('rejected');
-      expect(f.errors).toEqual([]);
-    } finally {
-      await f.close();
-    }
-  });
+  it.each(['tool_search', 'load_tools'])(
+    'cannot call a newly staged tool in the assistant that requested %s',
+    async (loadTool) => {
+      const c = catalog();
+      const f = await fixture(false, { externalTools: c.external, discovery: c.discovery });
+      try {
+        await f.runtime.updateSession(f.session.id, { approvalMode: 'full-access' });
+        f.faux.setResponses([
+          fauxAssistantMessage(
+            [
+              {
+                type: 'toolCall',
+                id: 'load',
+                name: loadTool,
+                arguments: loadTool === 'tool_search' ? { query: 'echo' } : { names: ['mcp_echo'] },
+              },
+              {
+                type: 'toolCall',
+                id: 'early',
+                name: 'mcp_echo',
+                arguments: { text: 'not offered yet' },
+              },
+            ],
+            { stopReason: 'toolUse' },
+          ),
+          fauxAssistantMessage('Wait for the new declaration'),
+        ]);
+        await f.runtime.send(f.session.id, {
+          text: 'Stage a tool',
+          mode: 'send',
+          requestId: 'early',
+        });
+        await idle(f);
+        expect(c.invoke).not.toHaveBeenCalled();
+        expect(
+          f.runtime.getSnapshot(f.session.id).tools.find((tool) => tool.name === 'mcp_echo')
+            ?.binding.kind,
+        ).toBe('rejected');
+        expect(f.errors).toEqual([]);
+      } finally {
+        await f.close();
+      }
+    },
+  );
 
   it('stops before the next model request if its tool visibility audit cannot be committed', async () => {
     const c = catalog();
@@ -524,7 +656,7 @@ describe('progressive Run capabilities through real Pi requests and SQLite/JSONL
           );
         return fauxAssistantMessage('Observed frozen instructions after compaction');
       };
-      f.faux.setResponses(Array.from({ length: 40 }, () => response));
+      f.faux.setResponses(Array.from({ length: 80 }, () => response));
       await f.runtime.send(f.session.id, {
         text: 'Read and retain source evidence',
         mode: 'send',
@@ -532,9 +664,25 @@ describe('progressive Run capabilities through real Pi requests and SQLite/JSONL
         skills: [s.frozen.selection],
       });
       await idle(f);
+      expect(f.errors).toEqual([]);
       expect(requests).toBe(17);
       expect(compactions).toBeGreaterThan(0);
       expect(f.work.snapshot(f.session.id).state.compaction).not.toBeNull();
+      let continuation: TranscriptContext | undefined;
+      f.faux.setResponses([
+        (context) => {
+          continuation = context;
+          return fauxAssistantMessage('Continued the compacted task');
+        },
+      ]);
+      await f.runtime.send(f.session.id, {
+        text: 'Continue after compaction',
+        mode: 'send',
+        requestId: 'skill-compaction-next-run',
+      });
+      await idle(f);
+      expect(JSON.stringify(continuation)).toContain('FROZEN_SKILL_BODY');
+      expect(JSON.stringify(continuation)).not.toContain('MUTATED_DURING_RUN');
       expect(f.errors).toEqual([]);
     } finally {
       await f.close();

@@ -4,6 +4,8 @@ packages:
 
 catalogMode: strict
 catalog:
+  '@huggingface/transformers': 4.3.1
+  minisearch: 7.2.0
   '@modelcontextprotocol/client': 2.3.1
   '@modelcontextprotocol/server': 2.3.1
   '@modelcontextprotocol/node': 2.1.1
@@ -75,6 +77,7 @@ overrides:
   '@earendil-works/pi-agent-core>@earendil-works/pi-ai': 1.1.0
 
 onlyBuiltDependencies:
+  - onnxruntime-node
   - better-sqlite3
   - electron
   - esbuild

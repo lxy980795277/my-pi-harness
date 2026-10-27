@@ -1,5 +1,7 @@
 # M4实施任务与模块归属
 
+2026-10-27已完成[插件授权与消费流程重构](plugin-completion.md)的实现及macOS定向验证，取代此前默认账户桥接；见[本轮结果](plugin-completion-verify.md#插件完整流程重构2026-10-27)。真实账号、DOCX页面视觉及平台验收继续保留，M5尚未开发。
+
 M4保持M4.1–M4.9范围。M4.1历史证据见[本地验证](verify.md)；2026-10-22已完成其余模块工程实现和macOS本机自动化联调，结果见[本轮整体验证](m4-completion-verify.md)。下列勾选表示实现及对应本机检查已完成，必要的外部环境与平台验收单列，不能据此宣称整个M4已验收。功能约束由[总Spec](spec.md)拥有，历史调研见[baseline](baseline.md)。
 
 ## 顺序与交付规则
@@ -13,7 +15,7 @@ M4保持M4.1–M4.9范围。M4.1历史证据见[本地验证](verify.md)；2026-
 | 所有者                   | M4职责                                                                |
 | ------------------------ | --------------------------------------------------------------------- |
 | `packages/protocol`      | 公开配置、状态、选择、调用来源与事件schema；不暴露秘密或宿主对象      |
-| `packages/storage`       | SQLite配置、信任、安装及连接记录；系统凭据引用；JSONL事实与投影       |
+| `packages/storage`       | SQLite配置、信任、安装及连接记录；插件凭据文件、系统凭据引用与JSONL   |
 | `packages/execution`     | 持久进程/管道、受控文件与网络、隔离和完整回收                         |
 | `packages/integrations`  | MCP SDK适配、Skills目录、插件装配与外部连接能力，内部按领域组织       |
 | `packages/agent-runtime` | Run工具集、模型可见定义、策略与审批、Skills激活、预算/压缩和会话事实  |

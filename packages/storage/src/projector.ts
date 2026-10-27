@@ -14,7 +14,7 @@ import {
 import { StorageError } from './errors.js';
 import { ToolProjection } from './tools.js';
 import { WorkRepository } from './work.js';
-import { projectCapabilityLoad, projectServiceGrant } from './capabilities.js';
+import { projectCapabilityLoad } from './capabilities.js';
 import * as schema from './schema.js';
 import {
   BranchSelectionSchema,
@@ -280,9 +280,6 @@ export class ProjectionWriter {
    */
   public apply(event: HarnessEvent, privateData?: string): void {
     switch (event.type) {
-      case 'run.service_access_granted':
-        projectServiceGrant(this.db, event, privateData);
-        break;
       case 'run.tools_loaded':
         projectCapabilityLoad(this.db, event, privateData);
         break;

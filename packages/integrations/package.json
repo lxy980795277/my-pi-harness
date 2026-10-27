@@ -20,6 +20,7 @@
     "test": "vitest run --config vitest.config.ts"
   },
   "dependencies": {
+    "@huggingface/transformers": "catalog:",
     "@modelcontextprotocol/client": "catalog:",
     "@my-pi-harness/execution": "workspace:*",
     "typebox": "catalog:",

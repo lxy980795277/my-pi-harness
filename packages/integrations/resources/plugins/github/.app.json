@@ -1,0 +1,13 @@
+{
+  "apps": [
+    {
+      "id": "github",
+      "provider": "github",
+      "name": "GitHub",
+      "description": "检查仓库、Pull Request、Issue 与 Actions 工作流。",
+      "credentialSource": "plugin-oauth",
+      "transport": "streamable-http",
+      "endpoint": "https://api.githubcopilot.com/mcp/"
+    }
+  ]
+}

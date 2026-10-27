@@ -1,9 +1,24 @@
 ---
 name: documents
-description: '在工作区创建、检查和受控修改 DOCX 文档。'
-allowed-tools: 'office_docx office_inspect'
+description: '创建有样式、页眉页脚和图片的 Word 文档，修改及审阅 DOCX，并通过渲染检查交付。'
+allowed-tools: 'office_docx office_inspect office_render pdf_read_pages'
 ---
 
-使用 office_inspect 确认输入结构、支持操作和依赖，再调用 office_docx。每次修改使用新的 output，不覆盖 source。保留文档未涉及结构，按支持范围处理段落、批注、修订和引用；复杂结构不支持时明确说明。检查 validation 和 notVerified；需要视觉确认的输出使用可用渲染流程核查。
+# Word 文档
+
+适用于工作区内的 DOCX 创建、格式调整和受限审阅。交付可编辑的 Word 文件；本地生成不等于上传到 Google Docs。仅回答已有文件的问题时先读取，不生成无必要的替代文件。
+
+## 执行步骤
+
+1. 确认用途、读者、语言、交付路径和是否有模板。编辑已有文件先调用 `office_inspect`，记录段落、表格、修订、批注、字段和版式限制。所有文件参数均为工作区相对路径。
+2. 用 `read_skill_resource` 读取 `references/authoring.md`（排版与创建）。用 `office_docx` 的结构化参数设置页尺寸、边距、字体和段落样式。新建文件可添加富文本、原生表格及 PNG/JPEG 图片。不要用空格或空段落模拟缩进、分页和表格。
+3. 修改已有文件时读取 `references/review.md`（编辑与审阅）。使用 `source` 和全新的 `output`，只提交相关操作。普通替换、真实修订和格式修改是不同操作；不要把普通文本替换描述成保留修订记录。
+4. 检查返回的 `validation`、`notVerified`；必要时再用 `office_inspect` 核对结果。目录、引用和页码是 Word 域，保存文件不代表这些域已更新。
+5. 版式交付前按 `references/verification.md`（渲染与验收）调用 `office_render` 转成新的 PDF，再用 `pdf_read_pages` 查看页图。检查标题分页、表格断行、字体缺字、图片比例和页眉页脚。修复后重新生成并重新检查。
+6. 说明实际完成的结构检查与页图检查范围。产物可以在已完成工具的详情中下载；下载绑定原文件字节，文件后来变化会被拒绝。仅结构通过时明确说明尚未验证页面版式。
+
+## 执行条件
+
+工具使用部署者配置的 Python 和已安装依赖。缺少解释器、Python 包或 LibreOffice 会明确失败；不要通过任意脚本或隐式安装绕过。需要图像输入能力才能消费 PDF 页图。复杂修订、带关系部件的文档合并等超出支持范围时保留源文件并说明限制，不重建成纯文本后宣称保留模板。
 
 加载 Skill 不会授予工具或账号权限。仅通过当前 Run 已授权的工具、连接与受限网关访问资源；不要读取凭据文件、请求用户粘贴 Token，或将秘密写入输出。停止、撤销和结果未知应按宿主返回状态处理，不自动重试副作用。

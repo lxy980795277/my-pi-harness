@@ -54,6 +54,12 @@ pnpm --filter @my-pi-harness/agent-runtime test
 
 ## M4渐进能力
 
-`InputCapabilityResolver`冻结显式MCP、候选目录和Skill正文/授权，排队保留原requestId与授权epoch。`RunCapabilities`将搜索目录与当前可调用集合分开，`load_tools`/`load_skill`只暂存下一请求内容；先提交`run.tools_loaded`再更新Pi AgentContext、预算和路由。旧assistant不能调用未曾提供的工具。Skill正文每次从冻结记录重建，不被压缩摘要或新磁盘版本替换；目录禁用、插件重装和授权撤销不能复活旧绑定。
+`InputCapabilityResolver`冻结显式MCP、候选目录、发现诊断和Skill正文/授权，排队保留原requestId与授权epoch。`RunCapabilities`将搜索目录与当前可调用集合分开：`tool_search`以服务显示名、原始工具名、说明和参数索引执行BM25检索，可由宿主注入本地向量推理并融合排名；完整工具名优先，语义失败或18秒期限回退词法，Run取消继续传播。搜索默认加载8项、每次最多10项，跳过已加载或已暂存名称，总工具数（含内置）最多64项；现有工具在Run内保持可用。搜索自动暂存命中，`load_tools`仍支持显式名称；两者与`load_skill`都先提交`run.tools_loaded`再更新下一次Pi声明、预算和路由，旧assistant不能调用未曾提供的工具。未命中时返回冻结发现状态，不能据此推断OAuth失效；新发现工具在后续Run进入候选，不在搜索时扩权。
 
-`request_skill_tools`及`request_service_access`始终要求明确用户批准。后者由ConnectionGatewayPort冻结Run/Skill版本/账户/操作/期限，再生成下一请求的具体服务工具；凭据只在daemon上游请求中添加。连接来源独立于MCP来源，继续保存派发屏障和中立结果；unknown停止Run并保留队列。Run关闭释放Skill lease及全部服务grant。接口与事实见[运行时能力协议](../../docs/03_API/capability-runtime.md)。
+每次Run把启用且未被遮蔽的Skill摘要目录和MCP服务发现状态加入已记录的system上下文，模型按用户意图选择并调用`load_skill`，摘要本身不激活正文。目录与激活正文贯穿每次请求及压缩后的重建；未装配WorkContext时也在实际system消息中提供激活正文。Skill正文每次从冻结记录重建，不被压缩摘要或新磁盘版本替换；目录禁用、插件重装和授权撤销不能复活旧绑定。
+
+用户文字中的独立`$skill-name`明确调用会冻结并激活相应启用Skill，未安装、禁用及被遮蔽的名称不激活。文字调用与picker显式选择分别保存，合并后仍受16项和同一内容/授权版本限制；队列私有`mentionedSkillBindings`保存当次正文，恢复不会改读磁盘新版本，撤销则拒绝恢复并保留队列。活跃Run后续输入中的新调用先随队列接受事实持久化，再通过每次模型请求前的`prepareRequest`屏障提交`run.tools_loaded`，包括直接续接的follow-up；它不创建工具授权或本地目录权限。
+
+后续Run从当前分支有效消息所对应的已提交接受/加载事实继承最近16个Skill冻结正文，自动压缩不清除该来源；编辑分支、上下文重置和检查点选择只使用保留范围。正文不会因picker空选择、模型历史裁剪或磁盘更新而丢失或换成新版。继承前逐项重验当前启停、版本及插件授权；失效项排除，并在已记录system上下文的`unavailablePreviousSkills`中说明，普通聊天继续，显式新选择仍严格校验。队列私有`inheritedSkillBindings`保留原版本，恢复可排除已失效的继承；不会继承`request_skill_tools`授权或MCP可执行集合。动态激活Skill同时暂存其声明且属于冻结工作区目录的Office工具，下一请求经过相同持久屏障获得schema；没有工作区不提供Office文件工具，任意MCP名字不随Skill声明加载。
+
+`request_skill_tools`始终要求明确用户批准。服务插件通过冻结Skill中的`gatewayUrl`提供只读HTTP入口，模型使用会话级`web_fetch`访问允许的路径，不要求工作区或授予文件/Shell能力；公网与网关访问继续执行现有网络校验、Plan与只读限制和单次审批。网关地址随接受输入与`context.prepared`保存，私有访问能力只在宿主执行请求时添加，不进入模型或会话日志。当前工具集合不提供固定服务操作目录、账户选择或Run级服务grant。MCP写操作继续使用实际加载的工具、独立信任与当前审批策略。接口与事实见[运行时能力协议](../../docs/03_API/capability-runtime.md)。

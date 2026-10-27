@@ -37,7 +37,11 @@ const OAuthStart = Type.Object(
 );
 
 /** Remote management is protected by the same application-auth and CSRF hooks as stdio management. */
-export function registerRemoteMcpRoutes(server: FastifyInstance, mcp: RemoteMcpService): void {
+export function registerRemoteMcpRoutes(
+  server: FastifyInstance,
+  mcp: RemoteMcpService,
+  resultOrigin?: () => string,
+): void {
   server.post<{ Body: RemoteMcpDraftTestInput }>(
     '/api/mcp/remote-servers/test-draft',
     {
@@ -232,6 +236,17 @@ export function registerRemoteMcpRoutes(server: FastifyInstance, mcp: RemoteMcpS
     },
   );
   server.post<{ Params: { id: string }; Body: McpControlInput }>(
+    '/api/mcp/remote-servers/:id/oauth/cancel',
+    {
+      schema: {
+        params: Params,
+        body: McpControlInputSchema,
+        response: { 200: RemoteMcpViewSchema },
+      },
+    },
+    (request) => mcp.cancelOAuth(request.params.id, request.body),
+  );
+  server.post<{ Params: { id: string }; Body: McpControlInput }>(
     '/api/mcp/remote-servers/:id/oauth/disconnect',
     {
       schema: {
@@ -270,8 +285,22 @@ export function registerRemoteMcpRoutes(server: FastifyInstance, mcp: RemoteMcpS
       const params = new URLSearchParams();
       for (const [name, value] of Object.entries(request.query))
         if (value !== undefined) params.set(name, value);
-      await mcp.completeOAuth(params, AbortSignal.timeout(30000));
-      return reply.type('text/plain; charset=utf-8').send('MCP授权完成，请返回应用刷新连接状态。');
+      if (resultOrigin === undefined) {
+        await mcp.completeOAuth(params, AbortSignal.timeout(30000));
+        return reply
+          .type('text/plain; charset=utf-8')
+          .send('MCP授权完成，请返回应用刷新连接状态。');
+      }
+      const result = new URL('/skill-oauth/result', resultOrigin());
+      result.searchParams.set('name', 'MCP');
+      try {
+        await mcp.completeOAuth(params, AbortSignal.timeout(30000));
+        result.searchParams.set('status', 'success');
+      } catch {
+        result.searchParams.set('status', 'error');
+        result.searchParams.set('message', 'MCP授权未完成或已失效，请返回应用重试。');
+      }
+      return reply.redirect(result.href, 303);
     },
   );
 }

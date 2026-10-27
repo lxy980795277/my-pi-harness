@@ -9,7 +9,7 @@ interface PluginSkillDetailProps {
   skill: PluginSkillRow;
 }
 
-/** Bundled instructions remain readable even when this plugin or component is disabled. */
+/** Installed instructions remain readable even when this plugin or component is disabled. */
 export const PluginSkillDetail: FC<PluginSkillDetailProps> = ({ pluginId, skill }) => {
   return (
     <div className="space-y-8">

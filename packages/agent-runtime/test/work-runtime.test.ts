@@ -98,6 +98,7 @@ describe('M3 durable session work through real Pi tools', () => {
               message.role === 'system' ? (message.toolsAdded ?? []).map(({ name }) => name) : [],
             ),
           ).toEqual([
+            'web_fetch',
             'ask_user',
             'update_plan',
             'update_plan_steps',

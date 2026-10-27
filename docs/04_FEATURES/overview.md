@@ -72,6 +72,7 @@ AC写可观察结果，不用「完善」「支持全部」代替具体条件。
 - [M4实施任务、模块归属与完成门槛](202610201932_feature_m4-capabilities/tasks.md)
 - [M4.1本地MCP验证](202610201932_feature_m4-capabilities/verify.md)
 - [M4工程实现与本机联调验证](202610201932_feature_m4-capabilities/m4-completion-verify.md)
+- [M4插件连接与任务工作流补齐验证](202610201932_feature_m4-capabilities/plugin-completion-verify.md)
 - [M4前置：用户身份与应用登录](202610161500_feature_application-login/spec.md)
 
 - [应用登录验证与真实账号review](202610161500_feature_application-login/verify.md)

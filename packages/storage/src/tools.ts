@@ -139,9 +139,7 @@ export class ToolProjection {
       tool.branchId !== run.branchId
     )
       throw new StorageError('INVALID_EVENT', 'Tool identity does not match its run');
-    const external =
-      tool.binding.kind === 'accepted' &&
-      (tool.binding.source.kind === 'mcp' || tool.binding.source.kind === 'connection');
+    const external = tool.binding.kind === 'accepted' && tool.binding.source.kind === 'mcp';
     if (
       (external && tool.dispatch.state === 'not_applicable') ||
       (!external && tool.dispatch.state !== 'not_applicable')
@@ -360,9 +358,7 @@ export class ToolProjection {
           'Rejected result must retain its full assistant call name',
         );
     }
-    const external =
-      record.binding.kind === 'accepted' &&
-      (record.binding.source.kind === 'mcp' || record.binding.source.kind === 'connection');
+    const external = record.binding.kind === 'accepted' && record.binding.source.kind === 'mcp';
     if (
       result.origin === 'server' &&
       (!external ||

@@ -2,6 +2,8 @@ import { Type, type TSchema } from 'typebox';
 import { Value } from 'typebox/value';
 import { ExecutionError } from '../errors.js';
 import type { ToolDescription } from '../types.js';
+import { DOCX_PARAMETERS } from './document-schema.js';
+import { PDF_PARAMETERS } from './pdf-schema.js';
 
 const object = <T extends Record<string, TSchema>>(properties: T) =>
   Type.Object(properties, { additionalProperties: false });
@@ -14,7 +16,6 @@ const cells = Type.Array(
   Type.Array(Type.Union([text, Type.Number(), Type.Boolean(), Type.Null()]), { maxItems: 100 }),
   { maxItems: 200 },
 );
-const table = object({ rows: cells });
 const bounds = {
   x: Type.Number({ minimum: 0, maximum: 30 }),
   y: Type.Number({ minimum: 0, maximum: 30 }),
@@ -30,51 +31,6 @@ const chart = object({
     { minItems: 1, maxItems: 20 },
   ),
 });
-const docxOperation = Type.Union([
-  object({
-    kind: Type.Literal('replace_text'),
-    old: Type.String({ minLength: 1, maxLength: 20_000 }),
-    replacement: text,
-  }),
-  object({
-    kind: Type.Literal('revisions'),
-    action: Type.Union([Type.Literal('accept'), Type.Literal('reject')]),
-  }),
-  object({ kind: Type.Literal('comment_add'), paragraph: index, text, author: short }),
-  object({ kind: Type.Literal('comment_remove'), id: index }),
-  object({
-    kind: Type.Literal('note'),
-    paragraph: index,
-    text,
-    noteType: Type.Union([Type.Literal('footnote'), Type.Literal('endnote')]),
-  }),
-  object({
-    kind: Type.Literal('bookmark'),
-    paragraph: index,
-    name: Type.String({ pattern: '^[A-Za-z_][A-Za-z0-9_]{0,39}$' }),
-  }),
-  object({
-    kind: Type.Literal('field'),
-    fieldType: Type.Union([Type.Literal('toc'), Type.Literal('ref'), Type.Literal('caption')]),
-    target: Type.Optional(short),
-    text: Type.Optional(text),
-  }),
-  object({ kind: Type.Literal('content_control'), tag: short, text }),
-  object({
-    kind: Type.Literal('metadata'),
-    title: Type.Optional(text),
-    subject: Type.Optional(text),
-    creator: Type.Optional(short),
-    description: Type.Optional(text),
-  }),
-]);
-const format = Type.Union([
-  Type.Literal('docx'),
-  Type.Literal('pdf'),
-  Type.Literal('xlsx'),
-  Type.Literal('pptx'),
-]);
-
 /** Fixed, structured tools; no supplied source code or program name reaches the worker. */
 export const OFFICE_TOOL_DEFINITIONS: readonly {
   name: string;
@@ -90,73 +46,14 @@ export const OFFICE_TOOL_DEFINITIONS: readonly {
   {
     name: 'office_docx',
     description:
-      'Create a DOCX or edit a source into a new output. Supports bounded plain text changes, simple revisions, comments, notes, bookmarks, fields, content controls and simple merges. Never overwrites source. Inspect and render before claiming visual quality.',
-    parameters: object({
-      source: Type.Optional(path),
-      output: path,
-      paragraphs: Type.Optional(
-        Type.Array(
-          object({ text, heading: Type.Optional(Type.Integer({ minimum: 0, maximum: 6 })) }),
-          { maxItems: 200 },
-        ),
-      ),
-      tables: Type.Optional(Type.Array(table, { maxItems: 20 })),
-      operations: Type.Optional(Type.Array(docxOperation, { maxItems: 100 })),
-      mergeSources: Type.Optional(Type.Array(path, { minItems: 1, maxItems: 10 })),
-    }),
+      'Create a DOCX or edit a source into a new output. Supports fonts/styles, page layout, rich paragraphs, headers/footers, staged images, tracked text changes, comments/notes/fields and simple merges. Never overwrites source. Inspect and render before claiming visual quality.',
+    parameters: DOCX_PARAMETERS,
   },
   {
     name: 'office_pdf',
     description:
-      'Create PDF or produce a new copy with selected/reordered/rotated/appended pages, text/checkbox field filling, bounded flattening, restricted field-tree repair and text/white overlays. Overlays are NOT secure redaction. Encrypted, signed, XFA and active PDFs are rejected.',
-    parameters: object({
-      source: Type.Optional(path),
-      output: path,
-      pages: Type.Optional(
-        Type.Array(
-          object({
-            text,
-            tables: Type.Optional(Type.Array(table, { maxItems: 10 })),
-            width: Type.Optional(Type.Number({ minimum: 72, maximum: 1440 })),
-            height: Type.Optional(Type.Number({ minimum: 72, maximum: 1440 })),
-          }),
-          { minItems: 1, maxItems: 100 },
-        ),
-      ),
-      selectPages: Type.Optional(Type.Array(positive, { minItems: 1, maxItems: 100 })),
-      rotations: Type.Optional(
-        Type.Array(
-          object({
-            page: positive,
-            degrees: Type.Union([Type.Literal(90), Type.Literal(180), Type.Literal(270)]),
-          }),
-          { maxItems: 100 },
-        ),
-      ),
-      appendSources: Type.Optional(Type.Array(path, { maxItems: 10 })),
-      fields: Type.Optional(
-        Type.Record(
-          Type.String({ minLength: 1, maxLength: 200 }),
-          Type.Union([text, Type.Boolean()]),
-        ),
-      ),
-      flatten: Type.Optional(Type.Boolean()),
-      repairFields: Type.Optional(Type.Boolean()),
-      overlays: Type.Optional(
-        Type.Array(
-          object({
-            page: positive,
-            x: Type.Number({ minimum: 0 }),
-            y: Type.Number({ minimum: 0 }),
-            width: Type.Number({ minimum: 1, maximum: 1440 }),
-            height: Type.Number({ minimum: 1, maximum: 1440 }),
-            text: Type.Optional(text),
-            cover: Type.Optional(Type.Boolean()),
-          }),
-          { maxItems: 100 },
-        ),
-      ),
-    }),
+      'Create paginated PDF prose/tables with flow and layout, or produce a new edited copy: pages, text/checkbox/choice fields, bounded flattening/repair and overlays. Overlays are NOT secure redaction. Encrypted, signed, XFA and active PDFs are rejected.',
+    parameters: PDF_PARAMETERS,
   },
   {
     name: 'office_xlsx',
@@ -290,5 +187,3 @@ export function describeOfficeTool(name: string, args: Record<string, unknown>):
     mutating,
   };
 }
-
-export const OFFICE_FORMAT_SCHEMA = format;

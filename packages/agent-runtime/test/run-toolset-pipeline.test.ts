@@ -35,6 +35,9 @@ function declarations(context: TranscriptContext): RunToolDefinition[] {
   });
 }
 
+const networkDefinitions = TOOL_DEFINITIONS.filter(({ name }) => name === 'web_fetch');
+const fileDefinitions = TOOL_DEFINITIONS.filter(({ name }) => name !== 'web_fetch');
+
 describe('accepted tools through Pi requests, budgets and durable execution', () => {
   it('uses the executor capability selection for audit, actual requests, budget and file execution', async () => {
     const f = await fixture(true, { sessionTools: false });
@@ -65,12 +68,19 @@ describe('accepted tools through Pi requests, budgets and durable execution', ()
       const accepted = committed.find(({ event }) => event.type === 'run.accepted');
       if (!accepted?.privateData) throw new Error('Missing acceptance audit');
       const audit = JSON.parse(accepted.privateData) as AcceptedTools;
-      expect(audit.tools).toEqual(JSON.parse(JSON.stringify(TOOL_DEFINITIONS)));
+      const expected = [...networkDefinitions, ...fileDefinitions];
+      expect(audit.tools).toEqual(JSON.parse(JSON.stringify(expected)));
       expect(audit.toolSources.map(({ name, source }) => ({ name, source }))).toEqual(
-        TOOL_DEFINITIONS.map(({ name }) => ({ name, source: { kind: 'workspace' } })),
+        expected.map(({ name }) => ({
+          name,
+          source: { kind: name === 'web_fetch' ? 'session' : 'workspace' },
+        })),
       );
       const frozen = new RunToolset(
-        TOOL_DEFINITIONS.map((definition) => ({ source: { kind: 'workspace' }, definition })),
+        expected.map((definition) => ({
+          source: { kind: definition.name === 'web_fetch' ? 'session' : 'workspace' },
+          definition,
+        })),
       );
       expect(audit.toolSources.map(({ fingerprint }) => fingerprint)).toEqual(
         frozen.records.map(({ fingerprint }) => fingerprint),
@@ -110,6 +120,7 @@ describe('accepted tools through Pi requests, budgets and durable execution', ()
       options: {},
       session: true,
       files: false,
+      network: true,
     },
     {
       name: 'session and workspace tools',
@@ -117,13 +128,15 @@ describe('accepted tools through Pi requests, budgets and durable execution', ()
       options: {},
       session: true,
       files: true,
+      network: true,
     },
     {
-      name: 'no executor session capabilities or workspace',
+      name: 'network tools without working-state capabilities or workspace',
       workspace: false,
       options: { sessionTools: false },
       session: false,
       files: false,
+      network: true,
     },
     {
       name: 'no tool runtime',
@@ -131,6 +144,7 @@ describe('accepted tools through Pi requests, budgets and durable execution', ()
       options: { tools: false },
       session: false,
       files: false,
+      network: false,
     },
     {
       name: 'executor work capabilities without context projection',
@@ -138,6 +152,7 @@ describe('accepted tools through Pi requests, budgets and durable execution', ()
       options: { context: false },
       session: true,
       files: false,
+      network: true,
     },
     {
       name: 'workspace tools without work capabilities or context projection',
@@ -145,6 +160,7 @@ describe('accepted tools through Pi requests, budgets and durable execution', ()
       options: { context: false, sessionTools: false },
       session: false,
       files: true,
+      network: true,
     },
   ])('declares exactly the accepted collection with $name', async (scenario) => {
     const f = await fixture(scenario.workspace, scenario.options);
@@ -167,8 +183,9 @@ describe('accepted tools through Pi requests, budgets and durable execution', ()
       if (!accepted?.privateData || !request) throw new Error('Missing request facts');
       const audit = JSON.parse(accepted.privateData) as AcceptedTools;
       const expected: RunToolDefinition[] = [];
+      if (scenario.network) expected.push(...networkDefinitions);
       if (scenario.session) expected.push(...SESSION_TOOL_DEFINITIONS);
-      if (scenario.files) expected.push(...TOOL_DEFINITIONS);
+      if (scenario.files) expected.push(...fileDefinitions);
       expect(audit.tools).toEqual(JSON.parse(JSON.stringify(expected)));
       expect(declarations(request)).toEqual(audit.tools);
       expect(audit.toolSources.map(({ name }) => name)).toEqual(expected.map(({ name }) => name));

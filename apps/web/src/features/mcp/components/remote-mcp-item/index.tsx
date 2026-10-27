@@ -34,7 +34,7 @@ export const RemoteMcpItem: FC<Props> = ({ server, onEdit }) => {
       <p className="font-mono text-xs break-all text-muted-foreground">{server.endpoint}</p>
       <div className="flex flex-wrap gap-1">
         <Button variant="outline" onClick={state.startup} disabled={state.pending}>
-          远端授权
+          信任此服务
         </Button>
         <Button
           variant="outline"
@@ -112,9 +112,9 @@ export const RemoteMcpItem: FC<Props> = ({ server, onEdit }) => {
         <ConfirmDialog
           open
           onOpenChange={state.closeTrust}
-          title="确认远端 MCP 授权？"
-          description={`${state.preview.endpoint}；传输 ${state.preview.transport}。请求将访问此来源，并使用配置的认证头。此授权不代替工具调用审批。`}
-          confirmLabel="确认远端范围"
+          title="信任此服务？"
+          description={`仅信任此服务地址：${state.preview.endpoint}；传输 ${state.preview.transport}。请求将使用配置的认证头。确认后启用服务，工具调用仍须经过对话审批。`}
+          confirmLabel="信任并启用"
           pending={state.pending}
           onConfirm={state.trust}
           error={state.trustError}
@@ -124,7 +124,7 @@ export const RemoteMcpItem: FC<Props> = ({ server, onEdit }) => {
         <DialogContent closeLabel="关闭秘密请求头">
           <DialogTitle>秘密请求头</DialogTitle>
           <DialogDescription>
-            秘密仅保存到本机凭据库，保存后需要重新确认远端授权。
+            秘密仅保存到本机凭据库，保存后需要重新确认对此服务的信任。
           </DialogDescription>
           <SelectField
             id={`remote-secret-${server.id}`}

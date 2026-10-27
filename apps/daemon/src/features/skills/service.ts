@@ -24,6 +24,7 @@ export interface SkillsServiceOptions {
   profileDirectory: string;
   resolveWorkspace(id: string): Promise<Workspace>;
   githubFetch?: typeof fetch;
+  pluginGatewayUrl?(pluginId: string): string | undefined;
 }
 /** Owns registered Skill roots and immutable resources; instruction text never grants tool access. */
 export class SkillsService {
@@ -71,14 +72,13 @@ export class SkillsService {
         plugin.directory !== join(this.options.profileDirectory, 'plugins', plugin.id)
       )
         throw new SkillError('SKILL_OWNER', 'Plugin installation root is inconsistent');
-      if (plugin.enabled)
-        roots.push({
-          path: join(plugin.directory, 'skills'),
-          scope: 'plugin',
-          workspaceId: null,
-          pluginId: plugin.id,
-          managed: false,
-        });
+      roots.push({
+        path: join(plugin.directory, 'skills'),
+        scope: 'plugin',
+        workspaceId: null,
+        pluginId: plugin.id,
+        managed: false,
+      });
     }
     return roots;
   }
@@ -102,7 +102,13 @@ export class SkillsService {
         const component = plugin?.components.find(
           (entry) => entry.kind === 'skill' && entry.referenceId === skill.id,
         );
-        if (component !== undefined && !component.enabled) enabled = false;
+        if (
+          plugin?.enabled !== true ||
+          component === undefined ||
+          component.id !== `skill:${skill.name}` ||
+          !component.enabled
+        )
+          enabled = false;
       }
       const shadowed = seen.has(skill.name);
       if (enabled) seen.add(skill.name);
@@ -178,7 +184,8 @@ export class SkillsService {
       if (record?.source.startsWith('github:')) source = `${record.source} (${skill.source})`;
       if (plugin !== undefined)
         source = `plugin:${plugin.id}@${plugin.generation} (${skill.source})`;
-      output.push({ ...frozen, source });
+      const gatewayUrl = this.options.pluginGatewayUrl?.(skill.pluginId ?? '');
+      output.push({ ...frozen, source, ...(gatewayUrl === undefined ? {} : { gatewayUrl }) });
     }
     this.assertBindingsCurrent(output);
     return output;

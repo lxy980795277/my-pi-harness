@@ -24,6 +24,7 @@ import { Type } from 'typebox';
 import type { ToolRunContext } from './tool-types.js';
 import type { RunCapabilities } from './run-capabilities.js';
 import type { FrozenInputCapabilities } from './input-capabilities.js';
+import { activeSkillContext } from './capability-context.js';
 
 function validToolIntents(message: AssistantMessage): boolean {
   if (message.content.length > 1024) return false;
@@ -147,7 +148,7 @@ export class RunExecution {
       steeringMode: 'one-at-a-time',
       followUpMode: 'one-at-a-time',
       toolExecution: 'sequential',
-      prepareNextTurnWithContext: ({ context }) => {
+      prepareRequest: ({ context }) => {
         if (this.unknownOutcome) throw this.failure;
         let advanced = false;
         try {
@@ -165,7 +166,30 @@ export class RunExecution {
         if (!options.tools || !toolContext)
           throw new RuntimeError('TOOL_NOT_AVAILABLE', '工具运行时不可用。');
         tools = options.tools.createTools(toolContext, this.toolset());
-        return { context: { ...context, tools } };
+        return {
+          context: {
+            ...context,
+            tools,
+            ...(!options.work
+              ? {
+                  messages: [
+                    {
+                      role: 'system' as const,
+                      content: [
+                        options.basePrompt,
+                        activeSkillContext(options.capabilities?.skills() ?? []),
+                      ]
+                        .filter(Boolean)
+                        .join('\n\n'),
+                      toolsAdded: [...this.toolset().definitions],
+                      timestamp: Date.now(),
+                    },
+                    ...context.messages.filter((message) => message.role !== 'system'),
+                  ],
+                }
+              : {}),
+          },
+        };
       },
       ...(options.work
         ? {

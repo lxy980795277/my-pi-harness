@@ -1,6 +1,12 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
-import { TOOL_DEFINITIONS, describeTool, executeTool } from '@my-pi-harness/execution';
+import {
+  TOOL_DEFINITIONS,
+  describeTool,
+  executeTool,
+  executeWebFetch,
+  type ExecutionResult,
+} from '@my-pi-harness/execution';
 import type {
   SessionSummary,
   ToolCallRecord,
@@ -54,13 +60,18 @@ export class ToolRuntime {
     extraWorkspace: readonly RunToolDefinition[] = [],
   ): RunToolset {
     const selections: RunToolSelection[] = [];
+    for (const definition of TOOL_DEFINITIONS.filter((tool) => tool.name === 'web_fetch'))
+      selections.push({ source: { kind: 'session' }, definition });
     for (const definition of controls) selections.push({ source: { kind: 'session' }, definition });
     if (this.options.work) {
       for (const definition of SESSION_TOOL_DEFINITIONS)
         selections.push({ source: { kind: 'session' }, definition });
     }
     if (session.workspaceId !== null) {
-      for (const definition of [...TOOL_DEFINITIONS, ...extraWorkspace])
+      for (const definition of [
+        ...TOOL_DEFINITIONS.filter((tool) => tool.name !== 'web_fetch'),
+        ...extraWorkspace,
+      ])
         selections.push({ source: { kind: 'workspace' }, definition });
     }
     if (external.length > 0 && !this.options.externalTools)
@@ -115,9 +126,10 @@ export class ToolRuntime {
     const { definition } = selected;
     if (!Value.Check(definition.parameters, args) || JSON.stringify(args).length > 256_000)
       throw new RuntimeError('TOOL_ARGUMENTS_INVALID', '工具参数无效或超过限制。');
-    const external = selected.source.kind === 'mcp' || selected.source.kind === 'connection';
+    const external = selected.source.kind === 'mcp';
     let policy = { approvalRequired: false, mutating: false, summary: name };
-    if (selected.source.kind === 'workspace') policy = describeTool(name, args);
+    if (selected.source.kind === 'workspace' || name === 'web_fetch')
+      policy = describeTool(name, args);
     if (selected.source.kind === 'mcp')
       policy = { approvalRequired: true, mutating: true, summary: selected.source.remoteToolName };
     if (
@@ -125,13 +137,7 @@ export class ToolRuntime {
       this.options.externalTools?.isReadOnlyAuthorized?.(selected.external, args)
     )
       policy = { ...policy, approvalRequired: false, mutating: false };
-    if (selected.connection)
-      policy = {
-        approvalRequired: !selected.connection.operation.readOnly,
-        mutating: !selected.connection.operation.readOnly,
-        summary: selected.connection.operation.name,
-      };
-    if (name === 'request_skill_tools' || name === 'request_service_access')
+    if (name === 'request_skill_tools')
       policy = { approvalRequired: true, mutating: false, summary: '授予本次运行的Skill工具权限' };
     const at = Date.now();
     let status: ToolCallRecord['status'] = 'running';
@@ -214,10 +220,7 @@ export class ToolRuntime {
         persistenceFailed = true;
         context.persistenceFailure(error);
       }
-      if (
-        (name === 'revoke_skill_tools' || name === 'revoke_service_access') &&
-        tool.status === 'completed'
-      )
+      if (name === 'revoke_skill_tools' && tool.status === 'completed')
         context.stopAfterTool?.('本次运行的工具授权已撤销。');
       return result;
     };
@@ -226,7 +229,11 @@ export class ToolRuntime {
     try {
       if (name === 'pdf_read_pages' && !context.supportsImages)
         throw new RuntimeError('MODEL_CAPABILITY', '读取PDF页图需要支持图像的模型。');
-      if (selected.source.kind === 'session' && !context.controls?.has(name)) {
+      if (
+        selected.source.kind === 'session' &&
+        name !== 'web_fetch' &&
+        !context.controls?.has(name)
+      ) {
         if (!this.options.work)
           throw new RuntimeError('TOOL_NOT_AVAILABLE', '会话工具运行时不可用。');
         const text = await executeSessionTool(
@@ -259,7 +266,7 @@ export class ToolRuntime {
       }
       if (policy.approvalRequired) {
         let decision: ApprovalReviewResult['decision'] = 'ask';
-        if (name === 'request_skill_tools' || name === 'request_service_access') {
+        if (name === 'request_skill_tools') {
           tool.status = 'awaiting_approval';
           commit('tool.updated');
           decision = await this.waitForApproval(context.session.id, tool.id, signal);
@@ -316,31 +323,16 @@ export class ToolRuntime {
           commit('tool.updated');
           return Promise.resolve();
         };
-        let outcome: ExternalToolOutcome;
-        if (selected.connection) {
-          const gateway = this.options.connectionGateway;
-          if (!gateway) throw new RuntimeError('CONNECTION_UNAVAILABLE', '服务网关不可用。');
-          outcome = await gateway.call({
-            grant: selected.connection.grant,
-            operation: selected.connection.operation.id,
-            runId: context.run.id,
-            parentToolCallId: tool.id,
-            arguments: tool.arguments,
-            signal,
-            beforeDispatch,
-          });
-        } else {
-          const port = this.options.externalTools;
-          if (!port || !selected.external)
-            throw new RuntimeError('MCP_UNAVAILABLE', '外部工具运行时不可用。');
-          outcome = await port.call({
-            tool: selected.external,
-            arguments: tool.arguments,
-            callAttemptId,
-            signal,
-            beforeDispatch,
-          });
-        }
+        const port = this.options.externalTools;
+        if (!port || !selected.external)
+          throw new RuntimeError('MCP_UNAVAILABLE', '外部工具运行时不可用。');
+        const outcome: ExternalToolOutcome = await port.call({
+          tool: selected.external,
+          arguments: tool.arguments,
+          callAttemptId,
+          signal,
+          beforeDispatch,
+        });
         if (outcome.kind === 'unknown') {
           tool.status = 'unknown';
           tool.result = outcome.message.slice(0, 4000);
@@ -377,20 +369,29 @@ export class ToolRuntime {
           ...(outcome.isError ? { isError: true } : {}),
         });
       }
-      const workspaceId = context.session.workspaceId;
-      if (workspaceId === null) throw new RuntimeError('WORKSPACE_REQUIRED', '请先选择工作区。');
-      const workspace = await this.options.resolveWorkspace(workspaceId);
-      signal.throwIfAborted();
-      const result = await executeTool(name, tool.arguments, {
-        workspaceRoot: workspace.rootPath,
-        profileDirectory: this.options.profileDirectory,
-        readOnly: context.session.approvalMode === 'read-only',
-        shellAccess: context.session.approvalMode === 'full-access' ? 'full-access' : 'sandboxed',
-        ...(this.options.officePythonPath
-          ? { officePythonPath: this.options.officePythonPath }
-          : {}),
-        signal,
-      });
+      let result: ExecutionResult;
+      if (name === 'web_fetch') {
+        result = await executeWebFetch(tool.arguments, {
+          readOnly: context.session.approvalMode === 'read-only',
+          ...(this.options.skillGateway ? { skillGateway: this.options.skillGateway } : {}),
+          signal,
+        });
+      } else {
+        const workspaceId = context.session.workspaceId;
+        if (workspaceId === null) throw new RuntimeError('WORKSPACE_REQUIRED', '请先选择工作区。');
+        const workspace = await this.options.resolveWorkspace(workspaceId);
+        signal.throwIfAborted();
+        result = await executeTool(name, tool.arguments, {
+          workspaceRoot: workspace.rootPath,
+          profileDirectory: this.options.profileDirectory,
+          readOnly: context.session.approvalMode === 'read-only',
+          shellAccess: context.session.approvalMode === 'full-access' ? 'full-access' : 'sandboxed',
+          ...(this.options.officePythonPath
+            ? { officePythonPath: this.options.officePythonPath }
+            : {}),
+          signal,
+        });
+      }
       tool.status = 'completed';
       tool.summary = result.summary.slice(0, 4000);
       tool.result = result.content

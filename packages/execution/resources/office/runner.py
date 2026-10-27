@@ -22,6 +22,8 @@ MODULES = {
 
 def detect(tool, request):
     modules = MODULES.get(tool, [])
+    if tool == 'office_docx' and request.get('images'):
+        modules = modules + ['PIL']
     if tool == 'office_inspect':
         modules = {'docx': ['docx'], 'pdf': ['pypdf'], 'xlsx': ['openpyxl'], 'pptx': ['pptx']}[request['format']]
     missing = [module for module in modules if importlib.util.find_spec(module) is None]

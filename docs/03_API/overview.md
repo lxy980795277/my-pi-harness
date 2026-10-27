@@ -4,7 +4,7 @@
 
 应用版本与协议版本用途不同：应用版本来自根版本生成流程；`PROTOCOL_VERSION` 管理跨端协议兼容。修改协议时更新所有消费者和相应检查，不能用产品版本代替兼容判定。
 
-当前协议为15，包含本地/远程MCP、工具目录与动态加载、Skill选择及插件/服务连接，冻结调用来源、派发事实和unknown终态；包含远程MCP草稿连接测试和只读内置插件详情预览。客户端与daemon必须采用相同协议版本，开发期不保留旧协议兼容。SQLite schema、Session JSONL批次与公开事件envelope分别管理版本，实际磁盘格式见[存储说明](../../packages/storage/README.md)，不随HTTP版本机械递增。
+当前协议为17，包含本地/远程MCP、工具目录与动态加载、Skill选择及插件/服务连接，冻结调用来源、派发事实和unknown终态；包含远程MCP草稿连接测试和只读内置插件详情预览。客户端与daemon必须采用相同协议版本，开发期不保留旧协议兼容。SQLite schema、Session JSONL批次与公开事件envelope分别管理版本，实际磁盘格式见[存储说明](../../packages/storage/README.md)，不随HTTP版本机械递增。
 
 ## M0 HTTP
 
@@ -57,8 +57,8 @@ Server配置、秘密槽位、按隔离范围的启动授权、发现/测试、�
 
 ## 能力扩展协议
 
-Run内工具加载、Skill冻结及服务授权事实见[运行时能力协议](capability-runtime.md)。`DesktopBridge.revealSkillDirectory(skillId, workspaceId)`只接收已注册Skill ID与工作区ID；main携带当前应用Cookie及CSRF向宿主解析目录，再交系统打开，不接收Renderer提供的任意文件路径。
+Run内工具加载与Skill冻结事实见[运行时能力协议](capability-runtime.md)。`DesktopBridge.revealSkillDirectory(skillId, workspaceId)`只接收已注册Skill ID与工作区ID；main携带当前应用Cookie及CSRF向宿主解析目录，再交系统打开，不接收Renderer提供的任意文件路径。
 
-Skills创建/安装、插件管理接口见[Skills与插件协议](skills-plugins.md)，服务账户与OAuth见[外部连接协议](connections.md)。
+Skills创建/安装、插件管理接口见[Skills与插件协议](skills-plugins.md)，插件OAuth、共享Token及只读网关见[插件连接协议](plugin-connections.md)，高级独立账户见[外部连接协议](connections.md)。
 
 HTTP/SSE传输、MCP OAuth与目录管理见[远程MCP协议](remote-mcp.md)；工具动态schema始终在宿主解析，不将外部schema直接交给HTTP验证器。

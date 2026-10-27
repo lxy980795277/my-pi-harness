@@ -146,3 +146,61 @@ it('refuses HTTPS downgrades, compression and oversized responses', async () => 
     executeTool('web_fetch', { url: 'https://public.example/' }, context),
   ).rejects.toMatchObject({ code: 'RESPONSE_LIMIT' });
 });
+
+const gatewayContext = {
+  ...context,
+  skillGateway: { origin: 'http://127.0.0.1:4311', token: 'host-only-gateway-capability' },
+};
+
+it('reaches only the owned gateway with a host-injected capability and pinned loopback socket', async () => {
+  fixtures.responses.push({ status: 200, body: '{"login":"fixture"}' });
+  const result = await executeTool(
+    'web_fetch',
+    { url: 'http://127.0.0.1:4311/api/skill-gateway/github/user' },
+    gatewayContext,
+  );
+  expect(result.content).toEqual([
+    {
+      type: 'text',
+      text: 'URL: http://127.0.0.1:4311/api/skill-gateway/github/user\nHTTP 200\n{"login":"fixture"}',
+    },
+  ]);
+  const options = fixtures.requests[0]?.options;
+  expect(options?.headers).toMatchObject({
+    'x-pi-harness-skill-gateway': 'host-only-gateway-capability',
+  });
+  const callback = vi.fn();
+  options?.lookup?.('127.0.0.1', {}, callback);
+  expect(callback).toHaveBeenCalledWith(null, '127.0.0.1', 4);
+  expect(fixtures.cancellations).toBe(0);
+  expect(JSON.stringify(result)).not.toContain('host-only-gateway-capability');
+});
+
+it.each([
+  'http://127.0.0.1:4311/api/auth/status',
+  'http://127.0.0.1:4311/api/skill-gateway/github',
+  'http://127.0.0.1:4312/api/skill-gateway/github/user',
+  'http://localhost:4311/api/skill-gateway/github/user',
+  'http://user:secret@127.0.0.1:4311/api/skill-gateway/github/user',
+  'http://127.0.0.1:4311/api/skill-gateway/github/../../auth/status',
+])('does not extend gateway authority to %s', async (url) => {
+  await expect(executeTool('web_fetch', { url }, gatewayContext)).rejects.toThrow();
+  expect(fixtures.requests).toHaveLength(0);
+});
+
+it('keeps the capability off public requests and rejects gateway POST or redirects', async () => {
+  fixtures.responses.push({ status: 200 });
+  await executeTool('web_fetch', { url: 'https://public.example/' }, gatewayContext);
+  expect(fixtures.requests[0]?.options.headers).not.toHaveProperty('x-pi-harness-skill-gateway');
+  fixtures.requests = [];
+  const url = 'http://127.0.0.1:4311/api/skill-gateway/github/user';
+  await expect(
+    executeTool('web_fetch', { url, method: 'POST', body: '{}' }, gatewayContext),
+  ).rejects.toMatchObject({ code: 'READ_ONLY' });
+  expect(fixtures.requests).toHaveLength(0);
+  fixtures.responses.push({ status: 302, location: 'https://public.example/' });
+  await expect(executeTool('web_fetch', { url }, gatewayContext)).rejects.toMatchObject({
+    code: 'UNSAFE_REDIRECT',
+  });
+  expect(fixtures.requests).toHaveLength(1);
+});

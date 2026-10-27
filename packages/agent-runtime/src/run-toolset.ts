@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import type { TSchema } from 'typebox';
 import { Value } from 'typebox/value';
 import { RuntimeError } from './errors.js';
-import type { ToolSource, ConnectionGrant, ConnectionOperationView } from '@my-pi-harness/protocol';
+import type { ToolSource } from '@my-pi-harness/protocol';
 import type { FrozenMcpTool } from './external-tools.js';
 
 export type RunToolSource = ToolSource;
@@ -17,7 +17,6 @@ export interface RunToolSelection {
   readonly source: RunToolSource;
   readonly definition: RunToolDefinition;
   readonly external?: FrozenMcpTool;
-  readonly connection?: { grant: ConnectionGrant; operation: ConnectionOperationView };
 }
 
 export interface RunToolRecord extends RunToolSelection {

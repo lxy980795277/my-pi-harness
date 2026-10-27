@@ -21,7 +21,8 @@ export function containsSecret(value: unknown, secrets: readonly string[]): bool
   return false;
 }
 
-function discovered(input: Tool, secrets: readonly string[]): McpDiscoveredTool {
+/** Freeze validated definitions, rejecting credential echoes before exposing or persisting metadata. */
+export function discovered(input: Tool, secrets: readonly string[]): McpDiscoveredTool {
   if (containsSecret(input, secrets))
     throw new McpError('SECRET_ECHO', 'The server returned credential-bearing tool metadata');
   const definition = deepFreeze(structuredClone(input));

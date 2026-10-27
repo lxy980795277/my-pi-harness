@@ -9,6 +9,7 @@ import {
 } from '@my-pi-harness/protocol';
 import type { FastifyInstance } from 'fastify';
 import type { PluginService } from './service.js';
+import { requestOperation } from '../request-operation.js';
 const Params = Type.Object(
   { id: Type.String({ minLength: 1, maxLength: 160 }) },
   { additionalProperties: false },
@@ -31,40 +32,19 @@ export function registerPluginRoutes(server: FastifyInstance, plugins: PluginSer
         response: { 200: PluginDetailSchema },
       },
     },
-    async (request, reply) => {
-      const controller = new AbortController();
-      const abort = (): void => controller.abort();
-      const close = (): void => {
-        if (!reply.raw.writableFinished) controller.abort();
-      };
-      request.raw.once('aborted', abort);
-      reply.raw.once('close', close);
-      try {
-        return await plugins.detail(request.params.id, controller.signal);
-      } finally {
-        request.raw.off('aborted', abort);
-        reply.raw.off('close', close);
-      }
-    },
+    (request, reply) =>
+      requestOperation(request, reply, (signal) => plugins.detail(request.params.id, signal), null),
   );
   server.post<{ Params: { id: string } }>(
     '/api/plugins/:id/install',
     { schema: { params: Params, response: { 200: PluginViewSchema } } },
-    async (request, reply) => {
-      const controller = new AbortController();
-      const abort = (): void => controller.abort();
-      const close = (): void => {
-        if (!reply.raw.writableFinished) controller.abort();
-      };
-      request.raw.once('aborted', abort);
-      reply.raw.once('close', close);
-      try {
-        return await plugins.install(request.params.id, controller.signal);
-      } finally {
-        request.raw.off('aborted', abort);
-        reply.raw.off('close', close);
-      }
-    },
+    (request, reply) =>
+      requestOperation(
+        request,
+        reply,
+        (signal) => plugins.install(request.params.id, signal),
+        null,
+      ),
   );
   server.post<{ Params: { id: string }; Body: PluginControlInput }>(
     '/api/plugins/:id/control',

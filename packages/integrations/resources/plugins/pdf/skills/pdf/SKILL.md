@@ -1,9 +1,23 @@
 ---
 name: pdf
-description: '创建 PDF，选择与修改页面、填写字段，并读取指定页图。'
+description: '自动分页生成正文和表格 PDF，检查及填写表单，处理页面并通过真实页图核查交付。'
 allowed-tools: 'office_pdf office_inspect pdf_read_pages'
 ---
 
-使用 office_inspect 核对加密、签名、XFA 和字段状态，再用 office_pdf 处理支持的操作。每次修改写入新的 output，不覆盖 source。通过 pdf_read_pages 读取指定页面并检查内容与版式。视觉遮盖不能称为不可恢复脱敏；检查 validation 与 notVerified，缺少渲染依赖时明确报告。
+# PDF 文档
+
+适用于本地 PDF 创建、正文读取、页面处理和受限 AcroForm 填写。文本提取不等于版式检查，也不进行 OCR。仅回答已有文件的问题时读取相关页面，不改写文件。
+
+## 执行步骤
+
+1. 有输入文件时先用 `office_inspect` 检查页数、文字、字段及支持限制；遇到扫描内容用 `pdf_read_pages` 查看指定页，无法辨识的内容应明确说明。所有路径均为工作区相对路径。
+2. 创建长文或长表格先用 `read_skill_resource` 读取 `references/layout.md`（排版与创建），使用 `office_pdf.flow` 和 `layout`，由排版引擎自动分页。需要明确固定页面时可用 `pages` 模式；不要把长报告强塞入一页。
+3. 修改现有文件先读 `references/editing.md`（页面与表单）。保留 `source`，写入全新的 `output`。填写字段前核对类型、导出值及选项；不要猜字段名称或把显示标签当成导出值。
+4. 查看工具的 `validation` 与 `notVerified`，再读最终 PDF 核对页数、正文、顺序及字段值。用 `pdf_read_pages` 分批检查新建或受影响页面，关注裁切、折行、表头重复、中文缺字及表单可见值。
+5. 修复后重新生成并查看最新结果。完成工具详情可下载原始产物；报告实际结构/页图检查范围及尚未验证项。
+
+## 支持限制
+
+每个输入/输出最多 100 页。加密、签名、XFA、脚本、附件及其他活动 PDF 会拒绝；没有安全脱敏和 OCR 工具。`overlays` 是视觉覆盖，会保留可恢复的底层内容，不能用于承诺删除敏感信息。缺少 Python 依赖时明确失败，不在 Run 中隐式安装。页图需要支持图像输入的模型。
 
 加载 Skill 不会授予工具或账号权限。仅通过当前 Run 已授权的工具、连接与受限网关访问资源；不要读取凭据文件、请求用户粘贴 Token，或将秘密写入输出。停止、撤销和结果未知应按宿主返回状态处理，不自动重试副作用。

@@ -38,7 +38,11 @@ PDF worker 有 96 MiB V8 old-generation、10 秒与 20 页/100000 字符限制�
 
 Web 工具只使用标准 80/443 端口，拒绝 URL 凭据、非公网地址、IPv4 映射/过渡 IPv6、HTTPS 降级和超过四次重定向。每次解析全部 A/AAAA 结果并检查，socket 使用已核对的地址；没有环境代理、cookies、认证头、重试或连接复用。总时间 15 秒、响应 500000 字节、模型输出 100000 字符。请求 identity 编码并拒绝压缩响应，防止隐藏的解压放大；二进制与非 UTF-8 响应明确失败。POST 结果不确定时由调用者展示执行事实，不自动重试。
 
+宿主可通过`ExecutionContext.skillGateway`声明唯一daemon回环origin及私有访问能力。只有该origin下的`/api/skill-gateway/{pluginId}/...`允许GET，socket固定127.0.0.1并附加私有请求头；其他本机路径、端口、别名及来自公网的重定向仍拒绝。网关响应上限5MiB，禁止跟随重定向；访问能力不进入工具参数或结果。
+
 ## 验证
+
+办公工具仍由固定JSON schema与受监管Python worker执行。DOCX排版及受控图片、PDF自动分页及表单处理的参数与限制见[办公指南](../../docs/07_USER_GUIDE/office.md)；结构检查、PDF页图和Office应用视觉验收分别记录，不以成功生成文件代替版式验收。
 
 使用 `pnpm --filter @my-pi-harness/execution test`、`typecheck`、`lint` 运行本包检查。真实 macOS 测试覆盖默认/显式沙箱的网络/越界/敏感文件拒绝、完整访问的受控工作区外读写与环境隔离，以及两种策略的取消、超时、输出上限、leader 提前退出与 TERM 升级；模拟平台分支检查 Windows/Linux 在两种策略下都拒绝执行，Windows/Linux实机尚未验证。测试使用独占临时工作区和假数据，不访问真实用户凭据或真实供应商账户。
 
@@ -47,3 +51,5 @@ Web 工具只使用标准 80/443 端口，拒绝 URL 凭据、非公网地址、
 `resolvePersistentProcess` 在不启动程序的情况下解析真实可执行文件、文件身份与已注册工作根，拒绝相对程序路径、启动控制环境和非法参数。`startPersistentProcess` 只启动这份已解析配置，spawn 前后核对程序身份；stdin/stdout 双向通道交由明确拥有者处理，不暴露 ChildProcess。MCP 的协议、目录和请求身份由 integrations 拥有。
 
 持久进程与 Shell 共用进程组 TERM/KILL 和真实管道关闭检查。默认沙箱使用独占 HOME/TMPDIR、拒绝网络；full-access 单独传入，使用宿主权限。写队列最多 4 MiB，排队结束与实际写入前再次检查取消；stdout/stderr 分别有累计和速率上限，stderr 环形诊断过滤已知秘密。`close` 同步拒绝写入、幂等且可等待，完成进程组/管道回收后才删除临时目录；失败明确报告，leader exit 不算完成。执行器仅保证所属 POSIX 进程组，主动脱组后代不在该回收保证内。
+
+`executeWebFetch(args, WebFetchContext)`提供不依赖工作区的同一网络执行器；只接收只读策略、精确Skill网关访问和取消信号。参数、DNS/socket绑定、重定向、响应限额与原`executeTool("web_fetch", ...)`共用实现；审批及派发事实仍由调用方负责。

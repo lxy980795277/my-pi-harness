@@ -24,10 +24,6 @@ const id = Type.String({ minLength: 1, maxLength: 160 });
 const fingerprint = Type.String({ pattern: '^[a-f0-9]{64}$' });
 /** Durable routing identity is independent from a user-editable display name. */
 export const ToolSourceSchema = Type.Union([
-  Type.Object(
-    { kind: Type.Literal('connection'), connectionId: id, grantId: id, operation: id },
-    { additionalProperties: false },
-  ),
   Type.Object({ kind: Type.Literal('session') }, { additionalProperties: false }),
   Type.Object({ kind: Type.Literal('workspace') }, { additionalProperties: false }),
   Type.Object(

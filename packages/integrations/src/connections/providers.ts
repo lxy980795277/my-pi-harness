@@ -1,4 +1,5 @@
 import type { ConnectionServiceId } from '@my-pi-harness/protocol';
+import { BUILTIN_PLUGIN_APPS } from '../plugins/catalog.js';
 
 export type ClientAuthentication = 'basic' | 'post';
 export interface ConnectionProvider {
@@ -27,8 +28,7 @@ const googleScopes = [
   'https://www.googleapis.com/auth/calendar.events.freebusy',
 ];
 
-/** Official endpoints are product data, never supplied by a model or browser form. */
-export const CONNECTION_PROVIDERS: readonly ConnectionProvider[] = [
+const providers: readonly Omit<ConnectionProvider, 'mcpEndpoints' | 'apps'>[] = [
   {
     serviceId: 'github',
     name: 'GitHub',
@@ -40,8 +40,6 @@ export const CONNECTION_PROVIDERS: readonly ConnectionProvider[] = [
     profileEndpoint: 'https://api.github.com/user',
     defaultScopes: ['read:user', 'repo'],
     allowedScopes: ['read:user', 'repo', 'public_repo', 'read:org', 'workflow', 'offline_access'],
-    mcpEndpoints: ['https://api.githubcopilot.com/mcp/'],
-    apps: ['GitHub'],
   },
   {
     serviceId: 'google',
@@ -61,14 +59,6 @@ export const CONNECTION_PROVIDERS: readonly ConnectionProvider[] = [
       'https://www.googleapis.com/auth/presentations.readonly',
       'https://www.googleapis.com/auth/calendar.events.readonly',
     ],
-    mcpEndpoints: [
-      'https://drivemcp.googleapis.com/mcp/v1',
-      'https://docsmcp.googleapis.com/mcp/v1',
-      'https://sheetsmcp.googleapis.com/mcp/v1',
-      'https://slidesmcp.googleapis.com/mcp/v1',
-      'https://calendarmcp.googleapis.com/mcp/v1',
-    ],
-    apps: ['Drive', 'Docs', 'Sheets', 'Slides', 'Calendar'],
   },
   {
     serviceId: 'vercel',
@@ -81,8 +71,6 @@ export const CONNECTION_PROVIDERS: readonly ConnectionProvider[] = [
     profileEndpoint: 'https://api.vercel.com/v2/user',
     defaultScopes: ['offline_access'],
     allowedScopes: ['offline_access', 'openid', 'profile', 'email'],
-    mcpEndpoints: ['https://mcp.vercel.com/'],
-    apps: ['Projects', 'Deployments'],
   },
   {
     serviceId: 'notion',
@@ -95,8 +83,6 @@ export const CONNECTION_PROVIDERS: readonly ConnectionProvider[] = [
     profileEndpoint: 'https://api.notion.com/v1/users/me',
     defaultScopes: [],
     allowedScopes: [],
-    mcpEndpoints: ['https://mcp.notion.com/mcp'],
-    apps: ['Pages', 'Blocks', 'Search'],
   },
   {
     serviceId: 'supabase',
@@ -109,10 +95,18 @@ export const CONNECTION_PROVIDERS: readonly ConnectionProvider[] = [
     profileEndpoint: 'https://api.supabase.com/v1/profile',
     defaultScopes: [],
     allowedScopes: [],
-    mcpEndpoints: ['https://mcp.supabase.com/mcp'],
-    apps: ['Organizations', 'Projects', 'Advisors'],
   },
 ];
+
+/** Official MCP targets and App labels come from the same bundled declarations as plugin installation. */
+export const CONNECTION_PROVIDERS: readonly ConnectionProvider[] = providers.map((provider) => {
+  const apps = BUILTIN_PLUGIN_APPS.filter((app) => app.provider === provider.serviceId);
+  return {
+    ...provider,
+    mcpEndpoints: apps.map((app) => app.endpoint),
+    apps: apps.map((app) => app.name),
+  };
+});
 
 export function connectionProvider(id: ConnectionServiceId): ConnectionProvider {
   const provider = CONNECTION_PROVIDERS.find((item) => item.serviceId === id);

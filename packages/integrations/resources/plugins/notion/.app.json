@@ -1,0 +1,13 @@
+{
+  "apps": [
+    {
+      "id": "notion",
+      "provider": "notion",
+      "name": "Notion",
+      "description": "搜索和编辑已授权的页面与数据库。",
+      "credentialSource": "mcp-oauth",
+      "transport": "streamable-http",
+      "endpoint": "https://mcp.notion.com/mcp"
+    }
+  ]
+}

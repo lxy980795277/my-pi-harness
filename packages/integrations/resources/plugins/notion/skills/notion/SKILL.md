@@ -1,9 +1,15 @@
 ---
 name: notion
 description: '读取与编辑已授权的 Notion 页面、块和数据库。'
-allowed-tools: 'notion'
+allowed-tools: 'web_fetch'
 ---
 
 先识别目标页面或数据库 ID。保留既有页面层级和未涉及内容，写入前读取最新结构。批量修改、共享或删除必须有明确目标。记录成功的页面链接；权限不足时报告连接范围，不试图访问其他工作区。
 
 加载 Skill 不会授予工具或账号权限。仅通过当前 Run 已授权的工具、连接与受限网关访问资源；不要读取凭据文件、请求用户粘贴 Token，或将秘密写入输出。停止、撤销和结果未知应按宿主返回状态处理，不自动重试副作用。
+
+## 已连接服务的只读访问
+
+当前激活Skill记录中的gatewayUrl是本机只读入口。使用web_fetch GET请求该入口下的服务API路径；宿主附加认证，不传入认证头，也不读取凭据。网关拒绝的路径不能绕过或改为上游直连。修改操作通过tool_search搜索已启用的MCP工具；命中会自动加载，下一次模型请求按返回的真实名称调用，继续遵守用户授权和工具审批。
+
+通过gatewayUrl下的v1/search?query=...检索页面；网关将检索转换为受限的JSON查询。也可读取v1/pages/{id}、v1/blocks/{id}、v1/blocks/{id}/children和v1/data_sources/{id}/query。网关返回不允许的路径时，使用实际MCP目录确认可用能力。

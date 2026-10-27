@@ -1,18 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import { Value } from 'typebox/value';
 import { Type } from 'typebox';
-import {
-  RuntimeError,
-  type ConnectionGatewayPort,
-  type ConnectionGatewayCall,
-  type ConnectionGrantRequest,
-  type ExternalToolOutcome,
-} from '@my-pi-harness/agent-runtime';
+import { RuntimeError } from '@my-pi-harness/agent-runtime';
 import {
   CONNECTION_PROVIDERS,
-  CONNECTION_OPERATIONS,
   connectionProvider,
-  connectionOperation,
   beginConnectionOAuth,
   refreshConnectionOAuth,
   parseConnectionCredential,
@@ -26,10 +18,7 @@ import type {
   ConnectionUpdate,
   ConnectionView,
   ConnectionSecretInput,
-  ConnectionGrant,
   ConnectionProviderView,
-  ConnectionOperationView,
-  FrozenSkill,
 } from '@my-pi-harness/protocol';
 import type {
   ProfileStore,
@@ -37,6 +26,7 @@ import type {
   ConnectionRepository,
   StoredConnection,
 } from '@my-pi-harness/storage';
+import { pluginEndpointComponent } from '../plugins/app-catalog.js';
 
 interface PendingFlow {
   connectionId: string;
@@ -48,21 +38,12 @@ interface PendingFlow {
   timer: NodeJS.Timeout;
   driver: ConnectionOAuthFlow;
   controller: AbortController;
-}
-interface Granted {
-  grant: ConnectionGrant;
-  skill: FrozenSkill;
-}
-interface ActiveRequest {
-  connectionId: string;
-  runId: string;
-  controller: AbortController;
+  consumed: boolean;
 }
 export interface ConnectionServiceOptions {
   store: ProfileStore;
   repository: ConnectionRepository;
   credentials: CredentialStore;
-  skills: { assertBindingsCurrent(skills: readonly FrozenSkill[]): void };
   onInvalidated?: (connectionId: string) => Promise<void>;
   fixtureOrigin?: string;
 }
@@ -93,11 +74,9 @@ function profileIdentity(value: unknown, service: string): { id: string; name: s
   return { id: String(id), name: String(name).slice(0, 200) };
 }
 
-/** Provider configuration, OS credentials and Run grants are separately owned authorities. */
-export class ConnectionService implements ConnectionGatewayPort {
+/** Advanced account configuration and OS credentials remain separate from plugin authorization. */
+export class ConnectionService {
   private readonly flows = new Map<string, PendingFlow>();
-  private readonly grants = new Map<string, Granted>();
-  private readonly active = new Set<ActiveRequest>();
   private readonly pending = new Set<Promise<unknown>>();
   private readonly mutations = new Set<string>();
   private closed = false;
@@ -222,9 +201,6 @@ export class ConnectionService implements ConnectionGatewayPort {
         clearTimeout(flow.timer);
         flow.controller.abort();
       }
-    for (const [grantId, granted] of this.grants)
-      if (granted.grant.connectionId === id) this.grants.delete(grantId);
-    for (const request of this.active) if (request.connectionId === id) request.controller.abort();
   }
   private async notifyInvalidated(id: string): Promise<void> {
     this.invalidate(id);
@@ -298,11 +274,13 @@ export class ConnectionService implements ConnectionGatewayPort {
     record: StoredConnection,
     credential: ConnectionCredential,
     update: Partial<StoredConnection>,
+    beforeCommit?: () => void,
   ): Promise<StoredConnection> {
     const reference = `connection:${record.id}:${randomUUID()}`;
     let saved: StoredConnection;
     try {
       await this.options.credentials.write(reference, JSON.stringify(credential));
+      beforeCommit?.();
       const current = this.require(record.id);
       this.expected(current, {
         expectedRevision: record.revision,
@@ -445,6 +423,7 @@ export class ConnectionService implements ConnectionGatewayPort {
       timer,
       driver,
       controller,
+      consumed: false,
     });
     return { url: driver.url, expiresAt };
   }
@@ -465,41 +444,52 @@ export class ConnectionService implements ConnectionGatewayPort {
     const state = params.get('state');
     if (state === null) fail('CONNECTION_OAUTH_STATE', '授权回调缺少state。');
     const flow = this.flows.get(state);
-    this.flows.delete(state);
-    if (flow !== undefined) clearTimeout(flow.timer);
-    if (flow === undefined || flow.expiresAt < Date.now())
+    if (flow === undefined || flow.consumed || flow.expiresAt < Date.now())
       fail('CONNECTION_OAUTH_EXPIRED', '授权流程已过期或已经使用。');
-    const record = this.require(flow.connectionId);
-    this.expected(record, {
-      expectedRevision: flow.revision,
-      expectedAccessEpoch: flow.accessEpoch,
-    });
-    const identity = this.identity();
-    if (
-      serviceId !== record.serviceId ||
-      identity.ownerId !== flow.ownerId ||
-      identity.epoch !== flow.identityEpoch
-    )
-      fail('CONNECTION_OAUTH_STATE', '授权回调与原账户或供应商不匹配。');
-    await this.mutate(record.id, async () => {
-      const linked = AbortSignal.any([signal, flow.controller.signal]);
-      let credential: ConnectionCredential;
-      try {
-        credential = await flow.driver.complete(params, linked);
-      } catch {
-        fail('CONNECTION_OAUTH_FAILED', '供应商授权失败、取消或回调校验未通过，请重新连接。');
-      }
-      if (credential.accessToken === undefined)
-        fail('CONNECTION_CREDENTIAL_INVALID', '授权没有返回访问Token。');
-      const account = await this.account(record, credential.accessToken, linked);
-      linked.throwIfAborted();
-      await this.saveCredential(record, credential, {
-        connected: true,
-        clientSecretConfigured: credential.clientSecret !== undefined,
-        accountId: account.id,
-        accountName: account.name,
+    flow.consumed = true;
+    try {
+      const record = this.require(flow.connectionId);
+      this.expected(record, {
+        expectedRevision: flow.revision,
+        expectedAccessEpoch: flow.accessEpoch,
       });
-    });
+      const identity = this.identity();
+      if (
+        serviceId !== record.serviceId ||
+        identity.ownerId !== flow.ownerId ||
+        identity.epoch !== flow.identityEpoch
+      )
+        fail('CONNECTION_OAUTH_STATE', '授权回调与原账户或供应商不匹配。');
+      await this.mutate(record.id, async () => {
+        const linked = AbortSignal.any([signal, flow.controller.signal]);
+        let credential: ConnectionCredential;
+        try {
+          credential = await flow.driver.complete(params, linked);
+        } catch {
+          fail('CONNECTION_OAUTH_FAILED', '供应商授权失败、取消或回调校验未通过，请重新连接。');
+        }
+        if (credential.accessToken === undefined)
+          fail('CONNECTION_CREDENTIAL_INVALID', '授权没有返回访问Token。');
+        const account = await this.account(record, credential.accessToken, linked);
+        linked.throwIfAborted();
+        await this.saveCredential(
+          record,
+          credential,
+          {
+            connected: true,
+            clientSecretConfigured: credential.clientSecret !== undefined,
+            accountId: account.id,
+            accountName: account.name,
+          },
+          () => {
+            linked.throwIfAborted();
+          },
+        );
+      });
+    } finally {
+      if (this.flows.get(state) === flow) this.flows.delete(state);
+      clearTimeout(flow.timer);
+    }
   }
   private assertConnected(record: StoredConnection): void {
     const identity = this.identity();
@@ -512,14 +502,14 @@ export class ConnectionService implements ConnectionGatewayPort {
     )
       fail('CONNECTION_REQUIRED', '外部账户未连接或授权已失效，请重新连接。');
   }
-  private assertPlugin(serviceId: string): void {
+  private appEnabled(serviceId: string, componentId: string): boolean {
     const plugin = this.options.store.extensions.plugins().find((item) => item.id === serviceId);
-    if (
-      plugin === undefined ||
-      !plugin.enabled ||
-      !plugin.components.some((item) => item.kind === 'app' && item.enabled)
-    )
-      fail('CONNECTION_PLUGIN_DISABLED', '请先安装并启用对应插件及App。');
+    return (
+      plugin?.enabled === true &&
+      plugin.components.some(
+        (item) => item.kind === 'app' && item.id === componentId && item.enabled,
+      )
+    );
   }
   public authority(
     connectionId: string,
@@ -527,23 +517,9 @@ export class ConnectionService implements ConnectionGatewayPort {
   ): { connectionId: string; accessEpoch: number; ownerId: string; identityEpoch: number } {
     const record = this.require(connectionId);
     this.assertConnected(record);
-    this.assertPlugin(record.serviceId);
-    const url = new URL(endpoint);
-    const endpoints = connectionProvider(record.serviceId).mcpEndpoints;
-    if (
-      !endpoints.some((entry) => {
-        const expected = new URL(entry);
-        return (
-          url.origin === expected.origin &&
-          url.username === '' &&
-          url.password === '' &&
-          url.pathname.replace(/\/$/, '') === expected.pathname.replace(/\/$/, '') &&
-          url.search === '' &&
-          url.hash === ''
-        );
-      })
-    )
-      fail('CONNECTION_ORIGIN_FORBIDDEN', '连接凭据只能用于对应服务的预置MCP地址。');
+    const componentId = pluginEndpointComponent(record.serviceId, endpoint);
+    if (!this.appEnabled(record.serviceId, componentId))
+      fail('CONNECTION_APP_DISABLED', '此MCP所属的服务应用已停用。');
     return {
       connectionId,
       accessEpoch: record.accessEpoch,
@@ -623,234 +599,6 @@ export class ConnectionService implements ConnectionGatewayPort {
       throw error;
     }
   }
-  public catalog(
-    _workspaceId: string | null,
-    activeSkills: readonly FrozenSkill[],
-    signal: AbortSignal,
-  ): Promise<readonly ConnectionOperationView[]> {
-    signal.throwIfAborted();
-    const output: ConnectionOperationView[] = [];
-    for (const record of this.options.repository.list(this.identity().ownerId)) {
-      if (
-        !record.connected ||
-        !activeSkills.some((skill) => skill.authorization.pluginId === record.serviceId)
-      )
-        continue;
-      this.assertConnected(record);
-      this.assertPlugin(record.serviceId);
-      for (const skill of activeSkills.filter(
-        (entry) => entry.authorization.pluginId === record.serviceId,
-      ))
-        this.options.skills.assertBindingsCurrent([skill]);
-      for (const operation of CONNECTION_OPERATIONS.filter(
-        (entry) => entry.serviceId === record.serviceId,
-      )) {
-        if (record.accountId === null) continue;
-        const parameters: unknown = Value.Clone(operation.parameters);
-        if (!Value.Check(Type.Record(Type.String(), Type.Unknown()), parameters))
-          fail('CONNECTION_SCHEMA_INVALID', '服务操作参数定义无效。');
-        output.push({
-          id: operation.id,
-          connectionId: record.id,
-          accountId: record.accountId,
-          serviceId: record.serviceId,
-          app: operation.app,
-          name: operation.name,
-          readOnly: operation.readOnly,
-          description: operation.description,
-          parameters,
-        });
-      }
-    }
-    return Promise.resolve(output);
-  }
-  private freezeGrantNow(request: ConnectionGrantRequest, signal: AbortSignal): ConnectionGrant {
-    signal.throwIfAborted();
-    const record = this.require(request.connectionId);
-    this.assertConnected(record);
-    this.assertPlugin(record.serviceId);
-    this.options.skills.assertBindingsCurrent([request.skill]);
-    if (
-      request.skill.authorization.pluginId !== record.serviceId ||
-      request.operations.length === 0 ||
-      request.operations.length > 30 ||
-      new Set(request.operations).size !== request.operations.length
-    )
-      fail('CONNECTION_SKILL_FORBIDDEN', '授权需要对应服务的已激活Skill和明确操作。');
-    for (const id of request.operations)
-      if (connectionOperation(id).serviceId !== record.serviceId)
-        fail('CONNECTION_OPERATION_FORBIDDEN', '不能跨供应商授权操作。');
-    const now = Date.now();
-    if (request.expiresAt <= now || request.expiresAt > now + 900_000 || record.accountId === null)
-      fail('CONNECTION_GRANT_INVALID', '授权有效期不能超过15分钟。');
-    const grant: ConnectionGrant = {
-      id: randomUUID(),
-      runId: request.runId,
-      skillId: request.skill.selection.id,
-      skillHash: request.skill.selection.contentHash,
-      pluginId: record.serviceId,
-      pluginEpoch: request.skill.authorization.pluginEpoch,
-      connectionId: record.id,
-      serviceId: record.serviceId,
-      accountId: record.accountId,
-      ownerId: record.ownerId,
-      identityEpoch: record.identityEpoch,
-      revision: record.revision,
-      accessEpoch: record.accessEpoch,
-      operations: [...request.operations],
-      expiresAt: request.expiresAt,
-    };
-    this.grants.set(grant.id, { grant: structuredClone(grant), skill: request.skill });
-    return structuredClone(grant);
-  }
-  public freezeGrant(
-    request: ConnectionGrantRequest,
-    signal: AbortSignal,
-  ): Promise<ConnectionGrant> {
-    return new Promise<ConnectionGrant>((accept) => {
-      accept(this.freezeGrantNow(request, signal));
-    });
-  }
-  private validateGrant(input: ConnectionGatewayCall): StoredConnection {
-    const granted = this.grants.get(input.grant.id);
-    if (
-      granted === undefined ||
-      JSON.stringify(granted.grant) !== JSON.stringify(input.grant) ||
-      input.runId !== granted.grant.runId ||
-      input.grant.expiresAt <= Date.now() ||
-      !input.grant.operations.includes(input.operation)
-    )
-      fail('CONNECTION_GRANT_EXPIRED', '此Run的连接授权不存在、过期或已撤销。');
-    const record = this.require(input.grant.connectionId);
-    this.assertConnected(record);
-    this.assertPlugin(record.serviceId);
-    this.options.skills.assertBindingsCurrent([granted.skill]);
-    if (
-      record.revision !== input.grant.revision ||
-      record.accessEpoch !== input.grant.accessEpoch ||
-      record.accountId !== input.grant.accountId ||
-      record.ownerId !== input.grant.ownerId ||
-      record.identityEpoch !== input.grant.identityEpoch
-    )
-      fail('CONNECTION_REVOKED', '连接账户或授权已变化。');
-    return record;
-  }
-  public async call(input: ConnectionGatewayCall): Promise<ExternalToolOutcome> {
-    return await this.track(this.perform(input));
-  }
-  private async perform(input: ConnectionGatewayCall): Promise<ExternalToolOutcome> {
-    let dispatched = false;
-    let barrierFailed = false;
-    const controller = new AbortController();
-    const active = { connectionId: input.grant.connectionId, runId: input.runId, controller };
-    this.active.add(active);
-    const signal = AbortSignal.any([
-      input.signal,
-      controller.signal,
-      AbortSignal.timeout(Math.max(1, Math.min(60_000, input.grant.expiresAt - Date.now()))),
-    ]);
-    try {
-      signal.throwIfAborted();
-      const record = this.validateGrant(input);
-      const operation = connectionOperation(input.operation);
-      if (operation.serviceId !== record.serviceId)
-        fail('CONNECTION_OPERATION_FORBIDDEN', '不能跨供应商调用。');
-      const request = operation.request(input.arguments);
-      const token = await this.accessToken(record, signal);
-      this.validateGrant(input);
-      const headers = this.headers(record.serviceId, token);
-      if (request.body !== undefined) headers.set('content-type', 'application/json');
-      const provider = connectionProvider(record.serviceId);
-      const fetch = connectionFetch(provider, this.options.fixtureOrigin);
-      try {
-        await input.beforeDispatch();
-      } catch (error) {
-        barrierFailed = true;
-        throw error;
-      }
-      this.validateGrant(input);
-      signal.throwIfAborted();
-      dispatched = true;
-      const response = await fetch(request.url, {
-        method: request.method,
-        headers,
-        ...(request.body === undefined ? {} : { body: request.body }),
-        signal,
-      });
-      let text = await response.text();
-      text = text.split(token).join('[redacted]');
-      let data: unknown = null;
-      if (text.length > 0) {
-        try {
-          data = JSON.parse(text);
-        } catch {
-          return {
-            kind: 'unknown',
-            message: '上游返回了无法核实的JSON结果；请求可能已经生效，不会自动重试。',
-          };
-        }
-      }
-      const encode = (result: unknown): string =>
-        JSON.stringify({
-          parentToolCallId: input.parentToolCallId,
-          operation: operation.id,
-          status: response.status,
-          result,
-        });
-      let content = encode(data);
-      if (content.length > 100_000) {
-        let length = Math.min(text.length, 20_000);
-        do {
-          content = encode({
-            truncated: true,
-            preview: text.slice(0, length),
-            message: '响应详情过长，已缩短预览；HTTP状态与操作结果类别保持不变。',
-          });
-          length = Math.floor(length / 2);
-        } while (content.length > 100_000 && length > 0);
-      }
-      if (response.status === 401) {
-        const current = this.require(record.id);
-        if (current.accessEpoch === record.accessEpoch) {
-          this.options.repository.save(
-            {
-              ...current,
-              connected: false,
-              accessEpoch: current.accessEpoch + 1,
-              updatedAt: Date.now(),
-            },
-            current.revision,
-            current.accessEpoch,
-          );
-          await this.notifyInvalidated(record.id);
-        }
-      }
-      return {
-        kind: 'known',
-        isError: !response.ok,
-        summary: `${operation.name} · HTTP ${String(response.status)}`,
-        content: [{ type: 'text', text: content }],
-      };
-    } catch (error) {
-      if (barrierFailed) throw error;
-      if (dispatched)
-        return {
-          kind: 'unknown',
-          message: '外部请求已可能发送，连接中断、撤销或超时；结果未知，不会自动重试。',
-        };
-      if (signal.aborted)
-        return { kind: 'not-dispatched', cancelled: true, message: '外部请求在派发前取消。' };
-      const message =
-        error instanceof RuntimeError ? error.message : '外部请求的参数或连接授权无效。';
-      return { kind: 'not-dispatched', cancelled: false, message };
-    } finally {
-      this.active.delete(active);
-    }
-  }
-  public revokeRun(runId: string): void {
-    for (const [id, value] of this.grants) if (value.grant.runId === runId) this.grants.delete(id);
-    for (const request of this.active) if (request.runId === runId) request.controller.abort();
-  }
   public stopAccepting(): void {
     this.closed = true;
     for (const flow of this.flows.values()) {
@@ -858,8 +606,6 @@ export class ConnectionService implements ConnectionGatewayPort {
       flow.controller.abort();
     }
     this.flows.clear();
-    this.grants.clear();
-    for (const request of this.active) request.controller.abort();
   }
   public async close(): Promise<void> {
     this.stopAccepting();

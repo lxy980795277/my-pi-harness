@@ -4,10 +4,9 @@ import { Type } from 'typebox';
 import {
   FrozenSkillSchema,
   FrozenMcpToolSchema,
-  ConnectionGrantSchema,
-  ConnectionOperationViewSchema,
   SkillSelectionsSchema,
   ToolSourceSchema,
+  ToolDiscoveryDiagnosticSchema,
   type HarnessEvent,
 } from '@my-pi-harness/protocol';
 import { checked } from './validation.js';
@@ -19,18 +18,15 @@ const definition = Type.Object({
   description: Type.String(),
   parameters: Type.Record(Type.String(), Type.Unknown()),
 });
-const record = Type.Object({
-  definition,
-  source: ToolSourceSchema,
-  fingerprint: Type.String({ pattern: '^[a-f0-9]{64}$' }),
-  external: Type.Optional(FrozenMcpToolSchema),
-  connection: Type.Optional(
-    Type.Object(
-      { grant: ConnectionGrantSchema, operation: ConnectionOperationViewSchema },
-      { additionalProperties: false },
-    ),
-  ),
-});
+const record = Type.Object(
+  {
+    definition,
+    source: ToolSourceSchema,
+    fingerprint: Type.String({ pattern: '^[a-f0-9]{64}$' }),
+    external: Type.Optional(FrozenMcpToolSchema),
+  },
+  { additionalProperties: false },
+);
 const publicLoad = Type.Object(
   {
     revision: Type.Integer({ minimum: 2 }),
@@ -57,6 +53,7 @@ const accepted = Type.Object({
   mcpBindings: Type.Optional(Type.Array(FrozenMcpToolSchema, { maxItems: 16 })),
   workspaceCandidates: Type.Optional(Type.Array(definition)),
   skills: Type.Optional(Type.Array(FrozenSkillSchema, { maxItems: 16 })),
+  discoveryDiagnostics: Type.Optional(Type.Array(ToolDiscoveryDiagnosticSchema, { maxItems: 512 })),
 });
 function parse(value: string | null): unknown {
   if (value === null)
@@ -112,38 +109,7 @@ export function projectCapabilityLoad(
     );
   const initial = new Map(frozen.tools.map((tool) => [tool.name, tool]));
   for (const tool of payload.tools) {
-    if (tool.source.kind === 'connection') {
-      const source = tool.source;
-      const grantEvent = db
-        .select()
-        .from(schema.events)
-        .where(
-          and(
-            eq(schema.events.runId, run.id),
-            eq(schema.events.type, 'run.service_access_granted'),
-          ),
-        )
-        .all()
-        .find((entry) => entry.data['grantId'] === source.grantId);
-      if (!grantEvent || !tool.connection)
-        throw new StorageError('INVALID_EVENT', 'Connection tool requires an explicit grant event');
-      const grant = checked(serviceGrantPrivate, parse(grantEvent.privateData));
-      const operation = grant.operations.find(
-        (entry) => entry.id === source.operation && entry.connectionId === source.connectionId,
-      );
-      if (
-        source.connectionId !== grant.grant.connectionId ||
-        !grant.grant.operations.includes(source.operation) ||
-        !operation ||
-        JSON.stringify(tool.connection.grant) !== JSON.stringify(grant.grant) ||
-        JSON.stringify(tool.connection.operation) !== JSON.stringify(operation) ||
-        JSON.stringify(tool.definition.parameters) !== JSON.stringify(operation.parameters)
-      )
-        throw new StorageError(
-          'INVALID_EVENT',
-          'Connection tool differs from its approved operation or account',
-        );
-    } else if (tool.source.kind === 'mcp') {
+    if (tool.source.kind === 'mcp') {
       const source = tool.source;
       const candidate = frozen.mcpCandidates?.find(
         (item) =>
@@ -207,12 +173,7 @@ export function projectCapabilityLoad(
     if (
       !payload.tools.some(
         (tool) =>
-          tool.definition.name === prior.definition.name &&
-          (tool.fingerprint === prior.fingerprint ||
-            (prior.source.kind === 'connection' &&
-              tool.source.kind === 'connection' &&
-              tool.source.connectionId === prior.source.connectionId &&
-              tool.source.operation === prior.source.operation)),
+          tool.definition.name === prior.definition.name && tool.fingerprint === prior.fingerprint,
       )
     )
       throw new StorageError('INVALID_EVENT', 'Loading cannot silently remove a visible tool');
@@ -236,61 +197,4 @@ export function currentCapabilityRevision(
     .limit(1)
     .get();
   return row ? checked(publicLoad, row.data).revision : 1;
-}
-
-const serviceGrantPublic = Type.Object(
-  {
-    grantId: Type.String(),
-    skillId: Type.String(),
-    connectionId: Type.String(),
-    operations: Type.Array(Type.String(), { minItems: 1, maxItems: 30, uniqueItems: true }),
-    expiresAt: Type.Integer(),
-  },
-  { additionalProperties: false },
-);
-const serviceGrantPrivate = Type.Object(
-  {
-    grant: ConnectionGrantSchema,
-    operations: Type.Array(ConnectionOperationViewSchema, { minItems: 1, maxItems: 30 }),
-  },
-  { additionalProperties: false },
-);
-
-/** A replayable grant contains its account, Skill version and finite operation definitions. */
-export function projectServiceGrant(
-  db: BetterSQLite3Database<typeof schema>,
-  event: HarnessEvent,
-  privateData?: string,
-): void {
-  const publicData = checked(serviceGrantPublic, event.data);
-  const { grant, operations } = checked(serviceGrantPrivate, parse(privateData ?? null));
-  const run =
-    event.runId === null
-      ? undefined
-      : db.select().from(schema.runs).where(eq(schema.runs.id, event.runId)).get();
-  if (
-    !run ||
-    run.sessionId !== event.sessionId ||
-    run.data.status !== 'running' ||
-    grant.runId !== run.id ||
-    grant.id !== publicData.grantId ||
-    grant.skillId !== publicData.skillId ||
-    grant.connectionId !== publicData.connectionId ||
-    grant.expiresAt !== publicData.expiresAt ||
-    grant.expiresAt <= event.at ||
-    grant.expiresAt > event.at + 900_000 ||
-    JSON.stringify(grant.operations) !== JSON.stringify(publicData.operations) ||
-    JSON.stringify(operations.map((operation) => operation.id)) !==
-      JSON.stringify(grant.operations) ||
-    operations.some(
-      (operation) =>
-        operation.connectionId !== grant.connectionId ||
-        operation.accountId !== grant.accountId ||
-        operation.serviceId !== grant.serviceId,
-    )
-  )
-    throw new StorageError(
-      'INVALID_EVENT',
-      'Service grant does not match its active Run, account or operations',
-    );
 }

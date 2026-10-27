@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { join, resolve } from 'node:path';
-import Database from 'better-sqlite3';
+import type Database from 'better-sqlite3';
 import { and, asc, eq, gt, sql } from 'drizzle-orm';
 import { drizzle, type BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import {
@@ -27,6 +26,7 @@ import {
   type WorkState,
   type AttachmentContent,
   type Checkpoint,
+  type FrozenSkill,
 } from '@my-pi-harness/protocol';
 import { StorageError } from './errors.js';
 import { AuthRepository } from './auth.js';
@@ -34,8 +34,7 @@ import { McpRepository } from './mcp.js';
 import { ExtensionRepository } from './extensions.js';
 import { RemoteMcpRepository } from './remote-mcp.js';
 import { ConnectionRepository } from './connections.js';
-import { applyMigrations } from './migrations.js';
-import { acquireProfileLock, type ProfileLock } from './profile-lock.js';
+import type { ProfileLock } from './profile-lock.js';
 import { ProjectionWriter } from './projector.js';
 import { WorkspaceRepository } from './workspaces.js';
 import { ToolProjection } from './tools.js';
@@ -50,7 +49,8 @@ import { AttachmentBlobs } from './attachment-blobs.js';
 import { interruptionEvents } from './interruption.js';
 import { validateToolBatch } from './tool-batch.js';
 import { ModelContextQuery } from './model-context.js';
-import { sessionLogDirectory, type ProfileStoreOptions } from './session-log-directory.js';
+import type { ProfileStoreOptions } from './session-log-directory.js';
+import { SkillContextQuery } from './skill-context.js';
 import * as schema from './schema.js';
 import type { CreateSessionInput, EventInput, RequestAcceptance } from './types.js';
 import {
@@ -921,6 +921,22 @@ export class ProfileStore {
     return this.modelContext.read(sessionId, branchId, messageIds);
   }
 
+  /** Return the reset marker recorded when this summary version was first committed. */
+  public getCompactionContextStart(sessionId: string, compactionId: string): string | null {
+    this.assertOpen();
+    return this.work.compactionContextStart(sessionId, compactionId);
+  }
+
+  /** Read frozen instructions only from replayable messages in the requested branch prefix. */
+  public getSkillContext(
+    sessionId: string,
+    branchId: string,
+    messageIds?: readonly string[],
+  ): readonly FrozenSkill[] {
+    this.assertOpen();
+    return new SkillContextQuery(this.db).read(sessionId, branchId, messageIds);
+  }
+
   /** Preserve partial output and queue; stale resources become interrupted, never retried. */
   public recoverInterrupted(): HarnessEvent[] {
     const output: HarnessEvent[] = [];
@@ -941,50 +957,5 @@ export class ProfileStore {
       if (inputs.length > 0) output.push(...this.append(session.id, inputs));
     }
     return output;
-  }
-}
-
-/**
- * Open one profile, migrate and interrupt old runs before any model work can begin.
- * @param directory Local application profile, separate from Pi or other harness data.
- * @param options Explicit log root; omission uses a hidden directory inside this profile.
- * @returns An owned synchronous store with its cross-process lock held until close.
- */
-export async function openProfileStore(
-  directory: string,
-  options: ProfileStoreOptions = {},
-): Promise<ProfileStore> {
-  if (options.sessionLogRoot !== undefined)
-    sessionLogDirectory(resolve(directory), options.sessionLogRoot);
-  const lock = await acquireProfileLock(directory);
-  let database: Database.Database | undefined;
-  let store: ProfileStore | undefined;
-  try {
-    database = new Database(join(lock.directory, 'data.sqlite'), { timeout: 1000 });
-    database.pragma('foreign_keys = ON');
-    applyMigrations(database);
-    database.pragma('journal_mode = WAL');
-    database.pragma('synchronous = FULL');
-    store = new ProfileStore(database, lock, options);
-    store.recoverInterrupted();
-    return store;
-  } catch (error: unknown) {
-    if (store) {
-      try {
-        store.close();
-      } catch (cleanupError) {
-        throw new AggregateError(
-          [error, cleanupError],
-          'Profile recovery failed and storage cleanup also failed',
-        );
-      }
-    } else {
-      try {
-        database?.close();
-      } finally {
-        lock.release();
-      }
-    }
-    throw error;
   }
 }

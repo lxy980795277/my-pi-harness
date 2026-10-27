@@ -22,18 +22,18 @@
 
 ## Monorepo职责
 
-| 路径                     | 负责                                                                     | 不负责                                    |
-| ------------------------ | ------------------------------------------------------------------------ | ----------------------------------------- |
-| `apps/web`               | 页面、交互、HTTP/SSE客户端、状态呈现                                     | Node API、凭据与Agent实例                 |
-| `apps/daemon`            | API装配、本机信任与应用登录、事件重放、profile与服务生命周期             | 页面组件与桌面窗口                        |
-| `apps/desktop`           | Electron窗口、有限preload桥、daemon启动和退出、桌面资源与发布装配        | Agent Loop、业务数据库与工具实现          |
-| `packages/agent-runtime` | Pi模型、认证与Run编排、独立审批复核、取消、队列和分支                    | Electron、React、Fastify与SQL实现         |
-| `packages/execution`     | 有界文件/PDF、Web与按策略隔离的macOS Shell执行                           | Pi Loop、审批拥有者、数据库与页面         |
-| `packages/integrations`  | MCP传输/目录/租约、Skills资源/安装、插件manifest与服务OAuth/固定操作目录 | 数据库、启动授权决策、Pi Loop、HTTP与页面 |
-| `packages/storage`       | JSONL批日志、SQLite配置/投影、附件文件、profile锁、系统凭据              | 模型调用和页面状态                        |
-| `packages/protocol`      | 跨端DTO、schema、协议版本、公开桌面桥                                    | Node imports、业务服务、环境配置或密钥    |
-| `packages/eslint-config` | 共享静态检查配置                                                         | 业务实现                                  |
-| `packages/tsconfig`      | 明确的TypeScript编译配置                                                 | 运行时代码                                |
+| 路径                     | 负责                                                                 | 不负责                                    |
+| ------------------------ | -------------------------------------------------------------------- | ----------------------------------------- |
+| `apps/web`               | 页面、交互、HTTP/SSE客户端、状态呈现                                 | Node API、凭据与Agent实例                 |
+| `apps/daemon`            | API装配、本机信任与应用登录、事件重放、profile与服务生命周期         | 页面组件与桌面窗口                        |
+| `apps/desktop`           | Electron窗口、有限preload桥、daemon启动和退出、桌面资源与发布装配    | Agent Loop、业务数据库与工具实现          |
+| `packages/agent-runtime` | Pi模型、认证与Run编排、独立审批复核、取消、队列和分支                | Electron、React、Fastify与SQL实现         |
+| `packages/execution`     | 有界文件/PDF、Web与按策略隔离的macOS Shell执行                       | Pi Loop、审批拥有者、数据库与页面         |
+| `packages/integrations`  | MCP传输/目录/租约、Skills资源/安装、插件manifest与服务OAuth/网关声明 | 数据库、启动授权决策、Pi Loop、HTTP与页面 |
+| `packages/storage`       | JSONL批日志、SQLite配置/投影、附件文件、profile锁、系统凭据          | 模型调用和页面状态                        |
+| `packages/protocol`      | 跨端DTO、schema、协议版本、公开桌面桥                                | Node imports、业务服务、环境配置或密钥    |
+| `packages/eslint-config` | 共享静态检查配置                                                     | 业务实现                                  |
+| `packages/tsconfig`      | 明确的TypeScript编译配置                                             | 运行时代码                                |
 
 `agent-runtime`通过明确RuntimeStore/ProviderStore与SecretStore接口接入宿主，ToolRuntime按冻结策略逐次确认、调用独立ModelApprovalReviewer或使用用户明确选择的full-access，再调用execution；daemon提供注册工作区解析和复核资料，Renderer只消费公开工具事件。`storage`拥有JSONL会话事实、不可变附件以及SQLite配置/会话投影；完整批次校验后先写日志并fsync，再提交SQLite投影，Runtime随后发布公开SSE。失败冻结写入，重启从日志重建会话投影，不重执行副作用。其他package在真实职责出现时创建，避免无边界共享工具包。跨包导入使用`@my-pi-harness/*`；相对导入仅留在同一app/package，源码检查拒绝跨workspace私有源码引用。
 
@@ -44,6 +44,8 @@ MCP由daemon的`McpService`管理配置、系统秘密与启动授权，`Externa
 ## 进程和连接
 
 浏览器开发通过 Vite 的同源 `/api` 代理访问 daemon。Electron 开发启动自己的 daemon，等待Web HTTP就绪后加载窗口；发布版由 Electron 启动随包独立 Node，daemon 托管构建后的 Web，窗口连接实际监听端口。
+
+插件OAuth在Web同步打开`/skill-oauth/:id/launch`，由该独立页面请求授权地址并自行跳转；主窗口轮询账号状态，关闭授权窗后停止等待。Electron通过限时一次性启动ticket在系统浏览器打开相同启动页，不共享Renderer Cookie；独立MCP使用同类启动流程。高级手动账户保留独立界面和窗口所有权。
 
 daemon 只监听 `127.0.0.1`。默认 Web 开发端口为 `5174`，独立 daemon 为 `4311`；发布时使用端口 `0` 申请空闲端口，并通过经过校验的启动记录返回实际地址。桌面开发自动启动的 daemon 由桌面进程拥有，退出与启动失败都要回收。
 
@@ -80,8 +82,10 @@ Web开发的 `DAEMON_ORIGIN` 指定同源代理目标，缺省连接上述独立
 
 ## M4能力所有权
 
-`McpService`与`RemoteMcpService`分别拥有本地/远端配置和启动信任；`SkillsService`拥有发现、不可变版本与资源lease；`PluginService`按精确引用装配独立资源及MCP Apps。`ConnectionService`另管插件服务账户、系统凭据和固定REST操作，不复用应用GitHub登录Token。它们由daemon装配，Runtime仅消费能力端口和非秘密冻结数据。
+`McpService`与`RemoteMcpService`拥有MCP配置、启动与工具授权；`SkillsService`冻结Skill正文、资源及公开gatewayUrl；`PluginService`按精确引用装配Skill和App。`PluginConnectionService`以每插件单一凭据完成OAuth、账号及刷新，专用`PluginCredentialStore`保存0600原子文件。插件manifest声明OAuth与只读路径，私有网关能力只由宿主web_fetch附加；MCP按官方endpoint共享插件Token。接口与桌面适配见[插件连接协议](../03_API/plugin-connections.md)。
 
-`RunCapabilities`分开冻结候选目录与当前可调用定义，`run.tools_loaded`持久化后推进下一模型请求；同一版本同时供声明、预算和执行使用。`ConnectionCapabilities`在明确用户审批后保存账户/Skill/Run限定的有限服务授权，具体调用仍经过ToolRuntime策略、派发屏障和unknown处理。Office工具在工作区执行，由选中Skill声明或按需加载，不把全部Office schema默认塞入所有请求。
+MCP目录由宿主按当前身份、配置、凭据epoch和信任指纹保存至SQLite；启动恢复有效快照并后台预热远程服务，输入接受等待有界单飞准备。各服务失败保留独立诊断，不阻塞其他目录；GET不进行发现，关闭和撤销取消所属工作并阻止迟到发布。
+
+`RunCapabilities`冻结候选与当前定义，搜索自动暂存命中，`run.tools_loaded`持久化后推进模型请求。启用Skill摘要、显式提及及目录发现状态纳入模型可见且可回放的上下文，具体限额见[运行时能力协议](../03_API/capability-runtime.md)。daemon拥有懒加载的本地CPU向量Worker，缓存固定版本模型至profile的models目录；Worker不继承供应商凭据环境，关闭时终止推理与下载。语义不可用时保留BM25搜索。插件只读API通过web_fetch访问允许网关，写入通过明确开启的MCP App和原有工具审批；没有固定REST操作或逐Run服务grant工具。高级手动`ConnectionService`只管理独立账户与MCP凭据，不再参与插件默认授权。Office工具由激活Skill或动态加载提供。
 
 生产package包含`integrations/resources/plugins`与`execution/resources/office`；Python/LibreOffice等可选办公依赖按明确配置检测，不在Agent任务中静默安装。核心过程见[能力扩展设计](../09_TECHNICAL/能力扩展与授权设计.md)。

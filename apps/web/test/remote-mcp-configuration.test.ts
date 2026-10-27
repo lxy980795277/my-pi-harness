@@ -23,6 +23,7 @@ const savedServer = (overrides: Partial<RemoteMcpView> = {}): RemoteMcpView => {
     enabled: false,
     trusted: false,
     oauthConnected: false,
+    catalogStatus: 'idle',
     createdAt: 1,
     updatedAt: 2,
     ...overrides,

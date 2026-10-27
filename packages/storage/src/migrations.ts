@@ -9,10 +9,12 @@ import { MCP_SQL } from './migrations/0003-mcp.js';
 import { EXTENSIONS_SQL } from './migrations/0004-extensions.js';
 import { REMOTE_MCP_SQL } from './migrations/0005-remote-mcp.js';
 import { CONNECTIONS_SQL } from './migrations/0006-connections.js';
+import { PLUGIN_ACCOUNTS_SQL } from './migrations/0007-plugin-accounts.js';
+import { MCP_CATALOGS_SQL } from './migrations/0008-mcp-catalogs.js';
 const MigrationRowSchema = Type.Object({ version: Type.Integer(), checksum: Type.String() });
 
 /** Highest installed schema version understood by this build. */
-export const SCHEMA_VERSION = 6;
+export const SCHEMA_VERSION = 8;
 const migrations = [
   { version: 1, sql: FOUNDATION_SQL },
   { version: 2, sql: APPLICATION_LOGIN_SQL },
@@ -20,6 +22,8 @@ const migrations = [
   { version: 4, sql: EXTENSIONS_SQL },
   { version: 5, sql: REMOTE_MCP_SQL },
   { version: 6, sql: CONNECTIONS_SQL },
+  { version: 7, sql: PLUGIN_ACCOUNTS_SQL },
+  { version: 8, sql: MCP_CATALOGS_SQL },
 ];
 
 /**

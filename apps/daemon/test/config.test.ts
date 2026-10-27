@@ -165,3 +165,54 @@ it('accepts only an explicitly absolute Office interpreter path', () => {
     }),
   ).toThrow(DaemonConfigError);
 });
+
+it('uses daemon-owned plugin OAuth pairs and isolates overrides from application login client settings', () => {
+  const fallback = loadDaemonConfig({
+    MY_PI_HARNESS_GITHUB_CLIENT_ID: 'login-client',
+    MY_PI_HARNESS_GITHUB_CLIENT_SECRET: 'login-secret',
+    MY_PI_HARNESS_GITHUB_CALLBACK_URL: 'http://127.0.0.1:5174/api/auth/callback/github',
+  });
+  expect(fallback.skillOAuthClients?.['github']).toBeUndefined();
+  const dedicated = loadDaemonConfig({
+    MY_PI_HARNESS_GITHUB_CLIENT_ID: 'login-client',
+    MY_PI_HARNESS_GITHUB_CLIENT_SECRET: 'login-secret',
+    MY_PI_HARNESS_SKILL_GITHUB_CLIENT_ID: 'plugin-client',
+    MY_PI_HARNESS_SKILL_GITHUB_CLIENT_SECRET: 'plugin-secret',
+    MY_PI_HARNESS_SKILL_GOOGLE_CLIENT_ID: 'google-client',
+    MY_PI_HARNESS_SKILL_GOOGLE_CLIENT_SECRET: 'google-secret',
+  });
+  expect(dedicated.githubClientId).toBe('login-client');
+  expect(dedicated.skillOAuthClients?.['github']).toEqual({
+    clientId: 'plugin-client',
+    clientSecret: 'plugin-secret',
+  });
+  expect(dedicated.skillOAuthClients?.['google']).toEqual({
+    clientId: 'google-client',
+    clientSecret: 'google-secret',
+  });
+});
+
+it.each([
+  { MY_PI_HARNESS_SKILL_GITHUB_CLIENT_ID: 'orphan' },
+  { MY_PI_HARNESS_SKILL_GITHUB_CLIENT_SECRET: 'orphan' },
+  {
+    MY_PI_HARNESS_SKILL_GOOGLE_CALLBACK_URL:
+      'http://127.0.0.1/api/skill-connections/google/oauth/callback',
+  },
+  { MY_PI_HARNESS_SKILL_GOOGLE_CLIENT_ID: '', MY_PI_HARNESS_SKILL_GOOGLE_CLIENT_SECRET: 'secret' },
+  { MY_PI_HARNESS_SKILL_GOOGLE_CLIENT_ID: 'id', MY_PI_HARNESS_SKILL_GOOGLE_CLIENT_SECRET: '' },
+  {
+    MY_PI_HARNESS_SKILL_GOOGLE_CLIENT_ID: 'id',
+    MY_PI_HARNESS_SKILL_GOOGLE_CLIENT_SECRET: 'secret',
+    MY_PI_HARNESS_SKILL_GOOGLE_CALLBACK_URL:
+      'https://evil.example/api/skill-connections/google/oauth/callback',
+  },
+  {
+    MY_PI_HARNESS_SKILL_GOOGLE_CLIENT_ID: 'id',
+    MY_PI_HARNESS_SKILL_GOOGLE_CLIENT_SECRET: 'secret',
+    MY_PI_HARNESS_SKILL_GOOGLE_CALLBACK_URL:
+      'http://127.0.0.1/api/skill-connections/github/oauth/callback',
+  },
+])('rejects incomplete plugin registration and unowned callback targets', (environment) => {
+  expect(() => loadDaemonConfig(environment)).toThrow(DaemonConfigError);
+});

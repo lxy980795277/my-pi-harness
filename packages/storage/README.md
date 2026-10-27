@@ -12,7 +12,8 @@ Node 24 宿主使用的同步存储。JSONL保存会话执行事实，独立不�
 | Provider配置、厂商绑定、工作区、应用设置                              | SQLite               | 权威配置，不能从会话日志恢复         |
 | 用户、外部身份、profile归属、本机客户端和应用登录会话                 | SQLite               | 权威认证事实，投影重建不删除         |
 | MCP Server配置、秘密引用、作用域启动授权及profile身份epoch            | SQLite               | 权威配置，独立于浏览器登录与会话投影 |
-| API Key、OAuth Token                                                  | 系统凭据库           | 只保存引用，不保存秘密               |
+| 模型 Key、高级账户和独立 MCP OAuth Token                              | 系统凭据库           | 只保存引用，不保存秘密               |
+| 插件共享 OAuth Token 与账号                                           | profile 私有 JSON    | 不保存 Token 或账户桥接记录          |
 
 JSONL是宿主私有数据，包含模型恢复所需的完整codec和工具结果。普通HTTP/SSE通过`readEvents()`选择公开envelope或`getSnapshot()`返回公开投影；用户明确下载日志时，由受保护的[会话日志接口](../../docs/03_API/model-session.md#事件快照与断线)读取原始已提交JSONL前缀，保留全部分支和恢复数据。图片base64仅在受保护附件内容接口按需提供。上下文中用户主动提供的正文和工具结果可能包含敏感信息，宿主日志不等于脱敏导出。
 
@@ -70,10 +71,14 @@ schema按版本和checksum校验：0001保存配置与会话投影，0002添加�
 
 `createSystemCredentialStore(profileDirectory)`按profile独立namespace使用macOS Keychain或Windows Credential Store。每个ref的操作串行，Token刷新由`modify()`拥有完整异步过程；失败不退回明文或内存。`createMemoryCredentialStore()`仅供测试显式注入，不读取Pi或其他项目凭据。
 
+`PluginCredentialStore.open(<profile>/skill-credentials.json)`专门保存插件共享 OAuth：每个插件一份 Token、账号与私有用户/身份 epoch/安装 generation。JSON 文件必须为当前用户拥有的普通单链接文件，POSIX 权限为 `0600`，拒绝目录或末级文件链接、损坏 schema 和超过 4 MiB 的记录。写入串行，临时文件写入并同步后经拥有者校验再原子替换；缓存与已发布文件同时更新。撤销校验失败保留此前文件；断开和卸载删除对应插件，不改高级账户或其他插件。此文件是插件凭据的明确权威位置，系统凭据不可用时不会将其他秘密降级写入这里。
+
 `pnpm --filter @my-pi-harness/storage test`使用真实临时SQLite和文件，覆盖批回滚、日志提交/SQL提交失败、重建、坏行、附件完整性、跨进程锁及中断恢复。系统凭据权限、Windows ACL和桌面安装需要独立目标平台证据。完整M3范围见[功能Spec](../../docs/04_FEATURES/202610151655_feature_m3-context-interaction/spec.md)，硬约束见[后端规范](../../docs/05_CONSTRAINTS/backend.md)。
 
 ## M4能力配置与会话事实
 
-当前SQLite schema为6。MCP目录开关/精确只读授权、远程配置、Skill启停、插件安装及外部服务连接是SQLite配置事实；秘密仍只存系统凭据库。Skill冻结文件保存于profile的不可变版本目录，资源使用hash校验和Run lease，不能仅备份会话日志替代这些资源。
+当前SQLite schema为8；第7代迁移移除已退役插件默认账户的归属标记，保留原账户及系统凭据引用，第8代添加`mcp_catalog_snapshots`派生目录。目录按Server及作用域保存非秘密授权指纹、有界协议定义JSON和发现时间，不保存凭据字节或可执行TypeBox对象；宿主恢复时重验官方协议与当前授权。目录可重建，损坏或失效不能授予信任，也不能替代配置/秘密。MCP目录开关/精确只读授权、远程配置、Skill启停、插件安装及高级外部服务连接是SQLite配置事实；插件共享 OAuth 按上述私有 JSON 独立保存，其他秘密保留系统凭据库。Skill冻结文件保存于profile的不可变版本目录，资源使用hash校验和Run lease，不能仅备份会话日志替代这些资源。
 
-`run.accepted`私有数据保存初始工具、不可变候选目录与Skill正文/授权；`run.tools_loaded`保存递增可见版本、完整定义/来源及冻结Skill。投影校验版本连续、公开名称对应私有定义、加载项来自原候选或明确服务grant、初始工具/Skill不能悄悄丢失。`context.prepared.capabilityRevision`必须等于当前可见版本。服务授权保存Run/Skill/账户/操作及期限的非秘密快照和固定操作schema，重建日志不恢复内存grant、不连接上游、不重做请求。
+`run.accepted`私有数据保存初始工具、不可变候选目录与Skill正文/授权；`run.tools_loaded`保存递增可见版本、完整定义/来源及冻结Skill。投影校验版本连续、公开名称对应私有定义、加载项来自原候选、初始工具/Skill不能悄悄丢失。`context.prepared.capabilityRevision`必须等于当前可见版本。服务插件的只读网关地址保存在冻结Skill中，私有网关访问能力不进入日志。重建不连接上游或重做请求。
+
+`getSkillContext(sessionId, branchId, messageIds?)`从当前分支可回放消息的接受与加载事实读取冻结指令，按事件顺序核对消息锚点，保留每个Skill最近版本，最多16项。分支后缀、被排除消息和其他会话不参与继承；重启不读取新磁盘正文。调用方决定压缩/重置的历史范围并重验当前启用、安装代和授权；该查询不提供工具权限或公开HTTP接口。

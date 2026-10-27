@@ -29,11 +29,11 @@ test('远程 MCP JSON、秘密、授权与脱敏配置交换', async ({ page, da
   await secret.getByLabel('秘密请求头值', { exact: true }).fill('synthetic-remote-authorization');
   await secret.getByRole('button', { name: '保存秘密', exact: true }).click();
   await expect(secret).toBeHidden();
-  await row.getByRole('button', { name: '远端授权', exact: true }).click();
-  const trust = page.getByRole('alertdialog', { name: '确认远端 MCP 授权？', exact: true });
+  await row.getByRole('button', { name: '信任此服务', exact: true }).click();
+  const trust = page.getByRole('alertdialog', { name: '信任此服务？', exact: true });
   await expect(trust).toContainText('https://example.com/mcp');
   await expect(trust).not.toContainText('synthetic-remote-authorization');
-  await trust.getByRole('button', { name: '确认远端范围', exact: true }).click();
+  await trust.getByRole('button', { name: '信任并启用', exact: true }).click();
   await expect(trust).toBeHidden();
   await expect(row).toContainText('已启用');
   await openMcpAdvancedSettings(page);

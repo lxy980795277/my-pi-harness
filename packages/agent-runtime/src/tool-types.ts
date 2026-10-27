@@ -1,4 +1,4 @@
-import type { ExecutionContent } from '@my-pi-harness/execution';
+import type { ExecutionContent, WebFetchGatewayAccess } from '@my-pi-harness/execution';
 import type {
   RunView,
   SessionSummary,
@@ -10,7 +10,6 @@ import type { EventInput } from './runtime-ports.js';
 import type { WorkRuntime } from './work-runtime.js';
 import type { ExternalTools } from './external-tools.js';
 import type { RunControls } from './capability-ports.js';
-import type { ConnectionGatewayPort } from './connection-ports.js';
 
 export type ToolEventType = 'tool.requested' | 'tool.updated';
 
@@ -40,7 +39,7 @@ export interface ToolRuntimeOptions {
   work?: WorkRuntime;
   reviewer?: ApprovalReviewer;
   externalTools?: ExternalTools;
-  connectionGateway?: ConnectionGatewayPort;
+  skillGateway?: WebFetchGatewayAccess;
   officePythonPath?: string;
 }
 

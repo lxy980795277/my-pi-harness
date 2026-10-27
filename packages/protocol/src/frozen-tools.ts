@@ -26,6 +26,7 @@ export type ExternalToolAuthorization = Static<typeof ExternalToolAuthorizationS
 export const FrozenMcpToolSchema = Type.Object(
   {
     selection: McpToolSelectionSchema,
+    displayName: Type.Optional(Type.String({ minLength: 1, maxLength: 1024 })),
     definition: Type.Object(
       {
         name: Type.String(),

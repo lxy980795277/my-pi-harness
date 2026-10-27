@@ -5,6 +5,7 @@ import { Notice } from '@/components/ui/notice';
 import { PluginMarket } from '@/features/plugins/components/plugin-market';
 import { PluginDetail } from '@/features/plugins/components/plugin-detail';
 import { PluginSkillDetail } from '@/features/plugins/components/plugin-skill-detail';
+import { PluginAppDetail } from '@/features/plugins/components/plugin-app-detail';
 import { usePluginSettings } from '@/features/plugins/hooks/use-plugin-settings';
 
 /** Navigation replaces the settings content without opening another dialog. */
@@ -46,6 +47,13 @@ export const PluginsSettings: FC = () => {
       )}
       {state.page.type === 'skill' && state.selected !== null && state.activeSkill !== null && (
         <PluginSkillDetail pluginId={state.selected.plugin.manifest.id} skill={state.activeSkill} />
+      )}
+      {state.page.type === 'app' && state.selected !== null && state.activeApp !== null && (
+        <PluginAppDetail
+          app={state.activeApp}
+          pluginId={state.selected.plugin.manifest.id}
+          pluginName={state.selected.plugin.manifest.name}
+        />
       )}
     </section>
   );

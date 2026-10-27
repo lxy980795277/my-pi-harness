@@ -1,0 +1,13 @@
+{
+  "apps": [
+    {
+      "id": "vercel",
+      "provider": "vercel",
+      "name": "Vercel",
+      "description": "检查项目、部署和构建状态。",
+      "credentialSource": "mcp-oauth",
+      "transport": "streamable-http",
+      "endpoint": "https://mcp.vercel.com/"
+    }
+  ]
+}

@@ -1,4 +1,5 @@
-export { ProfileStore, openProfileStore } from './store.js';
+export { ProfileStore } from './store.js';
+export { openProfileStore } from './open.js';
 export { StorageError, type StorageErrorCode } from './errors.js';
 export { ProfileLockedError, acquireProfileLock, type ProfileLock } from './profile-lock.js';
 export { SCHEMA_VERSION } from './migrations.js';
@@ -25,6 +26,11 @@ export { McpRepository } from './mcp.js';
 export type { StoredMcpServer, McpSecretBinding, McpStartupGrant, McpIdentity } from './mcp.js';
 export { ExtensionRepository, type StoredSkill, type StoredPlugin } from './extensions.js';
 export { RemoteMcpRepository, type StoredRemoteMcpServer } from './remote-mcp.js';
-export { McpDirectoryRepository, type McpReadOnlyGrant } from './mcp-directory.js';
+export {
+  McpDirectoryRepository,
+  type McpReadOnlyGrant,
+  type StoredMcpCatalog,
+} from './mcp-directory.js';
 
 export { ConnectionRepository, type StoredConnection } from './connections.js';
+export { PluginCredentialStore, type PluginOAuthCredential } from './plugin-credentials.js';

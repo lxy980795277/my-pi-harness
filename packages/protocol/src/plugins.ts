@@ -11,7 +11,16 @@ export const PluginManifestSchema = Type.Object(
     version: Type.String(),
     skills: Type.Array(Type.String()),
     apps: Type.Array(
-      Type.Object({ id: Type.String(), provider: Type.String(), name: Type.String() }, object),
+      Type.Object(
+        {
+          id: Type.String(),
+          provider: Type.String(),
+          name: Type.String(),
+          description: Type.Optional(Type.String({ maxLength: 1024 })),
+          credentialSource: Type.Optional(Type.Enum(['plugin-oauth', 'mcp-oauth', 'none'])),
+        },
+        object,
+      ),
     ),
   },
   object,

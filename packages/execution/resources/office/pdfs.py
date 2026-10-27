@@ -2,6 +2,7 @@
 import base64
 import io
 from common import require
+from pdf_forms import choice_options, update_choices, validate_choice
 
 
 def safe_pdf(path):
@@ -34,7 +35,10 @@ def field_view(reader):
     result = []
     for name, field in (reader.get_fields() or {}).items():
         value = field.get('/V')
-        result.append({'name': str(name), 'type': str(field.get('/FT', '')), 'value': str(value) if value is not None else None, 'flags': int(field.get('/Ff', 0))})
+        entry = {'name': str(name), 'type': str(field.get('/FT', '')), 'value': [str(item) for item in value] if isinstance(value, list) else (str(value) if value is not None else None), 'flags': int(field.get('/Ff', 0))}
+        if field.get('/FT') == '/Ch':
+            entry['options'] = [{'export': key, 'label': label} for key, label in choice_options(field)]
+        result.append(entry)
     return result
 
 
@@ -95,20 +99,36 @@ def validate_fields(reader, fields):
             enabled = [str(item) for item in appearances if str(item) != '/Off']
             require(len(enabled) == 1, 'Checkbox appearance has no unambiguous enabled state')
             values[name] = enabled[0] if value else '/Off'
+        elif kind == '/Ch':
+            values[name] = validate_choice(field, value)
         else:
-            raise ValueError('Only text and simple checkbox fields are supported')
+            raise ValueError('Only text, simple checkbox and bounded choice fields are supported')
     return values
 
 
 def pdf(request, output):
-    from pypdf import PdfReader, PdfWriter
-    from pypdf.generic import DictionaryObject, NameObject
-    from reportlab.pdfgen import canvas
+    from pypdf import PdfReader
     source = request.get('source')
-    require(not source or not request.get('pages'), 'Editing a PDF uses explicit page operations; creation pages cannot silently replace a source')
+    require(not source or not any(key in request for key in ('pages', 'flow', 'layout')), 'Editing a PDF uses explicit page operations; creation content cannot silently replace a source')
     if not source:
-        require(request.get('pages'), 'PDF creation needs at least one page')
+        require(('pages' in request) != ('flow' in request), 'PDF creation requires exactly one of pages or flow')
+        require('layout' not in request or 'flow' in request, 'PDF layout options require flow mode')
         generated = io.BytesIO()
+        if 'flow' in request:
+            from pdf_layout import build_flow
+            build_flow(request, generated)
+            reader = PdfReader(io.BytesIO(generated.getvalue()), strict=True)
+        else:
+            reader = fixed_pages(request, generated)
+    else:
+        reader = safe_pdf(source)
+    return modify_pdf(request, reader, output)
+
+
+def fixed_pages(request, generated):
+    from pypdf import PdfReader
+    from reportlab.pdfgen import canvas
+    if request['pages']:
         drawing = canvas.Canvas(generated)
         for page in request['pages']:
             width, height = page.get('width', 595), page.get('height', 842)
@@ -129,9 +149,13 @@ def pdf(request, output):
                 final_y -= 12
             drawing.showPage()
         drawing.save()
-        reader = PdfReader(io.BytesIO(generated.getvalue()), strict=True)
-    else:
-        reader = safe_pdf(source)
+    return PdfReader(io.BytesIO(generated.getvalue()), strict=True)
+
+
+def modify_pdf(request, reader, output):
+    from pypdf import PdfReader, PdfWriter
+    from pypdf.generic import DictionaryObject, NameObject
+    from reportlab.pdfgen import canvas
     if request.get('repairFields'):
         original_form = reader.trailer['/Root'].get('/AcroForm')
         require(not original_form or not original_form.get_object().get('/Fields'), 'Repair is limited to a missing/empty field tree')
@@ -176,8 +200,11 @@ def pdf(request, output):
             known = field_reader.get_fields() or {}
             require(known and all(field.get('/FT') == '/Tx' for field in known.values()), 'Flattening is limited to simple text fields')
             require(set(fields) == set(known), 'Flattening requires explicit values for every field')
-        for page in writer.pages:
-            writer.update_page_form_field_values(page, values, auto_regenerate=False, flatten=flattened)
+        known = field_reader.get_fields() or {}
+        regular = {name: value for name, value in values.items() if known[name].get('/FT') != '/Ch'}
+        if regular:
+            writer.update_page_form_field_values(None, regular, auto_regenerate=False, flatten=flattened)
+        update_choices(writer, known, values)
         if flattened:
             for page in writer.pages:
                 for reference in page.get('/Annots', []):
@@ -225,13 +252,15 @@ def pdf(request, output):
     if fields and not flattened:
         saved = {item['name']: item['value'] for item in result['fields']}
         for name, value in values.items():
-            require(saved.get(name) == str(value), 'Saved field value did not match the request')
+            require(saved.get(name) == (value if isinstance(value, list) else str(value)), 'Saved field value did not match the request')
         result['validation'].append('Saved form field values match the request')
     if flattened:
         require(not result['fields'], 'Flattening left interactive fields')
         result['validation'].append('Text fields flattened using appearances; interactive widgets removed')
     if request.get('overlays'):
         result['notVerified'].append('Visual overlay is NOT secure redaction; underlying content can remain recoverable')
+    if request.get('flow'):
+        result['validation'].append('Prose and tables paginated with ReportLab Platypus; output is within 100 pages')
     return result
 
 

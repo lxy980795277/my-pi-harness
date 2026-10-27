@@ -113,7 +113,7 @@ test('插件预览、独立 Skill 开关和整体停用持久反映到目录', a
     pluginId: 'documents',
     enabled: true,
   });
-  await expect(page.getByRole('button', { name: /documents 在工作区创建/u })).toBeVisible();
+  await expect(page.getByRole('button', { name: /documents 创建有样式/u })).toBeVisible();
 
   await page.getByRole('tab', { name: '插件', exact: true }).click();
   await card.getByRole('button', { name: '查看 Documents 插件详情', exact: true }).click();
@@ -135,7 +135,7 @@ test('插件预览、独立 Skill 开关和整体停用持久反映到目录', a
     pluginId: 'documents',
     enabled: false,
   });
-  await expect(page.getByRole('button', { name: /documents 在工作区创建/u })).toBeVisible();
+  await expect(page.getByRole('button', { name: /documents 创建有样式/u })).toBeVisible();
   await page.getByRole('tab', { name: '插件', exact: true }).click();
   await card.getByRole('button', { name: '查看 Documents 插件详情', exact: true }).click();
   await expect(skillToggle).not.toBeChecked();
@@ -153,7 +153,7 @@ test('插件预览、独立 Skill 开关和整体停用持久反映到目录', a
     pluginId: 'documents',
     enabled: true,
   });
-  await expect(page.getByRole('button', { name: /documents 在工作区创建/u })).toBeVisible();
+  await expect(page.getByRole('button', { name: /documents 创建有样式/u })).toBeVisible();
   await page.getByRole('tab', { name: '插件', exact: true }).click();
 
   const pluginToggle = card.getByRole('switch', { name: '启用 Documents 插件', exact: true });
@@ -161,15 +161,17 @@ test('插件预览、独立 Skill 开关和整体停用持久反映到目录', a
   await expect(pluginToggle).not.toBeChecked();
   await expect(detail).toBeHidden();
   const inactivePluginSkills = await openSkillCatalog(page);
-  expect(inactivePluginSkills.some((entry) => entry.name === 'documents')).toBe(false);
-  await expect(page.getByRole('button', { name: /documents 在工作区创建/u })).toBeHidden();
+  expect(inactivePluginSkills.find((entry) => entry.name === 'documents')).toMatchObject({
+    enabled: false,
+  });
+  await expect(page.getByRole('button', { name: /documents 创建有样式/u })).toBeVisible();
   await page.getByRole('tab', { name: '插件', exact: true }).click();
   await card.getByRole('button', { name: '查看 Documents 插件详情', exact: true }).click();
-  await expect(skillToggle).toBeChecked();
-  await expect(skillToggle).toBeDisabled();
+  await expect(skillToggle).not.toBeChecked();
+  await expect(skillToggle).toBeEnabled();
   await detail.getByRole('button', { name: '查看 documents 技能详情', exact: true }).click();
   await expectRenderedInstructions(skillDetail, skill.content);
-  await expect(skillBodyToggle).toBeDisabled();
+  await expect(skillBodyToggle).toBeEnabled();
   await skillDetail.getByRole('button', { name: '返回 Documents', exact: true }).click();
   await detail.getByRole('button', { name: '返回插件市场', exact: true }).click();
   await card.getByRole('button', { name: '卸载', exact: true }).click();
@@ -267,7 +269,12 @@ async function expectRenderedInstructions(detail: Locator, content: string): Pro
   const paragraph = content.split(/\n\s*\n/u).find((entry) => entry.trim().length > 0);
   if (paragraph === undefined) throw new Error('Bundled Skill instructions must not be empty');
   await expect(detail).toBeVisible();
-  await expect(detail.locator('p').filter({ hasText: paragraph.trim() })).toBeVisible();
+  const heading = /^(#{1,6})\s+(.+)$/u.exec(paragraph.trim());
+  if (heading?.[1] !== undefined && heading[2] !== undefined)
+    await expect(
+      detail.getByRole('heading', { level: heading[1].length, name: heading[2], exact: true }),
+    ).toBeVisible();
+  else await expect(detail.locator('p').filter({ hasText: paragraph.trim() })).toBeVisible();
   await expect(detail.locator('textarea')).toHaveCount(0);
 }
 

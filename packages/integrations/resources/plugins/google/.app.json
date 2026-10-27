@@ -1,0 +1,49 @@
+{
+  "apps": [
+    {
+      "id": "google-drive",
+      "provider": "google",
+      "name": "Google Drive",
+      "description": "搜索和管理授权范围内的云端文件。",
+      "credentialSource": "plugin-oauth",
+      "transport": "streamable-http",
+      "endpoint": "https://drivemcp.googleapis.com/mcp/v1"
+    },
+    {
+      "id": "google-docs",
+      "provider": "google",
+      "name": "Google Docs",
+      "description": "读取和编辑 Google 文档。",
+      "credentialSource": "plugin-oauth",
+      "transport": "streamable-http",
+      "endpoint": "https://docsmcp.googleapis.com/mcp/v1"
+    },
+    {
+      "id": "google-sheets",
+      "provider": "google",
+      "name": "Google Sheets",
+      "description": "读取和编辑 Google 表格。",
+      "credentialSource": "plugin-oauth",
+      "transport": "streamable-http",
+      "endpoint": "https://sheetsmcp.googleapis.com/mcp/v1"
+    },
+    {
+      "id": "google-slides",
+      "provider": "google",
+      "name": "Google Slides",
+      "description": "读取和编辑 Google 演示文稿。",
+      "credentialSource": "plugin-oauth",
+      "transport": "streamable-http",
+      "endpoint": "https://slidesmcp.googleapis.com/mcp/v1"
+    },
+    {
+      "id": "google-calendar",
+      "provider": "google",
+      "name": "Google Calendar",
+      "description": "查询和管理授权范围内的日历与日程。",
+      "credentialSource": "plugin-oauth",
+      "transport": "streamable-http",
+      "endpoint": "https://calendarmcp.googleapis.com/mcp/v1"
+    }
+  ]
+}

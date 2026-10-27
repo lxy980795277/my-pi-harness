@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import {
   RuntimeError,
   type ExternalTools,
@@ -10,9 +10,9 @@ import {
   RemoteMcpManager,
   compileMcpInputSchema,
   type RemoteMcpBinding,
-  type McpCatalog,
 } from '@my-pi-harness/integrations';
 import type {
+  ToolDiscoveryDiagnostic,
   ApprovalMode,
   RemoteMcpInput,
   RemoteMcpUpdate,
@@ -32,64 +32,55 @@ import type {
   RemoteMcpDraftTestInput,
   RemoteMcpDraftTestResult,
 } from '@my-pi-harness/protocol';
-import type {
-  ProfileStore,
-  CredentialStore,
-  RemoteMcpRepository,
-  StoredRemoteMcpServer,
-} from '@my-pi-harness/storage';
+import type { StoredRemoteMcpServer } from '@my-pi-harness/storage';
 
+import type { RemoteMcpServiceOptions } from './remote-options.js';
+import { closeMcpResources } from './lifecycle.js';
+import { RemoteCatalogs, type RemoteCatalogEntry as CatalogEntry } from './remote-catalogs.js';
+import {
+  remoteStartupFingerprint,
+  remoteFingerprint as hash,
+  remoteToolAlias as alias,
+} from './remote-fingerprint.js';
 import { RemoteMcpOAuth } from './remote-oauth.js';
+import { remoteMcpView } from './remote-view.js';
 import { McpDirectoryPolicy, mcpMetadata } from './directory.js';
 import { assertRemoteNameAvailable, validateRemoteInput } from './remote-configuration.js';
 import { testRemoteMcpDraft } from './remote-connection-test.js';
-interface CatalogEntry {
-  revision: number;
-  accessEpoch: number;
-  value: McpCatalog;
-  discoveredAt: number;
-}
-export interface RemoteMcpServiceOptions {
-  store: ProfileStore;
-  repository: RemoteMcpRepository;
-  credentials: CredentialStore;
-  manager?: RemoteMcpManager;
-  fixtureOrigin?: string;
-  connectionToken?: {
-    authority(
-      connectionId: string,
-      endpoint: string,
-    ): { connectionId: string; accessEpoch: number; ownerId: string; identityEpoch: number };
-    read(connectionId: string, endpoint: string, signal: AbortSignal): Promise<string>;
-  };
-}
+import {
+  connectionAuthority,
+  pluginCredentialId,
+  pluginAppAvailable,
+  pluginStartupGrant,
+  serviceToken,
+  readMcpHeaders,
+} from './plugin-credentials.js';
 function fail(code: string, message: string): never {
   throw new RuntimeError(code, message);
-}
-function hash(value: unknown): string {
-  return createHash('sha256')
-    .update(
-      JSON.stringify(value, (_key, entry: unknown) =>
-        entry !== null && typeof entry === 'object' && !Array.isArray(entry)
-          ? Object.fromEntries(Object.entries(entry).sort(([a], [b]) => a.localeCompare(b)))
-          : entry,
-      ),
-    )
-    .digest('hex');
-}
-function alias(id: string, name: string): string {
-  return `mcp_${hash(id).slice(0, 16)}_${hash(name).slice(0, 32)}`;
 }
 /** Profile-scoped remote authority is independent from application login cookies and local workspaces. */
 export class RemoteMcpService implements ExternalTools {
   private readonly manager: RemoteMcpManager;
   private readonly directory: McpDirectoryPolicy;
-  private readonly catalogs = new Map<string, CatalogEntry>();
+  private readonly catalogs: RemoteCatalogs;
   private readonly oauth: RemoteMcpOAuth;
   private readonly mutations = new Set<string>();
   private readonly pending = new Set<Promise<unknown>>();
   private closed = false;
+  private closing: Promise<void> | undefined;
   public constructor(private readonly options: RemoteMcpServiceOptions) {
+    this.catalogs = new RemoteCatalogs(
+      options.store.mcp.directory,
+      {
+        require: (id) => this.require(id),
+        identity: () => this.identity(),
+        available: (server) => this.pluginAvailable(server),
+        assertAuthority: (server) => this.assertAuthority(server),
+        connectionAuthority: (server) => this.connectionAuthority(server),
+        discover: (id, input, signal) => this.discover(id, input, signal),
+      },
+      (serverId) => options.onBackgroundError?.({ code: 'MCP_APP_DISCOVERY_FAILED', serverId }),
+    );
     this.manager =
       options.manager ??
       new RemoteMcpManager({
@@ -111,7 +102,10 @@ export class RemoteMcpService implements ExternalTools {
       expected: (server, revision, epoch) => this.expected(server, revision, epoch),
       identity: () => this.identity(),
       assertAuthority: (server) => this.assertAuthority(server),
-      catalogChanged: (id) => this.catalogs.delete(id),
+      catalogChanged: (id) => {
+        this.catalogs.delete(id);
+        this.catalogs.startServer(id);
+      },
     });
   }
   private identity() {
@@ -133,42 +127,14 @@ export class RemoteMcpService implements ExternalTools {
     return validateRemoteInput(input, this.options.fixtureOrigin);
   }
   private fingerprint(server: StoredRemoteMcpServer): string {
-    return hash({
-      endpoint: server.endpoint,
-      transport: server.transport,
-      publicHeaders: server.publicHeaders,
-      secretHeaders: server.secretHeaders,
-      oauth: server.oauth,
-      oauthClient: server.oauthClient,
-      connectionId: server.connectionId,
-    });
+    return remoteStartupFingerprint(server);
   }
   private view(server: StoredRemoteMcpServer): RemoteMcpView {
-    const pluginAvailable = this.pluginAvailable(server);
-    return {
-      id: server.id,
-      name: server.name,
-      transport: server.transport,
-      endpoint: server.endpoint,
-      publicHeaders: { ...server.publicHeaders },
-      secretHeaders: server.secretHeaders.map((slot) => ({
-        ...slot,
-        configured: server.secretBindings.some(
-          (binding) => binding.slotId === slot.slotId && binding.credentialRef !== null,
-        ),
-      })),
-      oauth: server.oauth,
-      ...(server.oauthClient === undefined ? {} : { oauthClient: server.oauthClient }),
-      ...(server.connectionId === undefined ? {} : { connectionId: server.connectionId }),
-      oauthClientSecretConfigured: server.oauthClientSecretRef !== null,
-      revision: server.revision,
-      accessEpoch: server.accessEpoch,
-      enabled: server.enabled && pluginAvailable,
-      trusted: server.grant !== null && pluginAvailable,
-      oauthConnected: server.oauthConnected,
-      createdAt: server.createdAt,
-      updatedAt: server.updatedAt,
-    };
+    return remoteMcpView(
+      server,
+      this.pluginAvailable(server),
+      this.catalogs.currentState(server.id),
+    );
   }
   public list(): RemoteMcpView[] {
     if (this.closed) fail('MCP_CLOSED', 'MCP服务正在关闭。');
@@ -182,21 +148,7 @@ export class RemoteMcpService implements ExternalTools {
     return owner?.pluginId === pluginId && owner.componentId === componentId;
   }
   private pluginAvailable(server: StoredRemoteMcpServer): boolean {
-    const owner = server.pluginOwner;
-    if (owner === undefined) return true;
-    const plugin = this.options.store.extensions
-      .plugins()
-      .find((entry) => entry.id === owner.pluginId);
-    return (
-      plugin?.enabled === true &&
-      plugin.components.some(
-        (entry) =>
-          entry.id === owner.componentId &&
-          entry.kind === 'app' &&
-          entry.enabled &&
-          entry.referenceId === server.id,
-      )
-    );
+    return pluginAppAvailable(server, this.options.store.extensions.plugins());
   }
   public get(id: string): RemoteMcpView {
     return this.view(this.require(id));
@@ -293,7 +245,6 @@ export class RemoteMcpService implements ExternalTools {
       if (config.connectionId === undefined) delete next.connectionId;
       if (config.oauthClient === undefined) delete next.oauthClient;
       const saved = this.options.repository.save(next, server.revision, server.accessEpoch);
-      this.catalogs.delete(id);
       this.cancelFlows(id);
       const retained = new Set(
         saved.secretBindings.map((slot) => slot.credentialRef).filter((ref) => ref !== null),
@@ -304,6 +255,7 @@ export class RemoteMcpService implements ExternalTools {
   }
   private cancelFlows(id: string): void {
     this.oauth.cancel(id);
+    this.catalogs.delete(id);
   }
   private async deleteCredentials(
     server: StoredRemoteMcpServer,
@@ -317,13 +269,13 @@ export class RemoteMcpService implements ExternalTools {
       if (ref !== null && !retained.has(ref)) await this.options.credentials.delete(ref);
   }
   public async remove(id: string, expectedRevision: number): Promise<void> {
+    this.catalogs.delete(id);
     await this.mutate(id, async () => {
       const server = this.require(id);
       this.expected(server, expectedRevision);
       this.options.repository.remove(id, expectedRevision);
       this.options.store.mcp.directory.remove(id);
-      this.catalogs.delete(id);
-      this.cancelFlows(id);
+      this.oauth.cancel(id);
       await this.deleteCredentials(server);
     });
   }
@@ -384,7 +336,6 @@ export class RemoteMcpService implements ExternalTools {
       server.revision,
       server.accessEpoch,
     );
-    this.catalogs.delete(id);
     this.cancelFlows(id);
     await this.manager.invalidateServer(id);
     return this.view(saved);
@@ -427,7 +378,6 @@ export class RemoteMcpService implements ExternalTools {
         if (error instanceof RuntimeError) throw error;
         fail('MCP_CREDENTIAL_WRITE_FAILED', '系统凭据保存失败，配置未生效。');
       }
-      this.catalogs.delete(id);
       this.cancelFlows(id);
       if (slot.credentialRef !== null) await this.options.credentials.delete(slot.credentialRef);
       return this.view(saved);
@@ -460,7 +410,6 @@ export class RemoteMcpService implements ExternalTools {
       server.accessEpoch,
     );
     this.cancelFlows(id);
-    this.catalogs.delete(id);
     await this.manager.invalidateServer(id);
     if (slot.credentialRef !== null) await this.options.credentials.delete(slot.credentialRef);
     return this.view(saved);
@@ -484,7 +433,6 @@ export class RemoteMcpService implements ExternalTools {
       server.accessEpoch,
     );
     this.cancelFlows(id);
-    this.catalogs.delete(id);
     await this.manager.invalidateServer(id);
     for (const ref of [server.oauthClientSecretRef, server.oauthCredentialRef])
       if (ref !== null) await this.options.credentials.delete(ref);
@@ -514,6 +462,15 @@ export class RemoteMcpService implements ExternalTools {
   public completeOAuth(params: URLSearchParams, signal: AbortSignal): Promise<void> {
     return this.oauth.completeOAuth(params, signal);
   }
+  public async cancelOAuth(id: string, input: McpControlInput): Promise<RemoteMcpView> {
+    const server = this.require(id);
+    this.expected(server, input.expectedRevision, input.expectedAccessEpoch);
+    this.identity();
+    await this.oauth.cancelAuthorization(id);
+    const current = this.require(id);
+    this.expected(current, input.expectedRevision, input.expectedAccessEpoch);
+    return this.view(current);
+  }
   public async disconnectOAuth(id: string, input: McpControlInput): Promise<RemoteMcpView> {
     const server = this.require(id);
     this.expected(server, input.expectedRevision, input.expectedAccessEpoch);
@@ -531,7 +488,6 @@ export class RemoteMcpService implements ExternalTools {
       server.accessEpoch,
     );
     this.cancelFlows(id);
-    this.catalogs.delete(id);
     await this.manager.invalidateServer(id);
     if (server.oauthCredentialRef !== null)
       await this.options.credentials.delete(server.oauthCredentialRef);
@@ -542,29 +498,17 @@ export class RemoteMcpService implements ExternalTools {
     signal: AbortSignal,
   ): Promise<RemoteMcpBinding> {
     this.assertAuthority(server);
-    const headers = { ...server.publicHeaders };
-    const secrets: string[] = [];
-    for (const slot of server.secretBindings) {
-      if (slot.credentialRef === null) fail('MCP_CREDENTIAL_REQUIRED', '请先配置所有秘密请求头。');
-      const value = await this.options.credentials.read(slot.credentialRef);
-      if (value === undefined) fail('MCP_CREDENTIAL_REQUIRED', '系统凭据不存在，请重新配置。');
-      headers[slot.headerName] = value;
-      secrets.push(value);
-      if (slot.headerName.toLowerCase() === 'authorization') {
-        const token = /^(?:Bearer|Basic)\s+(.+)$/i.exec(value)?.[1];
-        if (token !== undefined) secrets.push(token);
-      }
-    }
-    if (server.connectionId !== undefined) {
-      const tokenPort = this.options.connectionToken;
-      if (tokenPort === undefined) fail('MCP_CONNECTION_UNAVAILABLE', '服务连接不可用。');
-      const authority = tokenPort.authority(server.connectionId, server.endpoint);
-      const owner = this.identity();
-      if (authority.ownerId !== owner.ownerId || authority.identityEpoch !== owner.epoch)
-        fail('MCP_IDENTITY_REQUIRED', '服务连接身份不匹配。');
-      const token = await tokenPort.read(server.connectionId, server.endpoint, signal);
-      headers['Authorization'] = `Bearer ${token}`;
-      secrets.push(token);
+    const { headers, secrets } = await readMcpHeaders(server, this.options.credentials);
+    const sharedToken = await serviceToken(
+      server,
+      this.identity(),
+      this.options.pluginToken,
+      this.options.connectionToken,
+      signal,
+    );
+    if (sharedToken !== undefined) {
+      headers['Authorization'] = `Bearer ${sharedToken}`;
+      secrets.push(sharedToken);
     }
     if (server.oauth) {
       const token = await this.oauth.accessToken(server, signal);
@@ -578,7 +522,12 @@ export class RemoteMcpService implements ExternalTools {
       transport: server.transport,
       headers,
       secrets,
-      authorizationKey: hash([server.revision, server.accessEpoch, server.grant?.id]),
+      authorizationKey: hash([
+        server.revision,
+        server.accessEpoch,
+        server.grant?.id,
+        ...secrets.map((value) => hash(value)),
+      ]),
     };
   }
   /** A one-off protocol probe never publishes configuration, trust or a selectable catalog. */
@@ -607,15 +556,17 @@ export class RemoteMcpService implements ExternalTools {
     this.expected(server, input.expectedRevision, input.expectedAccessEpoch);
     const binding = await this.binding(server, signal);
     const value = await this.manager.discover(binding, { signal });
+    signal.throwIfAborted();
     this.expected(this.require(id), server.revision, server.accessEpoch);
     this.assertAuthority(this.require(id));
     const entry = {
+      authority: this.catalogs.authority(this.require(id)),
       revision: server.revision,
       accessEpoch: server.accessEpoch,
       value,
       discoveredAt: Date.now(),
     };
-    this.catalogs.set(id, entry);
+    this.catalogs.publish(id, id, 'remote', entry);
     return this.catalogView(server, entry);
   }
   private catalogView(server: StoredRemoteMcpServer, entry: CatalogEntry): McpToolCatalog {
@@ -651,8 +602,15 @@ export class RemoteMcpService implements ExternalTools {
   public catalog(id: string, _scope: McpScope = 'sandboxed'): McpToolCatalog | null {
     const server = this.require(id);
     const entry = this.catalogs.get(id);
+    let authority: string;
+    try {
+      authority = this.catalogs.authority(server);
+    } catch {
+      return null;
+    }
     if (
       entry === undefined ||
+      entry.authority !== authority ||
       !server.enabled ||
       !this.pluginAvailable(server) ||
       entry.revision !== server.revision ||
@@ -719,6 +677,7 @@ export class RemoteMcpService implements ExternalTools {
       if (server.grant === null) fail('MCP_DISABLED', '远端授权失效。');
       result.push({
         selection: { ...selection },
+        displayName: `${server.name} / ${tool.remoteToolName}`,
         definition: {
           name: alias(server.id, tool.remoteToolName),
           description: tool.description,
@@ -732,10 +691,10 @@ export class RemoteMcpService implements ExternalTools {
           grantId: server.grant.id,
           workspaceId: workspaceId ?? '',
           workspaceRoot: new URL(server.endpoint).origin,
-          ...(server.connectionId === undefined
+          ...(server.connectionId === undefined && pluginCredentialId(server) === undefined
             ? {}
             : {
-                connectionId: server.connectionId,
+                connectionId: this.connectionAuthority(server).connectionId,
                 connectionAccessEpoch: this.connectionAuthority(server).accessEpoch,
               }),
           scope: approvalMode === 'full-access' ? 'full-access' : 'sandboxed',
@@ -753,6 +712,11 @@ export class RemoteMcpService implements ExternalTools {
     workMode: 'execute' | 'plan',
     signal: AbortSignal,
   ): Promise<readonly FrozenMcpTool[]> {
+    await Promise.all(
+      this.list()
+        .filter((server) => server.enabled && server.trusted)
+        .map((server) => this.catalogs.prepareServer(server.id, signal)),
+    );
     const result: FrozenMcpTool[] = [];
     for (const server of this.list()) {
       if (!server.enabled || !server.trusted) continue;
@@ -795,7 +759,7 @@ export class RemoteMcpService implements ExternalTools {
       this.expected(server, frozen.selection.serverRevision, frozen.authorization.accessEpoch);
       this.assertAuthority(server);
       const identity = this.identity();
-      if (server.connectionId !== undefined) {
+      if (server.connectionId !== undefined || pluginCredentialId(server) !== undefined) {
         const authority = this.connectionAuthority(server);
         if (
           authority.connectionId !== frozen.authorization.connectionId ||
@@ -895,20 +859,64 @@ export class RemoteMcpService implements ExternalTools {
     await this.directory.revoke(id, grantId);
   }
   private connectionAuthority(server: StoredRemoteMcpServer) {
-    if (server.connectionId === undefined || this.options.connectionToken === undefined)
-      fail('MCP_CONNECTION_UNAVAILABLE', '服务连接不可用。');
-    const authority = this.options.connectionToken.authority(server.connectionId, server.endpoint);
-    const identity = this.identity();
-    if (authority.ownerId !== identity.ownerId || authority.identityEpoch !== identity.epoch)
-      fail('MCP_IDENTITY_REQUIRED', '服务连接身份不匹配。');
-    return authority;
+    return connectionAuthority(
+      server,
+      this.identity(),
+      this.options.pluginToken,
+      this.options.connectionToken,
+    );
   }
-  public async invalidateConnection(connectionId: string): Promise<void> {
+  /** The explicit App switch grants startup trust only to its installed, owned configuration. */
+  public enablePluginApp(id: string, pluginId: string, componentId: string): void {
+    const server = this.require(id);
+    if (!this.ownedBy(id, pluginId, componentId)) fail('MCP_PLUGIN_OWNER', '插件应用归属不匹配。');
+    const grant = pluginStartupGrant(
+      server,
+      pluginId,
+      componentId,
+      this.identity(),
+      this.fingerprint(server),
+    );
+    this.options.repository.save(
+      { ...server, enabled: true, grant, updatedAt: Date.now() },
+      server.revision,
+      server.accessEpoch,
+    );
+  }
+  /** Startup preparation is background-owned; GET requests only inspect its safe state. */
+  public initializeCatalogs(): void {
+    for (const server of this.list())
+      if (server.enabled && server.trusted) this.catalogs.startServer(server.id);
+  }
+  /** Explicit switches enqueue discovery; a Run joins the same owned task when it needs candidates. */
+  public schedulePluginApp(id: string): void {
+    this.catalogs.startServer(id);
+  }
+  public diagnostics(): readonly ToolDiscoveryDiagnostic[] {
+    return this.catalogs.diagnostics(this.list());
+  }
+  public async invalidatePlugin(pluginId: string): Promise<void> {
     await Promise.all(
       this.options.repository
         .list()
-        .filter((server) => server.connectionId === connectionId)
-        .map((server) => this.manager.invalidateServer(server.id)),
+        .filter((server) => server.pluginOwner?.pluginId === pluginId)
+        .map(async (server) => {
+          this.catalogs.delete(server.id);
+          await this.manager.invalidateServer(server.id);
+          this.catalogs.startServer(server.id);
+        }),
+    );
+  }
+  public async invalidateConnection(connectionId: string): Promise<void> {
+    const servers = this.options.repository
+      .list()
+      .filter((server) => server.connectionId === connectionId);
+    await Promise.all(
+      servers.map(async (server) => {
+        this.catalogs.delete(server.id);
+        await this.manager.invalidateServer(server.id);
+        this.catalogs.startServer(server.id);
+      }),
     );
   }
   public async writeOAuthClientSecret(id: string, input: McpSecretInput): Promise<RemoteMcpView> {
@@ -942,7 +950,6 @@ export class RemoteMcpService implements ExternalTools {
         if (error instanceof RuntimeError) throw error;
         fail('MCP_CREDENTIAL_WRITE_FAILED', '系统凭据保存失败，配置未生效。');
       }
-      this.catalogs.delete(id);
       this.cancelFlows(id);
       for (const previous of [server.oauthClientSecretRef, server.oauthCredentialRef])
         if (previous !== null) await this.options.credentials.delete(previous);
@@ -952,11 +959,16 @@ export class RemoteMcpService implements ExternalTools {
   public stopAccepting(): void {
     this.closed = true;
     this.oauth.stopAccepting();
+    this.catalogs.stop();
   }
-  public async close(): Promise<void> {
+  public close(): Promise<void> {
     this.stopAccepting();
-    await this.manager.close();
-    await this.oauth.close();
-    await Promise.allSettled([...this.pending]);
+    this.closing ??= closeMcpResources([
+      this.manager.close(),
+      this.oauth.close(),
+      this.catalogs.close(),
+      ...this.pending,
+    ]);
+    return this.closing;
   }
 }

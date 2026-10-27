@@ -3,6 +3,8 @@ import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { PluginIcon } from '@/features/plugins/components/plugin-icon';
 import { PluginActions } from '@/features/plugins/components/plugin-actions';
+import { PluginAuthorization } from '@/features/plugins/components/plugin-authorization';
+import { PluginAppRow } from '@/features/plugins/components/plugin-app-row';
 import type { PluginSettingsRow, PluginSettingsState } from '@/features/plugins/types/plugin';
 
 interface PluginDetailProps {
@@ -10,7 +12,7 @@ interface PluginDetailProps {
   row: PluginSettingsRow;
 }
 
-/** Component preferences stay independent of the plugin master switch. */
+/** The plugin switch controls all components; each component can also be enabled individually. */
 export const PluginDetail: FC<PluginDetailProps> = ({ state, row }) => {
   return (
     <div className="space-y-9">
@@ -24,6 +26,13 @@ export const PluginDetail: FC<PluginDetailProps> = ({ state, row }) => {
         </div>
         <PluginActions row={row} pending={state.pending} />
       </div>
+      {row.plugin.installed && row.plugin.manifest.category === 'services' && (
+        <PluginAuthorization
+          key={row.plugin.manifest.id}
+          plugin={row.plugin}
+          disabled={state.pending}
+        />
+      )}
       {state.apps.length > 0 && (
         <section aria-label="包含的应用" className="space-y-3">
           <div className="flex items-center justify-between gap-3">
@@ -31,37 +40,15 @@ export const PluginDetail: FC<PluginDetailProps> = ({ state, row }) => {
               包含的应用{' '}
               <span className="ml-2 font-normal text-muted-foreground">{state.apps.length}</span>
             </h3>
-            {row.plugin.installed && (
-              <Button variant="ghost" onClick={state.connections} className="rounded-full">
-                管理连接
-              </Button>
-            )}
           </div>
           {state.apps.map((app) => {
             return (
-              <div key={app.id} className="flex items-center gap-3 py-3">
-                <PluginIcon id={row.plugin.manifest.id} />
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium">{app.name}</p>
-                  <p className="mt-1 text-sm leading-5 text-muted-foreground">{app.description}</p>
-                </div>
-                {row.plugin.installed && (
-                  <Button
-                    variant="secondary"
-                    className="rounded-full"
-                    onClick={app.manage}
-                    aria-label={`管理 ${app.name} MCP`}
-                  >
-                    {app.status}
-                  </Button>
-                )}
-                <Switch
-                  checked={app.enabled}
-                  onCheckedChange={app.change}
-                  disabled={app.disabled}
-                  aria-label={`启用 ${app.name} 应用`}
-                />
-              </div>
+              <PluginAppRow
+                key={app.id}
+                app={app}
+                pluginId={row.plugin.manifest.id}
+                installed={row.plugin.installed}
+              />
             );
           })}
         </section>

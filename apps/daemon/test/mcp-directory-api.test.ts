@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Type } from 'typebox';
 import { Value } from 'typebox/value';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   McpServerViewSchema,
   McpToolCatalogSchema,
@@ -48,6 +48,7 @@ async function fixture(remoteFixtureOrigin?: string) {
       },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       signal: AbortSignal.timeout(5000),
+      redirect: 'manual',
     });
   const workspace: unknown = await (
     await send('/api/workspaces', 'POST', { rootPath: join(directory, 'project') })
@@ -108,6 +109,14 @@ async function fixture(remoteFixtureOrigin?: string) {
     },
   };
 }
+function expectOAuthResult(response: Response, status: 'success' | 'error'): void {
+  expect(response.status).toBe(303);
+  const target = new URL(response.headers.get('location') ?? '');
+  expect(target.pathname).toBe('/skill-oauth/result');
+  expect(target.searchParams.get('status')).toBe(status);
+  expect(target.href).not.toContain('host-fake-private');
+}
+
 describe('MCP directory management', () => {
   it('requires an enabled installed plugin App with the exact persisted server reference', async () => {
     const f = await fixture();
@@ -136,6 +145,10 @@ describe('MCP directory management', () => {
       if (plugin === undefined) throw new Error('Missing installed plugin');
       const app = plugin.components.find((entry) => entry.kind === 'app');
       if (app === undefined) throw new Error('Missing installed App');
+      await f.services.plugins.component('github', app.id, plugin.revision, true);
+      const enabled = f.services.store.extensions.plugins().find((entry) => entry.id === 'github');
+      if (enabled === undefined) throw new Error('Missing enabled plugin');
+      plugin = enabled;
       const remote = f.services.remoteMcp.get(app.referenceId);
       const control = {
         expectedRevision: remote.revision,
@@ -322,6 +335,10 @@ describe('MCP directory management', () => {
 async function oauthIssuer() {
   let origin = '';
   let exchanges = 0;
+  let holdToken = false;
+  let tokenEntered: (() => void) | undefined;
+  let tokenRelease: (() => void) | undefined;
+  let tokenWait = Promise.resolve();
   const server = createServer((request, response) => {
     const task = (async () => {
       response.setHeader('content-type', 'application/json');
@@ -372,6 +389,10 @@ async function oauthIssuer() {
       }
       if (url.pathname === '/token') {
         exchanges += 1;
+        if (holdToken) {
+          tokenEntered?.();
+          await tokenWait;
+        }
         response.end(
           JSON.stringify({
             access_token: 'host-fake-private-token',
@@ -402,7 +423,21 @@ async function oauthIssuer() {
   return {
     origin,
     exchanges: () => exchanges,
+    holdToken(): Promise<void> {
+      holdToken = true;
+      tokenWait = new Promise<void>((accept) => {
+        tokenRelease = accept;
+      });
+      return new Promise<void>((accept) => {
+        tokenEntered = accept;
+      });
+    },
+    releaseToken(): void {
+      holdToken = false;
+      tokenRelease?.();
+    },
     close: async () => {
+      tokenRelease?.();
       server.closeAllConnections();
       await new Promise<void>((accept, reject) => {
         server.close((error) => {
@@ -413,6 +448,211 @@ async function oauthIssuer() {
     },
   };
 }
+it('cancels only the selected MCP authorization and preserves connected credentials and startup trust', async () => {
+  const issuer = await oauthIssuer();
+  const f = await fixture(issuer.origin);
+  try {
+    const create = (name: string) => {
+      const value = f.services.remoteMcp.create({
+        name,
+        transport: 'streamable-http',
+        endpoint: `${issuer.origin}/mcp`,
+        publicHeaders: {},
+        secretHeaders: [],
+        oauth: true,
+      });
+      const control = { expectedRevision: value.revision, expectedAccessEpoch: value.accessEpoch };
+      const preview = f.services.remoteMcp.preview(value.id, control);
+      return f.services.remoteMcp.trust(value.id, { ...control, fingerprint: preview.fingerprint });
+    };
+    const first = create('First OAuth fixture');
+    const second = create('Second OAuth fixture');
+    const control = (value: typeof first) => ({
+      expectedRevision: value.revision,
+      expectedAccessEpoch: value.accessEpoch,
+    });
+    const start = async (id: string) => {
+      const value = f.services.remoteMcp.get(id);
+      return await f.services.remoteMcp.beginOAuth(
+        id,
+        control(value),
+        `${f.origin}/api/mcp/oauth/callback`,
+        AbortSignal.timeout(3000),
+      );
+    };
+    const callback = (state: string) =>
+      f.send(
+        `/api/mcp/oauth/callback?${new URLSearchParams({ state, code: 'fixture-code', iss: issuer.origin }).toString()}`,
+      );
+    const firstFlow = await start(first.id);
+    const secondFlow = await start(second.id);
+    expect(
+      (
+        await f.send(`/api/mcp/remote-servers/${first.id}/oauth/cancel`, 'POST', {
+          ...control(first),
+          expectedAccessEpoch: first.accessEpoch + 1,
+        })
+      ).status,
+    ).toBe(409);
+    expect(
+      (
+        await f.send(`/api/mcp/remote-servers/${first.id}/oauth/cancel`, 'POST', {
+          ...control(first),
+          extra: true,
+        })
+      ).status,
+    ).toBe(400);
+    const cancelled = await f.send(
+      `/api/mcp/remote-servers/${first.id}/oauth/cancel`,
+      'POST',
+      control(first),
+    );
+    expect(cancelled.status).toBe(200);
+    expect(await cancelled.json()).toMatchObject({
+      enabled: true,
+      trusted: true,
+      oauthConnected: false,
+    });
+    expectOAuthResult(await callback(firstFlow.state), 'error');
+    expect(issuer.exchanges()).toBe(0);
+    expectOAuthResult(await callback(secondFlow.state), 'success');
+    expect(issuer.exchanges()).toBe(1);
+    const connected = f.services.remoteMcp.get(second.id);
+    expect(connected.oauthConnected).toBe(true);
+    const restart = await start(second.id);
+    const stored = f.services.store.remoteMcp.get(second.id);
+    if (stored?.oauthCredentialRef === null || stored?.oauthCredentialRef === undefined)
+      throw new Error('Missing saved OAuth credentials');
+    const credentials = await f.credentials.read(stored.oauthCredentialRef);
+    expect(credentials).toContain('host-fake-private-token');
+    const preserved = await f.send(
+      `/api/mcp/remote-servers/${second.id}/oauth/cancel`,
+      'POST',
+      control(connected),
+    );
+    expect(preserved.status).toBe(200);
+    const preservedView: unknown = await preserved.json();
+    if (!Value.Check(RemoteMcpViewSchema, preservedView)) throw new Error('Invalid remote view');
+    const configuration = (view: typeof connected) =>
+      Object.fromEntries(
+        Object.entries(view).filter(([key]) => !['catalogStatus', 'catalogError'].includes(key)),
+      );
+    expect(configuration(preservedView)).toEqual(configuration(connected));
+    expect(await f.credentials.read(stored.oauthCredentialRef)).toBe(credentials);
+    expectOAuthResult(await callback(restart.state), 'error');
+    expect(issuer.exchanges()).toBe(1);
+    expect(
+      (
+        await f.send(
+          `/api/mcp/remote-servers/${second.id}/oauth/cancel`,
+          'POST',
+          control(connected),
+        )
+      ).status,
+    ).toBe(200);
+    const exchanging = await start(second.id);
+    const entered = issuer.holdToken();
+    const pendingCallback = callback(exchanging.state);
+    await entered;
+    try {
+      const aborted = await f.send(
+        `/api/mcp/remote-servers/${second.id}/oauth/cancel`,
+        'POST',
+        control(connected),
+      );
+      expect(aborted.status).toBe(200);
+      const abortedView: unknown = await aborted.json();
+      if (!Value.Check(RemoteMcpViewSchema, abortedView)) throw new Error('Invalid remote view');
+      expect(configuration(abortedView)).toEqual(configuration(connected));
+      expect(await f.credentials.read(stored.oauthCredentialRef)).toBe(credentials);
+      expectOAuthResult(await pendingCallback, 'error');
+      expect(f.services.remoteMcp.get(second.id).oauthConnected).toBe(true);
+    } finally {
+      issuer.releaseToken();
+      await pendingCallback;
+    }
+  } finally {
+    await f.close();
+    await issuer.close();
+  }
+});
+it('keeps prior credentials when authorization is cancelled during credential persistence', async () => {
+  const issuer = await oauthIssuer();
+  const f = await fixture(issuer.origin);
+  try {
+    for (const connected of [false, true]) {
+      const created = f.services.remoteMcp.create({
+        name: `Persistence fixture ${String(connected)}`,
+        transport: 'streamable-http',
+        endpoint: `${issuer.origin}/mcp`,
+        publicHeaders: {},
+        secretHeaders: [],
+        oauth: true,
+      });
+      const control = {
+        expectedRevision: created.revision,
+        expectedAccessEpoch: created.accessEpoch,
+      };
+      const preview = f.services.remoteMcp.preview(created.id, control);
+      f.services.remoteMcp.trust(created.id, { ...control, fingerprint: preview.fingerprint });
+      const start = async () =>
+        await f.services.remoteMcp.beginOAuth(
+          created.id,
+          control,
+          `${f.origin}/api/mcp/oauth/callback`,
+          AbortSignal.timeout(3000),
+        );
+      const callback = (state: string) =>
+        f.send(
+          `/api/mcp/oauth/callback?${new URLSearchParams({ state, code: 'fixture-code', iss: issuer.origin }).toString()}`,
+        );
+      if (connected) expectOAuthResult(await callback((await start()).state), 'success');
+      const before = f.services.store.remoteMcp.get(created.id);
+      if (before === undefined) throw new Error('Missing fixture server');
+      let encoded: string | undefined;
+      if (before.oauthCredentialRef !== null)
+        encoded = await f.credentials.read(before.oauthCredentialRef);
+      const flow = await start();
+      let enter: (() => void) | undefined;
+      let release: (() => void) | undefined;
+      const entered = new Promise<void>((accept) => {
+        enter = accept;
+      });
+      const gate = new Promise<void>((accept) => {
+        release = accept;
+      });
+      const references: string[] = [];
+      const write = f.credentials.write.bind(f.credentials);
+      const spy = vi.spyOn(f.credentials, 'write').mockImplementation(async (reference, value) => {
+        references.push(reference);
+        enter?.();
+        await gate;
+        await write(reference, value);
+      });
+      const pending = callback(flow.state);
+      try {
+        await entered;
+        const cancel = f.services.remoteMcp.cancelOAuth(created.id, control);
+        release?.();
+        await cancel;
+        expectOAuthResult(await pending, 'error');
+        expect(f.services.store.remoteMcp.get(created.id)).toEqual(before);
+        if (before.oauthCredentialRef !== null)
+          expect(await f.credentials.read(before.oauthCredentialRef)).toBe(encoded);
+        expect(references).toHaveLength(1);
+        for (const reference of references)
+          expect(await f.credentials.read(reference)).toBeUndefined();
+      } finally {
+        release?.();
+        await pending;
+        spy.mockRestore();
+      }
+    }
+  } finally {
+    await f.close();
+    await issuer.close();
+  }
+});
 it('binds MCP OAuth callbacks to one owner flow, rejects issuer mix-up and never returns token bytes', async () => {
   const issuer = await oauthIssuer();
   const f = await fixture(issuer.origin);
@@ -463,9 +703,7 @@ it('binds MCP OAuth callbacks to one owner flow, rejects issuer mix-up and never
       code: 'fake-code',
       iss: 'https://wrong-issuer.example',
     });
-    expect(
-      (await f.send(`/api/mcp/oauth/callback?${invalid.toString()}`)).status,
-    ).toBeGreaterThanOrEqual(400);
+    expectOAuthResult(await f.send(`/api/mcp/oauth/callback?${invalid.toString()}`), 'error');
     expect(issuer.exchanges()).toBe(0);
     const second = await start();
     const callback = new URLSearchParams({
@@ -474,12 +712,10 @@ it('binds MCP OAuth callbacks to one owner flow, rejects issuer mix-up and never
       iss: issuer.origin,
     });
     const result = await f.send(`/api/mcp/oauth/callback?${callback.toString()}`);
-    expect(result.status).toBe(200);
+    expectOAuthResult(result, 'success');
     expect(await result.text()).not.toContain('host-fake-private');
     expect(issuer.exchanges()).toBe(1);
-    expect(
-      (await f.send(`/api/mcp/oauth/callback?${callback.toString()}`)).status,
-    ).toBeGreaterThanOrEqual(400);
+    expectOAuthResult(await f.send(`/api/mcp/oauth/callback?${callback.toString()}`), 'error');
     expect(issuer.exchanges()).toBe(1);
     const current = f.services.remoteMcp.get(value.id);
     expect(current.oauthConnected).toBe(true);

@@ -10,6 +10,7 @@ export { encodeContextMessage, decodeContextMessage } from './context-codec.js';
 export { BUILTIN_PROVIDER_IDS, loadBuiltinProvider } from './provider-loader.js';
 export { ToolRuntime } from './tool-runtime.js';
 export type { SkillsPort, ToolDiscoveryPort } from './capability-ports.js';
+export type { ToolSearchEmbedder } from './tool-catalog-search.js';
 export type { ToolRuntimeOptions } from './tool-types.js';
 export type {
   ExternalTools,
@@ -28,9 +29,3 @@ export type {
   ApprovalReviewInput,
   ApprovalReviewResult,
 } from './approval-review.js';
-
-export type {
-  ConnectionGrantRequest,
-  ConnectionGatewayCall,
-  ConnectionGatewayPort,
-} from './connection-ports.js';

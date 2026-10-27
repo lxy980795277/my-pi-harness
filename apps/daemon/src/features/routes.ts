@@ -20,10 +20,16 @@ import { registerRemoteMcpRoutes } from './mcp/remote-routes.js';
 import { registerMcpDirectoryRoutes } from './mcp/directory-routes.js';
 import { registerMcpConfigurationRoutes } from './mcp/configuration-routes.js';
 import { registerConnectionRoutes } from './connections/routes.js';
+import { registerPluginConnectionRoutes } from './plugin-connections/routes.js';
 
 /** Install protected M1 endpoints; health and public process identity remain readable. */
 export function registerM1Routes(server: FastifyInstance, services: ApplicationServices): void {
   const { auth, login, gateway, runtime } = services;
+  services.setOriginResolver(() => {
+    const address = server.server.address();
+    if (address === null || typeof address === 'string') throw new Error('Daemon is not listening');
+    return `http://127.0.0.1:${address.port}`;
+  });
   server.addHook('onRequest', (request, reply, done) => {
     const path = request.url.split('?')[0] ?? '';
     if (!path.startsWith('/api/') || path === '/api/health' || path === '/api/runtime/events') {
@@ -31,19 +37,41 @@ export function registerM1Routes(server: FastifyInstance, services: ApplicationS
       return;
     }
     const bootstrap = path === '/api/auth/desktop';
+    const skillGateway =
+      request.method === 'GET' && /^\/api\/skill-gateway\/[a-z][a-z0-9-]*\//.test(path);
+    const oauthLaunch =
+      request.method === 'POST' &&
+      (/^\/api\/skill-connections\/[a-z][a-z0-9-]*\/oauth\/launch$/.test(path) ||
+        /^\/api\/mcp\/remote-servers\/[A-Za-z0-9_-]+\/oauth\/launch$/.test(path));
     const callback =
       request.method === 'GET' &&
       (/^\/api\/auth\/callback\/[A-Za-z0-9_-]+$/.test(path) ||
         path === '/api/mcp/oauth/callback' ||
-        /^\/api\/connections\/oauth\/callback\/(github|google|vercel|notion|supabase)$/.test(path));
+        /^\/api\/connections\/oauth\/callback\/(github|google|vercel|notion|supabase)$/.test(
+          path,
+        ) ||
+        /^\/api\/skill-connections\/[a-z][a-z0-9-]*\/oauth\/callback$/.test(path));
     if (callback) reply.header('Referrer-Policy', 'no-referrer');
     const write = !['GET', 'HEAD'].includes(request.method);
     if (!auth.trustedSource(request, write && !bootstrap)) {
       void reply.code(403).send({ code: 'SOURCE_REJECTED', message: '请求来源未授权。' });
       return;
     }
+    if (
+      skillGateway &&
+      !services.authorizeSkillGateway(request.headers['x-pi-harness-skill-gateway'])
+    ) {
+      void reply
+        .code(403)
+        .send({ code: 'SKILL_GATEWAY_FORBIDDEN', message: '插件网关请求未授权。' });
+      return;
+    }
     const publicRoute =
-      ['/api/auth/status', '/api/auth/pair'].includes(path) || bootstrap || callback;
+      ['/api/auth/status', '/api/auth/pair'].includes(path) ||
+      bootstrap ||
+      callback ||
+      skillGateway ||
+      oauthLaunch;
     const trustOnly =
       ['/api/auth/login', '/api/auth/logout'].includes(path) ||
       /^\/api\/auth\/login-flows\/login_[A-Za-z0-9_-]+(?:\/complete)?$/.test(path);
@@ -139,11 +167,12 @@ export function registerM1Routes(server: FastifyInstance, services: ApplicationS
   registerWorkRoutes(server, services.work);
   registerAttachmentRoutes(server, services.attachments);
   registerMcpRoutes(server, services.mcp);
-  registerRemoteMcpRoutes(server, services.remoteMcp);
+  registerRemoteMcpRoutes(server, services.remoteMcp, () => services.webOrigin());
   registerMcpDirectoryRoutes(server, services.mcp, services.remoteMcp);
   registerMcpConfigurationRoutes(server, services.mcp, services.remoteMcp);
   registerSkillRoutes(server, services.skills);
   registerPluginRoutes(server, services.plugins);
+  registerPluginConnectionRoutes(server, services);
   registerConnectionRoutes(server, services.connections);
   server.addHook('preClose', async () => {
     await services.close();

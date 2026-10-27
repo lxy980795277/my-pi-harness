@@ -2,6 +2,8 @@
 
 本页管理功能范围与里程碑顺序，详细验收由各里程碑 Spec 承担。`规划` 不表示能力已经可用；只有实现与必要验证都完成后才能调整状态。
 
+当前继续M4[插件全链路审计](../04_FEATURES/202610201932_feature_m4-capabilities/plugin-completion.md#插件能力全链路对齐审计2026-10-27)：已补齐MCP目录准备与恢复、搜索自动加载、资源启动对账、Skill跨Run/压缩继承及动态Office激活，完成macOS源码、浏览器、CPU向量和部署资源验证，见[实际记录](../04_FEATURES/202610201932_feature_m4-capabilities/plugin-completion-verify.md#插件能力全链路对齐审计2026-10-27)。已完成同目录[未提交改动冗余审查](../04_FEATURES/202610201932_feature_m4-capabilities/plugin-completion.md#未提交改动冗余审查2026-10-27)，清理被新链路替代的旧入口与重复实现。真实账号仓库访问和平台验收仍单列，M5尚未开始。
+
 Spec目录采用北京时间 `YYYYMMDDHHmm_category_name/`；历史补齐分钟仅用于排序，不能用来推断开发工时。新建和后续小修的规则见[功能文档入口](../04_FEATURES/overview.md)。
 
 | 里程碑                                                                                      | 交付范围                                                                                                                      | 当前状态                                                              |
@@ -41,6 +43,12 @@ Spec目录采用北京时间 `YYYYMMDDHHmm_category_name/`；历史补齐分钟�
 | 第二阶段                                                                                    | 根据独立产品需求新增或调整能力                                                                                                | 待规划                                                                |
 
 ## 第一阶段完成标准
+
+2026-10-27已完成插件架构重构及macOS定向验证：插件专属OAuth/凭据、弹窗自行启动、只读HTTP网关和MCP共享Token取代默认账户桥接，目录发现由受管后台任务完成。范围见[完整重构Spec](../04_FEATURES/202610201932_feature_m4-capabilities/plugin-completion.md#插件完整流程重构2026-10-27)，实际结果及真实客户端/系统浏览器/平台缺口见[本轮验证](../04_FEATURES/202610201932_feature_m4-capabilities/plugin-completion-verify.md#插件完整流程重构2026-10-27)。M5尚未开始。
+
+2026-10-26已完成M4插件授权开窗收尾：Web同步打开独立中转页，再由原页面请求并导航授权地址；桌面继续系统浏览器。实现及验证见[补齐Spec](../04_FEATURES/202610201932_feature_m4-capabilities/plugin-completion.md#授权开窗补充2026-10-26)，不进入M5或新增默认供应商客户端。
+
+2026-10-26已完成[M4插件连接与任务工作流补齐](../04_FEATURES/202610201932_feature_m4-capabilities/plugin-completion.md)的实现及macOS定向验证：插件内账户绑定、精确App门控、服务Skills及办公排版/检查流程，见[本轮结果](../04_FEATURES/202610201932_feature_m4-capabilities/plugin-completion-verify.md)。M5尚未开发；真实账号、DOCX页面视觉及Windows验收缺口继续保留。
 
 2026-10-22已实现并完成本机验证的[应用初始化与统一加载](../04_FEATURES/202610221610_feature_application-initialization/spec.md)，属于M0启动体验及M4界面收尾；统一登录/协议检查与首屏必要数据准备，保持后台刷新不遮挡工作台，不新增里程碑范围。
 

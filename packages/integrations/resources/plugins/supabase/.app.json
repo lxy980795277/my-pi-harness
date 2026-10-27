@@ -1,0 +1,13 @@
+{
+  "apps": [
+    {
+      "id": "supabase",
+      "provider": "supabase",
+      "name": "Supabase",
+      "description": "检查项目、数据库结构与服务。",
+      "credentialSource": "mcp-oauth",
+      "transport": "streamable-http",
+      "endpoint": "https://mcp.supabase.com/mcp"
+    }
+  ]
+}

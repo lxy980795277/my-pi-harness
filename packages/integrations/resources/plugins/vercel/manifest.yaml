@@ -1,0 +1,34 @@
+id: vercel
+name: Vercel
+apiUrl: https://api.vercel.com
+oauth:
+  issuer: https://vercel.com
+  authorizationEndpoint: https://vercel.com/oauth/authorize
+  tokenEndpoint: https://api.vercel.com/login/oauth/token
+  pkce: true
+  tokenAuth: body
+  tokenFormat: form
+  scopes:
+    - openid
+    - email
+    - profile
+    - offline_access
+  authorizationParams:
+    prompt: consent
+  profile:
+    source: userinfo
+    idField: sub
+    usernameField: preferred_username
+    displayNameField: name
+    avatarUrlField: picture
+    path: /login/oauth/userinfo
+    method: POST
+gateway:
+  allowedPaths:
+    - ^/v2/(?:user|teams(?:/[^/]+(?:/members)?)?)/?$
+    - ^/v9/projects/?$
+    - ^/v9/projects/[^/]+(?:/(?:domains|env)(?:/[^/]+)?)?/?$
+    - ^/v(?:2|3|6|13)/deployments(?:/[^/]+(?:/(?:aliases|events|files))?)?/?$
+  deniedQueryValues:
+    decrypt:
+      - 'true'

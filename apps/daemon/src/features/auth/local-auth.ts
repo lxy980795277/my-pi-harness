@@ -22,6 +22,7 @@ export interface LocalAuthOptions {
   ownerSecret?: string;
   developmentOrigin?: string;
   callbackOrigin?: string;
+  pluginCallbackUrls?: readonly string[];
 }
 
 function equalSecret(actual: string, expected: string): boolean {
@@ -52,6 +53,13 @@ export class LocalAuth {
     const accepted = new Set([`http://127.0.0.1:${address.port}`]);
     if (this.options.developmentOrigin) accepted.add(this.options.developmentOrigin);
     if (this.options.callbackOrigin) accepted.add(this.options.callbackOrigin);
+    if (request.method === 'GET') {
+      const path = request.url.split('?')[0];
+      for (const callback of this.options.pluginCallbackUrls ?? []) {
+        const url = new URL(callback);
+        if (path === url.pathname) accepted.add(url.origin);
+      }
+    }
     const host = request.headers.host;
     if (!host || ![...accepted].some((value) => new URL(value).host === host)) return false;
     const source = request.headers.origin;

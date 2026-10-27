@@ -32,6 +32,8 @@
 
 目录按Server能力发现tools/resources/prompts；没有tools能力的Server仍可提供只读元数据。后两类每类最多16页、512项，共计2MiB，拒绝重复URI/名称/cursor与秘密回显。目录结果不触发资源正文读取或Prompt执行。
 
+`encodeMcpCatalog`只编码经发现验证的协议定义及元数据，不序列化运行时schema对象；`decodeMcpCatalog`对宿主持久快照重新执行官方SDK结构、数量、名称唯一性与有界JSON校验，并重建输入schema和定义指纹。当前不支持的schema仍显示为不可选择，恢复目录不创建连接，也不建立任何启动或调用授权。
+
 ## 验证
 
 包级 `typecheck`、`lint`、`test` 在真实临时工作根运行。fixture 使用同版本官方 Server，通过实际 stdio 覆盖成功、已知错误、派发屏障、超时、共享租约、撤销、坏协议、目录界限与秘密回显；执行进程生命周期测试由 execution 拥有。macOS 是当前实际验证平台；Windows/Linux 的受监管 stdio 明确不可用，真实第三方 MCP Server 与账户另外验收。
@@ -42,4 +44,18 @@
 
 `SkillCatalog` 的资源路径只相对于所选不可变版本，不提供脚本执行。`retainBindings` 的幂等释放函数管理活动资源所有权；当前启停与安装代次仍由宿主检查。`allowed-tools` 是声明，不改变审批。GitHub 下载仅请求公开 API，先解析提交、再核对有界树和 blob 对象身份，不运行 Git hooks 或生命周期脚本。
 
-`plugins/catalog.ts` 与随包发布的 `resources/plugins/` 是有限内置清单及独立编写内容。manifest 不包含任意 JS 安装器，App 只声明供应商与稳定组件身份；账号、凭据和 MCP 配置关联由宿主拥有。资源不能从测试目录或开发源码动态补取。管理 API 与 Run 冻结见 [Skills与插件协议](../../docs/03_API/skills-plugins.md)。
+`plugins/catalog.ts` 与随包发布的 `resources/plugins/` 是有限内置清单及独立编写内容。服务插件的 `manifest.yaml` 声明 API 来源、OAuth、账号字段及网关允许路径；`plugins/connections.ts` 在启动时校验并加载这些宿主数据，公开插件清单不包含客户端配置。YAML 拒绝未知字段、重复键、别名、执行标签、非法来源、未锚定路径模式和覆盖认证的请求头。manifest 不包含任意 JS 安装器，App 保存稳定组件身份；凭据持久化和应用启停由宿主拥有。
+
+`plugins/oauth.ts` 使用 oauth4webapi 生成随机 state、PKCE 与校验回调，按 manifest 执行 form/JSON Token 请求和 body/basic 客户端认证。manifest 的 `oauth.issuer` 显式声明授权发行者，回调包含 `iss` 时精确匹配，未提供时仍校验 state 并继续授权码流程；不从授权地址的 origin 推断发行者。GitHub 的发行者为 `https://github.com/login/oauth`，见[官方发现文档](https://docs.github.com/en/apps/github-authentication-discovery-endpoints)。账号可从 userinfo、Token 响应或 Google `id_token` 读取；显示字段不建立应用登录身份。网络受十秒截止、公共来源检查与响应大小限制约束。回调寿命、取消、六十秒刷新、用户/安装归属与私有 JSON 发布由 daemon/storage 拥有。Skills 只读网关和 MCP Apps 使用同一插件 Token；高级多账户 Connections 保持独立。
+
+`PluginOAuthError` 仅公开授权回调、Token 交换或账号读取阶段，有限失败原因、固定提示及可选 HTTP 状态。供应商错误只识别明确允许的代码；未知错误正文、描述、网络消息和 cause 均不保留。Token 响应出现 `error` 时即使 HTTP 200 且含 Token 也拒绝使用；失效 refresh grant 仍返回需要重新连接的独立错误。
+
+资源不能从测试目录或开发源码动态补取。管理 API 与 Run 冻结见 [Skills与插件协议](../../docs/03_API/skills-plugins.md)。
+
+内置插件的 `.app.json` 由 `plugins/apps.ts` 进行有界、严格校验；App 公开名称、简介和授权来源与宿主 MCP 目标来自同一份声明，私有地址不进入公开插件 manifest。高级服务连接的 `mcpEndpoints` 与 App 名称也按 provider 从这些声明派生，供手动 MCP 配置精确识别账户；Google 的五个子 App 共用 Google provider。声明不接受命令、生命周期脚本、认证头或凭据字段；服务器身份和启动授权仍由 daemon 拥有。
+
+## 本地工具搜索向量
+
+`LocalToolSearchEmbedder`按需在独占Node Worker内运行Transformers.js的CPU/q8多语言特征提取，固定`Xenova/multilingual-e5-small`的提交`761b726dd34fb83930e26aab4e9ac3899aa1fa78`，输出384维归一化向量。输入按query/passage前缀区分，每批最多32条、每次最多512条，文本最多16000字符；首次使用下载模型到宿主显式传入的缓存目录，复用权重。Worker不继承daemon环境或启动参数，不提供模型/脚本路径配置；测试模块只能通过宿主选项注入。
+
+调用方取消移除自己的排队推理；共享模型初始化可供后续搜索复用，daemon关闭会终止Worker并等待退出。原始加载或推理错误不向模型传播；运行层拥有18秒搜索截止和BM25回退。本包不拥有工具排序、自动加载或任何MCP授权。

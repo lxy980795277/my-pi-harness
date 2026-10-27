@@ -1,4 +1,9 @@
 import { fileURLToPath } from 'node:url';
+import {
+  loadBuiltinPluginApps,
+  publicBuiltinPluginApps,
+  type OwnedBuiltinPluginApp,
+} from './apps.js';
 
 /** Resource location works from source, built workspace and packaged runtime. */
 export const BUILTIN_PLUGIN_RESOURCE_DIRECTORY = fileURLToPath(
@@ -12,24 +17,25 @@ export const BUILTIN_PLUGINS = [
     name: 'GitHub',
     description: '管理代码仓库、Issue 与 Pull Request。',
     category: 'services' as const,
-    version: '1.0.0',
-    skills: ['github'],
-    apps: [{ id: 'github', provider: 'github', name: 'GitHub' }],
+    version: '1.1.0',
+    skills: ['github', 'github-reviews', 'github-actions', 'github-publish'],
+    apps: publicBuiltinPluginApps('github'),
   },
   {
     id: 'google',
     name: 'Google',
     description: '使用 Drive、Docs、Sheets、Slides 与 Calendar。',
     category: 'services' as const,
-    version: '1.0.0',
-    skills: ['google'],
-    apps: [
-      { id: 'google-drive', provider: 'google', name: 'Google Drive' },
-      { id: 'google-docs', provider: 'google', name: 'Google Docs' },
-      { id: 'google-sheets', provider: 'google', name: 'Google Sheets' },
-      { id: 'google-slides', provider: 'google', name: 'Google Slides' },
-      { id: 'google-calendar', provider: 'google', name: 'Google Calendar' },
+    version: '1.1.0',
+    skills: [
+      'google',
+      'google-drive',
+      'google-docs',
+      'google-sheets',
+      'google-slides',
+      'google-calendar',
     ],
+    apps: publicBuiltinPluginApps('google'),
   },
   {
     id: 'vercel',
@@ -38,7 +44,7 @@ export const BUILTIN_PLUGINS = [
     category: 'services' as const,
     version: '1.0.0',
     skills: ['vercel'],
-    apps: [{ id: 'vercel', provider: 'vercel', name: 'Vercel' }],
+    apps: publicBuiltinPluginApps('vercel'),
   },
   {
     id: 'notion',
@@ -47,7 +53,7 @@ export const BUILTIN_PLUGINS = [
     category: 'services' as const,
     version: '1.0.0',
     skills: ['notion'],
-    apps: [{ id: 'notion', provider: 'notion', name: 'Notion' }],
+    apps: publicBuiltinPluginApps('notion'),
   },
   {
     id: 'supabase',
@@ -56,25 +62,25 @@ export const BUILTIN_PLUGINS = [
     category: 'services' as const,
     version: '1.0.0',
     skills: ['supabase'],
-    apps: [{ id: 'supabase', provider: 'supabase', name: 'Supabase' }],
+    apps: publicBuiltinPluginApps('supabase'),
   },
   {
     id: 'documents',
     name: 'Documents',
     description: '创建、检查和修改工作区内的 Word 文档。',
     category: 'office' as const,
-    version: '1.0.0',
+    version: '1.1.0',
     skills: ['documents'],
-    apps: [],
+    apps: publicBuiltinPluginApps('documents'),
   },
   {
     id: 'pdf',
     name: 'PDF',
     description: '创建、读取页面并处理 PDF 文件。',
     category: 'office' as const,
-    version: '1.0.0',
+    version: '1.1.0',
     skills: ['pdf'],
-    apps: [],
+    apps: publicBuiltinPluginApps('pdf'),
   },
   {
     id: 'spreadsheets',
@@ -83,7 +89,7 @@ export const BUILTIN_PLUGINS = [
     category: 'office' as const,
     version: '1.0.0',
     skills: ['spreadsheets'],
-    apps: [],
+    apps: publicBuiltinPluginApps('spreadsheets'),
   },
   {
     id: 'presentations',
@@ -92,6 +98,11 @@ export const BUILTIN_PLUGINS = [
     category: 'office' as const,
     version: '1.0.0',
     skills: ['presentations'],
-    apps: [],
+    apps: publicBuiltinPluginApps('presentations'),
   },
 ];
+
+/** The same resource declarations supply public metadata and private, owner-bound MCP targets. */
+export const BUILTIN_PLUGIN_APPS: readonly OwnedBuiltinPluginApp[] = BUILTIN_PLUGINS.flatMap(
+  (plugin) => loadBuiltinPluginApps(plugin.id).map((app) => ({ ...app, pluginId: plugin.id })),
+);

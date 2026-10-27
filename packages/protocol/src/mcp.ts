@@ -277,6 +277,26 @@ export const RemoteMcpUpdateSchema = Type.Object(
   object,
 );
 export type RemoteMcpUpdate = Static<typeof RemoteMcpUpdateSchema>;
+export const McpCatalogStatusSchema = Type.Enum(['idle', 'loading', 'ready', 'error']);
+export const McpCatalogErrorSchema = Type.Object(
+  {
+    code: Type.String({ minLength: 1, maxLength: 100 }),
+    message: Type.String({ maxLength: 1000 }),
+  },
+  object,
+);
+/** Safe discovery facts frozen for model context; these records never authorize a tool call. */
+export const ToolDiscoveryDiagnosticSchema = Type.Object(
+  {
+    serverId: id,
+    name: Type.String({ minLength: 1, maxLength: 512 }),
+    status: McpCatalogStatusSchema,
+    toolCount: Type.Integer({ minimum: 0, maximum: 512 }),
+    error: Type.Optional(McpCatalogErrorSchema),
+  },
+  object,
+);
+export type ToolDiscoveryDiagnostic = Static<typeof ToolDiscoveryDiagnosticSchema>;
 export const RemoteMcpViewSchema = Type.Object(
   {
     ...RemoteMcpInputSchema.properties,
@@ -290,6 +310,8 @@ export const RemoteMcpViewSchema = Type.Object(
     enabled: Type.Boolean(),
     trusted: Type.Boolean(),
     oauthConnected: Type.Boolean(),
+    catalogStatus: McpCatalogStatusSchema,
+    catalogError: Type.Optional(McpCatalogErrorSchema),
     oauthClientSecretConfigured: Type.Optional(Type.Boolean()),
     createdAt: Type.Integer({ minimum: 0 }),
     updatedAt: Type.Integer({ minimum: 0 }),

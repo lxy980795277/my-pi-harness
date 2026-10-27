@@ -39,6 +39,10 @@ export function createExternalToolPorts(
     return groups;
   };
   return {
+    diagnostics: (workspaceId, approvalMode) => [
+      ...local.diagnostics(workspaceId, approvalMode),
+      ...remote.diagnostics(),
+    ],
     async freezeSelections(workspaceId, approvalMode, mode, selections, signal) {
       const frozen: FrozenMcpTool[] = [];
       for (const [service, items] of groupSelections(selections))

@@ -8,9 +8,8 @@ import { Value } from 'typebox/value';
 export interface ConnectionUpstream {
   origin: string;
   calls: { path: string; method: string; body: Record<string, unknown>; authorization: string }[];
-  dropWrites(): void;
   dropRefresh(): void;
-  largeResponse(): void;
+  failToken(body: Readonly<Record<string, unknown>>, statusCode?: number): void;
   setAccount(id: string): void;
   holdProfile(): Promise<void>;
   releaseProfile(): void;
@@ -24,9 +23,8 @@ export async function connectionUpstream(): Promise<ConnectionUpstream> {
     authorization: string;
   }[] = [];
   const sockets = new Set<Socket>();
-  let dropWrites = false;
   let dropRefresh = false;
-  let largeResponse = false;
+  let tokenFailure: { body: Readonly<Record<string, unknown>>; statusCode: number } | undefined;
   let accountId: string | undefined;
   let holdProfile = false;
   let profileRelease: (() => void) | undefined;
@@ -64,6 +62,11 @@ export async function connectionUpstream(): Promise<ConnectionUpstream> {
         path.endsWith('/oauth/token') ||
         path.endsWith('/login/oauth/access_token')
       ) {
+        if (tokenFailure !== undefined) {
+          response.statusCode = tokenFailure.statusCode;
+          response.end(JSON.stringify(tokenFailure.body));
+          return;
+        }
         if (dropRefresh && body['grant_type'] === 'refresh_token') {
           response.destroy();
           return;
@@ -75,6 +78,12 @@ export async function connectionUpstream(): Promise<ConnectionUpstream> {
             refresh_token: `fixture-${String(service)}-refresh`,
             expires_in: 3600,
             scope: '',
+            ...(service === 'google' &&
+            String(body['redirect_uri']).includes('/api/skill-connections/google/')
+              ? {
+                  id_token: `fixture.${Buffer.from(JSON.stringify({ sub: accountId ?? 'google-account', email: 'google.fixture@example.com', name: 'Google fixture', picture: 'https://fixture.example/avatar' })).toString('base64url')}.signature`,
+                }
+              : {}),
           }),
         );
         return;
@@ -87,22 +96,21 @@ export async function connectionUpstream(): Promise<ConnectionUpstream> {
         let value: unknown = {
           id: accountId ?? `${String(service)}-account`,
           name: `${String(service)} fixture`,
+          login: `${String(service)} fixture`,
         };
         if (service === 'google')
           value = { sub: accountId ?? 'google-account', name: 'Google fixture' };
         if (service === 'vercel')
-          value = { user: { id: accountId ?? 'vercel-account', username: 'Vercel fixture' } };
+          value = {
+            user: { id: accountId ?? 'vercel-account', username: 'Vercel fixture' },
+            sub: accountId ?? 'vercel-account',
+            preferred_username: 'Vercel fixture',
+            name: 'Vercel fixture',
+          };
         response.end(JSON.stringify(value));
         return;
       }
-      if (dropWrites && request.method !== 'GET') {
-        response.destroy();
-        return;
-      }
-      if (largeResponse) {
-        response.end(JSON.stringify({ text: '"\\\n\t\u0000'.repeat(30_000) }));
-        return;
-      }
+
       response.end(
         JSON.stringify({
           fixture: true,
@@ -129,14 +137,11 @@ export async function connectionUpstream(): Promise<ConnectionUpstream> {
     dropRefresh(): void {
       dropRefresh = true;
     },
-    largeResponse(): void {
-      largeResponse = true;
+    failToken(body, statusCode = 200): void {
+      tokenFailure = { body, statusCode };
     },
     setAccount(id: string): void {
       accountId = id;
-    },
-    dropWrites(): void {
-      dropWrites = true;
     },
     holdProfile(): Promise<void> {
       holdProfile = true;

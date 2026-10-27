@@ -1,19 +1,7 @@
 import { SkillError } from '@my-pi-harness/integrations';
 import type { RemoteMcpService } from '../mcp/remote-service.js';
 import type { PluginAppPort } from './service.js';
-
-/** Fixed official endpoints are configuration; installation does not connect, grant trust or send data. */
-const endpoints: Readonly<Record<string, string>> = {
-  github: 'https://api.githubcopilot.com/mcp/',
-  'google-drive': 'https://drivemcp.googleapis.com/mcp/v1',
-  'google-docs': 'https://docsmcp.googleapis.com/mcp/v1',
-  'google-sheets': 'https://sheetsmcp.googleapis.com/mcp/v1',
-  'google-slides': 'https://slidesmcp.googleapis.com/mcp/v1',
-  'google-calendar': 'https://calendarmcp.googleapis.com/mcp/v1',
-  vercel: 'https://mcp.vercel.com',
-  notion: 'https://mcp.notion.com/mcp',
-  supabase: 'https://mcp.supabase.com/mcp',
-};
+import { pluginAppConfiguration } from './app-catalog.js';
 
 /** Persistent ownership is checked by IDs, including rollback before a plugin record exists. */
 export function createPluginAppPort(remote: RemoteMcpService): PluginAppPort {
@@ -23,29 +11,79 @@ export function createPluginAppPort(remote: RemoteMcpService): PluginAppPort {
       throw new SkillError('PLUGIN_APP_OWNER', 'Plugin does not own this MCP configuration');
     return remote.get(referenceId);
   };
+  const install = (
+    pluginId: string,
+    app: Parameters<PluginAppPort['install']>[1],
+    signal: AbortSignal,
+  ): string => {
+    signal.throwIfAborted();
+    const configuration = pluginAppConfiguration(app.id);
+    return remote.create(
+      {
+        name: app.name,
+        transport: configuration.transport,
+        endpoint: configuration.endpoint,
+        publicHeaders: {},
+        secretHeaders: [],
+        oauth: configuration.credentialSource === 'mcp-oauth',
+      },
+      { pluginId, componentId: app.id },
+    ).id;
+  };
   return {
+    refresh(id) {
+      remote.schedulePluginApp(id);
+      return Promise.resolve();
+    },
     install(pluginId, app, signal) {
+      return Promise.resolve(install(pluginId, app, signal));
+    },
+    async reconcile(pluginId, app, referenceId, enabled, signal) {
       signal.throwIfAborted();
-      const endpoint = endpoints[app.id];
-      if (endpoint === undefined)
-        throw new SkillError('PLUGIN_APP_UNKNOWN', 'Plugin App endpoint is not registered');
-      return Promise.resolve(
-        remote.create(
-          {
-            name: app.name,
-            transport: 'streamable-http',
-            endpoint,
-            publicHeaders: {},
-            secretHeaders: [],
-            oauth: true,
-          },
-          { pluginId, componentId: app.id },
-        ).id,
-      );
+      let server;
+      if (referenceId !== undefined) server = owned(pluginId, app.id, referenceId);
+      const ownedServers = remote
+        .list()
+        .filter((candidate) => remote.ownedBy(candidate.id, pluginId, app.id));
+      if (ownedServers.length > 1)
+        throw new SkillError(
+          'PLUGIN_APP_OWNER',
+          'Plugin App has more than one owned configuration',
+        );
+      if (server === undefined) server = ownedServers[0];
+      if (server === undefined) server = remote.get(install(pluginId, app, signal));
+      const configuration = pluginAppConfiguration(app.id);
+      const pluginOAuth = configuration.credentialSource === 'plugin-oauth';
+      if (
+        server.transport !== configuration.transport ||
+        server.endpoint !== configuration.endpoint ||
+        server.oauth !== (configuration.credentialSource === 'mcp-oauth') ||
+        (pluginOAuth && (server.connectionId !== undefined || server.secretHeaders.length > 0))
+      )
+        server = await remote.update(server.id, {
+          expectedRevision: server.revision,
+          name: app.name,
+          transport: configuration.transport,
+          endpoint: configuration.endpoint,
+          publicHeaders: {},
+          secretHeaders: [],
+          oauth: configuration.credentialSource === 'mcp-oauth',
+        });
+      // Startup reconciliation never replaces revoked identity or target trust with a new grant.
+      if (!enabled && server.enabled)
+        await remote.disable(server.id, {
+          expectedRevision: server.revision,
+          expectedAccessEpoch: server.accessEpoch,
+        });
+      return server.id;
     },
     async setEnabled(pluginId, componentId, referenceId, enabled) {
       const server = owned(pluginId, componentId, referenceId);
-      if (server === undefined || enabled) return;
+      if (server === undefined) return;
+      if (enabled) {
+        remote.enablePluginApp(referenceId, pluginId, componentId);
+        return;
+      }
       await remote.disable(referenceId, {
         expectedRevision: server.revision,
         expectedAccessEpoch: server.accessEpoch,

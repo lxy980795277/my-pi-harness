@@ -63,6 +63,26 @@ export class WorkRepository {
       throw new StorageError('INVALID_RECORD', 'Work branch does not belong to this session');
   }
 
+  /** A summary retains the reset boundary that applied when its immutable version was created. */
+  public compactionContextStart(sessionId: string, compactionId: string): string | null {
+    const row = this.db
+      .select({ data: schema.events.data })
+      .from(schema.events)
+      .where(
+        and(
+          eq(schema.events.sessionId, sessionId),
+          eq(schema.events.type, 'work.updated'),
+          sql`json_extract(${schema.events.data}, '$.state.compaction.id') = ${compactionId}`,
+        ),
+      )
+      .orderBy(asc(schema.events.seq))
+      .limit(1)
+      .get();
+    if (row === undefined)
+      throw new StorageError('INVALID_RECORD', 'Compaction has no recorded context baseline');
+    return checked(WorkEventSchema, row.data).state.contextStartAfterMessageId;
+  }
+
   private messageIds(branchId: string): string[] {
     return this.db
       .select({ id: schema.branchMessages.messageId })

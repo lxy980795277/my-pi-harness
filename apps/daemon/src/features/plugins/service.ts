@@ -10,6 +10,7 @@ import {
   readSkillTree,
   syncSkillDirectory,
   previewBuiltinPluginSkills,
+  previewPluginSkills,
 } from '@my-pi-harness/integrations';
 import type {
   PluginComponent,
@@ -19,6 +20,8 @@ import type {
 } from '@my-pi-harness/protocol';
 import type { ExtensionRepository, StoredPlugin } from '@my-pi-harness/storage';
 import type { SkillsService } from '../skills/service.js';
+import { syncPluginSkills } from './sync.js';
+import { installedPluginDirectory, pluginSkillsCurrent } from './resources.js';
 
 export interface PluginAppPort {
   install(
@@ -33,17 +36,25 @@ export interface PluginAppPort {
     enabled: boolean,
   ): Promise<void>;
   remove(pluginId: string, componentId: string, referenceId: string): Promise<void>;
+  refresh?(referenceId: string): Promise<void>;
+  reconcile?(
+    pluginId: string,
+    app: PluginManifest['apps'][number],
+    referenceId: string | undefined,
+    enabled: boolean,
+    signal: AbortSignal,
+  ): Promise<string>;
 }
 export interface PluginServiceOptions {
   repository: ExtensionRepository;
   profileDirectory: string;
   skills: SkillsService;
   apps?: PluginAppPort;
+  onRemoved?(id: string): Promise<void>;
   resourceDirectory?: string;
 }
 /** Plugin ownership is saved by exact references; names never identify removable MCP servers. */
 export class PluginService {
-  private readonly pending = new Set<string>();
   private readonly busy = new Set<string>();
   private readonly operations = new Set<AbortController>();
   private readonly settlements = new Set<Promise<void>>();
@@ -71,9 +82,23 @@ export class PluginService {
   public async detail(id: string, signal: AbortSignal): Promise<PluginDetail> {
     this.manifest(id);
     return await this.trackOperation(signal, async (owned) => {
-      const skills = await previewBuiltinPluginSkills(id, owned, this.resourceRoot());
       const plugin = this.list().find((entry) => entry.manifest.id === id);
       if (plugin === undefined) return this.missing();
+      const installed = this.options.repository.plugins().find((entry) => entry.id === id);
+      let skills;
+      if (installed === undefined)
+        skills = await previewBuiltinPluginSkills(id, owned, this.resourceRoot());
+      else {
+        const directory = await installedPluginDirectory(installed, this.options.profileDirectory);
+        skills = await previewPluginSkills(
+          join(directory, 'skills'),
+          installed.components
+            .filter((component) => component.kind === 'skill')
+            .map((component) => component.id.slice('skill:'.length)),
+          owned,
+        );
+        this.stored(id, installed.revision);
+      }
       return { plugin, skills };
     });
   }
@@ -89,9 +114,8 @@ export class PluginService {
   }
   private async installCore(id: string, signal: AbortSignal): Promise<PluginView> {
     const manifest = this.manifest(id);
-    if (this.pending.has(id) || this.options.repository.plugins().some((entry) => entry.id === id))
+    if (this.options.repository.plugins().some((entry) => entry.id === id))
       throw new SkillError('PLUGIN_CONFLICT', 'Plugin is already installed or installing');
-    this.pending.add(id);
     const root = join(this.options.profileDirectory, 'plugins');
     const staging = join(root, `.install-${randomUUID()}`);
     const directory = join(root, id);
@@ -129,7 +153,7 @@ export class PluginService {
             'Plugin app integration has not been configured',
           );
         const referenceId = await this.options.apps.install(id, app, signal);
-        components.push({ id: app.id, kind: 'app', enabled: true, referenceId });
+        components.push({ id: app.id, kind: 'app', enabled: false, referenceId });
       }
       signal.throwIfAborted();
       await rename(staging, directory);
@@ -180,59 +204,90 @@ export class PluginService {
       throw error;
     } finally {
       await rm(staging, { recursive: true, force: true });
-      this.pending.delete(id);
     }
   }
   private async controlCore(
     id: string,
     expectedRevision: number,
     enabled: boolean,
+    signal: AbortSignal,
   ): Promise<PluginView> {
     const plugin = this.stored(id, expectedRevision);
-    for (const component of plugin.components)
+    const components: PluginComponent[] = [];
+    for (const previous of plugin.components) {
+      const component = await this.configuredComponent(plugin, previous, signal);
       if (component.kind === 'app' && this.options.apps !== undefined)
-        await this.options.apps.setEnabled(
-          id,
-          component.id,
-          component.referenceId,
-          enabled && component.enabled,
-        );
+        await this.options.apps.setEnabled(id, component.id, component.referenceId, enabled);
+      components.push({ ...component, enabled });
+    }
     this.options.repository.savePlugin(
-      { ...plugin, revision: plugin.revision + 1, enabled },
+      {
+        ...plugin,
+        revision: plugin.revision + 1,
+        enabled,
+        components,
+      },
       plugin.revision,
     );
+    if (enabled)
+      await Promise.all(
+        components
+          .filter((component) => component.kind === 'app')
+          .map(async (component) => {
+            await this.options.apps?.refresh?.(component.referenceId);
+          }),
+      );
     return this.list().find((entry) => entry.manifest.id === id) ?? this.missing();
   }
   private missing(): never {
     throw new SkillError('PLUGIN_NOT_FOUND', 'Plugin disappeared');
+  }
+  private async configuredComponent(
+    plugin: StoredPlugin,
+    component: PluginComponent,
+    signal: AbortSignal,
+  ): Promise<PluginComponent> {
+    if (component.kind !== 'app' || this.options.apps?.reconcile === undefined) return component;
+    const app = this.manifest(plugin.id).apps.find((entry) => entry.id === component.id);
+    if (app === undefined)
+      throw new SkillError('PLUGIN_COMPONENT', 'Plugin App is no longer declared');
+    const referenceId = await this.options.apps.reconcile(
+      plugin.id,
+      app,
+      component.referenceId,
+      plugin.enabled && component.enabled,
+      signal,
+    );
+    return { ...component, referenceId };
   }
   private async componentCore(
     id: string,
     componentId: string,
     expectedRevision: number,
     enabled: boolean,
+    signal: AbortSignal,
   ): Promise<PluginView> {
     const plugin = this.stored(id, expectedRevision);
-    const component = plugin.components.find((entry) => entry.id === componentId);
-    if (!component) throw new SkillError('PLUGIN_COMPONENT', 'Plugin component does not exist');
+    const previous = plugin.components.find((entry) => entry.id === componentId);
+    if (!previous) throw new SkillError('PLUGIN_COMPONENT', 'Plugin component does not exist');
+    const component = await this.configuredComponent(plugin, previous, signal);
     if (component.kind === 'app' && this.options.apps !== undefined)
-      await this.options.apps.setEnabled(
-        id,
-        component.id,
-        component.referenceId,
-        plugin.enabled && enabled,
-      );
+      await this.options.apps.setEnabled(id, component.id, component.referenceId, enabled);
     this.options.repository.savePlugin(
       {
         ...plugin,
         revision: plugin.revision + 1,
+        enabled:
+          enabled || plugin.components.some((entry) => entry.id !== componentId && entry.enabled),
         components: plugin.components.map((entry) => {
-          if (entry.id === componentId) return { ...entry, enabled };
+          if (entry.id === componentId) return { ...component, enabled };
           return entry;
         }),
       },
       plugin.revision,
     );
+    if (component.kind === 'app' && enabled)
+      await this.options.apps?.refresh?.(component.referenceId);
     return this.list().find((entry) => entry.manifest.id === id) ?? this.missing();
   }
   private async removeCore(id: string, expectedRevision: number): Promise<void> {
@@ -248,6 +303,7 @@ export class PluginService {
       throw new SkillError('PLUGIN_OWNER', 'Plugin directory changed identity');
     for (const component of plugin.components)
       if (component.kind === 'skill') this.options.skills.assertRemovable(component.referenceId);
+    await this.options.onRemoved?.(id);
     const removing = this.options.repository.savePlugin(
       { ...plugin, revision: plugin.revision + 1, enabled: false },
       plugin.revision,
@@ -295,6 +351,80 @@ export class PluginService {
   public async install(id: string, signal: AbortSignal): Promise<PluginView> {
     return await this.ownOperation(id, signal, async (owned) => await this.installCore(id, owned));
   }
+  /** Reconcile only installed built-ins before Runs or catalog warmup can observe stale resources. */
+  public async synchronize(signal: AbortSignal): Promise<void> {
+    for (const installation of this.options.repository.plugins()) {
+      await this.ownOperation(installation.id, signal, async (owned) => {
+        const manifest = this.manifest(installation.id);
+        let plugin = this.stored(installation.id, installation.revision);
+        if (
+          !(await pluginSkillsCurrent(
+            plugin,
+            manifest,
+            this.options.profileDirectory,
+            this.resourceRoot(),
+            owned,
+          ))
+        ) {
+          await syncPluginSkills(
+            {
+              plugin,
+              manifest,
+              repository: this.options.repository,
+              skills: this.options.skills,
+              profileDirectory: this.options.profileDirectory,
+              resourceDirectory: this.resourceRoot(),
+            },
+            owned,
+          );
+          plugin =
+            this.options.repository.plugins().find((entry) => entry.id === installation.id) ??
+            this.missing();
+        }
+        const components: PluginComponent[] = [];
+        for (const app of manifest.apps) {
+          const previous = plugin.components.find(
+            (component) => component.kind === 'app' && component.id === app.id,
+          );
+          const enabled = plugin.enabled && (previous?.enabled ?? false);
+          let referenceId = previous?.referenceId;
+          if (this.options.apps?.reconcile !== undefined)
+            referenceId = await this.options.apps.reconcile(
+              plugin.id,
+              app,
+              referenceId,
+              enabled,
+              owned,
+            );
+          else if (referenceId === undefined && this.options.apps !== undefined)
+            referenceId = await this.options.apps.install(plugin.id, app, owned);
+          if (referenceId === undefined)
+            throw new SkillError(
+              'PLUGIN_APPS_UNAVAILABLE',
+              'Plugin App reconciliation has not been configured',
+            );
+          components.push({ id: app.id, kind: 'app', enabled, referenceId });
+        }
+        components.push(...plugin.components.filter((component) => component.kind === 'skill'));
+        for (const old of plugin.components)
+          if (old.kind === 'app' && !manifest.apps.some((app) => app.id === old.id))
+            await this.options.apps?.remove(plugin.id, old.id, old.referenceId);
+        const normalized = components.map((component) => ({
+          ...component,
+          enabled: plugin.enabled && component.enabled,
+        }));
+        const enabled = normalized.some((component) => component.enabled);
+        if (
+          JSON.stringify(normalized) !== JSON.stringify(plugin.components) ||
+          enabled !== plugin.enabled
+        )
+          this.options.repository.savePlugin(
+            { ...plugin, enabled, components: normalized, revision: plugin.revision + 1 },
+            plugin.revision,
+          );
+      });
+    }
+  }
   public async control(
     id: string,
     expectedRevision: number,
@@ -303,7 +433,7 @@ export class PluginService {
     return await this.ownOperation(
       id,
       new AbortController().signal,
-      async () => await this.controlCore(id, expectedRevision, enabled),
+      async (owned) => await this.controlCore(id, expectedRevision, enabled, owned),
     );
   }
   public async component(
@@ -315,7 +445,7 @@ export class PluginService {
     return await this.ownOperation(
       id,
       new AbortController().signal,
-      async () => await this.componentCore(id, componentId, expectedRevision, enabled),
+      async (owned) => await this.componentCore(id, componentId, expectedRevision, enabled, owned),
     );
   }
   public async remove(id: string, expectedRevision: number): Promise<void> {

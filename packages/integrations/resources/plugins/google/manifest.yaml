@@ -1,0 +1,42 @@
+id: google
+name: Google
+apiUrl: https://www.googleapis.com
+oauth:
+  issuer: https://accounts.google.com
+  authorizationEndpoint: https://accounts.google.com/o/oauth2/v2/auth
+  tokenEndpoint: https://oauth2.googleapis.com/token
+  pkce: true
+  tokenAuth: body
+  tokenFormat: form
+  authorizationParams:
+    access_type: offline
+    prompt: consent
+  scopes:
+    - openid
+    - email
+    - profile
+    - https://www.googleapis.com/auth/drive.readonly
+    - https://www.googleapis.com/auth/drive.file
+    - https://www.googleapis.com/auth/documents.readonly
+    - https://www.googleapis.com/auth/documents
+    - https://www.googleapis.com/auth/spreadsheets.readonly
+    - https://www.googleapis.com/auth/spreadsheets
+    - https://www.googleapis.com/auth/presentations.readonly
+    - https://www.googleapis.com/auth/presentations
+    - https://www.googleapis.com/auth/calendar.calendarlist.readonly
+    - https://www.googleapis.com/auth/calendar.events.freebusy
+    - https://www.googleapis.com/auth/calendar.events.readonly
+    - https://www.googleapis.com/auth/calendar.events
+  profile:
+    source: id-token
+    idField: sub
+    usernameField: email
+    displayNameField: name
+    avatarUrlField: picture
+gateway:
+  allowedPaths:
+    - ^/drive/v3/files(?:/[^/]+)?/?$
+    - ^/drive/v3/files/[^/]+/export/?$
+    - ^/drive/v3/files/[^/]+/comments(?:/[^/]+(?:/replies(?:/[^/]+)?)?)?/?$
+    - ^/calendar/v3/users/[^/]+/calendarList/?$
+    - ^/calendar/v3/calendars/[^/]+/events(?:/[^/]+)?/?$

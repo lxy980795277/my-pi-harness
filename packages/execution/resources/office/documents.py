@@ -1,10 +1,21 @@
 """Restricted DOCX package edits preserve unrelated OOXML parts."""
 import re
+from datetime import datetime, timezone
 from lxml import etree as ET
-from common import NS, audit_package, clone, ensure_part, paragraph_text, plain_paragraph, read_package, require, set_xml, tag, write_package, xml
+from common import audit_package, clone, ensure_part, paragraph_text, plain_paragraph, read_package, require, set_xml, tag, write_package, xml
+from word_layout import apply_settings, create_document, format_paragraph, inspect_layout
 
-W = NS['w']
 NOTE_CONTENT = 'application/vnd.openxmlformats-officedocument.wordprocessingml.'
+
+
+def paragraph_details(paragraphs):
+    result = []
+    for index, paragraph in enumerate(paragraphs[:500]):
+        props = paragraph.find(tag('w', 'pPr'))
+        style = props.find(tag('w', 'pStyle')) if props is not None else None
+        result.append({'index': index, 'text': paragraph_text(paragraph)[:2000],
+                       'style': style.get(tag('w', 'val')) if style is not None else None})
+    return result
 
 
 def inspect_docx(path):
@@ -26,14 +37,16 @@ def inspect_docx(path):
         'format': 'docx', 'paragraphs': len(paragraphs),
         'tables': len(list(doc.iter(tag('w', 'tbl')))),
         'text': '\n'.join(paragraph_text(p) for p in paragraphs)[:100000],
+        'paragraphDetails': paragraph_details(paragraphs),
         'revisions': sum(len(list(doc.iter(tag('w', name)))) for name in ('ins', 'del')),
         'comments': len(list(xml(parts['word/comments.xml']))) if 'word/comments.xml' in parts else 0,
         'bookmarks': [node.get(tag('w', 'name')) for node in doc.iter(tag('w', 'bookmarkStart'))],
         'fields': [node.text for node in doc.iter(tag('w', 'instrText'))],
         'contentControls': len(list(doc.iter(tag('w', 'sdt')))),
         'footnotes': 'word/footnotes.xml' in parts, 'endnotes': 'word/endnotes.xml' in parts,
+        **inspect_layout(parts, doc),
         'validation': audit_package(parts),
-        'notVerified': ['Word/LibreOffice page rendering', 'Field/TOC calculation; fields require an Office application update'],
+        'notVerified': ['Word/LibreOffice page rendering and installed-font glyph coverage', 'Field/TOC calculation; fields require an Office application update'],
     }
 
 
@@ -80,6 +93,45 @@ def replace_text(doc, old, replacement):
         node.text = before + (replacement if not inserted else '') + after
         node.set('{http://www.w3.org/XML/1998/namespace}space', 'preserve')
         inserted = True
+
+
+def tracked_replace(doc, operation):
+    old = operation['old']
+    matches = [p for p in doc.iter(tag('w', 'p')) if old in paragraph_text(p)]
+    require(len(matches) == 1 and paragraph_text(matches[0]).count(old) == 1, 'Tracked replacement must match once in one paragraph')
+    paragraph = matches[0]
+    require(not any(list(paragraph.iter(tag('w', name))) for name in ('fldChar', 'instrText', 'hyperlink', 'ins', 'del', 'drawing', 'sdt')), 'Tracked replacement requires plain paragraph text')
+    runs = [run for run in paragraph.findall(tag('w', 'r')) if len(run.findall(tag('w', 't'))) == 1 and old in (run.find(tag('w', 't')).text or '')]
+    require(len(runs) == 1, 'Tracked replacement must fit within one plain run')
+    source = runs[0]
+    require(all(node.tag in (tag('w', 'rPr'), tag('w', 't')) for node in source), 'Tracked replacement run contains special content')
+    original = source.find(tag('w', 't')).text
+    before, after = original.split(old, 1)
+    props = source.find(tag('w', 'rPr'))
+    def run(value, deleted=False):
+        node = ET.Element(tag('w', 'r'))
+        if props is not None:
+            node.append(clone(props))
+        text = ET.SubElement(node, tag('w', 'delText' if deleted else 't'))
+        text.set('{http://www.w3.org/XML/1998/namespace}space', 'preserve')
+        text.text = value
+        return node
+    identifier = max([int(node.get(tag('w', 'id'))) for node in doc.iter() if node.get(tag('w', 'id'), '').isdigit()] + [0]) + 1
+    nodes = [run(before)] if before else []
+    for kind, value in (('del', old), ('ins', operation['replacement'])):
+        if not value:
+            continue
+        revision = ET.Element(tag('w', kind), {tag('w', 'id'): str(identifier), tag('w', 'author'): operation['author'], tag('w', 'date'): datetime.now(timezone.utc).isoformat()})
+        identifier += 1
+        revision.append(run(value, kind == 'del'))
+        nodes.append(revision)
+    if after:
+        nodes.append(run(after))
+    offset = list(paragraph).index(source)
+    paragraph.remove(source)
+    for node in nodes:
+        paragraph.insert(offset, node)
+        offset += 1
 
 
 def add_note(parts, paragraph, operation):
@@ -181,30 +233,20 @@ def merge(parts, body, paths):
 
 
 def docx(request, output):
-    from docx import Document
     source = request.get('source')
     if source:
-        require(not request.get('paragraphs') and not request.get('tables'), 'Source edits use explicit operations; creation paragraphs/tables cannot silently replace content')
+        require(not request.get('paragraphs') and not request.get('tables') and not request.get('images'), 'Source edits use explicit operations; creation paragraphs/tables/images cannot silently replace content')
         parts = read_package(source)
     else:
-        document = Document()
-        for item in request.get('paragraphs', []):
-            if 'heading' in item:
-                document.add_heading(item['text'], item['heading'])
-            else:
-                document.add_paragraph(item['text'])
-        for table in request.get('tables', []):
-            rows = table['rows']
-            require(rows and rows[0] and all(len(row) == len(rows[0]) for row in rows), 'A table must be rectangular')
-            result = document.add_table(rows=len(rows), cols=len(rows[0]))
-            for row_index, row in enumerate(rows):
-                for column, value in enumerate(row):
-                    result.cell(row_index, column).text = '' if value is None else str(value)
-        document.save(output)
+        create_document(request, output)
         parts = read_package(output)
     doc = xml(parts['word/document.xml'])
     body = doc.find(tag('w', 'body'))
     require(body is not None, 'DOCX body is missing')
+    styles = apply_settings(parts, doc, request)
+    if not source:
+        for paragraph, values in zip(body.findall(tag('w', 'p')), request.get('paragraphs', [])):
+            format_paragraph(paragraph, values, styles)
     for operation in request.get('operations', []):
         kind = operation['kind']
         paragraphs = list(body.iter(tag('w', 'p')))
@@ -212,6 +254,10 @@ def docx(request, output):
             require(operation['paragraph'] < len(paragraphs), 'Paragraph index is outside the document')
         if kind == 'replace_text':
             replace_text(doc, operation['old'], operation['replacement'])
+        elif kind == 'tracked_replace':
+            tracked_replace(doc, operation)
+        elif kind == 'format_paragraph':
+            format_paragraph(paragraphs[operation['paragraph']], operation, styles)
         elif kind == 'revisions':
             edit_revisions(doc, operation['action'])
         elif kind in ('comment_add', 'comment_remove'):

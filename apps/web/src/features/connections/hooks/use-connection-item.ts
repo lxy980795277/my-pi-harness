@@ -1,10 +1,13 @@
 import { useCallback, useState, type ChangeEvent } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Type } from 'typebox';
 import type { ConnectionView } from '@my-pi-harness/protocol';
 import { useAsyncEvent } from '@/hooks/use-async-event';
-import { openExternal } from '@/services/open-external';
-import { parseResponse } from '@/utils/parse-response';
+import {
+  beginConnectionAuthorization,
+  reopenConnectionAuthorization,
+  showConnectionAuthorization,
+} from '@/features/connections/services/oauth-launch';
+import type { ConnectionAuthorizationWindow } from '@/features/connections/services/oauth-window';
 import {
   connectionAction,
   removeConnection,
@@ -23,6 +26,7 @@ export const useConnectionItem = (
   const client = useQueryClient();
   const [secret, setSecret] = useState('');
   const [oauthUrl, setOauthUrl] = useState<string | null>(null);
+  const [oauthPopup, setOauthPopup] = useState<ConnectionAuthorizationWindow | null>(null);
   const [deleting, setDeleting] = useState(false);
   const refresh = useCallback(async (): Promise<void> => {
     await client.invalidateQueries({ queryKey: ['connections'] });
@@ -45,21 +49,23 @@ export const useConnectionItem = (
   const action = useAsyncEvent(
     useCallback(
       async (signal: AbortSignal, kind: ConnectionAction): Promise<void> => {
-        const value = await connectionAction(connection, kind, signal);
         if (kind === 'oauth/start') {
-          const result = parseResponse(
-            Type.Object({ url: Type.String(), expiresAt: Type.Integer() }),
-            value,
-          );
+          const result = await beginConnectionAuthorization(connection, signal);
+          if (signal.aborted) result.popup?.close();
           signal.throwIfAborted();
           setOauthUrl(result.url);
-          await openExternal(result.url);
+          setOauthPopup(result.popup);
+          await showConnectionAuthorization(result);
         } else {
+          await connectionAction(connection, kind, signal);
+          signal.throwIfAborted();
+          oauthPopup?.close();
           setOauthUrl(null);
+          setOauthPopup(null);
         }
         await refresh();
       },
-      [connection, refresh],
+      [connection, oauthPopup, refresh],
     ),
   );
   const remove = useAsyncEvent(
@@ -71,7 +77,7 @@ export const useConnectionItem = (
       [connection, refresh],
     ),
   );
-  const { run } = action;
+  const { run, clearError: clearActionError } = action;
   const connect = useCallback((): void => {
     run('oauth/start');
   }, [run]);
@@ -94,9 +100,10 @@ export const useConnectionItem = (
   const reopen = useAsyncEvent(
     useCallback(async (): Promise<void> => {
       if (oauthUrl !== null) {
-        await openExternal(oauthUrl);
+        clearActionError();
+        setOauthPopup(await reopenConnectionAuthorization(connection, oauthUrl));
       }
-    }, [oauthUrl]),
+    }, [clearActionError, connection, oauthUrl]),
   );
   let secretLabel = '访问 Token';
   let saveLabel = '保存并连接';
@@ -110,6 +117,9 @@ export const useConnectionItem = (
   }
   if (error === null) {
     error = remove.error;
+  }
+  if (error === null) {
+    error = reopen.error;
   }
   return {
     secret,
@@ -127,7 +137,7 @@ export const useConnectionItem = (
     remove: remove.run,
     oauthUrl,
     reopen: reopen.run,
-    pending: action.pending || save.pending || remove.pending,
+    pending: action.pending || save.pending || remove.pending || reopen.pending,
     error,
   };
 };
