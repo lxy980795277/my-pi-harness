@@ -13,6 +13,7 @@ import { test, expect } from './fixture.js';
 import { configureTestProvider } from './model-fixtures.js';
 import { startToolSequenceModel } from './m2-completion-model.js';
 import { chooseOption } from './ui-controls.js';
+import { expandCompletedProcesses } from './process-controls.js';
 
 test('完整工具链复用 SDK 调用ID，逐次审批、真实编辑与受限执行后保留历史', async ({
   page,
@@ -196,6 +197,8 @@ test('完整工具链复用 SDK 调用ID，逐次审批、真实编辑与受限�
       ),
     ).toBe(true);
     await expect(page.getByRole('alert')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: '停止', exact: true })).toBeHidden();
+    await expandCompletedProcesses(page);
     await page.screenshot({ path: testInfo.outputPath('m2-completed-tools.png'), fullPage: true });
     await page.reload();
     await page.getByRole('button', { name: /^完整工具链验收 / }).click();

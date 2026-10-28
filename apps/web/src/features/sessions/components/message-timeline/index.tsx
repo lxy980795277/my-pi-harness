@@ -9,10 +9,10 @@ import type {
 import type { FC, ReactNode } from 'react';
 import { ArrowDown, LoaderCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { MessageCard } from '@/features/sessions/components/message-card';
 import { AnswerFooter } from '@/features/sessions/components/answer-footer';
+import { AnswerProcess } from '@/features/sessions/components/answer-process';
+import { TimelineContent } from '@/features/sessions/components/timeline-content';
 import { useMessageTimeline } from '@/features/sessions/hooks/use-message-timeline';
-import { ToolCard } from '@/features/sessions/components/tool-card';
 import { cn } from '@/utils/cn';
 
 interface MessageTimelineProps {
@@ -65,18 +65,29 @@ export const MessageTimeline: FC<MessageTimelineProps> = ({
                   key={entry.id}
                   data-index={index}
                   ref={state.measureRow}
-                  className={cn('absolute top-0 left-0 w-full pb-0.5')}
+                  className={cn('absolute top-0 left-0 w-full')}
                 >
-                  {entry.type === 'message' && (
-                    <MessageCard
+                  {(entry.type === 'message' || entry.type === 'tool') && (
+                    <TimelineContent
+                      entry={entry}
                       workspaceId={workspaceId}
                       approvalMode={approvalMode}
-                      message={entry.message}
                       canEdit={canEdit}
                       onEdit={onEdit}
+                      onDecide={onDecide}
                     />
                   )}
-                  {entry.type === 'tool' && <ToolCard tool={entry.tool} onDecide={onDecide} />}
+                  {entry.type === 'process' && (
+                    <AnswerProcess
+                      entry={entry}
+                      workspaceId={workspaceId}
+                      approvalMode={approvalMode}
+                      canEdit={canEdit}
+                      onBeforeToggle={state.beforeProcessToggle}
+                      onEdit={onEdit}
+                      onDecide={onDecide}
+                    />
+                  )}
                   {entry.type === 'answer-footer' && <AnswerFooter footer={entry.footer} />}
                   {entry.type === 'waiting' && (
                     <div

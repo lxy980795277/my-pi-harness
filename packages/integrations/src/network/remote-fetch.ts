@@ -1,7 +1,8 @@
 import { Resolver } from 'node:dns/promises';
 import { request as httpRequest, type IncomingMessage } from 'node:http';
 import { request as httpsRequest } from 'node:https';
-import { BlockList, isIP, type IPVersion } from 'node:net';
+import { isIP } from 'node:net';
+import { isPublicAddress } from '@my-pi-harness/execution';
 import type { FetchLike } from '@modelcontextprotocol/client';
 import { NetworkError } from './errors.js';
 
@@ -15,46 +16,8 @@ export interface RemoteNetworkOptions {
   validateUtf8?: boolean;
 }
 
-type Subnet = readonly [address: string, prefix: number];
-
-const denied = createBlockList(
-  [
-    ['0.0.0.0', 8],
-    ['10.0.0.0', 8],
-    ['100.64.0.0', 10],
-    ['127.0.0.0', 8],
-    ['169.254.0.0', 16],
-    ['172.16.0.0', 12],
-    ['192.0.0.0', 24],
-    ['192.0.2.0', 24],
-    ['192.88.99.0', 24],
-    ['192.168.0.0', 16],
-    ['198.18.0.0', 15],
-    ['198.51.100.0', 24],
-    ['203.0.113.0', 24],
-    ['224.0.0.0', 4],
-    ['240.0.0.0', 4],
-  ] as const,
-  'ipv4',
-);
-const publicV6 = createBlockList([['2000::', 3]], 'ipv6');
-const deniedV6 = createBlockList(
-  [
-    ['2001::', 23],
-    ['2001:db8::', 32],
-    ['2002::', 16],
-    ['3fff::', 20],
-  ] as const,
-  'ipv6',
-);
-
 export function assertRemoteAddress(address: string): void {
-  const family = isIP(address);
-  if (
-    (family === 4 && !denied.check(address, 'ipv4')) ||
-    (family === 6 && publicV6.check(address, 'ipv6') && !deniedV6.check(address, 'ipv6'))
-  )
-    return;
+  if (isPublicAddress(address)) return;
   throw new NetworkError('PRIVATE_NETWORK', '远程连接禁止访问本机、私有、保留或元数据地址。');
 }
 export function parseRemoteUrl(input: string | URL, fixtureOrigin?: string): URL {
@@ -245,10 +208,4 @@ export function createRemoteFetch(options: RemoteNetworkOptions = {}): FetchLike
       client.end(bytes);
     });
   };
-}
-
-function createBlockList(subnets: readonly Subnet[], family: IPVersion): BlockList {
-  const list = new BlockList();
-  for (const [address, prefix] of subnets) list.addSubnet(address, prefix, family);
-  return list;
 }

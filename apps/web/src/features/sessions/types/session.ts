@@ -17,15 +17,36 @@ export type SessionCommandMethod = 'POST' | 'PUT' | 'DELETE';
 
 export type SessionConnectionStatus = 'connecting' | 'connected' | 'disconnected';
 
-export type TimelineEntry =
+export type TimelineMessagePart = 'all' | 'thinking' | 'body';
+
+export interface AnswerTurn {
+  user: MessageView;
+  assistants: MessageView[];
+}
+
+export type TimelineContentEntry =
   | {
       type: 'message';
       id: string;
       createdAt: number;
       message: MessageView;
+      part?: TimelineMessagePart;
     }
+  | { type: 'tool'; id: string; createdAt: number; tool: ToolCallView };
+
+export interface TimelineProcessEntry {
+  type: 'process';
+  id: string;
+  sessionId: string;
+  inputId: string;
+  durationLabel: string;
+  entries: readonly TimelineContentEntry[];
+}
+
+export type TimelineEntry =
+  | TimelineContentEntry
+  | TimelineProcessEntry
   | { type: 'answer-footer'; id: string; footer: AnswerFooter }
-  | { type: 'tool'; id: string; createdAt: number; tool: ToolCallView }
   | { type: 'waiting'; id: string; runId: string };
 
 export interface LiveSession {
@@ -101,6 +122,7 @@ export interface MessageTimelineState {
   measureList: (node: HTMLDivElement | null) => void;
   measureRow: (node: HTMLDivElement | null) => void;
   showJump: boolean;
+  beforeProcessToggle: Action;
   jump: Action;
   scroll: (event: UIEvent<HTMLDivElement>) => void;
 }

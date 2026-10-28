@@ -9,6 +9,7 @@ import { test, expect } from './fixture.js';
 import { configureTestProvider } from './model-fixtures.js';
 import { startToolModel } from './tool-model-server.js';
 import { chooseOption } from './ui-controls.js';
+import { expandCompletedProcesses } from './process-controls.js';
 
 test('权限菜单展示三种策略、说明、统一图标和当前选项，完整访问使用警示样式', async ({
   page,
@@ -16,12 +17,15 @@ test('权限菜单展示三种策略、说明、统一图标和当前选项，�
 }) => {
   await page.goto(daemon.origin);
   const trigger = page.getByRole('combobox', { name: '执行批准方式', exact: true });
+  await expect(trigger).toContainText('完全访问权限');
+  await chooseOption(page, trigger, '请求批准');
   await expect(trigger).toContainText('请求批准');
   const message = page.getByLabel('消息', { exact: true });
   const surface = message.locator('..');
   const surfaceBorder = await surface.evaluate((element) => {
     return getComputedStyle(element).borderColor;
   });
+  await message.focus();
   const triggerStyle = await trigger.evaluate((element) => {
     const style = getComputedStyle(element);
     return {
@@ -171,6 +175,8 @@ for (const scenario of ['auto-allow', 'full-access', 'auto-fallback'] as const) 
       expect(await readFile(join(directory, 'approved.txt'), 'utf8')).toBe(
         'Approval fixture content\n',
       );
+      await expect(page.getByRole('button', { name: '停止', exact: true })).toBeHidden();
+      await expandCompletedProcesses(page);
       await expect(card.getByRole('button', { name: '允许本次操作', exact: true })).toHaveCount(0);
       if (scenario !== 'auto-fallback')
         await card.getByRole('button', { name: '展开 write_file 工具详情', exact: true }).click();
@@ -191,6 +197,8 @@ for (const scenario of ['auto-allow', 'full-access', 'auto-fallback'] as const) 
       }
       await page.reload();
       await page.getByRole('button', { name: /^请创建 approved.txt 测试文件 / }).click();
+      await expect(page.getByText('审批执行已完成。', { exact: true })).toBeVisible();
+      await expandCompletedProcesses(page);
       await card.getByRole('button', { name: '展开 write_file 工具详情', exact: true }).click();
       await expect(card.getByLabel('审批记录', { exact: true })).toBeVisible();
       expect(await readFile(join(directory, 'approved.txt'), 'utf8')).toBe(

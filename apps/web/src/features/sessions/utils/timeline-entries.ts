@@ -1,12 +1,13 @@
 import type { MessageView, RunView, ToolCallView } from '@my-pi-harness/protocol';
 import type { TimelineEntry } from '@/features/sessions/types/session';
 import { buildAnswerFooters } from '@/features/sessions/utils/answer-metadata';
+import { collapseAnswerProcesses } from '@/features/sessions/utils/answer-process';
 
-const hasVisibleMessage = (message: MessageView): boolean => {
+const hasVisibleBody = (message: MessageView): boolean => {
   if (message.role !== 'assistant' || message.status !== 'complete') {
     return true;
   }
-  if (message.text.length > 0 || message.thinking.length > 0) {
+  if (message.text.length > 0) {
     return true;
   }
   return message.attachmentIds !== undefined && message.attachmentIds.length > 0;
@@ -56,13 +57,24 @@ export const buildTimelineEntries = (
   }
   const entries: TimelineEntry[] = [];
   for (const message of messages) {
-    if (hasVisibleMessage(message)) {
+    const separateThinking = message.role === 'assistant' && message.thinking.length > 0;
+    if (separateThinking) {
+      entries.push({
+        type: 'message',
+        id: `thinking:${message.id}`,
+        createdAt: message.createdAt,
+        message,
+        part: 'thinking',
+      });
+    }
+    if (hasVisibleBody(message)) {
       const entry: TimelineEntry = {
         type: 'message',
         id: `message:${message.id}`,
         createdAt: message.createdAt,
         message,
       };
+      if (separateThinking) entry.part = 'body';
       entries.push(entry);
     }
     for (const tool of toolsByMessage.get(message.id) ?? []) {
@@ -80,5 +92,5 @@ export const buildTimelineEntries = (
   if (activeRunId !== null && !hasActiveActivity(messages, tools, activeRunId)) {
     entries.push({ type: 'waiting', id: `waiting:${activeRunId}`, runId: activeRunId });
   }
-  return entries;
+  return collapseAnswerProcesses(entries, messages, runs, activeRunId, branchId);
 };

@@ -40,7 +40,7 @@ Shell 默认的 Seatbelt 从 deny-default 开始，只开放工作区、独占�
 
 PDF worker 有 96 MiB V8 old-generation、10 秒与 20 页/100000 字符限制，退出/取消等待 worker 终止；只调用 `getDocument` / `getTextContent`，不装配 viewer 的 scripting 能力，也不加载外部资源。PDF.js 固定使用修复 [GHSA-hq66-cqwq-w95j](https://github.com/mozilla/pdf.js/security/advisories/GHSA-hq66-cqwq-w95j) 的版本；旧版的 `isEvalSupported:false` 不能代替升级。worker 是解析资源隔离，不是 OS 级恶意库代码沙箱。图片最多 2 MiB，仅确认格式签名，不承担完整图像解码或 OCR。
 
-Web 工具只使用标准 80/443 端口，拒绝 URL 凭据、非公网地址、IPv4 映射/过渡 IPv6、HTTPS 降级和超过四次重定向。每次解析全部 A/AAAA 结果并检查，socket 使用已核对的地址；没有环境代理、cookies、认证头、重试或连接复用。总时间 15 秒、响应 500000 字节、模型输出 100000 字符。请求 identity 编码并拒绝压缩响应，防止隐藏的解压放大；二进制与非 UTF-8 响应明确失败。POST 结果不确定时由调用者展示执行事实，不自动重试。
+Web 工具只使用标准 80/443 端口，拒绝 URL 凭据、非公网地址、其他过渡 IPv6、HTTPS 降级和超过四次重定向。IPv4-mapped IPv6按内嵌IPv4执行同一公网策略，点分与十六进制形式等价；映射私网、回环、元数据与保留地址仍拒绝。纯地址判定由`web/public-address.ts`拥有并供integrations复用，各调用方保留自己的领域错误。每次解析全部 A/AAAA 结果并检查，socket 使用已核对的地址；没有环境代理、cookies、认证头、重试或连接复用。总时间 15 秒、响应 500000 字节、模型输出 100000 字符。请求 identity 编码并拒绝压缩响应，防止隐藏的解压放大；二进制与非 UTF-8 响应明确失败。POST 结果不确定时由调用者展示执行事实，不自动重试。
 
 宿主可通过`ExecutionContext.skillGateway`声明唯一daemon回环origin及私有访问能力。只有该origin下的`/api/skill-gateway/{pluginId}/...`允许GET，socket固定127.0.0.1并附加私有请求头；其他本机路径、端口、别名及来自公网的重定向仍拒绝。网关响应上限5MiB，禁止跟随重定向；访问能力不进入工具参数或结果。
 

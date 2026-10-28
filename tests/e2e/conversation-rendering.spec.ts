@@ -3,6 +3,7 @@ import { startMarkdownModel } from './markdown-model.js';
 import { configureTestProvider } from './model-fixtures.js';
 import { chooseOption, openUserSettings } from './ui-controls.js';
 import { startToolSequenceModel } from './m2-completion-model.js';
+import { expandCompletedProcesses } from './process-controls.js';
 
 const PREFIX = [
   '## 渲染验证',
@@ -74,6 +75,13 @@ test('一次回答跨工具步骤只在末尾复制全部正文，底部统计�
     const answers = page.getByRole('article', { name: 'Agent的消息', exact: true });
     await expect(answers.last()).toContainText('核对完成');
     await expect(page.getByRole('button', { name: '停止', exact: true })).toBeHidden();
+    await expect(answers).toHaveCount(1);
+    await expect(page.getByLabel('search_session_history 工具调用', { exact: true })).toHaveCount(
+      0,
+    );
+    await expect(page.getByRole('button', { name: '展开回答过程', exact: true })).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath('answer-process-collapsed.png') });
+    await expandCompletedProcesses(page);
     await expect(answers).toHaveCount(3);
     await expect(answers.getByRole('button', { name: '复制消息', exact: true })).toHaveCount(0);
     const tools = page.getByLabel('search_session_history 工具调用', { exact: true });
@@ -107,6 +115,7 @@ test('一次回答跨工具步骤只在末尾复制全部正文，底部统计�
 });
 
 test('工具展开选择跨虚拟卸载与会话切换保留，输入草稿独立保存', async ({ page, daemon }) => {
+  test.setTimeout(45_000);
   const calls = Array.from({ length: 16 }, (_, index) => {
     return {
       name: 'search_session_history',
@@ -131,6 +140,7 @@ test('工具展开选择跨虚拟卸载与会话切换保留，输入草稿独�
     await expect(page.getByText('状态生命周期验证完成。', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: '停止', exact: true })).toHaveCount(0);
     const timeline = page.getByLabel('对话记录', { exact: true });
+    await expandCompletedProcesses(page);
     const firstTool = page
       .getByLabel('search_session_history 工具调用', { exact: true })
       .filter({ hasText: 'state-retain-0' });
@@ -141,9 +151,16 @@ test('工具展开选择跨虚拟卸载与会话切换保留，输入草稿独�
       .getByRole('button', { name: '展开 search_session_history 工具详情', exact: true })
       .click();
     await expect(firstTool.getByRole('region', { name: '调用参数', exact: true })).toBeVisible();
-    await timeline.evaluate((element) => {
-      element.scrollTop = element.scrollHeight;
-    });
+    // Later turns move the entire expanded process row outside the virtual overscan range.
+    for (let index = 0; index < 8; index += 1) {
+      await draft.fill(`虚拟卸载后续${index + 1}`);
+      await page.getByRole('button', { name: '发送', exact: true }).click();
+      await expect.poll(() => model.requests.length).toBe(18 + index);
+      await expect(page.getByRole('button', { name: '停止', exact: true })).toBeHidden();
+      await timeline.evaluate((element) => {
+        element.scrollTop = element.scrollHeight;
+      });
+    }
     await expect(firstTool).toHaveCount(0);
     await timeline.evaluate((element) => {
       element.scrollTop = 0;
@@ -162,7 +179,7 @@ test('工具展开选择跨虚拟卸载与会话切换保留，输入草稿独�
     await expect(
       firstTool.getByRole('button', { name: '收起 search_session_history 工具详情', exact: true }),
     ).toHaveAttribute('aria-expanded', 'true');
-    expect(model.requests).toHaveLength(17);
+    expect(model.requests).toHaveLength(25);
   } finally {
     await model.close();
   }

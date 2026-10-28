@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { assertPublicAddress, parseWebUrl } from '../src/web/fetch.js';
-import { executeTool } from '../src/index.js';
+import { executeTool, isPublicAddress } from '../src/index.js';
 
 describe('public web targets', () => {
   it.each([
@@ -18,20 +18,44 @@ describe('public web targets', () => {
     'fe80::1',
     'fc00::1',
     '::ffff:127.0.0.1',
-    '::ffff:8.8.8.8',
+    '::ffff:7f00:1',
+    '::ffff:10.0.0.1',
+    '::ffff:a00:1',
+    '::ffff:169.254.169.254',
+    '::ffff:a9fe:a9fe',
+    '::ffff:100.64.0.1',
+    '::ffff:6440:1',
+    '::ffff:198.18.0.1',
+    '::ffff:c612:1',
+    '::ffff:192.168.1.1',
+    '::ffff:c0a8:101',
+    '::ffff:192.0.2.1',
+    '::ffff:0.0.0.0',
+    '::ffff:224.0.0.1',
+    '::8.8.8.8',
+    '::ffff:0:8.8.8.8',
     '64:ff9b::808:808',
     '2002:0808:0808::',
     '2001:db8::1',
     '3fff::1',
   ])('refuses reserved address %s', (address) => {
+    expect(isPublicAddress(address)).toBe(false);
     expect(() => assertPublicAddress(address)).toThrow('cannot access');
   });
-  it.each(['8.8.8.8', '1.1.1.1', '2606:4700:4700::1111', '2001:4860:4860::8888'])(
-    'permits public address %s',
-    (address) => {
-      expect(() => assertPublicAddress(address)).not.toThrow();
-    },
-  );
+  it.each([
+    '8.8.8.8',
+    '1.1.1.1',
+    '100.12.0.13',
+    '::ffff:8.8.8.8',
+    '::ffff:100.12.0.13',
+    '::ffff:640c:d',
+    '::FFFF:808:808',
+    '2606:4700:4700::1111',
+    '2001:4860:4860::8888',
+  ])('permits public address %s', (address) => {
+    expect(isPublicAddress(address)).toBe(true);
+    expect(() => assertPublicAddress(address)).not.toThrow();
+  });
   it.each([
     'file:///etc/passwd',
     'https://user:secret@example.com',

@@ -16,6 +16,7 @@ import { openUserSettings, openMcpAdvancedSettings, chooseOption } from './ui-co
 import { registerTestWorkspace } from './workspace-fixtures.js';
 import { configureTestProvider } from './model-fixtures.js';
 import { startToolSequenceModel } from './m2-completion-model.js';
+import { expandCompletedProcesses } from './process-controls.js';
 
 test.skip(process.platform !== 'darwin', '当前本地 MCP stdio 仅提供 macOS 受监管进程实现。');
 
@@ -166,7 +167,7 @@ for (const remoteName of ['echo', 'disconnect'] as const) {
           page.getByText('Synthetic lost MCP acceptance response', { exact: true }),
         ).toBeVisible();
         await expect(
-          page.getByText('上次提交结果尚未确认。点击发送会按原消息和请求重试，请先检查对话记录。', {
+          page.getByText('上次提交结果尚未确认。再次发送会按原消息和请求重试，请先检查对话记录。', {
             exact: true,
           }),
         ).toBeVisible();
@@ -200,6 +201,8 @@ for (const remoteName of ['echo', 'disconnect'] as const) {
       const row = page.getByLabel(`${tool.name} 工具调用`, { exact: true });
       if (remoteName === 'echo') {
         await expect(page.getByText('MCP 已完成。', { exact: true })).toBeVisible();
+        await expect(page.getByRole('button', { name: '停止', exact: true })).toBeHidden();
+        await expandCompletedProcesses(page);
         expect(model.requests).toHaveLength(2);
       } else {
         await expect(row.getByText('结果未知', { exact: true })).toBeVisible();
@@ -226,6 +229,10 @@ for (const remoteName of ['echo', 'disconnect'] as const) {
       await page.screenshot({ path: testInfo.outputPath(`mcp-${remoteName}.png`), fullPage: true });
       await page.reload();
       await page.getByRole('button', { name: new RegExp(`^调用 ${remoteName} `) }).click();
+      if (remoteName === 'echo') {
+        await expect(page.getByText('MCP 已完成。', { exact: true })).toBeVisible();
+        await expandCompletedProcesses(page);
+      }
       await expect(page.getByLabel(`${tool.name} 工具调用`, { exact: true })).toContainText(
         remoteName,
       );

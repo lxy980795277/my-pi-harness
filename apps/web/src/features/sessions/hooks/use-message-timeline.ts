@@ -1,9 +1,12 @@
 import type { MessageTimelineState } from '@/features/sessions/types/session';
 import type { MessageView, RunView, ToolCallView } from '@my-pi-harness/protocol';
-import { useVirtualizer } from '@tanstack/react-virtual';
+import { useVirtualizer, type VirtualizerOptions } from '@tanstack/react-virtual';
 import { useCallback, useLayoutEffect, useMemo, useRef, useState, type UIEvent } from 'react';
 import { buildTimelineEntries } from '@/features/sessions/utils/timeline-entries';
 import { estimateTimelineEntry } from '@/features/sessions/utils/timeline-layout';
+
+type TimelineAnchor = NonNullable<VirtualizerOptions<HTMLDivElement, HTMLDivElement>['anchorTo']>;
+type TimelineScrollMode = 'follow' | 'read' | 'process';
 
 /** Virtualize measured rows and follow the end only while the reader has not scrolled away. */
 export const useMessageTimeline = (
@@ -18,9 +21,14 @@ export const useMessageTimeline = (
   }, [activeRunId, messages, tools, runs, branchId]);
   const scrollElement = useRef<HTMLDivElement>(null);
   const contentElement = useRef<HTMLDivElement>(null);
-  const followEnd = useRef(true);
+  const scrollModeRef = useRef<TimelineScrollMode>('follow');
   const lastScrollTop = useRef(0);
-  const [showJump, setShowJump] = useState(false);
+  const [scrollMode, setScrollModeState] = useState<TimelineScrollMode>('follow');
+  const setScrollMode = useCallback((mode: TimelineScrollMode): void => {
+    scrollModeRef.current = mode;
+    setScrollModeState(mode);
+  }, []);
+  const showJump = scrollMode !== 'follow';
   const getItemKey = useCallback(
     (index: number): string | number => {
       const entry = entries[index];
@@ -39,12 +47,14 @@ export const useMessageTimeline = (
   );
   const follow = useCallback((): void => {
     const element = scrollElement.current;
-    if (element === null || !followEnd.current) {
+    if (element === null || scrollModeRef.current !== 'follow') {
       return;
     }
     element.scrollTop = element.scrollHeight;
     lastScrollTop.current = element.scrollTop;
   }, []);
+  let anchorTo: TimelineAnchor = 'end';
+  if (scrollMode === 'process') anchorTo = 'start';
   const virtualizer = useVirtualizer<HTMLDivElement, HTMLDivElement>({
     count: entries.length,
     getScrollElement: () => {
@@ -61,7 +71,7 @@ export const useMessageTimeline = (
     overscan: 5,
     paddingStart: 24,
     paddingEnd: 8,
-    anchorTo: 'end',
+    anchorTo,
     scrollEndThreshold: 4,
     directDomUpdates: true,
   });
@@ -86,24 +96,29 @@ export const useMessageTimeline = (
     };
   }, [follow]);
   useLayoutEffect(follow, [entries, follow]);
+  const beforeProcessToggle = useCallback((): void => {
+    setScrollMode('process');
+    const viewport = scrollElement.current;
+    if (viewport !== null) lastScrollTop.current = viewport.scrollTop;
+  }, [setScrollMode]);
   const jump = useCallback((): void => {
-    followEnd.current = true;
-    setShowJump(false);
+    setScrollMode('follow');
     follow();
-  }, [follow]);
-  const scroll = useCallback((event: UIEvent<HTMLDivElement>): void => {
-    const element = event.currentTarget;
-    const atEnd = element.scrollHeight - element.scrollTop - element.clientHeight <= 4;
-    const moved = Math.abs(element.scrollTop - lastScrollTop.current) > 1;
-    lastScrollTop.current = element.scrollTop;
-    if (atEnd) {
-      followEnd.current = true;
-      setShowJump(false);
-    } else if (moved) {
-      followEnd.current = false;
-      setShowJump(true);
-    }
-  }, []);
+  }, [follow, setScrollMode]);
+  const scroll = useCallback(
+    (event: UIEvent<HTMLDivElement>): void => {
+      const element = event.currentTarget;
+      const atEnd = element.scrollHeight - element.scrollTop - element.clientHeight <= 4;
+      const moved = Math.abs(element.scrollTop - lastScrollTop.current) > 1;
+      lastScrollTop.current = element.scrollTop;
+      if (atEnd && (moved || scrollModeRef.current === 'follow')) {
+        setScrollMode('follow');
+      } else if (moved) {
+        setScrollMode('read');
+      }
+    },
+    [setScrollMode],
+  );
   const rows = virtualizer.getVirtualItems().flatMap((item) => {
     const entry = entries[item.index];
     if (entry === undefined) return [];
@@ -117,6 +132,7 @@ export const useMessageTimeline = (
     measureList,
     measureRow: virtualizer.measureElement,
     showJump,
+    beforeProcessToggle,
     jump,
     scroll,
   };

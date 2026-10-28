@@ -1,10 +1,11 @@
 import { Resolver } from 'node:dns/promises';
 import { request as httpRequest, type IncomingMessage } from 'node:http';
 import { request as httpsRequest } from 'node:https';
-import { BlockList, isIP, type IPVersion } from 'node:net';
+import { isIP } from 'node:net';
 import { stringArgument } from '../core/catalog.js';
 import { ExecutionError, checkCancelled } from '../core/errors.js';
 import type { WebFetchContext, ExecutionResult, WebFetchGatewayAccess } from '../core/types.js';
+import { isPublicAddress } from './public-address.js';
 
 interface WebResponse {
   status: number;
@@ -12,46 +13,9 @@ interface WebResponse {
   text: string;
 }
 
-type Subnet = readonly [address: string, prefix: number];
-
-const deniedV4 = createBlockList(
-  [
-    ['0.0.0.0', 8],
-    ['10.0.0.0', 8],
-    ['100.64.0.0', 10],
-    ['127.0.0.0', 8],
-    ['169.254.0.0', 16],
-    ['172.16.0.0', 12],
-    ['192.0.0.0', 24],
-    ['192.0.2.0', 24],
-    ['192.88.99.0', 24],
-    ['192.168.0.0', 16],
-    ['198.18.0.0', 15],
-    ['198.51.100.0', 24],
-    ['203.0.113.0', 24],
-    ['224.0.0.0', 4],
-    ['240.0.0.0', 4],
-  ] as const,
-  'ipv4',
-);
-const allowedV6 = createBlockList([['2000::', 3]], 'ipv6');
-const deniedV6 = createBlockList(
-  [
-    ['2001::', 23],
-    ['2001:db8::', 32],
-    ['2002::', 16],
-    ['3fff::', 20],
-  ] as const,
-  'ipv6',
-);
-
-/** Refuse non-public ranges, including mapped IPv4 addresses and transition networks. */
+/** Refuse non-public Web targets, applying IPv4 policy to mapped IPv6 addresses. */
 export function assertPublicAddress(address: string): void {
-  const family = isIP(address);
-  const publicV4 = family === 4 && !deniedV4.check(address, 'ipv4');
-  const publicV6 =
-    family === 6 && allowedV6.check(address, 'ipv6') && !deniedV6.check(address, 'ipv6');
-  if (!publicV4 && !publicV6)
+  if (!isPublicAddress(address))
     throw new ExecutionError(
       'PRIVATE_NETWORK',
       'Web tools cannot access private, local, reserved or metadata addresses',
@@ -312,10 +276,4 @@ export async function webFetchTool(
     };
   }
   throw new ExecutionError('REDIRECT_LIMIT', 'Web request exceeded its redirect limit');
-}
-
-function createBlockList(subnets: readonly Subnet[], family: IPVersion): BlockList {
-  const list = new BlockList();
-  for (const [address, prefix] of subnets) list.addSubnet(address, prefix, family);
-  return list;
 }

@@ -1,10 +1,10 @@
 import type { MessageView, RunView } from '@my-pi-harness/protocol';
 import type { AnswerFooter, AnswerMetadata } from '@/features/sessions/types/answer-metadata';
-
-interface AnswerTurn {
-  user: MessageView;
-  assistants: MessageView[];
-}
+import {
+  answerTurnFinishedAt,
+  collectAnswerTurns,
+  lastAnswerTurnsByRun,
+} from '@/features/sessions/utils/answer-turns';
 
 const COMPACT_TOKENS = new Intl.NumberFormat('en', {
   notation: 'compact',
@@ -26,20 +26,6 @@ const ANSWER_DATE = new Intl.DateTimeFormat('zh-CN', {
   second: '2-digit',
   hour12: false,
 });
-
-const collectTurns = (messages: readonly MessageView[]): AnswerTurn[] => {
-  const turns: AnswerTurn[] = [];
-  let turn: AnswerTurn | undefined;
-  for (const message of messages) {
-    if (message.role === 'user') {
-      turn = { user: message, assistants: [] };
-      turns.push(turn);
-    } else if (turn !== undefined) {
-      turn.assistants.push(message);
-    }
-  }
-  return turns;
-};
 
 const describeUsage = (
   assistants: readonly MessageView[],
@@ -94,29 +80,22 @@ export const buildAnswerFooters = (
   activeRunId: string | null,
   branchId: string | undefined,
 ): ReadonlyMap<string, AnswerFooter> => {
-  const turns = collectTurns(messages);
+  const turns = collectAnswerTurns(messages);
   const runsById = new Map(
     runs.map((run) => {
       return [run.id, run];
     }),
   );
-  const lastTurnByRun = new Map<string, AnswerTurn>();
-  for (const turn of turns) {
-    for (const message of [turn.user, ...turn.assistants]) {
-      if (message.runId !== null) lastTurnByRun.set(message.runId, turn);
-    }
-  }
+  const lastTurnByRun = lastAnswerTurnsByRun(turns);
   const footers = new Map<string, AnswerFooter>();
   for (const turn of turns) {
     const tail = turn.assistants.at(-1);
     if (tail === undefined) continue;
     let answer: MessageView | undefined;
-    let finishedAt: number | undefined;
     let streaming = false;
     for (const assistant of turn.assistants) {
       if (assistant.status === 'streaming') streaming = true;
       if (assistant.status !== 'streaming' && assistant.text.length > 0) answer = assistant;
-      if (assistant.finishedAt !== undefined) finishedAt = assistant.finishedAt;
     }
     if (answer === undefined || streaming) continue;
     const runId = answer.runId;
@@ -124,15 +103,7 @@ export const buildAnswerFooters = (
     if (runId !== null) run = runsById.get(runId);
     const lastInRun = runId !== null && lastTurnByRun.get(runId) === turn;
     if (lastInRun && (run?.status === 'running' || runId === activeRunId)) continue;
-    if (
-      lastInRun &&
-      run !== undefined &&
-      run.status !== 'running' &&
-      run.branchId === branchId &&
-      run.finishedAt !== null
-    ) {
-      finishedAt = run.finishedAt;
-    }
+    const finishedAt = answerTurnFinishedAt(turn, run, lastInRun, branchId);
     let durationLabel = '用时未记录';
     let durationTitle = '本次回答未记录完整的结束时间';
     let timestamp = answer.createdAt;

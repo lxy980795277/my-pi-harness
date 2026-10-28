@@ -14,6 +14,7 @@ export {
   parseWorkspaceRelativePath,
 } from './filesystem/workspace-path.js';
 export { extractPdf } from './documents/extract-pdf.js';
+export { isPublicAddress } from './web/public-address.js';
 export type { WorkspaceRootInput } from './filesystem/workspace-path.js';
 export type {
   ExecutionContent,

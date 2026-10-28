@@ -6,6 +6,7 @@ import { beforeEach, expect, it, vi } from 'vitest';
 
 const fixtures = vi.hoisted(() => ({
   addresses: ['8.8.8.8'],
+  ipv6Addresses: [] as string[],
   responses: [] as { status: number; location?: string; body?: string; encoding?: string }[],
   requests: [] as { url: URL; options: RequestOptions }[],
   cancellations: 0,
@@ -17,7 +18,7 @@ vi.mock('node:dns/promises', () => ({
       return Promise.resolve(fixtures.addresses);
     }
     public resolve6(): Promise<string[]> {
-      return Promise.resolve([]);
+      return Promise.resolve(fixtures.ipv6Addresses);
     }
     public cancel(): void {
       fixtures.cancellations += 1;
@@ -69,6 +70,7 @@ const context = {
 
 beforeEach(() => {
   fixtures.addresses = ['8.8.8.8'];
+  fixtures.ipv6Addresses = [];
   fixtures.responses = [];
   fixtures.requests = [];
   fixtures.cancellations = 0;
@@ -100,6 +102,39 @@ it('rejects mixed public/private DNS results before creating a socket', async ()
   fixtures.addresses = ['8.8.8.8', '127.0.0.1'];
   await expect(
     executeTool('web_fetch', { url: 'http://public.example/' }, context),
+  ).rejects.toMatchObject({ code: 'PRIVATE_NETWORK' });
+  expect(fixtures.requests).toHaveLength(0);
+});
+
+it('accepts a public A answer with its mapped AAAA representation and pins the socket', async () => {
+  fixtures.addresses = ['100.12.0.13'];
+  fixtures.ipv6Addresses = ['::ffff:100.12.0.13'];
+  fixtures.responses.push({ status: 200, body: 'dual-stack public document' });
+  const result = await executeTool(
+    'web_fetch',
+    { url: 'https://public.example/document' },
+    context,
+  );
+  expect(result.content).toEqual([
+    {
+      type: 'text',
+      text: 'URL: https://public.example/document\nHTTP 200\ndual-stack public document',
+    },
+  ]);
+  const lookup = fixtures.requests[0]?.options.lookup;
+  expect(lookup).toBeTypeOf('function');
+  const callback = vi.fn();
+  fixtures.addresses = ['127.0.0.1'];
+  fixtures.ipv6Addresses = ['::ffff:127.0.0.1'];
+  lookup?.('public.example', {}, callback);
+  expect(callback).toHaveBeenCalledWith(null, '100.12.0.13', 4);
+});
+
+it('rejects a mapped private AAAA answer even when the A answer is public', async () => {
+  fixtures.addresses = ['100.12.0.13'];
+  fixtures.ipv6Addresses = ['::ffff:100.12.0.13', '::ffff:169.254.169.254'];
+  await expect(
+    executeTool('web_fetch', { url: 'https://public.example/' }, context),
   ).rejects.toMatchObject({ code: 'PRIVATE_NETWORK' });
   expect(fixtures.requests).toHaveLength(0);
 });

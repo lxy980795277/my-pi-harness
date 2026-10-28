@@ -1,5 +1,5 @@
 import type { ApprovalMode, EditInput, MessageView } from '@my-pi-harness/protocol';
-import { Atom, Check, ChevronRight, Copy, LoaderCircle, Pencil } from 'lucide-react';
+import { Check, Copy, LoaderCircle, Pencil } from 'lucide-react';
 import { memo, type FC } from 'react';
 
 import { Markdown } from '@/components/markdown';
@@ -10,7 +10,6 @@ import { Button } from '@/components/ui/button';
 import { Notice } from '@/components/ui/notice';
 import { Textarea } from '@/components/ui/textarea';
 import { useMessageEditor } from '@/features/sessions/hooks/use-message-editor';
-import { reasoningPreview } from '@/features/sessions/utils/reasoning-preview';
 import { useCopyText } from '@/hooks/use-copy-text';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/utils/cn';
@@ -32,7 +31,7 @@ const STATUS_LABELS: Record<MessageView['status'], string> = {
   interrupted: '服务中断',
 };
 
-/** Displays only public text/thinking; an edit creates a new branch rather than replacing this fact. */
+/** Displays message text and attachments; editing creates a new branch rather than replacing this fact. */
 export const MessageCard: FC<MessageCardProps> = memo(
   ({ message, workspaceId, approvalMode, canEdit, onEdit }) => {
     const { editing, text, changeText, submit, start, cancel, pending, error, mcp, skills } =
@@ -46,35 +45,6 @@ export const MessageCard: FC<MessageCardProps> = memo(
         className={cn('group group/message min-w-0 space-y-1', user && 'flex flex-col items-end')}
         aria-label={`${ROLE_LABELS[message.role]}的消息`}
       >
-        {message.thinking.length > 0 && (
-          <details className="group/thinking min-w-0 text-muted-foreground">
-            <summary
-              className="group/reasoning flex w-full min-w-0 cursor-pointer list-none items-center gap-2 rounded py-1 text-sm focus-visible:bg-muted/50 focus-visible:outline-none [&::-webkit-details-marker]:hidden"
-              aria-label="思考内容"
-            >
-              <span className="flex h-4 w-4 shrink-0 items-center justify-center">
-                <Atom
-                  width={15}
-                  height={15}
-                  className="group-hover/thinking:hidden group-focus-visible/reasoning:hidden"
-                  aria-hidden
-                />
-                <ChevronRight
-                  width={15}
-                  height={15}
-                  className="hidden group-open/thinking:rotate-90 group-hover/thinking:block group-focus-visible/reasoning:block"
-                  aria-hidden
-                />
-              </span>
-              <span className="shrink-0">思考</span>
-              <span aria-hidden>·</span>
-              <span className="min-w-0 truncate">{reasoningPreview(message.thinking)}</span>
-            </summary>
-            <div className="mt-2 rounded-lg bg-muted/40 px-4 py-3">
-              <Markdown text={message.thinking} streaming={streaming} className="text-sm" />
-            </div>
-          </details>
-        )}
         {!editing && (
           <div
             className={cn(

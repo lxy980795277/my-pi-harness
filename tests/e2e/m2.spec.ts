@@ -9,6 +9,7 @@ import { chooseOption, openUserSettings } from './ui-controls.js';
 import { startToolModel } from './tool-model-server.js';
 import { registerTestWorkspace } from './workspace-fixtures.js';
 import { archiveTestSession } from './session-fixtures.js';
+import { expandCompletedProcesses } from './process-controls.js';
 
 for (const policy of ['请求批准', '只读'] as const) {
   test(`工作区树、首次发送与真实工具循环：${policy}`, async ({ page, daemon }, testInfo) => {
@@ -35,6 +36,13 @@ for (const policy of ['请求批准', '只读'] as const) {
         page.getByRole('combobox', { name: '对话模型', exact: true }),
         'Queue Model · Chat',
       );
+      if (policy === '请求批准') {
+        await chooseOption(
+          page,
+          page.getByRole('combobox', { name: '执行批准方式', exact: true }),
+          '请求批准',
+        );
+      }
       if (policy === '只读') {
         const status: unknown = await (
           await page.request.get(`${daemon.origin}/api/auth/status`)
@@ -86,6 +94,8 @@ for (const policy of ['请求批准', '只读'] as const) {
       await expect(group.getByRole('button', { name: /^创建工作区文件 / })).toBeVisible();
       expect(model.requests).toHaveLength(2);
       expect(JSON.stringify(model.requests[1]?.body['messages'])).toContain('tool_call_id');
+      await expect(page.getByRole('button', { name: '停止', exact: true })).toBeHidden();
+      await expandCompletedProcesses(page);
       if (policy === '请求批准') {
         expect(await readFile(join(directory, 'created.txt'), 'utf8')).toBe(
           'Workspace tool result\n',
@@ -115,6 +125,7 @@ for (const policy of ['请求批准', '只读'] as const) {
       await page.reload();
       await page.getByRole('button', { name: /^创建工作区文件 / }).click();
       await expect(page.getByText('已收到工具执行结果。', { exact: true })).toBeVisible();
+      await expandCompletedProcesses(page);
       await expect(page.getByText('写入文件', { exact: true })).toBeVisible();
       await expect(page.getByLabel('回答统计', { exact: true })).toContainText('用量 1.3K tok');
       const toggle = toolRow.getByRole('button', { name: '展开 write_file 工具详情', exact: true });
@@ -162,7 +173,7 @@ for (const policy of ['请求批准', '只读'] as const) {
   });
 }
 
-test('响应丢失和跨页后确认原请求，不重复计费或复活旧首发', async ({ page, daemon }) => {
+test('响应丢失后确认原请求，跨页不重复计费或复活旧首发', async ({ page, daemon }) => {
   const directory = await mkdtemp(join(tmpdir(), 'my-pi-m2-retry-'));
   const model = await startToolModel();
   try {
@@ -181,8 +192,15 @@ test('响应丢失和跨页后确认原请求，不重复计费或复活旧首�
       page.getByRole('combobox', { name: '对话模型', exact: true }),
       'Queue Model · Chat',
     );
+    await chooseOption(
+      page,
+      page.getByRole('combobox', { name: '执行批准方式', exact: true }),
+      '请求批准',
+    );
     let lostResponse = false;
+    const submitted: unknown[] = [];
     await page.route('**/api/sessions/*/inputs', async (route) => {
+      submitted.push(route.request().postDataJSON());
       if (!lostResponse) {
         lostResponse = true;
         await route.fetch();
@@ -202,11 +220,37 @@ test('响应丢失和跨页后确认原请求，不重复计费或复活旧首�
     const session: unknown = await (await createdSession).json();
     if (!Value.Check(SessionSnapshotSchema, session)) throw new Error('Invalid created session');
     await expect(page.getByRole('button', { name: /^保持原请求 / })).toBeVisible();
+    const uncertain = page.getByText(
+      '上次提交结果尚未确认。再次发送会按原消息和请求重试，请先检查对话记录。',
+      { exact: true },
+    );
+    await expect(uncertain).toBeVisible();
+    await expect(page.getByLabel('消息', { exact: true })).toHaveValue('保持原请求');
+    await expect(page.getByLabel('消息', { exact: true })).toBeDisabled();
+    const retry = page.getByRole('button', { name: '发送', exact: true });
+    await expect(retry).toBeEnabled();
+    const accepted = page.waitForResponse((response) => {
+      return (
+        response.request().method() === 'POST' &&
+        new URL(response.url()).pathname === `/api/sessions/${session.session.id}/inputs`
+      );
+    });
+    await retry.click();
+    const replay = await accepted;
+    const repeated: unknown = await replay.json();
+    if (!replay.ok() || !Value.Check(SessionSnapshotSchema, repeated))
+      throw new Error('The original input was not acknowledged');
+    expect(repeated.session.id).toBe(session.session.id);
+    expect(repeated.runs).toHaveLength(1);
+    expect(repeated.messages.filter((message) => message.role === 'user')).toHaveLength(1);
+    expect(submitted).toHaveLength(2);
+    expect(submitted[1]).toEqual(submitted[0]);
+    await expect(uncertain).toBeHidden();
+    await expect(page.getByLabel('消息', { exact: true })).toHaveValue('');
+    expect(model.requests).toHaveLength(1);
     await page.getByRole('button', { name: '运行状态', exact: true }).click();
     await page.getByRole('button', { name: /^保持原请求 / }).click();
     await expect(page.getByRole('button', { name: '允许本次操作', exact: true })).toBeVisible();
-    await expect(page.getByLabel('消息', { exact: true })).toHaveValue('保持原请求');
-    await page.getByLabel('消息', { exact: true }).press('Enter');
     await expect(page.getByLabel('消息', { exact: true })).toHaveValue('');
     expect(model.requests).toHaveLength(1);
     await page.getByRole('button', { name: '允许本次操作', exact: true }).click();

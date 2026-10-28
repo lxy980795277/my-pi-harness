@@ -19,6 +19,7 @@ import { configureTestProvider } from './model-fixtures.js';
 import { startM3Model } from './m3-model-server.js';
 import { chooseOption } from './ui-controls.js';
 import { selectTestSessionBranch } from './session-fixtures.js';
+import { expandCompletedProcesses } from './process-controls.js';
 
 const readSession = async (page: Page, origin: string, id: string): Promise<SessionSnapshot> => {
   const response = await page.request.get(`${origin}/api/sessions/${encodeURIComponent(id)}`);
@@ -460,6 +461,8 @@ test('M3 无工作区时 Agent 可等待用户回答，并支持取消后继续'
     await question.getByRole('button', { name: '下一题', exact: true }).click();
     await question.getByRole('button', { name: '提交回答', exact: true }).click();
     await expect(page.getByText(/Agent 收到回答：.*方案 A，先读资料/)).toBeVisible();
+    await expect(page.getByRole('button', { name: '停止', exact: true })).toBeHidden();
+    await expandCompletedProcesses(page);
     await expect(toolRow).toHaveAttribute('aria-busy', 'false');
     await expect(toolRow.locator('[data-slot="tool-loading"]')).toHaveCount(0);
     await expect(toolRow.locator('[data-slot="tool-icon"]')).toBeVisible();

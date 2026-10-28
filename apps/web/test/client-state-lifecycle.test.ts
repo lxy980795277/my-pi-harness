@@ -118,6 +118,7 @@ describe('private client state lifecycle', () => {
     useAttachmentDrafts.getState().add('private-session', DRAFT_ATTACHMENT);
     useAttachmentDrafts.getState().setBusy('private-session', true);
     useTimelineStore.getState().setToolExpanded('private-session', 'private-tool', true);
+    useTimelineStore.getState().toggleProcess('private-session', 'private-input');
 
     readClientAction(useResetClientState)();
     composer.markNewAttemptCreated(generation, 'late-private-session');
@@ -147,5 +148,6 @@ describe('private client state lifecycle', () => {
     });
     expect(useAttachmentDrafts.getState()).toMatchObject({ drafts: {}, busy: {} });
     expect(useTimelineStore.getState().expandedTools).toEqual({});
+    expect(useTimelineStore.getState().expandedProcesses).toEqual({});
   });
 });

@@ -48,6 +48,10 @@ Spec目录采用北京时间 `YYYYMMDDHHmm_category_name/`；历史补齐分钟�
 
 ## 第一阶段完成标准
 
+2026-10-28实现[回答过程自动折叠](../04_FEATURES/202610280123_feature_answer-process-disclosure/spec.md)：生成期间保留过程，成功结束后按输入轮次归并思考、中间说明及工具，正式正文和整答操作留在外部；沿用虚拟测高与展示状态所有权，属于对话体验及M4收尾，不进入M5。
+
+2026-10-28修复[GitHub授权的IPv4映射地址误判](../04_FEATURES/202610280108_fix_mapped-ipv4-oauth/spec.md)，插件OAuth、远端MCP与Web抓取共用纯公网IP策略，映射地址按内嵌IPv4校验；继续检查全部DNS记录和固定socket地址，属于M4网络可靠性修复，不进入M5。
+
 2026-10-28完成[技术专题拆分与全仓治理](../04_FEATURES/202610280040_refactor_technical-docs-governance/spec.md)的实现与本机工程验证，将插件体系与MCP连接分别沉淀，修复清理/关闭及旧异步结果影响新目标的问题，清除确证冗余；属于工程维护与M4收尾，不进入M5，既有账号、视觉与平台验收缺口保持原归属。
 
 2026-10-27已完成插件架构重构及macOS定向验证：插件专属OAuth/凭据、弹窗自行启动、只读HTTP网关和MCP共享Token取代默认账户桥接，目录发现由受管后台任务完成。范围见[完整重构Spec](../04_FEATURES/202610201932_feature_m4-capabilities/plugin-completion.md#插件完整流程重构2026-10-27)，实际结果及真实客户端/系统浏览器/平台缺口见[本轮验证](../04_FEATURES/202610201932_feature_m4-capabilities/plugin-completion-verify.md#插件完整流程重构2026-10-27)。M5尚未开始。

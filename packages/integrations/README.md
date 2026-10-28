@@ -30,7 +30,7 @@
 
 `RemoteMcpManager`每个租约建立独立SDK连接，不把本地进程策略或工作区要求带到远端。默认最多8条连接，每租约最多8个在途调用和64个attempt；完成后释放等待传输关闭。远端调用同样先等待`beforeDispatch`持久屏障，受控fetch按attempt仅允许一次tools/call POST；SDK认证重试、重新握手或断线不重发已派发操作。Streamable HTTP自动重连关闭，SSE只用于明确选择的兼容Server。
 
-`createRemoteFetch`只允许HTTPS标准端口与公网DNS结果，逐次固定实际socket地址，拒绝URL凭据、认证查询参数、私网/保留地址、重定向、未授权来源和受限请求头。MCP传输及OAuth开启严格UTF-8检查；请求正文4MiB、响应流8MiB、有界DNS与120秒请求截止贯通取消。`fixtureOrigin`仅是宿主测试注入的精确回环来源，不出现在产品配置或环境开关中。静态认证不会转发至另一origin，原始响应和SDK错误cause不进入诊断。
+`createRemoteFetch`只允许HTTPS标准端口与公网DNS结果，逐次固定实际socket地址，拒绝URL凭据、认证查询参数、私网/保留地址、重定向、未授权来源和受限请求头。纯IP判定复用execution的`isPublicAddress`，IPv4-mapped IPv6继承内嵌IPv4的公网/禁止范围；全部A/AAAA均通过才创建socket，不能忽略被拒绝记录。MCP传输及OAuth开启严格UTF-8检查；请求正文4MiB、响应流8MiB、有界DNS与120秒请求截止贯通取消。`fixtureOrigin`仅是宿主测试注入的精确回环来源，不出现在产品配置或环境开关中。静态认证不会转发至另一origin，原始响应和SDK错误cause不进入诊断。
 
 `RemoteOAuthSession`实现公开OAuthClientProvider，使用SDK的发现、授权码、PKCE、issuer校验和刷新。调用Transport只获得已解析的Bearer字节，不持有交互Provider，因此401不能自动重新授权并重复工具调用。宿主保存单次、有界、身份/配置绑定的state与回调拥有者；令牌和客户端信息通过秘密端口保存。预注册客户端支持独立Client Secret、scope和Google offline参数。MCP OAuth与应用登录、Provider连接各自拥有记录；服务连接的临时token由daemon内部端口共享，不复制到公开配置。
 

@@ -27,6 +27,10 @@ AC写可观察结果，不用「完善」「支持全部」代替具体条件。
 
 ## 当前Spec
 
+- [回答过程自动折叠](202610280123_feature_answer-process-disclosure/spec.md)
+
+- [GitHub授权的IPv4映射地址误判](202610280108_fix_mapped-ipv4-oauth/spec.md)
+
 - [技术专题拆分与全仓治理](202610280040_refactor_technical-docs-governance/spec.md)
 
 - [会话日志数据精简](202610271953_refactor_session-journal-compaction/spec.md)

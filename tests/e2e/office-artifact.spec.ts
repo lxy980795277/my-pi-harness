@@ -6,6 +6,7 @@ import { chooseOption } from './ui-controls.js';
 import { configureTestProvider } from './model-fixtures.js';
 import { registerTestWorkspace } from './workspace-fixtures.js';
 import { startToolSequenceModel } from './m2-completion-model.js';
+import { expandCompletedProcesses } from './process-controls.js';
 
 test.skip(
   process.platform !== 'darwin' || process.env['MY_PI_HARNESS_OFFICE_PYTHON'] === undefined,
@@ -55,6 +56,8 @@ test('按需加载办公工具、审批创建 DOCX 并从详情下载原始产�
     const row = page.getByLabel('office_docx 工具调用', { exact: true });
     await row.getByRole('button', { name: '允许本次操作', exact: true }).click();
     await expect(page.getByText('文档已创建。', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: '停止', exact: true })).toBeHidden();
+    await expandCompletedProcesses(page);
     const button = row.getByRole('button', { name: '下载 browser-created.docx', exact: true });
     if (!(await button.isVisible()))
       await row.getByRole('button', { name: '展开 office_docx 工具详情', exact: true }).click();
