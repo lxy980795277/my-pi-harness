@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test, expect } from './fixture.js';
-import { chooseOption } from './ui-controls.js';
+import { chooseConversationModel, chooseOption } from './ui-controls.js';
 import { configureTestProvider } from './model-fixtures.js';
 import { registerTestWorkspace } from './workspace-fixtures.js';
 import { startToolSequenceModel } from './m2-completion-model.js';
@@ -36,11 +36,7 @@ test('按需加载办公工具、审批创建 DOCX 并从详情下载原始产�
     await registerTestWorkspace(page, '文档工作区', directory);
     await configureTestProvider(page, model.origin, 32768);
     await page.reload();
-    await chooseOption(
-      page,
-      page.getByRole('combobox', { name: '对话模型', exact: true }),
-      'Queue Model · Chat',
-    );
+    await chooseConversationModel(page, 'Queue Model', 'Chat');
     await chooseOption(
       page,
       page.getByRole('combobox', { name: '选择工作区', exact: true }),

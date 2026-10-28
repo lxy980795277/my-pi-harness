@@ -33,7 +33,7 @@ describe('branch-scoped work transport', () => {
       }),
     );
     vi.stubGlobal('fetch', fetch);
-    const patch = { expectedBranchId: 'original', revision: 0, mode: 'plan' as const };
+    const patch = { expectedBranchId: 'original', revision: 0, todos: [] };
     await expect(patchWork('session', patch, new AbortController().signal)).rejects.toThrow(
       '原分支不一致',
     );

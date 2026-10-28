@@ -34,7 +34,7 @@ Node端的模型接入与持久会话运行层，使用固定的Pi core/ai 1.1.0
 
 `RunToolset`在接受Run前由实际`ToolRuntime`能力与工作区选择一次，深拷贝并冻结定义，同时保留TypeBox元数据。接受审计的`tools`、Pi声明、上下文预算及运行时路由共用该集合；来源与稳定定义指纹单独保存为私有`toolSources`，不进入模型工具schema。`ToolRuntime`仅在已接受集合内查找来源和定义，重名与未接受的路由明确拒绝；底层execution及会话执行器对固定内置目录的参数复核继续生效。MCP来源从宿主ExternalTools端口获得有界、可执行的冻结定义与非秘密授权，Run接受审计同时保存工具选择及授权绑定。配置、信任、凭据和SDK连接由daemon/integrations拥有，runtime不直接访问SDK或SQL。
 
-`ToolRuntime`按接受Run时冻结的approvalMode执行：ask逐次询问，auto调用`ModelApprovalReviewer`，full-access自动批准并显式选择macOS无沙箱Shell；旧read-only继续阻止变更。Plan限制在审批前检查，文件工具仍以工作区为根。独立复核使用当前Run的Provider/model、用户请求与冻结规则，没有执行工具、共享主会话或多轮重试；只接受allow/deny/ask结构化结果，模型/认证失败、超预算、无效结果或30秒超时均转人工。停止中止复核并等待SDK结算后释放模型lease。审计请求和决定先持久化，存储失败直接传播，不当成模型失败转人工；公开事件只有工具/模型ID及决定/理由，完整复核请求仅保存在privateData。工具卡最终来源区分user/ai/full-access，先前AI转人工记录仍保留在事件历史。
+`ToolRuntime`按接受Run时冻结的approvalMode执行：ask逐次询问，auto调用`ModelApprovalReviewer`，full-access自动批准并显式选择macOS无沙箱Shell；旧read-only继续阻止变更。文件工具仍以工作区为根。独立复核使用当前Run的Provider/model、用户请求与冻结规则，没有执行工具、共享主会话或多轮重试；只接受allow/deny/ask结构化结果，模型/认证失败、超预算、无效结果或30秒超时均转人工。停止中止复核并等待SDK结算后释放模型lease。审计请求和决定先持久化，存储失败直接传播，不当成模型失败转人工；公开事件只有工具/模型ID及决定/理由，完整复核请求仅保存在privateData。工具卡最终来源区分user/ai/full-access，先前AI转人工记录仍保留在事件历史。
 
 运行中的follow-up/steer输入先进入持久队列，再交Pi对应队列消费；文本更新与删除重建其内存投影。每个Run只投递当次允许的输入集合，普通发送与编辑不会激活旧暂停队列。取消、失败与重启保留未消费输入，恢复收费请求需显式resume，且原始分支必须与所选分支相符；同一恢复Run只激活相同Provider/model、MCP工具选择和授权绑定的输入。排队时即冻结定义与原始授权，编辑保留接受请求ID；恢复先校验原始授权并重建TypeBox元数据，撤销后重新信任不会复活旧输入。编辑用户消息追加分支与新输入，保留旧分支并排除其后续回复。session.deleted归档会话，保留事件，不是彻底删除私人数据。
 
@@ -54,9 +54,9 @@ JSONL批记录是会话执行事实来源，完整批次fsync后才更新SQLite�
 
 摘要模型无工具、输出有界、总等待90秒。结构摘要记录目标、约束、决策、观察与完成、待办、阻塞及下一步；模型错误、无效JSON或自身超时使用保守本地摘要，调用方取消和持久化失败继续传播。全部结构字段合计受JSON序列化24000字符和渲染30000字符的预算限制，连续降级不会因局部数组累计变长而中断持久化。每个摘要版本保存父版本、覆盖消息、触发原因、策略及同口径前后token估算。手动压缩由WorkRuntime按持久消息锚点保留最近两轮用户对话；自动压缩由WorkContext按完整工具组保留近期内容，可以在单个长任务中多次进行。两者共用结构化摘要生成与持久化入口。最终真正请求的system和消息先保存为context.prepared。
 
-`WorkInteractions`让ask_user和update_plan工具等待所属Run的用户响应，最长24小时；停止Run会结束等待。ask_user支持多题、选项说明、单选/多选和显式自由输入，答案逐题验证；取消提问返回工具错误，模型可以继续。update_plan提交带唯一ID的结构化步骤并进入只读规划模式；新计划必须保留现有任务关联的步骤，否则在保存与等待审核前拒绝，模型可先更新或清理任务关联。feedback结果返回原Run修订，approve切换执行模式并继续原Run，工具审批仍独立生效。update_plan_steps只修改已批准计划的步骤进度，不修改正文或授予批准。
+`WorkInteractions`让ask_user和update_plan工具等待所属Run的用户响应，最长24小时；停止Run会结束等待。ask_user支持多题、选项说明、单选/多选和显式自由输入，答案逐题验证；取消提问返回工具错误，模型可以继续。update_plan提交带唯一ID的结构化步骤并等待审核；新计划必须保留现有任务关联的步骤，否则在保存与等待审核前拒绝，模型可先更新或清理任务关联。feedback结果返回原Run修订，approve保存批准状态并继续原Run，工具审批仍独立生效。update_plan_steps只修改已批准计划的步骤进度，不修改正文或授予批准。
 
-update_todos保存稳定ID、计划步骤关联和五种任务状态。完成任务需要本Run成功工具的已核验记录ID，或纯文本分析的明确completionNote；伪造、失败或为新增完成项引用其他Run证据被拒绝；既有完成项的未变证据在后续Run和继承分支中保留有效，校验以当前分支可见工具为准。最多一项任务处于进行中。用户手动完成同样需要依据或完成结论。reset_working_state/reset-tasks只清Plan/Todos；reset-context保留模式与Plan/Todos，清规则快照、用量、摘要、问题和未消费队列，并重置有效历史起点，旧历史仍可读。
+update_todos保存稳定ID、计划步骤关联和五种任务状态。完成任务需要本Run成功工具的已核验记录ID，或纯文本分析的明确completionNote；伪造、失败或为新增完成项引用其他Run证据被拒绝；既有完成项的未变证据在后续Run和继承分支中保留有效，校验以当前分支可见工具为准。最多一项任务处于进行中。用户手动完成同样需要依据或完成结论。reset_working_state/reset-tasks只清Plan/Todos；reset-context保留Plan/Todos，清规则快照、用量、摘要、问题和未消费队列，并重置有效历史起点，旧历史仍可读。
 
 自动摘要版本是“上下文检查点”：选择旧版本保留当前Session及所有历史，但仅旧摘要和选择后新消息进入模型。restore_context_checkpoint支持指定版本或回退1至10个父版本。search_session_history有界检索当前分支原始消息、工具结果及可见消息绑定的文本附件，包括被模型投影缩短的附件尾部；最多检查10000条消息、2000条工具和128个附件，总扫描100万字符，最多返回20个各2000字符的片段，不跨Session，不代替M6长期记忆。手动checkpoints是“会话快照”：冻结消息前缀和工作状态，恢复时创建新分支，保留旧分支。两者都不回滚文件、命令或外部请求。
 
@@ -78,4 +78,4 @@ pnpm --filter @my-pi-harness/agent-runtime test
 
 后续Run从当前分支有效消息所对应的已提交接受/加载事实继承最近16个Skill冻结正文，自动压缩不清除该来源；编辑分支、上下文重置和检查点选择只使用保留范围。正文不会因picker空选择、模型历史裁剪或磁盘更新而丢失或换成新版。继承前逐项重验当前启停、版本及插件授权；失效项排除，并在已记录system上下文的`unavailablePreviousSkills`中说明，普通聊天继续，显式新选择仍严格校验。队列私有`inheritedSkillBindings`保留原版本，恢复可排除已失效的继承；不会继承`request_skill_tools`授权或MCP可执行集合。动态激活Skill同时暂存其声明且属于冻结工作区目录的Office工具，下一请求经过相同持久屏障获得schema；没有工作区不提供Office文件工具，任意MCP名字不随Skill声明加载。
 
-`request_skill_tools`始终要求明确用户批准。服务插件通过冻结Skill中的`gatewayUrl`提供只读HTTP入口，模型使用会话级`web_fetch`访问允许的路径，不要求工作区或授予文件/Shell能力；公网与网关访问继续执行现有网络校验、Plan与只读限制和单次审批。网关地址随接受输入与`context.prepared`保存，私有访问能力只在宿主执行请求时添加，不进入模型或会话日志。当前工具集合不提供固定服务操作目录、账户选择或Run级服务grant。MCP写操作继续使用实际加载的工具、独立信任与当前审批策略。接口与事实见[运行时能力协议](../../docs/03_API/capability-runtime.md)。
+`request_skill_tools`始终要求明确用户批准。服务插件通过冻结Skill中的`gatewayUrl`提供只读HTTP入口，模型使用会话级`web_fetch`访问允许的路径，不要求工作区或授予文件/Shell能力；公网与网关访问继续执行现有网络校验、只读限制和单次审批。网关地址随接受输入与`context.prepared`保存，私有访问能力只在宿主执行请求时添加，不进入模型或会话日志。当前工具集合不提供固定服务操作目录、账户选择或Run级服务grant。MCP写操作继续使用实际加载的工具、独立信任与当前审批策略。接口与事实见[运行时能力协议](../../docs/03_API/capability-runtime.md)。

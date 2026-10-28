@@ -43,18 +43,16 @@ export function createExternalToolPorts(
       ...local.diagnostics(workspaceId, approvalMode),
       ...remote.diagnostics(),
     ],
-    async freezeSelections(workspaceId, approvalMode, mode, selections, signal) {
+    async freezeSelections(workspaceId, approvalMode, selections, signal) {
       const frozen: FrozenMcpTool[] = [];
       for (const [service, items] of groupSelections(selections))
-        frozen.push(
-          ...(await service.freezeSelections(workspaceId, approvalMode, mode, items, signal)),
-        );
+        frozen.push(...(await service.freezeSelections(workspaceId, approvalMode, items, signal)));
       return frozen;
     },
-    async freezeCandidates(workspaceId, approvalMode, mode, signal) {
+    async freezeCandidates(workspaceId, approvalMode, signal) {
       const candidates = [
-        ...(await local.freezeCandidates(workspaceId, approvalMode, mode, signal)),
-        ...(await remote.freezeCandidates(workspaceId, approvalMode, mode, signal)),
+        ...(await local.freezeCandidates(workspaceId, approvalMode, signal)),
+        ...(await remote.freezeCandidates(workspaceId, approvalMode, signal)),
       ];
       if (candidates.length > 512 || JSON.stringify(candidates).length > 4_000_000)
         throw new RuntimeError('MCP_CATALOG_LIMIT', '已授权MCP目录过大，请先停用不需要的工具。');

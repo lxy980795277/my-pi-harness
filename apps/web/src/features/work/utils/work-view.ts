@@ -5,15 +5,10 @@ import type {
   Plan,
   Todo,
   WorkSnapshot,
-  WorkState,
 } from '@my-pi-harness/protocol';
 import type { WorkDifference, ComparisonState } from '@/features/work/types/work';
 import type { SelectOption } from '@/components/ui/select-field';
 
-export const WORK_MODE_OPTIONS: SelectOption[] = [
-  { value: 'execute', label: '执行' },
-  { value: 'plan', label: 'Plan · 只规划' },
-];
 export const TODO_STATUS_OPTIONS: SelectOption[] = [
   { value: 'pending', label: '待处理' },
   { value: 'in_progress', label: '进行中' },
@@ -112,17 +107,10 @@ const contextStart = (entry: ComparisonState): string => {
   const index = entry.messageIds.indexOf(marker);
   return `从第 ${index + 1} 条历史消息之后开始`;
 };
-const modeLabel = (state: WorkState): string => {
-  if (state.mode === 'plan') {
-    return 'Plan · 只规划';
-  }
-  return '执行';
-};
 /** Compares persisted values and presents user-facing plan/task text rather than raw DTO fields. */
 export const compareWork = (left: ComparisonState, right: ComparisonState): WorkDifference[] => {
   const samePrefix = left.messageIds.join('\n') === right.messageIds.join('\n');
   const rows: [string, string, string][] = [
-    ['模式', modeLabel(left.state), modeLabel(right.state)],
     [
       '规则',
       left.state.rules

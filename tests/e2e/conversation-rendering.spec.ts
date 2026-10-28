@@ -1,7 +1,7 @@
 import { test, expect } from './fixture.js';
 import { startMarkdownModel } from './markdown-model.js';
 import { configureTestProvider } from './model-fixtures.js';
-import { chooseOption, openUserSettings } from './ui-controls.js';
+import { chooseConversationModel, openUserSettings } from './ui-controls.js';
 import { startToolSequenceModel } from './m2-completion-model.js';
 import { expandCompletedProcesses } from './process-controls.js';
 
@@ -65,11 +65,7 @@ test('一次回答跨工具步骤只在末尾复制全部正文，底部统计�
     await page.reload();
     const statistics = page.getByRole('group', { name: '对话统计', exact: true });
     await expect(statistics).toHaveText(/^上下文 —\s*\|\s*总对话 0 次$/u);
-    await chooseOption(
-      page,
-      page.getByRole('combobox', { name: '对话模型', exact: true }),
-      'Queue Model · Chat',
-    );
+    await chooseConversationModel(page, 'Queue Model', 'Chat');
     await page.getByLabel('消息', { exact: true }).fill('核对test出现次数');
     await page.getByRole('button', { name: '发送', exact: true }).click();
     const answers = page.getByRole('article', { name: 'Agent的消息', exact: true });
@@ -129,11 +125,7 @@ test('工具展开选择跨虚拟卸载与会话切换保留，输入草稿独�
     // Keep all sixteen tool rounds in context; this case tests UI state rather than compaction.
     await configureTestProvider(page, model.origin, 32768);
     await page.reload();
-    await chooseOption(
-      page,
-      page.getByRole('combobox', { name: '对话模型', exact: true }),
-      'Queue Model · Chat',
-    );
+    await chooseConversationModel(page, 'Queue Model', 'Chat');
     const draft = page.getByLabel('消息', { exact: true });
     await draft.fill('工具展开保留');
     await page.getByRole('button', { name: '发送', exact: true }).click();
@@ -193,11 +185,7 @@ test('首响应延迟有等待提示，刷新可恢复，正文到达后接替�
     await page.goto(daemon.origin);
     await configureTestProvider(page, model.origin);
     await page.reload();
-    await chooseOption(
-      page,
-      page.getByRole('combobox', { name: '对话模型', exact: true }),
-      'Queue Model · Chat',
-    );
+    await chooseConversationModel(page, 'Queue Model', 'Chat');
     await page.getByLabel('消息', { exact: true }).fill('首响应等待验证');
     await page.getByRole('button', { name: '发送', exact: true }).click();
     await expect.poll(() => model.requests).toBe(1);
@@ -228,11 +216,7 @@ test('模型尚未返回内容时也可以停止，等待提示随真实运行�
     await page.goto(daemon.origin);
     await configureTestProvider(page, model.origin);
     await page.reload();
-    await chooseOption(
-      page,
-      page.getByRole('combobox', { name: '对话模型', exact: true }),
-      'Queue Model · Chat',
-    );
+    await chooseConversationModel(page, 'Queue Model', 'Chat');
     await page.getByLabel('消息', { exact: true }).fill('首响应前停止验证');
     await page.getByRole('button', { name: '发送', exact: true }).click();
     await expect.poll(() => model.requests).toBe(1);
@@ -273,11 +257,7 @@ test('Markdown流式、完成与刷新一致，代码可复制且HTML和图片�
     await page.goto(daemon.origin);
     await configureTestProvider(page, model.origin);
     await page.reload();
-    await chooseOption(
-      page,
-      page.getByRole('combobox', { name: '对话模型', exact: true }),
-      'Queue Model · Chat',
-    );
+    await chooseConversationModel(page, 'Queue Model', 'Chat');
     await page.getByLabel('消息', { exact: true }).fill('**原始输入**');
     const composerBounds = await page
       .getByLabel('消息', { exact: true })
@@ -441,11 +421,7 @@ test('长回答更新不抢上滑阅读位置，回到最新后恢复底部跟�
     await page.goto(daemon.origin);
     await configureTestProvider(page, model.origin);
     await page.reload();
-    await chooseOption(
-      page,
-      page.getByRole('combobox', { name: '对话模型', exact: true }),
-      'Queue Model · Chat',
-    );
+    await chooseConversationModel(page, 'Queue Model', 'Chat');
     await page.getByLabel('消息', { exact: true }).fill('长回答滚动验证');
     await page.getByRole('button', { name: '发送', exact: true }).click();
     await expect(page.getByRole('heading', { name: '段落 50', exact: true })).toBeVisible();
@@ -487,11 +463,7 @@ test('高亮资源加载失败时保留可读代码和准确复制', async ({ pa
     await page.goto(daemon.origin);
     await configureTestProvider(page, model.origin);
     await page.reload();
-    await chooseOption(
-      page,
-      page.getByRole('combobox', { name: '对话模型', exact: true }),
-      'Queue Model · Chat',
-    );
+    await chooseConversationModel(page, 'Queue Model', 'Chat');
     await page.getByLabel('消息', { exact: true }).fill('高亮失败验证');
     await page.getByRole('button', { name: '发送', exact: true }).click();
     const answer = page.getByRole('article', { name: 'Agent的消息', exact: true });

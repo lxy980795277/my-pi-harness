@@ -48,7 +48,6 @@ export interface McpSelectionState {
   settings: Action;
   scope: McpScope;
   workspaceMissing: boolean;
-  planMode: boolean;
   readOnly: boolean;
 }
 export interface McpServerItemProps {

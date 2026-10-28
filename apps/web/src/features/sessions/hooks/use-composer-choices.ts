@@ -2,6 +2,7 @@ import type { ProviderConfig, SessionPatchInput, SessionSummary } from '@my-pi-h
 import { useCallback } from 'react';
 import { useSettingsStore } from '@/features/settings/stores/settings';
 import { useProviderModels } from '@/features/models/hooks/use-model-catalog';
+import { buildModelMenuGroups } from '@/features/models/utils/model-menu';
 import {
   buildThinkingOptions,
   findModelSelection,
@@ -10,13 +11,11 @@ import {
 } from '@/features/models/utils/model-options';
 import type { ComposerChoices, ComposerChoicesState } from '@/features/sessions/types/composer';
 import {
-  buildComposerModelOptions,
   buildWorkspaceOptions,
   NO_WORKSPACE,
   readApprovalMode,
 } from '@/features/sessions/utils/composer-options';
 import { useWorkspaces } from '@/features/workspaces/hooks/use-workspaces';
-import { useComposerWorkMode } from '@/features/work/hooks/use-composer-work-mode';
 import { useAsyncEvent } from '@/hooks/use-async-event';
 
 /** Existing conversations retain their directory; model and policy changes affect future runs. */
@@ -25,7 +24,6 @@ export const useComposerChoices = (
   providers: ProviderConfig[],
   onPatch: (input: SessionPatchInput) => Promise<void>,
 ): ComposerChoicesState => {
-  const workMode = useComposerWorkMode(session);
   const workspaces = useWorkspaces();
   const openSettings = useSettingsStore((state) => {
     return state.openSettings;
@@ -92,13 +90,10 @@ export const useComposerChoices = (
     workspaceLabel,
     workspaceIcon: workspace?.icon ?? 'folder',
     changeWorkspace,
-    workMode: workMode.mode,
-    changeWorkMode: workMode.change,
-    workModeDisabled: workMode.disabled,
     approvalMode: session.approvalMode,
     changeApprovalMode,
     modelKey: modelSelectionKey(session.providerId, session.modelId),
-    modelOptions: buildComposerModelOptions(providers, session),
+    modelGroups: buildModelMenuGroups(providers, session),
     changeModel,
     thinking: session.thinkingLevel,
     thinkingOptions: buildThinkingOptions(model),
@@ -106,13 +101,9 @@ export const useComposerChoices = (
     settings,
     disabled: save.pending || session.activeRunId !== null,
   };
-  let error = save.error;
-  if (error === null) {
-    error = workMode.error;
-  }
   return {
-    submitBlocked: save.pending || workMode.sendingBlocked,
+    submitBlocked: save.pending,
     choices,
-    error: error,
+    error: save.error,
   };
 };

@@ -22,14 +22,6 @@ export const usePlanPanel = (
   const changeTodo = useCallback((event: ChangeEvent<HTMLInputElement>): void => {
     setNewTodo(event.target.value);
   }, []);
-  const mode = useCallback(
-    (value: string): void => {
-      if (value === 'execute' || value === 'plan') {
-        run({ expectedBranchId: state.branchId, revision: state.revision, mode: value });
-      }
-    },
-    [run, state.branchId, state.revision],
-  );
   const addTodo = useCallback(
     (event: SubmitEvent<HTMLFormElement>): void => {
       event.preventDefault();
@@ -81,5 +73,5 @@ export const usePlanPanel = (
     },
     [onPatch, state.branchId, state.revision, state.todos],
   );
-  return { newTodo, changeTodo, mode, addTodo, saveTodo, removeTodo, action };
+  return { newTodo, changeTodo, addTodo, saveTodo, removeTodo, action };
 };

@@ -22,7 +22,6 @@ export const McpToolPicker: FC<McpToolPickerProps> = ({ state }) => {
         </DialogDescription>
         {state.locked && <Notice>当前选择已冻结，运行或提交结束后可以修改。</Notice>}
         {state.workspaceMissing && <Notice>本地 stdio 工具需要工作区；远程工具可直接使用。</Notice>}
-        {state.planMode && <Notice>计划模式只能使用已明确授予精确参数只读权限的外部工具。</Notice>}
         {state.readOnly && <Notice>只读模式只能使用已明确授予精确参数只读权限的外部工具。</Notice>}
         {state.loading && (
           <p role="status" className="text-xs text-muted-foreground">

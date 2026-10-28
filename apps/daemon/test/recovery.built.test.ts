@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process';
-import { randomBytes } from 'node:crypto';
-import { appendFile, mkdtemp, readFile, realpath, rm } from 'node:fs/promises';
+import { createHash, randomBytes } from 'node:crypto';
+import { appendFile, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type Server } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -17,14 +17,12 @@ import {
   type SessionSnapshot,
 } from '@my-pi-harness/protocol';
 import { sessionLogDirectory, SessionBatchSchema } from '@my-pi-harness/storage';
-import type { Static, TSchema } from 'typebox';
+import { Type, type Static, type TSchema } from 'typebox';
 import { Value } from 'typebox/value';
 import { describe, expect, it } from 'vitest';
 import { loginThroughHttp } from './support/login-http.js';
 import type { FixtureAuthorization } from './support/login.js';
 
-const root = fileURLToPath(new URL('../../../', import.meta.url));
-const launcher = fileURLToPath(new URL('../../../tests/e2e/start-daemon.mjs', import.meta.url));
 interface Outcome {
   code: number | null;
   signal: NodeJS.Signals | null;
@@ -37,6 +35,10 @@ interface Daemon {
   exited: Promise<Outcome>;
   stop(): Promise<Outcome>;
 }
+
+const root = fileURLToPath(new URL('../../../', import.meta.url));
+const launcher = fileURLToPath(new URL('../../../tests/e2e/start-daemon.mjs', import.meta.url));
+const JSON_OBJECT_SCHEMA = Type.Record(Type.String(), Type.Unknown());
 
 function checked<T extends TSchema>(schema: T, value: unknown): Static<T> {
   if (!Value.Check(schema, value)) throw new Error('Invalid built daemon response');
@@ -512,7 +514,7 @@ describe('built daemon recovery with real Pi HTTP streaming', () => {
 });
 
 describe('built daemon M3 work recovery', () => {
-  it('preserves frozen attachments, tasks and restored session snapshot branches through authoritative journal replay', async () => {
+  it('preserves frozen attachments, tasks and restored session snapshot branches while replaying retired journal fields', async () => {
     const profile = await mkdtemp(join(tmpdir(), 'my-pi-built-work-recovery-'));
     const children: ChildProcess[] = [];
     const daemons: Daemon[] = [];
@@ -547,7 +549,6 @@ describe('built daemon M3 work recovery', () => {
         providerId: 'work-recovery-provider',
         modelId: 'fixture-model',
         thinkingLevel: 'off',
-        workMode: 'plan',
       });
       const sessionId = initial.session.id;
       const originalBranchId = initial.session.activeBranchId;
@@ -564,7 +565,7 @@ describe('built daemon M3 work recovery', () => {
         data: Buffer.from(frozenText).toString('base64'),
       });
       const initialWork = await readWork(first, originalBranchId);
-      expect(initialWork.state).toMatchObject({ revision: 1, mode: 'plan' });
+      expect(initialWork.state).toMatchObject({ revision: 0 });
       const todos = [
         {
           id: 'inspect',
@@ -615,7 +616,6 @@ describe('built daemon M3 work recovery', () => {
       await api(first, `/sessions/${sessionId}/work`, WorkSnapshotSchema, 'PATCH', {
         expectedBranchId: originalBranchId,
         revision: saved.state.revision,
-        mode: 'execute',
         todos: [
           {
             ...todos[0],
@@ -653,7 +653,7 @@ describe('built daemon M3 work recovery', () => {
       );
       const restoredBranchId = restoredWork.state.branchId;
       expect(restoredBranchId).not.toBe(originalBranchId);
-      expect(restoredWork.state).toMatchObject({ mode: 'plan', plan: null, todos });
+      expect(restoredWork.state).toMatchObject({ plan: null, todos });
       const restoredHistory = await api(first, `/sessions/${sessionId}`, SessionSnapshotSchema);
       expect(restoredHistory.messages).toEqual(stopped.messages);
       expect(restoredHistory.queue).toEqual([]);
@@ -664,13 +664,51 @@ describe('built daemon M3 work recovery', () => {
         sessionLogDirectory(await realpath(profile), join(profile, '.my-pi-harness')),
         `${sessionId}.jsonl`,
       );
-      await appendFile(log, '{"version":3,"records":[{"event":"crash-tail');
+      const currentJsonl = await readFile(log, 'utf8');
+      let oldWorkStates = 0;
+      let oldCheckpoints = 0;
+      const legacyBatches = currentJsonl
+        .trimEnd()
+        .split('\n')
+        .map((line, index) => {
+          const batch = checked(SessionBatchSchema, JSON.parse(line) as unknown);
+          expect(Object.keys(batch).sort()).toEqual(['checksum', 'records']);
+          for (const { event } of batch.records) {
+            if (event.type === 'work.updated') {
+              checked(JSON_OBJECT_SCHEMA, event.data['state'])['mode'] = 'plan';
+              oldWorkStates += 1;
+            }
+            if (event.type === 'checkpoint.created') {
+              const checkpoint = checked(JSON_OBJECT_SCHEMA, event.data['checkpoint']);
+              checked(JSON_OBJECT_SCHEMA, checkpoint['state'])['mode'] = 'plan';
+              oldCheckpoints += 1;
+            }
+          }
+          const body = {
+            version: index % 2 === 0 ? 3 : 4,
+            writer: 'retired-work-mode-fixture',
+            records: batch.records,
+          };
+          return {
+            ...body,
+            checksum: createHash('sha256').update(JSON.stringify(body)).digest('hex'),
+          };
+        });
+      expect(oldWorkStates).toBeGreaterThan(0);
+      expect(oldCheckpoints).toBe(1);
+      const legacyJsonl = `${legacyBatches.map((batch) => JSON.stringify(batch)).join('\n')}\n`;
+      await writeFile(log, legacyJsonl);
+      await appendFile(log, '{"records":[{"event":"crash-tail');
 
       const second = await startDaemon(profile, children, first);
       daemons.push(second);
       const afterRestart = await api(second, `/sessions/${sessionId}`, SessionSnapshotSchema);
       expect(afterRestart).toEqual(restoredHistory);
-      expect(await readWork(second, restoredBranchId)).toEqual(restoredWork);
+      const recoveredWork = await readWork(second, restoredBranchId);
+      expect(recoveredWork).toEqual(restoredWork);
+      expect(recoveredWork.state).not.toHaveProperty('mode');
+      for (const savedCheckpoint of recoveredWork.checkpoints)
+        expect(savedCheckpoint.state).not.toHaveProperty('mode');
       const content = await api(
         second,
         `/attachments/${attachment.id}/content`,
@@ -682,6 +720,7 @@ describe('built daemon M3 work recovery', () => {
       );
       const replayed = await readStreamSnapshot(second, sessionId);
       const jsonl = await readFile(log, 'utf8');
+      expect(jsonl).toBe(legacyJsonl);
       expect(jsonl.endsWith('\n')).toBe(true);
       const diskBatches = jsonl
         .slice(0, -1)
@@ -689,8 +728,7 @@ describe('built daemon M3 work recovery', () => {
         .map((line) => {
           const value: unknown = JSON.parse(line);
           const batch = checked(SessionBatchSchema, value);
-          expect(Object.keys(batch).sort()).toEqual(['checksum', 'records', 'version']);
-          expect(batch.version).toBe(3);
+          expect(batch).toMatchObject({ writer: 'retired-work-mode-fixture' });
           return batch;
         });
       expect(replayed).toEqual(afterRestart);
@@ -723,6 +761,21 @@ describe('built daemon M3 work recovery', () => {
       expect((await readWork(second, originalBranchId)).state).toEqual(laterWork.state);
       expect(provider.requests).toHaveLength(2);
       expect(await second.stop()).toEqual({ code: 0, signal: null });
+      const appendedJsonl = await readFile(log, 'utf8');
+      expect(appendedJsonl.startsWith(legacyJsonl)).toBe(true);
+      const newLines = appendedJsonl.slice(legacyJsonl.length).trimEnd().split('\n');
+      expect(newLines).toHaveLength(1);
+      for (const line of newLines) {
+        const batch = checked(SessionBatchSchema, JSON.parse(line) as unknown);
+        expect(Object.keys(batch).sort()).toEqual(['checksum', 'records']);
+      }
+      const third = await startDaemon(profile, children, second);
+      daemons.push(third);
+      expect(await api(third, `/sessions/${sessionId}`, SessionSnapshotSchema)).toEqual(original);
+      expect((await readWork(third, originalBranchId)).state).toEqual(laterWork.state);
+      expect(await readFile(log, 'utf8')).toBe(appendedJsonl);
+      expect(provider.requests).toHaveLength(2);
+      expect(await third.stop()).toEqual({ code: 0, signal: null });
     } finally {
       for (const daemon of daemons) await daemon.stop();
       for (const child of children) {

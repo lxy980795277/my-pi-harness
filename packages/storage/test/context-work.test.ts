@@ -85,68 +85,32 @@ afterEach(async () => {
 });
 
 describe('M3 durable work state', () => {
-  it('commits first-session Plan mode atomically and preserves execute defaults', async () => {
-    const { directory, store } = await fixture();
-    expect(store.getWorkState('session')).toMatchObject({ revision: 0, mode: 'execute' });
-    expect(store.getSession('session')?.snapshotSeq).toBe(1);
+  it('creates a session with empty work state and no extra work event', async () => {
+    const { store } = await fixture();
+    expect(store.getWorkState('session')).toEqual(initialWorkState('main'));
     const input: CreateSessionInput = {
-      id: 'planning',
-      branchId: 'planning-main',
-      title: 'Plan first',
+      id: 'new-session',
+      branchId: 'new-main',
+      title: 'New session',
       providerId: 'provider',
       modelId: 'model',
       thinkingLevel: 'off',
       workspaceId: null,
       approvalMode: 'ask',
-      workMode: 'plan',
       at: 5,
     };
-    const connection = new Database(join(directory, 'data.sqlite'));
-    try {
-      connection.exec(
-        "CREATE TRIGGER reject_initial_work BEFORE INSERT ON work_states BEGIN SELECT RAISE(ABORT, 'initial mode rejected'); END",
-      );
-      expect(() => store.createSession(input)).toThrow();
-      expect(store.getSession('planning')).toBeUndefined();
-      expect(
-        connection
-          .prepare("SELECT count(*) AS count FROM branches WHERE id = 'planning-main'")
-          .get(),
-      ).toEqual({ count: 0 });
-      expect(
-        connection
-          .prepare("SELECT count(*) AS count FROM events WHERE session_id = 'planning'")
-          .get(),
-      ).toEqual({ count: 0 });
-      connection.exec('DROP TRIGGER reject_initial_work');
-      const session = store.createSession(input);
-      expect(session.snapshotSeq).toBe(2);
-      expect(store.getWorkState(session.id)).toMatchObject({
-        revision: 1,
-        mode: 'plan',
-        branchId: 'planning-main',
-      });
-      expect(store.readEvents(session.id).map(({ seq, type }) => ({ seq, type }))).toEqual([
-        { seq: 1, type: 'session.created' },
-        { seq: 2, type: 'work.updated' },
-      ]);
-      const execute = store.createSession({
-        ...input,
-        id: 'executing',
-        branchId: 'executing-main',
-        workMode: 'execute',
-      });
-      expect(execute.snapshotSeq).toBe(1);
-      expect(store.getWorkState(execute.id)).toMatchObject({ revision: 0, mode: 'execute' });
-    } finally {
-      connection.close();
-    }
+    const session = store.createSession(input);
+    expect(session.snapshotSeq).toBe(1);
+    expect(store.getWorkState(session.id)).toEqual(initialWorkState('new-main'));
+    expect(store.readEvents(session.id).map(({ seq, type }) => ({ seq, type }))).toEqual([
+      { seq: 1, type: 'session.created' },
+    ]);
   });
 
   it('keeps branch state revision checked and rolls back a conflicting batch', async () => {
     const { store } = await fixture();
     expect(store.getWorkState('session')).toEqual(initialWorkState('main'));
-    const state = { ...initialWorkState('main'), revision: 1, mode: 'plan' as const };
+    const state = { ...initialWorkState('main'), revision: 1 };
     store.append('session', [event('work.updated', { state })]);
     expect(store.getWorkState('session')).toEqual(state);
     expect(() => store.append('session', [event('work.updated', { state })])).toThrow('revision');

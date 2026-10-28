@@ -137,7 +137,6 @@ export class WorkInteractions {
       sessionId,
       {
         ...state,
-        mode: approved ? 'execute' : 'plan',
         plan: {
           ...state.plan,
           status: approved ? 'approved' : 'draft',
@@ -187,14 +186,14 @@ export class WorkInteractions {
       feedback: null,
       updatedAt: Date.now(),
     };
-    this.work.save(sessionId, { ...state, mode: 'plan', plan }, runId);
+    this.work.save(sessionId, { ...state, plan }, runId);
     try {
       const response = await this.wait(this.plans, sessionId, id, signal);
       if (response.decision === 'approve')
         return '用户已批准该计划。继续同一次运行，逐项执行；每项工具仍遵守正常审批策略。';
       if (response.decision === 'feedback')
-        return `用户要求修改计划：${response.feedback}。保持规划模式，修订后重新提交审核。`;
-      return '用户取消了计划审核。保持规划模式，不执行文件修改或命令。';
+        return `用户要求修改计划：${response.feedback}。修订后重新提交审核。`;
+      return '用户取消了计划审核。本计划未获批准；后续操作仍遵守正常工具审批策略。';
     } finally {
       const latest = this.work.snapshot(sessionId).state;
       if (latest.plan?.id === id && latest.plan.review === 'pending')

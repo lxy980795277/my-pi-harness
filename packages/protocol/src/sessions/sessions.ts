@@ -175,7 +175,6 @@ export const SessionCreateInputSchema = Type.Object(
     thinkingLevel: Type.Optional(ThinkingLevelSchema),
     workspaceId: Type.Optional(nullableId),
     approvalMode: Type.Optional(ApprovalModeSchema),
-    workMode: Type.Optional(Type.Union([Type.Literal('execute'), Type.Literal('plan')])),
   },
   { additionalProperties: false },
 );
@@ -189,7 +188,6 @@ export const ResolvedSessionCreateInputSchema = Type.Object(
     thinkingLevel: ThinkingLevelSchema,
     workspaceId: nullableId,
     approvalMode: ApprovalModeSchema,
-    workMode: Type.Optional(Type.Union([Type.Literal('execute'), Type.Literal('plan')])),
   },
   { additionalProperties: false },
 );

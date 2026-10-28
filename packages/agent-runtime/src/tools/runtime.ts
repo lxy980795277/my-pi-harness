@@ -250,16 +250,6 @@ export class ToolRuntime {
         tool.summary = text.slice(0, 4000);
         return finish({ content: [{ type: 'text', text }], details: undefined });
       }
-      if (
-        this.options.work?.snapshot(context.session.id).state.mode === 'plan' &&
-        policy.mutating
-      ) {
-        tool.status = 'denied';
-        throw new RuntimeError(
-          'PLAN_READ_ONLY',
-          'Plan模式只能读取和规划，请先确认计划并切换执行模式。',
-        );
-      }
       if (context.session.approvalMode === 'read-only' && policy.mutating) {
         tool.status = 'denied';
         throw new RuntimeError('TOOL_READ_ONLY', '当前会话为只读模式，禁止此操作。');

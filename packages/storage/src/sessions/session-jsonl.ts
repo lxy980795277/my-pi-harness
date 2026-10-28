@@ -43,23 +43,16 @@ interface Cursor {
   byteLength: number;
 }
 
-const StoredEventSchema = Type.Object(
-  {
-    event: HarnessEventSchema,
-    privateData: Type.Union([Type.Record(Type.String(), Type.Unknown()), Type.Null()]),
-  },
-  { additionalProperties: false },
-);
+const StoredEventSchema = Type.Object({
+  event: Type.Object(HarnessEventSchema.properties),
+  privateData: Type.Union([Type.Record(Type.String(), Type.Unknown()), Type.Null()]),
+});
 
-/** Exact disk batch format; public event readers never expose its private records. */
-export const SessionBatchSchema = Type.Object(
-  {
-    version: Type.Literal(3),
-    records: Type.Array(StoredEventSchema, { minItems: 1, maxItems: 10000 }),
-    checksum: Type.String({ pattern: '^[a-f0-9]{64}$' }),
-  },
-  { additionalProperties: false },
-);
+/** Required batch fields; additional stored metadata is checksummed but does not affect replay. */
+export const SessionBatchSchema = Type.Object({
+  records: Type.Array(StoredEventSchema, { minItems: 1, maxItems: 10000 }),
+  checksum: Type.String({ pattern: '^[a-f0-9]{64}$' }),
+});
 
 const MAXIMUM_LINE_BYTES = 32 * 1024 * 1024;
 
@@ -244,13 +237,14 @@ export class SessionJournal {
     if (records.length === 0) return;
     const cursor = this.cursors.get(sessionId);
     const firstSeq = (cursor?.seq ?? 0) + 1;
-    for (const [index, record] of records.entries())
+    for (const [index, record] of records.entries()) {
+      checked(HarnessEventSchema, record.event);
       if (record.event.sessionId !== sessionId || record.event.seq !== firstSeq + index)
         throw new StorageError('INVALID_RECORD', 'Session command sequence is invalid');
+    }
     const encoded = encodeJournalRecords(records, cursor?.context ?? new Map());
     const body: Omit<SessionBatch, 'checksum'> = {
-      version: 3,
-      records: encoded.records,
+      records: encoded.records.map(({ event, privateData }) => ({ event, privateData })),
     };
     const batch = checked(SessionBatchSchema, { ...body, checksum: checksum(body) });
     const bytes = Buffer.from(`${JSON.stringify(batch)}\n`);

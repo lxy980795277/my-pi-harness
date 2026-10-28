@@ -1,11 +1,8 @@
 import { isDeepStrictEqual } from 'node:util';
 import { and, asc, eq, sql } from 'drizzle-orm';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
-import { Type } from 'typebox';
 import {
-  BranchViewSchema,
   CheckpointSchema,
-  ContextUsageSchema,
   WorkStateSchema,
   initialWorkState,
   type Checkpoint,
@@ -16,38 +13,13 @@ import { StorageError } from '../../shared/errors.js';
 import * as schema from '../../sqlite/schema.js';
 import { checked } from '../../shared/validation.js';
 import { currentCapabilityRevision } from './capabilities.js';
-
-const WorkEventSchema = Type.Object({ state: WorkStateSchema }, { additionalProperties: false });
-const CheckpointEventSchema = Type.Object(
-  { checkpoint: CheckpointSchema },
-  { additionalProperties: false },
-);
-const RestoreEventSchema = Type.Object(
-  {
-    branch: BranchViewSchema,
-    messageIds: Type.Array(Type.String({ minLength: 1 }), { maxItems: 10_000 }),
-  },
-  { additionalProperties: false },
-);
-
-const PreparedEventSchema = Type.Object(
-  {
-    branchId: Type.String({ minLength: 1 }),
-    usage: ContextUsageSchema,
-    messageIds: Type.Array(Type.String({ minLength: 1 }), { maxItems: 10_000 }),
-    attachmentIds: Type.Optional(Type.Array(Type.String({ minLength: 1 }), { maxItems: 4096 })),
-    capabilityRevision: Type.Optional(Type.Integer({ minimum: 1 })),
-  },
-  { additionalProperties: false },
-);
-const PreparedPrivateSchema = Type.Object(
-  {
-    version: Type.Literal(1),
-    systemPrompt: Type.String(),
-    messages: Type.Array(Type.Record(Type.String(), Type.Unknown())),
-  },
-  { additionalProperties: false },
-);
+import {
+  CheckpointEventSchema,
+  PreparedEventSchema,
+  PreparedPrivateSchema,
+  RestoreEventSchema,
+  WorkEventSchema,
+} from '../event-validation.js';
 
 /** Branch-local context facts and frozen content; writes run inside the store transaction. */
 export class WorkRepository {

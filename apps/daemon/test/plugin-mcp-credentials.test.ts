@@ -168,7 +168,6 @@ it('keeps install and authorization inert until the App switch grants startup to
   const frozen = await f.remote.freezeSelections(
     null,
     'full-access',
-    'execute',
     [metadata],
     AbortSignal.timeout(5000),
   );

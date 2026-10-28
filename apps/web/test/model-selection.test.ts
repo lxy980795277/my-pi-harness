@@ -1,5 +1,9 @@
 import type { ModelInfo, ProviderConfig } from '@my-pi-harness/protocol';
 import { getProviderAuthentication } from '../src/features/models/utils/provider-authentication';
+import {
+  buildModelMenuGroups,
+  modelMenuPresentation,
+} from '../src/features/models/utils/model-menu';
 import { describe, expect, it } from 'vitest';
 import {
   buildAvailableModelOptions,
@@ -57,6 +61,53 @@ const model: ModelInfo = {
 };
 
 describe('explicit model selection', () => {
+  it('groups enabled model choices without parsing labels and retains a missing saved model as disabled', () => {
+    const selected = {
+      providerId: 'missing',
+      modelId: 'old:model',
+      thinkingLevel: 'high' as const,
+    };
+    const groups = buildModelMenuGroups(
+      [
+        provider({ name: 'Name · with separator' }),
+        provider({ id: 'off', enabled: false }),
+        provider({ id: 'unconfigured', configured: false }),
+        provider({ id: 'empty', models: [] }),
+      ],
+      selected,
+    );
+    expect(groups).toHaveLength(2);
+    expect(groups[0]?.options[0]).toMatchObject({
+      value: modelSelectionKey('local', 'model'),
+      label: 'Name · with separator · Model',
+      name: 'Model',
+    });
+    expect(groups[1]?.options[0]).toMatchObject({
+      value: modelSelectionKey('missing', 'old:model'),
+      disabled: true,
+    });
+    expect(
+      modelMenuPresentation(
+        groups,
+        modelSelectionKey('missing', 'old:model'),
+        'off',
+        buildThinkingOptions(undefined),
+      ).label,
+    ).toContain('当前配置不可用');
+  });
+
+  it('renders reasoning choices only from the selected capability list in the shared menu position', () => {
+    const groups = buildModelMenuGroups([provider()], null);
+    const key = modelSelectionKey('local', 'model');
+    const current = modelMenuPresentation(groups, key, 'high', buildThinkingOptions(model));
+    expect(current.label).toBe('Local · Model');
+    expect(current.thinkingLabel).toBe('高');
+    expect(current.thinkingOptions.map((option) => option.value)).toEqual(['off', 'low', 'high']);
+    const disabled = modelMenuPresentation(groups, key, 'off', buildThinkingOptions(undefined));
+    expect(disabled.thinkingOptions.map((option) => option.value)).toEqual(['off']);
+    expect(disabled.thinkingLabel).toBe('关闭');
+  });
+
   it('offers only OAuth for a native OAuth-only provider and API Key for a custom service', () => {
     const native = provider({ kind: 'builtin', builtinId: 'openai-codex' });
     expect(

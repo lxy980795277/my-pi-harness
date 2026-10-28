@@ -16,6 +16,22 @@ export async function chooseOption(
 }
 
 /**
+ * Select a conversation model through its provider submenu.
+ * @param page The authenticated conversation page.
+ * @param provider The provider's displayed name.
+ * @param model The model's displayed name within that provider.
+ */
+export async function chooseConversationModel(
+  page: Page,
+  provider: string,
+  model: string,
+): Promise<void> {
+  await page.getByRole('button', { name: '对话模型', exact: true }).click();
+  await page.getByRole('menuitem', { name: provider, exact: true }).hover();
+  await page.getByRole('menuitemradio', { name: `${provider} · ${model}`, exact: true }).click();
+}
+
+/**
  * Reach settings through the sidebar account card and its portaled actions.
  * @param page The authenticated application page.
  */

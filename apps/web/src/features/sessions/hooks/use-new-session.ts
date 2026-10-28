@@ -9,6 +9,7 @@ import {
   EMPTY_ATTACHMENTS,
 } from '@/features/attachments/stores/attachment-drafts';
 import { useModelCatalog, useProviderModels } from '@/features/models/hooks/use-model-catalog';
+import { buildModelMenuGroups } from '@/features/models/utils/model-menu';
 import {
   buildThinkingOptions,
   findModelSelection,
@@ -19,7 +20,6 @@ import { mergeSessionSnapshot } from '@/features/sessions/queries/projection';
 import { createSession, submitInput } from '@/features/sessions/services/sessions';
 import type { ComposerChoices, NewSessionState } from '@/features/sessions/types/composer';
 import {
-  buildComposerModelOptions,
   buildWorkspaceOptions,
   NO_WORKSPACE,
   readApprovalMode,
@@ -59,12 +59,6 @@ export const useNewSession = (
   });
   const approvalMode = useComposerStore((state) => {
     return state.newConversationApproval;
-  });
-  const workMode = useComposerStore((state) => {
-    return state.newConversationWorkMode;
-  });
-  const setWorkMode = useComposerStore((state) => {
-    return state.setNewConversationWorkMode;
   });
   const setApproval = useComposerStore((state) => {
     return state.setNewConversationApproval;
@@ -119,7 +113,6 @@ export const useNewSession = (
     selection = catalog.settings.data.defaultModel;
   }
   let draft = storedDraft;
-  let selectedWorkMode = workMode;
   let attachmentIds = attachments.map((attachment) => {
     return attachment.id;
   });
@@ -127,7 +120,6 @@ export const useNewSession = (
   let selectedApprovalMode = approvalMode;
   if (attempt) {
     draft = attempt.input.text;
-    selectedWorkMode = attempt.workMode;
     if (attempt.input.attachmentIds !== undefined) {
       attachmentIds = attempt.input.attachmentIds;
     }
@@ -138,7 +130,6 @@ export const useNewSession = (
     attachmentDraftKey,
     selectedWorkspaceId,
     selectedApprovalMode,
-    selectedWorkMode === 'plan',
     attempt !== null,
     attempt?.input.mcpTools,
   );
@@ -180,7 +171,6 @@ export const useNewSession = (
             model: selection,
             workspaceId,
             approvalMode,
-            workMode,
             input: {
               text,
               mode: 'send',
@@ -208,7 +198,6 @@ export const useNewSession = (
                 ...current.model,
                 workspaceId: current.workspaceId,
                 approvalMode: current.approvalMode,
-                workMode: current.workMode,
               },
               signal,
             );
@@ -274,7 +263,6 @@ export const useNewSession = (
         selection,
         valid,
         workspaceId,
-        workMode,
       ],
     ),
   );
@@ -335,14 +323,6 @@ export const useNewSession = (
     },
     [setApproval],
   );
-  const changeWorkMode = useCallback(
-    (value: string): void => {
-      if (!attempt && (value === 'execute' || value === 'plan')) {
-        setWorkMode(value);
-      }
-    },
-    [attempt, setWorkMode],
-  );
   const settings = useCallback((): void => {
     openSettings('models');
   }, [openSettings]);
@@ -356,13 +336,10 @@ export const useNewSession = (
     workspaceLabel: workspace?.name ?? '不使用工作区',
     workspaceIcon: workspace?.icon ?? 'folder',
     changeWorkspace,
-    workMode: selectedWorkMode,
-    changeWorkMode,
-    workModeDisabled: send.pending || attempt !== null,
     approvalMode: selectedApprovalMode,
     changeApprovalMode,
     modelKey,
-    modelOptions: buildComposerModelOptions(providers, selection),
+    modelGroups: buildModelMenuGroups(providers, selection),
     changeModel,
     thinking: selection?.thinkingLevel ?? 'off',
     thinkingOptions: buildThinkingOptions(model),

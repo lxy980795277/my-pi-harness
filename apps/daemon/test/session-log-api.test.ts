@@ -123,8 +123,7 @@ describe('authenticated original session JSONL download', () => {
         .map((line) => {
           const batch: unknown = JSON.parse(line);
           if (!Value.Check(SessionBatchSchema, batch)) throw new Error('Invalid downloaded batch');
-          expect(Object.keys(batch).sort()).toEqual(['checksum', 'records', 'version']);
-          expect(batch.version).toBe(3);
+          expect(Object.keys(batch).sort()).toEqual(['checksum', 'records']);
           return batch;
         });
       const privateRecord = batches

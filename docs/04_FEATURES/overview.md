@@ -27,6 +27,10 @@ AC写可观察结果，不用「完善」「支持全部」代替具体条件。
 
 ## 当前Spec
 
+- [会话日志去版本与持久读取整理](202610281245_refactor_session-journal-reading/spec.md)
+
+- [输入栏模式清理与统一模型菜单](202610281140_refactor_composer-model-controls/spec.md)
+
 - [回答过程自动折叠](202610280123_feature_answer-process-disclosure/spec.md)
 
 - [GitHub授权的IPv4映射地址误判](202610280108_fix_mapped-ipv4-oauth/spec.md)

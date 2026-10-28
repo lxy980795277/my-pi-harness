@@ -126,9 +126,7 @@ export function requestUsage(
     JSON.stringify(state.rules.map(({ path, content }) => ({ path, content }))),
   );
   const summary = state.compaction ? textTokens(state.compaction.summary) : 0;
-  const workingState = textTokens(
-    JSON.stringify({ mode: state.mode, plan: state.plan, todos: state.todos }),
-  );
+  const workingState = textTokens(JSON.stringify({ plan: state.plan, todos: state.todos }));
   let attachments = 0;
   for (const message of messages) {
     if (message.role !== 'user' || typeof message.content === 'string') continue;

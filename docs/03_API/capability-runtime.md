@@ -16,13 +16,13 @@
 
 `skill_search`仅返回可用元数据；`load_skill`按精确hash冻结正文并在下一请求激活；`read_skill_resource`只读取当前激活版本中的注册相对资源，返回路径/hash和有界内容。每次模型请求从冻结正文重建指令；当前分支已提交激活正文跨Run及压缩保留，重启不读取新版正文。后续Run逐项重验，失效继承被省略并在记录的system上下文给出固定诊断，不阻塞其他聊天或复活旧授权；本次显式选择仍严格拒绝。reset或选择摘要按首次生成摘要时的reset边界限定来源，排除已放弃的消息。动态Skill仅暂存其声明且已在本Run冻结的本地Office工具，不按任意allowed-tools名称自动激活MCP或授予调用权限。
 
-`request_skill_tools`绑定当前Run、激活Skill版本和具体冻结工具，始终要求用户明确批准。Skill正文和allowed-tools不自动授予权限；Plan、工作区范围、Server启动信任及每次工具审批仍有效。`revoke_skill_tools`保存撤销事实后停止Run，结束释放资源lease。
+`request_skill_tools`绑定当前Run、激活Skill版本和具体冻结工具，始终要求用户明确批准。Skill正文和allowed-tools不自动授予权限；工作区范围、Server启动信任及每次工具审批仍有效。`revoke_skill_tools`保存撤销事实后停止Run，结束释放资源lease。
 
 插件服务Skill额外冻结公开gatewayUrl，进入`run.accepted`及`context.prepared`；会话级`web_fetch`不要求工作区，不附带文件/Shell权限；宿主只对精确网关附加私有能力头。固定REST操作目录、connection来源和逐Run服务grant已移除，具体协议见[插件连接](plugin-connections.md)。
 
 ## 调用与恢复
 
-MCP工具保留精确Server来源、配置及授权版本；普通web_fetch记录原URL和受限结果，不记录宿主能力或供应商Token。写入仍由MCP和原执行器按Plan及审批策略处理。
+MCP工具保留精确Server来源、配置及授权版本；普通web_fetch记录原URL和受限结果，不记录宿主能力或供应商Token。写入仍由MCP和原执行器按审批策略处理。
 
 派发前持久化`may_have_started`；失联、超时或撤销后无法核实结果时记unknown，停止模型和自动队列，不自动重试。终态和中立结果同批写入。日志恢复只重建事实，不重做请求；完整磁盘语义由[storage](../../packages/storage/README.md)拥有。
 

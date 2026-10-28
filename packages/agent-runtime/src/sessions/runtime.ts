@@ -16,7 +16,6 @@ import type {
   SessionPatchInput,
   SessionSnapshot,
   SessionSummary,
-  WorkState,
   FrozenSkill,
 } from '@my-pi-harness/protocol';
 import {
@@ -303,7 +302,6 @@ export class SessionRuntime {
         frozen = await this.capabilityInputs.freeze(
           snapshot.session,
           { mcpTools: requested, skills: skillSelections, text: patch.text },
-          this.workMode(sessionId),
           signal,
         );
       const updated: QueueInput = {
@@ -512,13 +510,7 @@ export class SessionRuntime {
         )
           throw new RuntimeError('INPUT_BINDING_INVALID', '排队输入的选择与原授权不一致。');
         frozen = await this.capabilityInputs.restore(frozen, signal, true);
-      } else
-        frozen = await this.capabilityInputs.freeze(
-          session,
-          input,
-          this.workMode(session.id),
-          signal,
-        );
+      } else frozen = await this.capabilityInputs.freeze(session, input, signal);
       if (!queuedInputId) {
         const ids = historyIds ?? this.getSnapshot(session.id).messages.map(({ id }) => id);
         const state = this.options.work?.snapshot(session.id).state;
@@ -815,11 +807,6 @@ export class SessionRuntime {
     } catch (error) {
       this.options.onError(error);
     }
-  }
-
-  private workMode(sessionId: string): WorkState['mode'] {
-    if (this.options.work) return this.options.work.snapshot(sessionId).state.mode;
-    return 'execute';
   }
 
   private activeInput(run: RunExecution): FrozenInputCapabilities {

@@ -10,7 +10,6 @@ export const useComposerMcpSelection = (
   draftKey: string,
   workspaceId: string | null,
   approval: ApprovalMode,
-  planMode: boolean,
   locked: boolean,
   frozen: McpToolSelection[] | undefined = undefined,
 ): McpSelectionState => {
@@ -26,12 +25,5 @@ export const useComposerMcpSelection = (
     },
     [draftKey, setSelections],
   );
-  return useMcpSelection(
-    frozen ?? stored,
-    changeSelection,
-    workspaceId,
-    approval,
-    planMode,
-    locked,
-  );
+  return useMcpSelection(frozen ?? stored, changeSelection, workspaceId, approval, locked);
 };

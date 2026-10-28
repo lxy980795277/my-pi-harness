@@ -628,7 +628,6 @@ export class RemoteMcpService implements ExternalTools {
   public freezeSelections(
     workspaceId: string | null,
     approvalMode: ApprovalMode,
-    workMode: 'execute' | 'plan',
     selections: readonly McpToolSelection[],
     signal: AbortSignal,
   ): Promise<readonly FrozenMcpTool[]> {
@@ -672,7 +671,7 @@ export class RemoteMcpService implements ExternalTools {
             entry.identityEpoch === identity.epoch &&
             entry.toolControlRevision === control.revision,
         );
-      if ((approvalMode === 'read-only' || workMode === 'plan') && grant === undefined)
+      if (approvalMode === 'read-only' && grant === undefined)
         fail('MCP_SELECTION_FORBIDDEN', '此工具没有精确只读授权。');
       if (server.grant === null) fail('MCP_DISABLED', '远端授权失效。');
       result.push({
@@ -709,7 +708,6 @@ export class RemoteMcpService implements ExternalTools {
   public async freezeCandidates(
     workspaceId: string | null,
     approvalMode: ApprovalMode,
-    workMode: 'execute' | 'plan',
     signal: AbortSignal,
   ): Promise<readonly FrozenMcpTool[]> {
     await Promise.all(
@@ -725,7 +723,7 @@ export class RemoteMcpService implements ExternalTools {
       const tools = catalog.tools.filter(
         (tool) =>
           tool.available &&
-          (!(approvalMode === 'read-only' || workMode === 'plan') ||
+          (!(approvalMode === 'read-only') ||
             this.options.store.mcp.directory
               .grants(server.id)
               .some(
@@ -740,7 +738,6 @@ export class RemoteMcpService implements ExternalTools {
           ...(await this.freezeSelections(
             workspaceId,
             approvalMode,
-            workMode,
             tools.slice(offset, offset + 16).map((tool) => ({
               serverId: tool.serverId,
               serverRevision: tool.serverRevision,

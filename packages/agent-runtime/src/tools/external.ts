@@ -1,5 +1,5 @@
 import type { ExecutionContent } from '@my-pi-harness/execution';
-import type { ApprovalMode, McpToolSelection, WorkState } from '@my-pi-harness/protocol';
+import type { ApprovalMode, McpToolSelection } from '@my-pi-harness/protocol';
 import type { ExternalToolAuthorization } from '@my-pi-harness/protocol';
 import type { RunToolDefinition } from './toolset.js';
 /** Hydrated executable schemas retain TypeBox metadata; the shared journal schema validates JSON. */
@@ -29,7 +29,6 @@ export interface ExternalTools {
   freezeSelections(
     workspaceId: string | null,
     approvalMode: ApprovalMode,
-    workMode: WorkState['mode'],
     selections: readonly McpToolSelection[],
     signal: AbortSignal,
   ): Promise<readonly FrozenMcpTool[]>;

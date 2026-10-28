@@ -3,15 +3,13 @@ import type {
   DefaultModel,
   InputRequest,
   WorkspaceIcon,
-  WorkState,
 } from '@my-pi-harness/protocol';
 import type { CompositionEventHandler, KeyboardEventHandler, ReactNode } from 'react';
 import type { SelectOption } from '@/components/ui/select-field';
+import type { ModelMenuGroup } from '@/features/models/types/model-menu';
 import type { SkillSelectionState } from '@/features/skills/types/skill';
 import type { McpSelectionState } from '@/features/mcp/types/mcp';
 import type { Action, FormSubmit, TextChange, ValueChange } from '@/types/events';
-
-export type WorkMode = WorkState['mode'];
 
 export interface ComposerCompositionState {
   active: boolean;
@@ -37,13 +35,10 @@ export interface ComposerChoices {
   workspaceLabel: string;
   workspaceIcon: WorkspaceIcon;
   changeWorkspace: ValueChange<string>;
-  workMode: WorkMode;
   approvalMode: ApprovalMode;
   changeApprovalMode: ValueChange<string>;
-  changeWorkMode: ValueChange<string>;
-  workModeDisabled: boolean;
   modelKey: string;
-  modelOptions: SelectOption[];
+  modelGroups: ModelMenuGroup[];
   changeModel: ValueChange<string>;
   thinking: string;
   thinkingOptions: SelectOption[];
@@ -81,7 +76,6 @@ export interface NewSessionState extends Omit<ComposerSurfaceProps, 'id'> {
 export interface NewConversationIntent {
   model: DefaultModel;
   workspaceId: string | null;
-  workMode: WorkMode;
   approvalMode: ApprovalMode;
   input: InputRequest;
 }

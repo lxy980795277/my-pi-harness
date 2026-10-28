@@ -21,7 +21,7 @@ SessionSnapshot.tools给出所选分支的ToolCallView[]，每项包含afterMess
 
 ask模式允许工作区内非敏感读取、目录和搜索；写入、编辑、Shell及所有Web请求逐次审批。auto将这些待批调用交给独立、无工具的模型请求，使用当前Run模型与用户请求、冻结规则等复核资料；明确allow执行、deny拒绝、ask/无效结果/模型失败或超时转人工。复核不修改主Agent对话；停止取消请求并等待其结算，模型lease在请求结束后释放。tool.review.requested公开记录toolId/providerId/modelId，tool.review.completed增加decision/reason；完整请求仅进入privateData，不进入公开HTTP/SSE，完整材料保存在JSONL的宿主privateData。reviewing尚不能由人工decision接口批准，只有转为awaiting_approval才接受决定。
 
-full-access自动批准工具，在macOS直接执行无OS沙箱的Shell；明确选择后仅影响后续Run，不是隔离失败的自动回退。Shell使用宿主用户权限而不提权，文件工具仍限制在工作区，Plan仍禁止修改与命令。legacy read-only拒绝写入/编辑/Shell和Web POST，但仍可审批GET。本地MCP另需按相同隔离范围确认启动授权，接口与unknown处理见[本地MCP协议](local-mcp.md)。Skill提供冻结指令和资源，不能绕过审批；动态加载与有限授权见[运行时能力协议](capability-runtime.md)。
+full-access自动批准工具，在macOS直接执行无OS沙箱的Shell；明确选择后仅影响后续Run，不是隔离失败的自动回退。Shell使用宿主用户权限而不提权，文件工具仍限制在工作区。legacy read-only拒绝写入/编辑/Shell和Web POST，但仍可审批GET。本地MCP另需按相同隔离范围确认启动授权，接口与unknown处理见[本地MCP协议](local-mcp.md)。Skill提供冻结指令和资源，不能绕过审批；动态加载与有限授权见[运行时能力协议](capability-runtime.md)。
 
 审批等待有界，停止Run/退出会取消等待与执行。ask/auto的macOS Shell保持无网络OS沙箱，full-access保留相同进程组取消、超时、环境白名单和输出上限；脱离所属进程组的恶意后代不在现有回收保证内。Windows/Linux Shell仍明确拒绝。文件编辑要求SHA-256预像，创建使用expectedHash:null；调用参数提供修改内容，执行后显示Diff，当前不提供执行前Diff预览。
 
@@ -31,4 +31,4 @@ Run接受时私有冻结模型、工作区、策略、system prompt与工具声�
 
 模型codec与中立工具结果格式由各自schema校验，不提供旧开发格式兼容。恢复为未派发调用配对宿主interrupted结果，为有屏障但无可靠结果的MCP调用配对unknown说明；即使assistant一次声明多个调用、后续调用尚未进入执行器，也逐项补齐而不删除整个周期或伪造成功。已有终态不改写，不自动批准或重发副作用。文件工具路径竞态、Shell进程组以及PDF worker的实际隔离范围见[execution说明](../../packages/execution/README.md)，不能将Renderer sandbox当宿主执行沙箱。
 
-M3的Plan模式、会话工具、冻结规则、预算与检查点行为见[上下文与工作状态协议](context-interaction.md)，批准计划不替代本页的工具审批。
+M3的计划与任务、会话工具、冻结规则、预算与检查点行为见[上下文与工作状态协议](context-interaction.md)，批准计划不替代本页的工具审批。

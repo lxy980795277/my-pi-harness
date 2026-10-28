@@ -255,32 +255,24 @@ describe('protected MCP configuration API', () => {
       const frozen = await value.services.mcp.freezeSelections(
         value.input.workspaceId,
         'ask',
-        'execute',
         selection,
         signal,
       );
       expect(JSON.stringify(frozen)).not.toContain('credentialRef');
       expect(JSON.stringify(frozen)).not.toContain('/usr/bin/fixture');
       await expect(
-        value.services.mcp.freezeSelections(null, 'ask', 'execute', selection, signal),
+        value.services.mcp.freezeSelections(null, 'ask', selection, signal),
       ).rejects.toThrow();
       await expect(
         value.services.mcp.freezeSelections(
           value.input.workspaceId,
-          'ask',
-          'plan',
+          'read-only',
           selection,
           signal,
         ),
       ).rejects.toThrow();
       await expect(
-        value.services.mcp.freezeSelections(
-          'another-workspace',
-          'ask',
-          'execute',
-          selection,
-          signal,
-        ),
+        value.services.mcp.freezeSelections('another-workspace', 'ask', selection, signal),
       ).rejects.toThrow();
       expect((await value.send('/api/auth/logout', 'POST', {})).status).toBe(200);
       await expect(value.services.mcp.validateBindings(frozen, signal)).resolves.toBeUndefined();
@@ -384,7 +376,6 @@ describe('protected MCP configuration API', () => {
       const frozen = await value.services.mcp.freezeSelections(
         value.input.workspaceId,
         'ask',
-        'execute',
         [
           {
             serverId: server.id,
@@ -552,7 +543,6 @@ describe('protected MCP configuration API', () => {
         const frozen = await value.services.mcp.freezeSelections(
           value.input.workspaceId,
           'full-access',
-          'execute',
           [
             {
               serverId: selected.serverId,
@@ -633,7 +623,6 @@ describe('protected MCP configuration API', () => {
         const frozen = await value.services.mcp.freezeSelections(
           value.input.workspaceId,
           'full-access',
-          'execute',
           [
             {
               serverId: server.id,

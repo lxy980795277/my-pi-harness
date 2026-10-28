@@ -630,14 +630,13 @@ export class McpService implements ExternalTools {
   public async freezeSelections(
     workspaceId: string | null,
     approvalMode: ApprovalMode,
-    workMode: 'execute' | 'plan',
     selections: readonly McpToolSelection[],
     signal: AbortSignal,
   ): Promise<FrozenMcpTool[]> {
     signal.throwIfAborted();
     if (selections.length === 0) return [];
     if (selections.length > 16 || workspaceId === null)
-      fail('MCP_SELECTION_FORBIDDEN', '当前工作区或执行模式不能使用外部工具。');
+      fail('MCP_SELECTION_FORBIDDEN', '请选择工作区且最多选择16个外部工具。');
     const scope: McpScope = approvalMode === 'full-access' ? 'full-access' : 'sandboxed';
     const seen = new Set<string>();
     const output: FrozenMcpTool[] = [];
@@ -685,7 +684,7 @@ export class McpService implements ExternalTools {
             grant.ownerId === binding.ownerId &&
             grant.identityEpoch === binding.identityEpoch,
         );
-      if ((approvalMode === 'read-only' || workMode === 'plan') && readOnlyGrant === undefined)
+      if (approvalMode === 'read-only' && readOnlyGrant === undefined)
         fail('MCP_SELECTION_FORBIDDEN', '此工具没有当前身份的精确只读授权。');
       signal.throwIfAborted();
       output.push({
@@ -724,7 +723,6 @@ export class McpService implements ExternalTools {
   public async freezeCandidates(
     workspaceId: string | null,
     approvalMode: ApprovalMode,
-    workMode: 'execute' | 'plan',
     signal: AbortSignal,
   ): Promise<readonly FrozenMcpTool[]> {
     if (workspaceId === null) return [];
@@ -753,7 +751,7 @@ export class McpService implements ExternalTools {
         .filter(
           (tool) =>
             tool.available &&
-            (!(approvalMode === 'read-only' || workMode === 'plan') ||
+            (!(approvalMode === 'read-only') ||
               this.options.store.mcp.directory
                 .grants(server.id)
                 .some(
@@ -777,7 +775,6 @@ export class McpService implements ExternalTools {
             ...(await this.freezeSelections(
               workspaceId,
               approvalMode,
-              workMode,
               selections.slice(offset, offset + 16),
               signal,
             )),

@@ -45,7 +45,6 @@ describe('unconfirmed conversation input', () => {
       model: { providerId: 'provider', modelId: 'model', thinkingLevel: 'off' as const },
       workspaceId: 'workspace',
       approvalMode: 'ask' as const,
-      workMode: 'plan' as const,
       input: {
         requestId: 'first-send',
         text: 'first message',
@@ -76,7 +75,6 @@ describe('unconfirmed conversation input', () => {
     state.beginNewAttempt(generation, intent);
     state.markNewAttemptCreated(generation, 'created-session');
     state.startNewConversation();
-    expect(useComposerStore.getState().newConversationWorkMode).toBe('execute');
     state.markNewAttemptCreated(generation, 'late-old-response');
     expect(useComposerStore.getState().newConversationGeneration).not.toBe(generation);
     expect(useComposerStore.getState().newConversationAttempt).toBeNull();

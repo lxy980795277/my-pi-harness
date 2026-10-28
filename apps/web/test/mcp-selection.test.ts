@@ -92,7 +92,6 @@ describe('MCP input selection', () => {
     const intent = {
       model: { providerId: 'provider', modelId: 'model', thinkingLevel: 'off' as const },
       workspaceId: 'workspace',
-      workMode: 'execute' as const,
       approvalMode: 'full-access' as const,
       input: { text: 'once', mode: 'send' as const, requestId: 'request', mcpTools: selected },
     };

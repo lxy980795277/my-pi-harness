@@ -22,15 +22,7 @@ export const useMessageEditor = (
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(message.text);
   const [mcpTools, setMcpTools] = useState<McpToolSelection[]>(message.mcpTools ?? []);
-  const mcp = useMcpSelection(
-    mcpTools,
-    setMcpTools,
-    workspaceId,
-    approvalMode,
-    false,
-    false,
-    editing,
-  );
+  const mcp = useMcpSelection(mcpTools, setMcpTools, workspaceId, approvalMode, false, editing);
   const [skillSelections, setSkillSelections] = useState<SkillSelection[]>(message.skills ?? []);
   const skills = useSkillSelection(
     skillSelections,

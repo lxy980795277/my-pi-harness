@@ -1,11 +1,8 @@
 import { Type } from 'typebox';
-import {
-  ToolCallRecordSchema,
-  StoredToolResultSchema,
-  type ToolCallRecord,
-} from '@my-pi-harness/protocol';
+import { StoredToolResultSchema, type ToolCallRecord } from '@my-pi-harness/protocol';
 import { checked } from '../../shared/validation.js';
 import { StorageError } from '../../shared/errors.js';
+import { ToolContextEventSchema, ToolEventSchema } from '../event-validation.js';
 
 interface BatchRecord {
   type: string;
@@ -13,8 +10,9 @@ interface BatchRecord {
   privateData?: Record<string, unknown> | null;
 }
 
-const ToolEventSchema = Type.Object({ tool: ToolCallRecordSchema });
-const ContextSchema = Type.Object({ toolCallId: Type.String() });
+const ContextSchema = Type.Pick(ToolContextEventSchema, ['toolCallId'], {
+  additionalProperties: true,
+});
 
 export function activeTool(status: ToolCallRecord['status']): boolean {
   return status === 'running' || status === 'reviewing' || status === 'awaiting_approval';

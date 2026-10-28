@@ -46,7 +46,7 @@ function catalog() {
     };
   });
   const external: ExternalTools = {
-    freezeSelections: (_workspace, _approval, _mode, selected) =>
+    freezeSelections: (_workspace, _approval, selected) =>
       Promise.resolve(selected.length ? [tool] : []),
     validateBindings: () => Promise.resolve(),
     assertBindingsCurrent: () => undefined,

@@ -1,4 +1,5 @@
 import * as fs from 'node:fs';
+import { createHash } from 'node:crypto';
 import {
   link,
   lstat,
@@ -60,6 +61,10 @@ async function batches(profile: string): Promise<SessionBatch[]> {
     .trimEnd()
     .split('\n')
     .map((line) => checked(SessionBatchSchema, JSON.parse(line)));
+}
+function serializedBatch(body: Record<string, unknown>): string {
+  const checksum = createHash('sha256').update(JSON.stringify(body)).digest('hex');
+  return `${JSON.stringify({ ...body, checksum })}\n`;
 }
 function event(
   type: string,
@@ -257,8 +262,7 @@ describe('authoritative host session journals', () => {
     value.store.append('session', accept());
     const logged = await batches(value.directory);
     expect(logged).toHaveLength(2);
-    expect(Object.keys(logged[1] ?? {})).toEqual(['version', 'records', 'checksum']);
-    expect(logged[1]?.version).toBe(3);
+    expect(Object.keys(logged[1] ?? {})).toEqual(['records', 'checksum']);
     expect(logged[1]?.records).toHaveLength(2);
     expect(logged[1]?.records[0]?.privateData).toEqual({ marker: 'private-model-codec' });
     expect(logged.flatMap((batch) => batch.records.map((record) => record.event))).toEqual(
@@ -270,6 +274,40 @@ describe('authoritative host session journals', () => {
       expect((await stat(logPath(value.directory))).mode & 0o777).toBe(0o600);
       expect((await stat(directory(value.directory))).mode & 0o777).toBe(0o700);
     }
+  });
+
+  it('replays checksummed outer metadata without rewriting it and appends only required fields', async () => {
+    const value = await fixture();
+    const logged = await batches(value.directory);
+    const initial = logged[0];
+    if (initial === undefined) throw new Error('Fixture initial batch is missing');
+    const records = initial.records.map((record) => ({
+      ...record,
+      writer: 'previous-record-owner',
+      event: { ...record.event, source: 'previous-envelope-owner' },
+    }));
+    value.store.close();
+    const original = serializedBatch({ version: 3, writer: 'previous-owner', records });
+    await writeFile(logPath(value.directory), original);
+    value.store = await openProfileStore(value.directory);
+    expect(value.store.getSnapshot('session').session.title).toBe('Logs');
+    expect(await readFile(logPath(value.directory), 'utf8')).toBe(original);
+    value.store.append('session', [event('audit.after-metadata', {})]);
+    const source = await readFile(logPath(value.directory), 'utf8');
+    expect(source.startsWith(original)).toBe(true);
+    const appended: unknown = JSON.parse(source.slice(original.length).trim());
+    expect(Object.keys(checked(SessionBatchSchema, appended))).toEqual(['records', 'checksum']);
+  });
+
+  it('checksums additional stored metadata before selecting replay records', async () => {
+    const value = await fixture();
+    const logged = await batches(value.directory);
+    value.store.close();
+    const original = serializedBatch({ version: 3, records: logged[0]?.records });
+    const damaged = original.replace('"version":3', '"version":4');
+    await writeFile(logPath(value.directory), damaged);
+    await expect(openProfileStore(value.directory)).rejects.toThrow('checksum is invalid');
+    expect(await readFile(logPath(value.directory), 'utf8')).toBe(damaged);
   });
 
   it('validates the entire command before writing and deduplicates accepted requests', async () => {
@@ -289,12 +327,12 @@ describe('authoritative host session journals', () => {
     expect(await readFile(logPath(value.directory), 'utf8')).toBe(accepted);
   });
 
-  it('rolls back nested Plan creation without writing an initial partial session', async () => {
+  it('rolls back rejected branch creation without writing an initial partial session', async () => {
     const value = await fixture();
     const sql = new Database(join(value.directory, 'data.sqlite'));
     try {
       sql.exec(
-        "CREATE TRIGGER reject_work BEFORE INSERT ON work_states BEGIN SELECT RAISE(ABORT, 'reject mode'); END",
+        "CREATE TRIGGER reject_branch BEFORE INSERT ON branches BEGIN SELECT RAISE(ABORT, 'reject branch'); END",
       );
       expect(() =>
         value.store.createSession({
@@ -306,7 +344,6 @@ describe('authoritative host session journals', () => {
           thinkingLevel: 'off',
           workspaceId: null,
           approvalMode: 'ask',
-          workMode: 'plan',
           at: 3,
         }),
       ).toThrow();
@@ -417,7 +454,7 @@ describe('authoritative host session journals', () => {
       value.store.close();
       await writeFile(
         logPath(value.directory),
-        kind === 'fragment' ? `${full}{"version":3,"records":[` : full.trimEnd(),
+        kind === 'fragment' ? `${full}{"records":[` : full.trimEnd(),
       );
       value.store = await openProfileStore(value.directory);
       expect(value.store.readEvents('session')).toHaveLength(3);
@@ -425,7 +462,7 @@ describe('authoritative host session journals', () => {
     },
   );
 
-  it.each(['changed-record', 'duplicate-batch', 'invalid-line', 'unknown-version'])(
+  it.each(['changed-record', 'duplicate-batch', 'invalid-line', 'invalid-envelope'])(
     'rejects %s without rewriting journal history',
     async (kind) => {
       const value = await fixture();
@@ -434,7 +471,15 @@ describe('authoritative host session journals', () => {
       let damaged = full.replace('Logs', 'forged');
       if (kind === 'duplicate-batch') damaged = full + full;
       if (kind === 'invalid-line') damaged = '{not json}\n';
-      if (kind === 'unknown-version') damaged = full.replace('"version":3', '"version":2');
+      if (kind === 'invalid-envelope') {
+        const batch = (await batches(value.directory))[0];
+        if (batch === undefined) throw new Error('Fixture batch is missing');
+        const records = structuredClone(batch.records);
+        const first = records[0];
+        if (first === undefined) throw new Error('Fixture event is missing');
+        first.event.seq = 0;
+        damaged = serializedBatch({ records });
+      }
       await writeFile(logPath(value.directory), damaged);
       await expect(openProfileStore(value.directory)).rejects.toMatchObject({
         code: 'SESSION_LOG_INVALID',

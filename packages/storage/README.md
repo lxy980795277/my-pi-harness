@@ -27,11 +27,13 @@ JSONL是宿主私有数据，包含模型恢复所需的完整codec和工具结�
 
 `openProfileStore(profileDirectory, { sessionLogRoot })`先获取独立`owner.sqlite`的SQLite VFS排他事务，再校验fresh schema、初始化文件目录和重建会话投影。`data.sqlite`使用WAL和FULL同步。所有权随OS释放，不按PID或时间猜测陈旧锁；`close()`先释放业务资源再释放所有权，重复调用安全。仅支持本机文件系统。
 
-一个命令的完整事件批先在SQLite短事务内验证关联、状态和revision；所有事件通过后，将公开envelope及其privateData编码为一行批记录，追加JSONL并fsync，最后提交SQLite投影。创建会话时的初始Plan模式更新属于同一行批。队列消费和对应用户消息也属于同一批；后续任一事件非法时不写日志、不提交任何投影。返回后调用者才发布SSE。
+一个命令的完整事件批先在SQLite短事务内验证关联、状态和revision；所有事件通过后，将公开envelope及其privateData编码为一行批记录，追加JSONL并fsync，最后提交SQLite投影。创建会话仅保存会话与初始分支，空工作状态由分支派生。队列消费和对应用户消息也属于同一批；后续任一事件非法时不写日志、不提交任何投影。返回后调用者才发布SSE。
 
-每行格式版本3，仅包含version、records及SHA-256 checksum；session归属与连续seq由每条event校验，eventId仍唯一。一次事务只属于一个会话；中断恢复分别提交每个会话。单行最多32 MiB、10000个事件，读取按64 KiB分块，拒绝旧/未知版本、无效UTF-8、校验和不符、重复或断序。
+新写入的每行仅包含records及SHA-256 checksum，不保存批次版本。读取先对原始对象除checksum外的全部字段验证校验和，再选择records回放；既有行的额外元数据参与校验但不决定读取分支，原始历史不会因此重写。session归属与连续seq由每条event校验，eventId仍唯一。一次事务只属于一个会话；中断恢复分别提交每个会话。单行最多32 MiB、10000个事件，读取按64 KiB分块；无效UTF-8、校验和不符、非法记录、重复或断序明确拒绝。
 
 privateData使用原生JSON对象，模型codec、队列绑定和请求messages不再嵌套JSON字符串。磁盘工具展示result与同批canonical文本完全相同时，以`{from:'tool.context'}`引用正文；不同或更丰富的展示值仍完整保存。context.prepared.messages使用完整codec对象或同Run、同branch上一请求的消息索引，systemPrompt为字符串或指向首system消息内容的0。首次请求必须自包含，结束Run释放基线。SessionJournal.read先验证原始行checksum再还原完整记录，返回逐事务records数组；原始文件下载保留引用编码。
+
+`event-validation.ts`是公开持久payload的单一schema所有者，codec在完成解引用和原请求基线保存后，经`stored-event.ts`按相同定义选择当前公开字段；废弃附加字段不进入新投影，privateData和原文件不改写。必要数据与关系继续由所属投影校验，未知progress/audit数据保持原语义；HTTP和新写业务不使用此宽松读取路径。完整职责见[持久字段投影](../../docs/09_TECHNICAL/会话存储与恢复设计.md#412-持久字段投影)。
 
 SQLite的private_data列使用JSON对象映射，字段与表版本不变。完整请求审计仅保存在JSONL，事件查询投影不再额外保存context.prepared的完整私有历史；模型续聊继续从消息codec及canonical工具结果重建。
 
@@ -77,7 +79,7 @@ SQLite的private_data列使用JSON对象映射，字段与表版本不变。完�
 
 ## 开发期schema与凭据
 
-schema按版本和checksum校验：0001保存配置与会话投影，0002添加应用登录事实，0003添加MCP配置/启动授权/身份epoch及队列私有元数据。未知版本、已应用migration内容不匹配明确拒绝；JSONL只接受当前批次版本2，不读取旧开发格式或提供降级兼容。
+SQLite schema按版本和checksum校验：0001保存配置与会话投影，0002添加应用登录事实，0003添加MCP配置/启动授权/身份epoch及队列私有元数据。未知SQLite版本、已应用migration内容不匹配明确拒绝；该迁移版本独立于无批次版本的会话JSONL。
 
 `createSystemCredentialStore(profileDirectory)`按profile独立namespace使用macOS Keychain或Windows Credential Store。每个ref的操作串行，Token刷新由`modify()`拥有完整异步过程；失败不退回明文或内存。`createMemoryCredentialStore()`仅供测试显式注入，不读取Pi或其他项目凭据。
 

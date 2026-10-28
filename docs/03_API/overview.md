@@ -4,7 +4,7 @@
 
 应用版本与协议版本用途不同：应用版本来自根版本生成流程；`PROTOCOL_VERSION` 管理跨端协议兼容。修改协议时更新所有消费者和相应检查，不能用产品版本代替兼容判定。
 
-当前协议为17，包含本地/远程MCP、工具目录与动态加载、Skill选择及插件/服务连接，冻结调用来源、派发事实和unknown终态；包含远程MCP草稿连接测试和只读内置插件详情预览。客户端与daemon必须采用相同协议版本，开发期不保留旧协议兼容。SQLite schema、Session JSONL批次与公开事件envelope分别管理版本，实际磁盘格式见[存储说明](../../packages/storage/README.md)，不随HTTP版本机械递增。
+当前协议为18，包含本地/远程MCP、工具目录与动态加载、Skill选择及插件/服务连接，冻结调用来源、派发事实和unknown终态；包含远程MCP草稿连接测试和只读内置插件详情预览。客户端与daemon必须采用相同协议版本，开发期不保留旧协议兼容。SQLite schema为8，公开事件envelope为1；Session JSONL外层仅有records/checksum，不设批次版本，实际磁盘格式见[存储说明](../../packages/storage/README.md)。这些职责不随HTTP版本机械变化。
 
 ## M0 HTTP
 

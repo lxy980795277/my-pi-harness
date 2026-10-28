@@ -15,7 +15,7 @@ import { Value } from 'typebox/value';
 import { test, expect } from './fixture.js';
 import { configureTestProvider } from './model-fixtures.js';
 import { startTestModel } from './model-server.js';
-import { chooseOption } from './ui-controls.js';
+import { chooseConversationModel } from './ui-controls.js';
 import { registerTestWorkspace } from './workspace-fixtures.js';
 
 async function readSessions(page: Page, origin: string): Promise<SessionSummary[]> {
@@ -367,11 +367,7 @@ test('工作区加号从会话和运行页进入预选的新输入，发送前�
     expect((await readSessions(page, daemon.origin)).map(({ id }) => id)).toEqual([
       session.session.id,
     ]);
-    await chooseOption(
-      page,
-      page.getByRole('combobox', { name: '对话模型', exact: true }),
-      'Queue Model · Chat',
-    );
+    await chooseConversationModel(page, 'Queue Model', 'Chat');
     const creation = page.waitForResponse((response) => {
       return (
         response.request().method() === 'POST' &&

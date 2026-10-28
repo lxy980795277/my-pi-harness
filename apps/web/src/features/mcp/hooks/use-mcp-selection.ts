@@ -19,7 +19,6 @@ export const useMcpSelection = (
   changeSelection: (tools: McpToolSelection[]) => void,
   workspaceId: string | null,
   approval: ApprovalMode,
-  planMode: boolean,
   locked: boolean,
   enabled = true,
 ): McpSelectionState => {
@@ -92,14 +91,14 @@ export const useMcpSelection = (
           }),
         );
       } else if (
-        (!(planMode || approval === 'read-only') || tool.readOnlyAuthorized === true) &&
+        (approval !== 'read-only' || tool.readOnlyAuthorized === true) &&
         tool.available &&
         selected.length < 16
       ) {
         changeSelection([...selected, selectMcpTool(tool)]);
       }
     },
-    [approval, changeSelection, locked, planMode, selected],
+    [approval, changeSelection, locked, selected],
   );
   const rows = catalogs.flatMap((query) => {
     if (!query.data) {
@@ -129,7 +128,7 @@ export const useMcpSelection = (
         disabled:
           locked ||
           (!isSelected &&
-            (((planMode || approval === 'read-only') && tool.readOnlyAuthorized !== true) ||
+            ((approval === 'read-only' && tool.readOnlyAuthorized !== true) ||
               !tool.available ||
               selected.length >= 16)),
         change: (): void => {
@@ -191,7 +190,6 @@ export const useMcpSelection = (
     settings,
     scope,
     workspaceMissing: workspaceId === null,
-    planMode,
     readOnly: approval === 'read-only',
   };
 };

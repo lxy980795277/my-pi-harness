@@ -4,7 +4,6 @@ import type {
   SkillSelection,
   SkillView,
   ToolDiscoveryDiagnostic,
-  WorkState,
 } from '@my-pi-harness/protocol';
 import type { ExecutionContent } from '@my-pi-harness/execution';
 import type { FrozenMcpTool } from '../tools/external.js';
@@ -19,7 +18,6 @@ export interface ToolDiscoveryPort {
   freezeCandidates(
     workspaceId: string | null,
     approvalMode: ApprovalMode,
-    mode: WorkState['mode'],
     signal: AbortSignal,
   ): Promise<readonly FrozenMcpTool[]>;
 }

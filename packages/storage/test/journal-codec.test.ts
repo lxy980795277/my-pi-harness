@@ -300,7 +300,15 @@ describe('journal canonical tool results', () => {
   });
 });
 
-describe('journal v3 replay', () => {
+describe('journal reference replay', () => {
+  it('keeps newly appended event envelopes strict before creating journal bytes', async () => {
+    const { journal, path } = await fixture();
+    const source = request(1);
+    const record = { ...source, event: { ...source.event, retiredMetadata: true } };
+    expect(() => journal.append('session', [record])).toThrow('failed validation');
+    await expect(readFile(path)).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
   it('restores request baselines on restart before encoding the next append', async () => {
     const { files, journal, path } = await fixture();
     journal.append('session', [request(1)]);
@@ -308,8 +316,7 @@ describe('journal v3 replay', () => {
     expect([...reopened.read('session')].flat()).toEqual([request(1)]);
     reopened.append('session', [request(2)]);
     const disk = (await readFile(path, 'utf8')).trimEnd().split('\n').map(diskBatch);
-    expect(Object.keys(disk[1] ?? {})).toEqual(['version', 'records', 'checksum']);
-    expect(disk[1]?.version).toBe(3);
+    expect(Object.keys(disk[1] ?? {})).toEqual(['records', 'checksum']);
     expect(disk[1]?.records[0]?.privateData?.['messages']).toEqual([0, 1]);
     const download = reopened.openDownload('session');
     try {
@@ -366,7 +373,7 @@ describe('journal v3 replay', () => {
     const lines = (await readFile(path, 'utf8')).trimEnd().split('\n');
     const second = diskBatch(lines[1]);
     privatePayload(second.records[0])['messages'] = [99];
-    const body = { version: second.version, records: second.records };
+    const body = { records: second.records };
     second.checksum = createHash('sha256').update(JSON.stringify(body)).digest('hex');
     await writeFile(path, `${lines[0]}\n${JSON.stringify(second)}\n`);
     expect(() => [...new SessionJournal(files).read('session')]).toThrow('replayed safely');

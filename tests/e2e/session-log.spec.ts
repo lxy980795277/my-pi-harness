@@ -6,7 +6,7 @@ import { test, expect } from './fixture.js';
 import { configureTestProvider } from './model-fixtures.js';
 import { startMarkdownModel } from './markdown-model.js';
 import { startTestModel } from './model-server.js';
-import { chooseOption } from './ui-controls.js';
+import { chooseConversationModel } from './ui-controls.js';
 
 declare global {
   interface Window {
@@ -19,7 +19,6 @@ const expectSessionLogBatches = (text: string): void => {
   for (const line of text.trimEnd().split('\n')) {
     const entry: unknown = JSON.parse(line);
     expect(entry).toEqual({
-      version: 3,
       records: expect.any(Array),
       checksum: expect.stringMatching(/^[a-f0-9]{64}$/u),
     });
@@ -71,11 +70,7 @@ test('会话标题栏全宽展示，下载完整 JSONL 并在失败后重试', a
     await page.goto(daemon.origin);
     await configureTestProvider(page, model.origin);
     await page.reload();
-    await chooseOption(
-      page,
-      page.getByRole('combobox', { name: '对话模型', exact: true }),
-      'Queue Model · Chat',
-    );
+    await chooseConversationModel(page, 'Queue Model', 'Chat');
     const original = await sendFirstMessage(page, '对话日志下载验收');
     const header = page.getByLabel('会话标题栏', { exact: true });
     const panel = page.getByRole('region', { name: '当前会话', exact: true });
@@ -155,11 +150,7 @@ test('运行中下载固定已提交 JSONL 前缀，完成后再次下载包含�
     await page.goto(daemon.origin);
     await configureTestProvider(page, model.origin);
     await page.reload();
-    await chooseOption(
-      page,
-      page.getByRole('combobox', { name: '对话模型', exact: true }),
-      'Queue Model · Chat',
-    );
+    await chooseConversationModel(page, 'Queue Model', 'Chat');
     const original = await startSession(page, '运行中的日志快照');
     await expect(page.getByText(prefix, { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: '停止', exact: true })).toBeVisible();
@@ -222,11 +213,7 @@ test('离开会话取消在途日志下载，不触发旧会话文件保存', as
     await page.goto(daemon.origin);
     await configureTestProvider(page, model.origin);
     await page.reload();
-    await chooseOption(
-      page,
-      page.getByRole('combobox', { name: '对话模型', exact: true }),
-      'Queue Model · Chat',
-    );
+    await chooseConversationModel(page, 'Queue Model', 'Chat');
     await sendFirstMessage(page, '取消日志下载验收');
     let requested: Route | undefined;
     await page.route('**/api/sessions/*/log', async (route) => {

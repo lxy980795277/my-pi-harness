@@ -127,7 +127,7 @@ it('restores a real SDK catalog after profile restart without a new handshake or
   expect(first.list()[0]?.catalogStatus).toBe('idle');
   expect(first.catalog(server.id)).toBeNull();
   expect(upstream.requests()).toBe(0);
-  const before = await first.freezeCandidates(null, 'ask', 'execute', AbortSignal.timeout(5000));
+  const before = await first.freezeCandidates(null, 'ask', AbortSignal.timeout(5000));
   expect(before).toHaveLength(1);
   expect(before[0]?.displayName).toBe('Persisted fixture / echo');
   expect(store.mcp.directory.catalog(server.id, 'remote')).toBeDefined();
@@ -147,7 +147,7 @@ it('restores a real SDK catalog after profile restart without a new handshake or
   cleanups.push(async () => await second.close());
   const requests = upstream.requests();
   second.initializeCatalogs();
-  const after = await second.freezeCandidates(null, 'ask', 'execute', AbortSignal.timeout(5000));
+  const after = await second.freezeCandidates(null, 'ask', AbortSignal.timeout(5000));
   expect(after.map((tool) => tool.definition)).toEqual(before.map((tool) => tool.definition));
   expect(second.metadata(server.id)?.resources).toHaveLength(1);
   expect(second.get(server.id).catalogStatus).toBe('ready');
@@ -169,8 +169,8 @@ it('joins startup preparation and simultaneous Runs instead of freezing an empty
   await entered.promise;
   expect(f.remote.get(f.server.id).catalogStatus).toBe('loading');
   let settled = false;
-  const one = f.remote.freezeCandidates(null, 'ask', 'execute', AbortSignal.timeout(5000));
-  const two = f.remote.freezeCandidates(null, 'ask', 'execute', AbortSignal.timeout(5000));
+  const one = f.remote.freezeCandidates(null, 'ask', AbortSignal.timeout(5000));
+  const two = f.remote.freezeCandidates(null, 'ask', AbortSignal.timeout(5000));
   const watched = (async () => {
     await one;
     settled = true;
@@ -205,9 +205,7 @@ it('keeps a failed server visible as a safe diagnostic while other enabled catal
       ? Promise.resolve(value)
       : Promise.reject(new Error('Authorization Bearer private-provider-secret')),
   );
-  expect(
-    await f.remote.freezeCandidates(null, 'ask', 'execute', AbortSignal.timeout(5000)),
-  ).toHaveLength(1);
+  expect(await f.remote.freezeCandidates(null, 'ask', AbortSignal.timeout(5000))).toHaveLength(1);
   expect(f.remote.diagnostics().find((entry) => entry.serverId === f.server.id)).toMatchObject({
     status: 'error',
     toolCount: 0,
@@ -215,9 +213,7 @@ it('keeps a failed server visible as a safe diagnostic while other enabled catal
   });
   expect(JSON.stringify(f.remote.diagnostics())).not.toContain('private-provider-secret');
   vi.spyOn(f.manager, 'discover').mockResolvedValue(value);
-  expect(
-    await f.remote.freezeCandidates(null, 'ask', 'execute', AbortSignal.timeout(5000)),
-  ).toHaveLength(2);
+  expect(await f.remote.freezeCandidates(null, 'ask', AbortSignal.timeout(5000))).toHaveLength(2);
   expect(f.remote.get(f.server.id).catalogStatus).toBe('ready');
 });
 
@@ -239,7 +235,7 @@ it('stops an obsolete in-flight catalog from publishing after trust is revoked',
     await finish.promise;
     return value;
   });
-  const freezing = f.remote.freezeCandidates(null, 'ask', 'execute', AbortSignal.timeout(5000));
+  const freezing = f.remote.freezeCandidates(null, 'ask', AbortSignal.timeout(5000));
   await entered.promise;
   await f.remote.disable(f.server.id, {
     expectedRevision: f.server.revision,
@@ -263,10 +259,10 @@ it('cancels only one waiting Run while shared catalog preparation finishes for a
     return value;
   });
   const caller = new AbortController();
-  const one = f.remote.freezeCandidates(null, 'ask', 'execute', caller.signal);
+  const one = f.remote.freezeCandidates(null, 'ask', caller.signal);
   const rejected = expect(one).rejects.toMatchObject({ name: 'AbortError' });
   await entered.promise;
-  const two = f.remote.freezeCandidates(null, 'ask', 'execute', AbortSignal.timeout(5000));
+  const two = f.remote.freezeCandidates(null, 'ask', AbortSignal.timeout(5000));
   caller.abort();
   await rejected;
   finish.release();
@@ -277,7 +273,7 @@ it('rebuilds a corrupt durable catalog instead of restoring it or silently freez
   const f = await setup();
   const value = catalog();
   vi.spyOn(f.manager, 'discover').mockResolvedValue(value);
-  await f.remote.freezeCandidates(null, 'ask', 'execute', AbortSignal.timeout(5000));
+  await f.remote.freezeCandidates(null, 'ask', AbortSignal.timeout(5000));
   const stored = f.store.mcp.directory.catalog(f.server.id, 'remote');
   if (stored === undefined) throw new Error('Missing durable catalog');
   await f.remote.close();
@@ -294,9 +290,7 @@ it('rebuilds a corrupt durable catalog instead of restoring it or silently freez
     manager,
   });
   cleanups.push(async () => await recovered.close());
-  expect(
-    await recovered.freezeCandidates(null, 'ask', 'execute', AbortSignal.timeout(5000)),
-  ).toHaveLength(1);
+  expect(await recovered.freezeCandidates(null, 'ask', AbortSignal.timeout(5000))).toHaveLength(1);
   expect(discover).toHaveBeenCalledTimes(1);
   expect(recovered.get(f.server.id).catalogStatus).toBe('ready');
   expect(f.store.mcp.directory.catalog(f.server.id, 'remote')?.data).not.toContain('invalid');
@@ -336,7 +330,7 @@ it('limits simultaneous startup handshakes while draining all eligible servers',
     }
   });
   f.remote.initializeCatalogs();
-  const frozen = f.remote.freezeCandidates(null, 'ask', 'execute', AbortSignal.timeout(5000));
+  const frozen = f.remote.freezeCandidates(null, 'ask', AbortSignal.timeout(5000));
   await entered.promise;
   expect(discover).toHaveBeenCalledTimes(4);
   finish.release();
@@ -389,9 +383,9 @@ async function localSetup() {
 it('restores local catalogs only for the explicitly trusted workspace isolation scope', async () => {
   const { workspace, adapter, options, local: first } = await localSetup();
   expect(adapter.state.starts).toBe(0);
-  expect(
-    await first.freezeCandidates(workspace.id, 'ask', 'execute', AbortSignal.timeout(5000)),
-  ).toHaveLength(1);
+  expect(await first.freezeCandidates(workspace.id, 'ask', AbortSignal.timeout(5000))).toHaveLength(
+    1,
+  );
   expect(adapter.state.starts).toBe(1);
   expect(first.diagnostics(workspace.id, 'ask')).toMatchObject([{ status: 'ready', toolCount: 1 }]);
   expect(first.diagnostics('another-workspace', 'ask')).toEqual([]);
@@ -402,16 +396,11 @@ it('restores local catalogs only for the explicitly trusted workspace isolation 
   const second = new McpService({ ...options, manager: secondAdapter.manager });
   cleanups.push(async () => await second.close());
   expect(
-    await second.freezeCandidates(workspace.id, 'ask', 'execute', AbortSignal.timeout(5000)),
+    await second.freezeCandidates(workspace.id, 'ask', AbortSignal.timeout(5000)),
   ).toHaveLength(1);
   expect(secondAdapter.state.starts).toBe(0);
   expect(
-    await second.freezeCandidates(
-      workspace.id,
-      'full-access',
-      'execute',
-      AbortSignal.timeout(5000),
-    ),
+    await second.freezeCandidates(workspace.id, 'full-access', AbortSignal.timeout(5000)),
   ).toEqual([]);
   expect(secondAdapter.state.starts).toBe(0);
 });
@@ -431,7 +420,7 @@ it('owns local launch inspection through caller cancellation and service shutdow
     return await preview(input);
   });
   const caller = new AbortController();
-  const pending = local.freezeCandidates(workspace.id, 'ask', 'execute', caller.signal);
+  const pending = local.freezeCandidates(workspace.id, 'ask', caller.signal);
   await entered.promise;
   expect(local.diagnostics(workspace.id, 'ask')).toMatchObject([
     { status: 'loading', toolCount: 0 },
@@ -467,12 +456,7 @@ it('ends the Run wait at its preparation deadline while retaining unfinished lau
   });
   const deadline = new AbortController();
   const timeout = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(deadline.signal);
-  const pending = local.freezeCandidates(
-    workspace.id,
-    'ask',
-    'execute',
-    new AbortController().signal,
-  );
+  const pending = local.freezeCandidates(workspace.id, 'ask', new AbortController().signal);
   await entered.promise;
   expect(timeout).toHaveBeenCalledWith(30_000);
   deadline.abort(new DOMException('Fixture deadline elapsed', 'TimeoutError'));
@@ -493,12 +477,7 @@ it('ends the Run wait at its preparation deadline while retaining unfinished lau
 
 async function blockReadyBinding(check: number) {
   const fixture = await localSetup();
-  await fixture.local.freezeCandidates(
-    fixture.workspace.id,
-    'ask',
-    'execute',
-    AbortSignal.timeout(5000),
-  );
+  await fixture.local.freezeCandidates(fixture.workspace.id, 'ask', AbortSignal.timeout(5000));
   const entered = gate();
   const finish = gate();
   cleanups.push(() => {
@@ -523,7 +502,7 @@ it.each([1, 2])(
   async (check) => {
     const { workspace, local, adapter, entered, finish } = await blockReadyBinding(check);
     const caller = new AbortController();
-    const pending = local.freezeCandidates(workspace.id, 'ask', 'execute', caller.signal);
+    const pending = local.freezeCandidates(workspace.id, 'ask', caller.signal);
     await entered.promise;
     caller.abort(new DOMException('Fixture caller cancelled', 'AbortError'));
     await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
@@ -545,12 +524,7 @@ it.each([1, 2])(
     const { workspace, local, adapter, entered, finish } = await blockReadyBinding(check);
     const deadline = new AbortController();
     vi.spyOn(AbortSignal, 'timeout').mockReturnValue(deadline.signal);
-    const pending = local.freezeCandidates(
-      workspace.id,
-      'ask',
-      'execute',
-      new AbortController().signal,
-    );
+    const pending = local.freezeCandidates(workspace.id, 'ask', new AbortController().signal);
     await entered.promise;
     deadline.abort(new DOMException('Fixture deadline elapsed', 'TimeoutError'));
     expect(await pending).toEqual([]);

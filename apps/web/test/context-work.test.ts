@@ -31,7 +31,7 @@ describe('context and checkpoint presentation', () => {
   it('detects a different message prefix even when both checkpoints contain the same number of messages', () => {
     const left = { state: initialWorkState('branch'), messageIds: ['first', 'second'] };
     const right = {
-      state: { ...initialWorkState('branch'), mode: 'plan' as const },
+      state: { ...initialWorkState('branch'), contextStartAfterMessageId: 'first' },
       messageIds: ['first', 'replacement'],
     };
     const rows = compareWork(left, right);
@@ -42,7 +42,7 @@ describe('context and checkpoint presentation', () => {
     ).toBe(true);
     expect(
       rows.find((row) => {
-        return row.label === '模式';
+        return row.label === '上下文起点';
       })?.changed,
     ).toBe(true);
     expect(

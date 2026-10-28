@@ -9,14 +9,12 @@ import type {
 import type {
   NewConversationAttempt,
   NewConversationIntent,
-  WorkMode,
 } from '@/features/sessions/types/composer';
 
 interface ComposerState {
   newConversationDraft: string;
   newConversationModel: DefaultModel | null;
   newConversationApproval: ApprovalMode;
-  newConversationWorkMode: WorkMode;
   newConversationGeneration: string;
   newConversationAttempt: NewConversationAttempt | null;
   pendingInputs: Readonly<Record<string, InputRequest>>;
@@ -29,7 +27,6 @@ interface ComposerState {
   setNewConversationDraft: (text: string) => void;
   setNewConversationModel: (model: DefaultModel) => void;
   setNewConversationApproval: (mode: ApprovalMode) => void;
-  setNewConversationWorkMode: (mode: WorkMode) => void;
   prepareInput: (sessionId: string, input: InputRequest) => InputRequest;
   clearPendingInput: (sessionId: string, requestId: string) => void;
   confirmInput: (sessionId: string, requestId: string) => void;
@@ -51,7 +48,6 @@ export const useComposerStore = create<ComposerState>((set, get) => {
     newConversationDraft: '',
     newConversationModel: null,
     newConversationApproval: 'full-access',
-    newConversationWorkMode: 'execute',
     newConversationGeneration: crypto.randomUUID(),
     newConversationAttempt: null,
     pendingInputs: {},
@@ -80,7 +76,6 @@ export const useComposerStore = create<ComposerState>((set, get) => {
         newConversationGeneration: crypto.randomUUID(),
         newConversationAttempt: null,
         newConversationDraft: '',
-        newConversationWorkMode: 'execute',
       });
     },
     setNewConversationDraft: (text: string): void => {
@@ -91,12 +86,6 @@ export const useComposerStore = create<ComposerState>((set, get) => {
     },
     setNewConversationApproval: (mode: ApprovalMode): void => {
       set({ newConversationApproval: mode });
-    },
-    setNewConversationWorkMode: (mode): void => {
-      const state = get();
-      if (!state.newConversationAttempt) {
-        set({ newConversationWorkMode: mode });
-      }
     },
     prepareInput: (sessionId: string, input: InputRequest): InputRequest => {
       const state = get();
@@ -200,7 +189,6 @@ export const useComposerStore = create<ComposerState>((set, get) => {
         newConversationDraft: '',
         newConversationModel: null,
         newConversationApproval: 'full-access',
-        newConversationWorkMode: 'execute',
         newConversationGeneration: crypto.randomUUID(),
         newConversationAttempt: null,
         pendingInputs: {},

@@ -1,7 +1,7 @@
 import { test, expect } from './fixture.js';
 import { startToolSequenceModel } from './m2-completion-model.js';
 import { configureTestProvider } from './model-fixtures.js';
-import { chooseOption } from './ui-controls.js';
+import { chooseConversationModel } from './ui-controls.js';
 
 test('回答结束后收起完整过程，展开保留阅读位置、最终思考与内部工具选择', async ({
   page,
@@ -25,11 +25,7 @@ test('回答结束后收起完整过程，展开保留阅读位置、最终思�
     await page.goto(daemon.origin);
     await configureTestProvider(page, model.origin, 32768);
     await page.reload();
-    await chooseOption(
-      page,
-      page.getByRole('combobox', { name: '对话模型', exact: true }),
-      'Queue Model · Chat',
-    );
+    await chooseConversationModel(page, 'Queue Model', 'Chat');
     await page.getByLabel('消息', { exact: true }).fill('验证完整回答过程');
     await page.getByRole('button', { name: '发送', exact: true }).click();
     await expect(page.getByText(final, { exact: true })).toBeVisible();
@@ -129,11 +125,7 @@ test('停止后的部分回答与工具保持可见，不生成成功过程摘�
     await page.goto(daemon.origin);
     await configureTestProvider(page, model.origin);
     await page.reload();
-    await chooseOption(
-      page,
-      page.getByRole('combobox', { name: '对话模型', exact: true }),
-      'Queue Model · Chat',
-    );
+    await chooseConversationModel(page, 'Queue Model', 'Chat');
     await page.getByLabel('消息', { exact: true }).fill('验证停止保留过程');
     await page.getByRole('button', { name: '发送', exact: true }).click();
     await expect(page.getByText(partial, { exact: true })).toBeVisible();
@@ -177,11 +169,7 @@ test('阅读最终正文时自动收起上方过程，保留当前阅读段落�
     await page.goto(daemon.origin);
     await configureTestProvider(page, model.origin, 32768);
     await page.reload();
-    await chooseOption(
-      page,
-      page.getByRole('combobox', { name: '对话模型', exact: true }),
-      'Queue Model · Chat',
-    );
+    await chooseConversationModel(page, 'Queue Model', 'Chat');
     await page.getByLabel('消息', { exact: true }).fill('验证自动折叠阅读位置');
     await page.getByRole('button', { name: '发送', exact: true }).click();
     await expect(page.getByText(lastParagraph, { exact: true })).toBeVisible();

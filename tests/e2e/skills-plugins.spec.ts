@@ -1,5 +1,5 @@
 import { test, expect } from './fixture.js';
-import { openUserSettings, chooseOption } from './ui-controls.js';
+import { chooseConversationModel, openUserSettings, chooseOption } from './ui-controls.js';
 import { configureTestProvider } from './model-fixtures.js';
 import { startToolSequenceModel } from './m2-completion-model.js';
 import {
@@ -33,11 +33,7 @@ test('创建 Skill 后显式选择，指令进入模型和会话日志', async (
     await page.getByRole('button', { name: '关闭设置', exact: true }).click();
     await configureTestProvider(page, model.origin);
     await page.reload();
-    await chooseOption(
-      page,
-      page.getByRole('combobox', { name: '对话模型', exact: true }),
-      'Queue Model · Chat',
-    );
+    await chooseConversationModel(page, 'Queue Model', 'Chat');
     await page.getByRole('button', { name: '添加上下文', exact: true }).click();
     await page.getByRole('button', { name: 'Skill', exact: true }).click();
     const picker = page.getByRole('dialog', { name: /Skills · 已选/u });

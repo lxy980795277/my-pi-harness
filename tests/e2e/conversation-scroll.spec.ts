@@ -6,7 +6,7 @@ import { Value } from 'typebox/value';
 import { test, expect } from './fixture.js';
 import type { Page } from '@playwright/test';
 import { configureTestProvider } from './model-fixtures.js';
-import { chooseOption } from './ui-controls.js';
+import { chooseConversationModel } from './ui-controls.js';
 
 interface ControlledModel {
   origin: string;
@@ -148,11 +148,7 @@ async function openModel(
     if (!response.ok()) throw new Error('Updating the fixture context window failed');
   }
   await page.reload();
-  await chooseOption(
-    page,
-    page.getByRole('combobox', { name: '对话模型', exact: true }),
-    'Queue Model · Chat',
-  );
+  await chooseConversationModel(page, 'Queue Model', 'Chat');
 }
 
 async function renderFrames(page: Page, count = 5): Promise<void> {

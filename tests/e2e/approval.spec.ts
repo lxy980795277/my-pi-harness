@@ -8,7 +8,7 @@ import { registerTestWorkspace } from './workspace-fixtures.js';
 import { test, expect } from './fixture.js';
 import { configureTestProvider } from './model-fixtures.js';
 import { startToolModel } from './tool-model-server.js';
-import { chooseOption } from './ui-controls.js';
+import { chooseConversationModel, chooseOption } from './ui-controls.js';
 import { expandCompletedProcesses } from './process-controls.js';
 
 test('权限菜单展示三种策略、说明、统一图标和当前选项，完整访问使用警示样式', async ({
@@ -146,11 +146,7 @@ for (const scenario of ['auto-allow', 'full-access', 'auto-fallback'] as const) 
         page.getByRole('combobox', { name: '选择工作区', exact: true }),
         '审批验证项目',
       );
-      await chooseOption(
-        page,
-        page.getByRole('combobox', { name: '对话模型', exact: true }),
-        'Queue Model · Chat',
-      );
+      await chooseConversationModel(page, 'Queue Model', 'Chat');
       let label = '帮我批准';
       if (scenario === 'full-access') label = '完全访问权限';
       await chooseOption(

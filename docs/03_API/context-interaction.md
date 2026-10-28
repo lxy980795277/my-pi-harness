@@ -28,7 +28,7 @@ HTTP上传体上限12MiB；UTF-8文本最多256000字节，PNG/JPEG/GIF/WebP最�
 | 方法与路径                                   | 行为                                                                             |
 | -------------------------------------------- | -------------------------------------------------------------------------------- |
 | GET /work?branchId=...                       | 返回state、checkpoints手动会话快照、compactions摘要历史                          |
-| PATCH /work                                  | expectedBranchId、revision、可选mode/todos；不允许直接批准计划                   |
+| PATCH /work                                  | expectedBranchId、revision、可选todos；不允许直接批准计划                        |
 | POST /work/compact                           | expectedBranchId、revision；手动压缩                                             |
 | POST /work/compactions/:compactionId/select  | expectedBranchId、revision；选择摘要版本，不创建分支                             |
 | POST /work/checkpoints                       | expectedBranchId、label；保存手动会话快照                                        |
@@ -39,7 +39,7 @@ HTTP上传体上限12MiB；UTF-8文本最多256000字节，PNG/JPEG/GIF/WebP最�
 | POST /questions/:questionId/answer           | answers数组，一次提交该请求全部题目                                              |
 | POST /questions/:questionId/cancel           | 空对象，取消所属请求等待                                                         |
 
-WorkState按Session和Branch隔离，包含revision、mode、rules、usage、当前compaction、contextStartAfterMessageId、plan、todos、questions。命令核对当前分支与revision，旧窗口不能写到新分支。普通编辑、压缩、快照及上下文重置要求空闲；回答和审核仅开放给所属活跃Run的待处理请求。
+WorkState按Session和Branch隔离，包含revision、rules、usage、当前compaction、contextStartAfterMessageId、plan、todos、questions。命令核对当前分支与revision，旧窗口不能写到新分支。普通编辑、压缩、快照及上下文重置要求空闲；回答和审核仅开放给所属活跃Run的待处理请求。
 
 ## 结构化提问
 
@@ -49,9 +49,9 @@ Question容器保存id、runId、branchId、toolCallId、questions、answers、s
 
 ## 计划与任务
 
-Plan有稳定id、runId、title/content、结构化steps、status、review、feedback和updatedAt。步骤有id/title/status，最多一个in_progress。update_plan工具提交计划并等待审核；decision为approve、feedback或cancel。批准使原Run切换execute并继续，反馈交回原模型修订，取消结束审核。不能通过PATCH plan.status绕过审核，也不能从批准计划推导具体工具已获授权。
+Plan有稳定id、runId、title/content、结构化steps、status、review、feedback和updatedAt。步骤有id/title/status，最多一个in_progress。update_plan工具提交计划并等待审核；decision为approve、feedback或cancel。批准记录计划确认并继续原Run，反馈交回原模型修订，取消结束审核。不能通过PATCH plan.status绕过审核，也不能从批准计划推导具体工具已获授权。
 
-Todo有id/title/status、planStepId、evidenceToolCallIds和completionNote。状态为pending/in_progress/completed/blocked/cancelled；引用步骤必须存在，新计划遗漏现有Todo引用的步骤时，在保存和创建审核等待前返回TODO_PLAN_STEP_INVALID，原工作状态与revision不变，需先更新或清理任务关联。工具证据必须是实际成功的相关工具记录。完成也可填写明确文本结论，人工确认通过completionNote记录，纯分析任务不要求虚构工具。Plan模式继续禁止文件修改、Shell和Web POST。
+Todo有id/title/status、planStepId、evidenceToolCallIds和completionNote。状态为pending/in_progress/completed/blocked/cancelled；引用步骤必须存在，新计划遗漏现有Todo引用的步骤时，在保存和创建审核等待前返回TODO_PLAN_STEP_INVALID，原工作状态与revision不变，需先更新或清理任务关联。工具证据必须是实际成功的相关工具记录。完成也可填写明确文本结论，人工确认通过completionNote记录，纯分析任务不要求虚构工具。
 
 会话工具包括ask_user、update_plan、update_plan_steps、update_todos、search_session_history、restore_context_checkpoint和reset_working_state；均不授予工作区权限。历史搜索仅限当前会话、有限匹配和有界片段，不实现M6跨会话索引。
 
@@ -63,4 +63,4 @@ Compaction保存id、parentId、throughMessageId、summary、structured、strate
 
 context.prepared公开模型请求关联、用量和附件ID，完整system/messages仅进入宿主日志私有记录。原历史不删除；压缩不是文件撤销。上下文检查点选择旧摘要并确定新的有效尾部，历史仍可检索；会话快照保存消息前缀及WorkState并恢复为新分支，两种恢复入口独立。
 
-reset-tasks保留摘要与历史，仅清计划任务；reset-context保留可读历史和手动快照，保留Plan/Todos和mode，但清规则、用量、摘要、问题及未消费队列。恢复不自动执行工具、Shell或外部请求。完整导入导出和文件撤销重做继续属于M7。
+reset-tasks保留摘要与历史，仅清计划任务；reset-context保留可读历史和手动快照，保留Plan/Todos，但清规则、用量、摘要、问题及未消费队列。恢复不自动执行工具、Shell或外部请求。完整导入导出和文件撤销重做继续属于M7。

@@ -126,7 +126,7 @@ describe('M3 protected work commands', () => {
       400,
     );
     const missingBranch = [
-      { path: '', method: 'PATCH', body: { revision: 0, mode: 'plan' } },
+      { path: '', method: 'PATCH', body: { revision: 0 } },
       { path: '/reset-context', method: 'POST', body: { revision: 0 } },
       { path: '/compact', method: 'POST', body: { revision: 0 } },
       { path: '/checkpoints/missing/restore', method: 'POST', body: { revision: 0 } },
@@ -141,7 +141,6 @@ describe('M3 protected work commands', () => {
       await f.send('/api/sessions/first/work', 'PATCH', {
         expectedBranchId: 'first-main',
         revision: 0,
-        mode: 'plan',
       }),
     );
     const saved = await work(
@@ -160,7 +159,7 @@ describe('M3 protected work commands', () => {
     expect(restored.state.branchId).not.toBe(stale.expectedBranchId);
     const before = f.services.store.getSnapshot('first');
     const requests = [
-      { path: '', method: 'PATCH', body: { ...stale, mode: 'execute' } },
+      { path: '', method: 'PATCH', body: { ...stale } },
       { path: '/reset-context', method: 'POST', body: stale },
       { path: '/compact', method: 'POST', body: stale },
       { path: `/checkpoints/${checkpoint.id}/restore`, method: 'POST', body: stale },
@@ -188,7 +187,7 @@ describe('M3 protected work commands', () => {
     expect(f.services.store.getSnapshot('first')).toEqual(before);
   });
 
-  it('accepts first-session Plan mode before any run and rejects invalid modes', async () => {
+  it('creates mode-free session work and rejects removed mode parameters', async () => {
     const f = await fixture();
     await f.services.gateway.saveProvider({
       id: 'fixture',
@@ -217,46 +216,40 @@ describe('M3 protected work commands', () => {
       modelId: 'model',
       thinkingLevel: 'off',
     };
-    const created = await f.send('/api/sessions', 'POST', { ...input, workMode: 'plan' });
+    const created = await f.send('/api/sessions', 'POST', input);
     expect(created.status).toBe(200);
     const session: unknown = await created.json();
     if (!Value.Check(SessionSnapshotSchema, session)) throw new Error('Invalid session response');
-    expect(session.snapshotSeq).toBe(2);
+    expect(session.snapshotSeq).toBe(1);
     expect(session.session.activeRunId).toBeNull();
     expect(session.messages).toEqual([]);
-    expect(
-      (
-        await work(
-          await f.send(
-            `/api/sessions/${session.session.id}/work?branchId=${session.session.activeBranchId}`,
-          ),
-        )
-      ).state,
-    ).toMatchObject({ revision: 1, mode: 'plan' });
+    const snapshot = await work(
+      await f.send(
+        `/api/sessions/${session.session.id}/work?branchId=${session.session.activeBranchId}`,
+      ),
+    );
+    expect(snapshot.state).toMatchObject({ revision: 0, plan: null, todos: [] });
+    expect(snapshot.state).not.toHaveProperty('mode');
     expect(f.services.store.readEvents(session.session.id).map(({ type }) => type)).toEqual([
       'session.created',
-      'work.updated',
     ]);
-    const defaultCreated = await f.send('/api/sessions', 'POST', input);
-    expect(defaultCreated.status).toBe(200);
-    const defaultSession: unknown = await defaultCreated.json();
-    if (!Value.Check(SessionSnapshotSchema, defaultSession))
-      throw new Error('Invalid default session response');
-    expect(defaultSession.snapshotSeq).toBe(1);
-    expect(
-      (
-        await work(
-          await f.send(
-            `/api/sessions/${defaultSession.session.id}/work?branchId=${defaultSession.session.activeBranchId}`,
-          ),
-        )
-      ).state,
-    ).toMatchObject({ revision: 0, mode: 'execute' });
     const count = f.services.store.listSessions().length;
-    expect((await f.send('/api/sessions', 'POST', { ...input, workMode: 'unsafe' })).status).toBe(
-      400,
-    );
+    for (const workMode of ['execute', 'plan', 'unsafe']) {
+      expect((await f.send('/api/sessions', 'POST', { ...input, workMode })).status).toBe(400);
+    }
     expect(f.services.store.listSessions()).toHaveLength(count);
+    for (const mode of ['execute', 'plan']) {
+      expect(
+        (
+          await f.send(`/api/sessions/${session.session.id}/work`, 'PATCH', {
+            expectedBranchId: session.session.activeBranchId,
+            revision: snapshot.state.revision,
+            mode,
+          })
+        ).status,
+      ).toBe(400);
+    }
+    expect(f.services.work.snapshot(session.session.id)).toEqual(snapshot);
   });
 
   it('requires authorization and CSRF, validates fields and preserves optimistic revisions', async () => {
@@ -265,21 +258,20 @@ describe('M3 protected work commands', () => {
     const unauthorizedWrite = await fetch(`${f.origin}/api/sessions/first/work`, {
       method: 'PATCH',
       headers: { Origin: f.origin, Cookie: f.headers.Cookie, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ revision: 0, mode: 'plan' }),
+      body: JSON.stringify({ revision: 0 }),
     });
     expect(unauthorizedWrite.status).toBe(403);
     expect(
       (await work(await f.send('/api/sessions/first/work?branchId=first-main'))).state,
     ).toMatchObject({
       revision: 0,
-      mode: 'execute',
     });
     expect(
       (
         await f.send('/api/sessions/first/work', 'PATCH', {
           expectedBranchId: 'first-main',
           revision: 0,
-          mode: 'plan',
+
           extra: true,
         })
       ).status,
@@ -288,7 +280,7 @@ describe('M3 protected work commands', () => {
       await f.send('/api/sessions/first/work', 'PATCH', {
         expectedBranchId: 'first-main',
         revision: 0,
-        mode: 'plan',
+
         todos: [
           {
             id: 'task',
@@ -303,13 +295,12 @@ describe('M3 protected work commands', () => {
     );
     expect(updated.state).toMatchObject({
       revision: 1,
-      mode: 'plan',
+
       todos: [{ title: 'Inspect' }],
     });
     const stale = await f.send('/api/sessions/first/work', 'PATCH', {
       expectedBranchId: 'first-main',
       revision: 0,
-      mode: 'execute',
     });
     expect(stale.status).toBe(409);
     expect(await stale.json()).toMatchObject({ code: 'WORK_CONFLICT' });
@@ -360,7 +351,6 @@ describe('M3 protected work commands', () => {
       await f.send('/api/sessions/first/work', 'PATCH', {
         expectedBranchId: 'first-main',
         revision: 0,
-        mode: 'plan',
       }),
     );
     const seeded = f.services.work.snapshot('first').state;
@@ -630,7 +620,6 @@ describe('M3 protected work commands', () => {
         await f.send(`/api/sessions/first/work/plans/${planId}/review`, 'POST', input),
       );
       expect(approved.state).toMatchObject({
-        mode: 'execute',
         plan: { id: planId, runId, status: 'approved', review: 'approved' },
       });
       await expect(pending).resolves.toContain('同一次运行');
@@ -696,7 +685,6 @@ describe('M3 protected work commands', () => {
           await f.send('/api/sessions/first/work', 'PATCH', {
             expectedBranchId: state.branchId,
             revision: state.revision,
-            mode: 'plan',
           })
         ).status,
       ).toBe(409);

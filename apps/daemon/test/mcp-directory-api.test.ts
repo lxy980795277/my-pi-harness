@@ -192,7 +192,6 @@ describe('MCP directory management', () => {
           f.services.remoteMcp.freezeSelections(
             null,
             'ask',
-            'execute',
             [
               {
                 serverId: remote.id,
@@ -205,12 +204,7 @@ describe('MCP directory management', () => {
           ),
         ).toThrow('请先确认远程地址和认证范围');
         expect(
-          await f.services.remoteMcp.freezeCandidates(
-            null,
-            'ask',
-            'execute',
-            AbortSignal.timeout(1000),
-          ),
+          await f.services.remoteMcp.freezeCandidates(null, 'ask', AbortSignal.timeout(1000)),
         ).toEqual([]);
       }
       await f.services.remoteMcp.remove(orphan.id, orphan.revision);
@@ -226,7 +220,6 @@ describe('MCP directory management', () => {
       const frozen = await f.services.mcp.freezeSelections(
         f.input.workspaceId,
         'ask',
-        'execute',
         [f.selection],
         AbortSignal.timeout(1000),
       );
@@ -243,7 +236,6 @@ describe('MCP directory management', () => {
       const readonly = await f.services.mcp.freezeSelections(
         f.input.workspaceId,
         'read-only',
-        'plan',
         [f.selection],
         AbortSignal.timeout(1000),
       );

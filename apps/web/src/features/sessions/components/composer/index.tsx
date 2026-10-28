@@ -29,13 +29,7 @@ export const Composer: FC<ComposerProps> = ({
   onPatch,
 }) => {
   const selection = useComposerChoices(session, providers, onPatch);
-  const state = useComposer(
-    session,
-    activeRun,
-    selection.choices.workMode === 'plan',
-    onSend,
-    onStop,
-  );
+  const state = useComposer(session, activeRun, onSend, onStop);
   return (
     <div className="shrink-0 px-5 pt-2 pb-2 sm:px-6">
       <div className="mx-auto w-full max-w-4xl">

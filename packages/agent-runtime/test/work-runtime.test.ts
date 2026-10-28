@@ -1,4 +1,4 @@
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fauxAssistantMessage, type TranscriptContext } from '@earendil-works/pi-ai';
 import { describe, expect, it } from 'vitest';
@@ -24,7 +24,6 @@ describe('M3 durable session work through real Pi tools', () => {
       await f.work.patch(f.session.id, {
         expectedBranchId: f.session.activeBranchId,
         revision: 0,
-        mode: 'plan',
       });
       const saved = await f.work.createCheckpoint(f.session.id, {
         expectedBranchId: f.session.activeBranchId,
@@ -38,7 +37,7 @@ describe('M3 durable session work through real Pi tools', () => {
       expect(restored.state.branchId).not.toBe(stale.expectedBranchId);
       const before = f.runtime.getSnapshot(f.session.id);
       const commands = [
-        () => f.work.patch(f.session.id, { ...stale, mode: 'execute' }),
+        () => f.work.patch(f.session.id, { ...stale }),
         () => f.work.reset(f.session.id, stale),
         () => f.work.compact(f.session.id, stale),
         () => f.work.restore(f.session.id, checkpoint.id, stale),
@@ -201,74 +200,6 @@ describe('M3 durable session work through real Pi tools', () => {
     },
   );
 
-  it.each(['ask', 'auto', 'full-access'] as const)(
-    'denies writes, commands and POST in Plan mode with %s policy before any approval or local side effect',
-    async (approvalMode) => {
-      const f = await fixture(true);
-      try {
-        await f.runtime.updateSession(f.session.id, { approvalMode });
-        await writeFile(join(f.root, 'keep.txt'), 'original');
-        await f.work.patch(f.session.id, {
-          expectedBranchId: f.session.activeBranchId,
-          revision: 0,
-          mode: 'plan',
-        });
-        f.faux.setResponses([
-          fauxAssistantMessage(
-            [
-              {
-                type: 'toolCall',
-                id: 'write',
-                name: 'write_file',
-                arguments: { path: 'created.txt', content: 'not permitted', expectedHash: null },
-              },
-              {
-                type: 'toolCall',
-                id: 'shell',
-                name: 'shell',
-                arguments: { command: 'touch should-not-exist' },
-              },
-              {
-                type: 'toolCall',
-                id: 'post',
-                name: 'web_fetch',
-                arguments: { url: 'https://example.com', method: 'POST', body: 'not sent' },
-              },
-            ],
-            { stopReason: 'toolUse' },
-          ),
-          fauxAssistantMessage('Planning only'),
-        ]);
-        await f.runtime.send(f.session.id, {
-          text: 'Stay in planning',
-          mode: 'send',
-          requestId: 'plan-deny',
-        });
-        await idle(f);
-        expect(f.runtime.getSnapshot(f.session.id).tools.map(({ status }) => status)).toEqual([
-          'denied',
-          'denied',
-          'denied',
-        ]);
-        expect(
-          f.runtime
-            .getSnapshot(f.session.id)
-            .tools.every(({ result }) => result?.includes('Plan模式')),
-        ).toBe(true);
-        await expect(readFile(join(f.root, 'created.txt'))).rejects.toMatchObject({
-          code: 'ENOENT',
-        });
-        await expect(readFile(join(f.root, 'should-not-exist'))).rejects.toMatchObject({
-          code: 'ENOENT',
-        });
-        expect(await readFile(join(f.root, 'keep.txt'), 'utf8')).toBe('original');
-        expect(f.errors).toEqual([]);
-      } finally {
-        await f.close();
-      }
-    },
-  );
-
   it('waits for plan feedback, then approves and executes in the same Run with task evidence', async () => {
     const f = await fixture();
     try {
@@ -305,7 +236,7 @@ describe('M3 durable session work through real Pi tools', () => {
       let state = f.work.snapshot(f.session.id).state;
       const runId = f.runtime.getSnapshot(f.session.id).session.activeRunId;
       if (!state.plan) throw new Error('Missing plan');
-      expect(state.mode).toBe('plan');
+      expect(state.plan.review).toBe('pending');
       await f.work.reviewPlan(f.session.id, state.plan.id, {
         expectedBranchId: state.branchId,
         revision: state.revision,
@@ -337,7 +268,7 @@ describe('M3 durable session work through real Pi tools', () => {
       });
       await idle(f);
       const done = f.work.snapshot(f.session.id).state;
-      expect(done.mode).toBe('execute');
+      expect(done.plan?.review).toBe('approved');
       expect(done.plan).toMatchObject({
         title: 'Revised report',
         status: 'completed',
@@ -385,7 +316,7 @@ describe('M3 durable session work through real Pi tools', () => {
       state = f.work.snapshot(f.session.id).state;
       f.work.save(f.session.id, {
         ...state,
-        mode: 'plan',
+
         plan: {
           id: 'later',
           runId: null,
@@ -415,7 +346,6 @@ describe('M3 durable session work through real Pi tools', () => {
       expect(branch.branches).toHaveLength(2);
       expect(restored.state.plan).toEqual(checkpoint.state.plan);
       expect(restored.state.todos).toEqual(checkpoint.state.todos);
-      expect(restored.state.mode).toBe(checkpoint.state.mode);
       await f.runtime.selectBranch(f.session.id, originalBranch);
       expect(f.runtime.getSnapshot(f.session.id).messages.map(({ text }) => text)).toEqual([
         'First request',
@@ -463,7 +393,6 @@ describe('M3 durable session work through real Pi tools', () => {
         revision: before.revision,
       });
       expect(reset.state).toMatchObject({
-        mode: 'execute',
         plan: null,
         todos: [],
         questions: [],

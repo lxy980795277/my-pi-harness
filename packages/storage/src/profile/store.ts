@@ -10,7 +10,6 @@ import {
   RunViewSchema,
   SessionSnapshotSchema,
   SessionSummarySchema,
-  initialWorkState,
   WorkStateSchema,
   type Compaction,
   type HarnessEvent,
@@ -57,6 +56,7 @@ import {
   InputIdSchema,
   QueueRequestSchema,
   RunAcceptedSchema,
+  SessionCreatedSchema,
 } from '../sessions/event-validation.js';
 
 /** JSONL session facts, immutable attachments and SQLite configuration/projections for one daemon. */
@@ -118,8 +118,7 @@ export class ProfileStore {
   }
 
   private createProjection(event: HarnessEvent): void {
-    const session = checked(SessionSummarySchema, event.data['session']);
-    const branch = checked(BranchViewSchema, event.data['branch']);
+    const { session, branch } = checked(SessionCreatedSchema, event.data);
     if (
       event.seq !== 1 ||
       event.runId !== null ||
@@ -423,17 +422,6 @@ export class ProfileStore {
         .values({ ...event, privateData: null })
         .run();
       this.pendingRecords.push({ event, privateData: null });
-      if (input.workMode === 'plan') {
-        this.append(session.id, [
-          {
-            type: 'work.updated',
-            runId: null,
-            at: input.at,
-            data: { state: { ...initialWorkState(branch.id), revision: 1, mode: 'plan' } },
-          },
-        ]);
-        return this.projector.session(session.id);
-      }
       return session;
     });
   }
@@ -748,7 +736,7 @@ export class ProfileStore {
       let incoming: RequestAcceptance | undefined;
       if (input.type === 'run.accepted') {
         const value = checked(RunAcceptedSchema, input.data);
-        const run = checked(RunViewSchema, value.run);
+        const run = value.run;
         requestId = value.requestId;
         incoming = { runId: run.id, inputId: null };
       } else if (input.type === 'queue.added' && input.privateData !== undefined) {

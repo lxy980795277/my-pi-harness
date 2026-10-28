@@ -3,13 +3,11 @@ import type { FC } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Notice } from '@/components/ui/notice';
-import { SelectField } from '@/components/ui/select-field';
 import { PlanSteps } from '@/features/work/components/plan-steps';
 import { TodoRow } from '@/features/work/components/todo-row';
 import { usePlanPanel } from '@/features/work/hooks/use-plan-panel';
-import { PLAN_STATUS_LABELS, WORK_MODE_OPTIONS } from '@/features/work/utils/work-view';
+import { PLAN_STATUS_LABELS } from '@/features/work/utils/work-view';
 interface PlanPanelProps {
   state: WorkState;
   running: boolean;
@@ -22,18 +20,6 @@ export const PlanPanel: FC<PlanPanelProps> = ({ state, running, tools, onPatch }
   const disabled = running || editor.action.pending;
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between gap-3">
-        <Label htmlFor="work-mode">工作模式</Label>
-        <SelectField
-          id="work-mode"
-          ariaLabel="工作模式"
-          value={state.mode}
-          options={WORK_MODE_OPTIONS}
-          onValueChange={editor.mode}
-          disabled={disabled}
-          className="w-44"
-        />
-      </div>
       {editor.action.error && <Notice tone="error">{editor.action.error}</Notice>}
       {state.plan && (
         <div className="space-y-3 rounded-xl border border-border p-4">

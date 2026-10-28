@@ -35,7 +35,6 @@ export const useQueueItem = (
     setMcpTools,
     workspaceId,
     approvalMode,
-    false,
     !editing || running,
   );
   const [skillSelections, setSkillSelections] = useState<SkillSelection[]>(input.skills ?? []);

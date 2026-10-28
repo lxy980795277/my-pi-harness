@@ -154,7 +154,6 @@ describe('workspace rule discovery', () => {
     await writeFile(join(f.workspaceRoot, 'AGENTS.md'), 'Workspace instructions');
     const rules = await loadWorkspaceRules(f);
     const state = initialWorkState('branch');
-    state.mode = 'plan';
     state.plan = {
       id: 'plan',
       runId: null,

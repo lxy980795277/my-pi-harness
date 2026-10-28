@@ -255,7 +255,7 @@ test('无 Key 模型、默认设置重载与失效提示，设置保留聊天草
     );
     await page.getByRole('button', { name: '关闭设置', exact: true }).click();
     await page.reload();
-    await expect(page.getByRole('combobox', { name: '对话模型', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: '对话模型', exact: true })).toBeVisible();
     await page.getByLabel('消息', { exact: true }).fill('保留这份未发送草稿');
     await openUserSettings(page);
     await expect(card).toBeVisible();

@@ -1,7 +1,7 @@
 import { test, expect } from './fixture.js';
 import { startTestModel } from './model-server.js';
 import { configureTestProvider } from './model-fixtures.js';
-import { chooseOption, openUserSettings } from './ui-controls.js';
+import { chooseConversationModel, chooseOption, openUserSettings } from './ui-controls.js';
 import { AuthStatusSchema, SessionSnapshotSchema } from '@my-pi-harness/protocol';
 import { selectTestSessionBranch } from './session-fixtures.js';
 import { Value } from 'typebox/value';
@@ -128,11 +128,7 @@ test('新对话与已有对话回车发送，换行和输入法确认不误发',
     expect(inputRequests).toHaveLength(0);
     await configureTestProvider(page, model.origin);
     await page.reload();
-    await chooseOption(
-      page,
-      page.getByRole('combobox', { name: '对话模型', exact: true }),
-      'Queue Model · Chat',
-    );
+    await chooseConversationModel(page, 'Queue Model', 'Chat');
     await draft.fill('   ');
     await expect(send).toBeDisabled();
     await draft.press('Enter');

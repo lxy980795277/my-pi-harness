@@ -123,7 +123,7 @@ export class ProjectionWriter {
 
   private acceptRun(event: HarnessEvent, privateData: Record<string, unknown> | undefined): void {
     const accepted = checked(RunAcceptedSchema, event.data);
-    const run = checked(RunViewSchema, accepted.run);
+    const run = accepted.run;
     const session = this.session(event.sessionId);
     if (
       run.sessionId !== event.sessionId ||
@@ -334,7 +334,7 @@ export class ProjectionWriter {
       }
       case 'message.completed': {
         const completed = checked(MessageCompletedSchema, event.data);
-        const message = checked(MessageViewSchema, completed.message);
+        const message = completed.message;
         this.validateMessageStatistics(message);
         const previous = this.message(event, message.id);
         if (

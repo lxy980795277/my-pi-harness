@@ -9,7 +9,6 @@ import {
   type HarnessEvent,
   type ToolCallView,
 } from '@my-pi-harness/protocol';
-import { Type } from 'typebox';
 import { StorageError } from '../../shared/errors.js';
 import * as schema from '../../sqlite/schema.js';
 import { checked } from '../../shared/validation.js';
@@ -21,19 +20,7 @@ import {
 } from './tool-intents.js';
 import { recoverToolEvents } from './tool-recovery.js';
 import type { EventInput } from '../types.js';
-
-const ToolEventSchema = Type.Object(
-  { tool: ToolCallRecordSchema, afterMessageId: Type.Optional(Type.String()) },
-  { additionalProperties: false },
-);
-const ContextEventSchema = Type.Object(
-  {
-    branchId: Type.String({ minLength: 1, maxLength: 160 }),
-    afterMessageId: Type.String({ minLength: 1, maxLength: 160 }),
-    toolCallId: Type.String({ minLength: 1, maxLength: 160 }),
-  },
-  { additionalProperties: false },
-);
+import { ToolContextEventSchema, ToolEventSchema } from '../event-validation.js';
 
 /** Tool cards and private results are projected within their session event transaction. */
 export class ToolProjection {
@@ -301,7 +288,7 @@ export class ToolProjection {
   }
 
   public context(event: HarnessEvent, privateData: Record<string, unknown> | undefined): void {
-    const input = checked(ContextEventSchema, event.data);
+    const input = checked(ToolContextEventSchema, event.data);
     const run = this.run(event);
     const tool = this.db
       .select()

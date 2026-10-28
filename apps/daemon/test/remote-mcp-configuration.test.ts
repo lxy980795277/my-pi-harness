@@ -118,12 +118,7 @@ describe('remote MCP draft connection and configuration ownership', () => {
         expect(write).not.toHaveBeenCalled();
         expect(read).not.toHaveBeenCalled();
         expect(
-          await f.services.remoteMcp.freezeCandidates(
-            null,
-            'ask',
-            'execute',
-            AbortSignal.timeout(1000),
-          ),
+          await f.services.remoteMcp.freezeCandidates(null, 'ask', AbortSignal.timeout(1000)),
         ).toEqual([]);
       } finally {
         await f.close();

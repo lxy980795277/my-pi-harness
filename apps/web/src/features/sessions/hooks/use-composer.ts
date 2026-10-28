@@ -19,7 +19,6 @@ import { isRejectedInput } from '@/features/sessions/utils/input-outcome';
 export const useComposer = (
   session: SessionSummary,
   activeRun: RunView | undefined,
-  planMode: boolean,
   onSend: (input: InputRequest) => Promise<void>,
   onStop: () => Promise<void>,
 ): ComposerState => {
@@ -94,7 +93,6 @@ export const useComposer = (
     sessionId,
     session.workspaceId,
     session.approvalMode,
-    planMode,
     sendPending || pendingInput !== null || running,
     frozen,
   );

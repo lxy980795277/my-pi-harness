@@ -17,7 +17,7 @@ import { Value } from 'typebox/value';
 import { test, expect } from './fixture.js';
 import { configureTestProvider } from './model-fixtures.js';
 import { startM3Model } from './m3-model-server.js';
-import { chooseOption } from './ui-controls.js';
+import { chooseConversationModel, chooseOption } from './ui-controls.js';
 import { selectTestSessionBranch } from './session-fixtures.js';
 import { expandCompletedProcesses } from './process-controls.js';
 
@@ -100,11 +100,7 @@ const setupModel = async (
     if (!saved.ok()) throw new Error('Enabling fixture image capability failed');
   }
   await page.reload();
-  await chooseOption(
-    page,
-    page.getByRole('combobox', { name: '对话模型', exact: true }),
-    'Queue Model · Chat',
-  );
+  await chooseConversationModel(page, 'Queue Model', 'Chat');
   return configured;
 };
 
@@ -283,10 +279,8 @@ test('M3 计划反馈与批准保持同一次运行，快照恢复和两类重�
   const model = await startM3Model();
   try {
     await setupModel(page, daemon.origin, model.origin);
-    await chooseOption(
-      page,
-      page.getByRole('combobox', { name: '输入栏工作模式', exact: true }),
-      'Plan · 只规划',
+    await expect(page.getByRole('combobox', { name: '输入栏工作模式', exact: true })).toHaveCount(
+      0,
     );
     const id = await firstSend(page, '计划与检查点验收 [plan:review]');
     const review = page.getByLabel('计划审核', { exact: true });
@@ -306,7 +300,7 @@ test('M3 计划反馈与批准保持同一次运行，快照恢复和两类重�
     expect(original.runs).toHaveLength(1);
     expect(original.runs[0]?.id).toBe(runId);
     const completed = await readWork(page, daemon.origin, id);
-    expect(completed.state.mode).toBe('execute');
+    expect(completed.state).not.toHaveProperty('mode');
     expect(completed.state.plan?.status).toBe('completed');
     expect(completed.state.plan?.review).toBe('approved');
     expect(completed.state.plan?.content).toContain('核对来源');

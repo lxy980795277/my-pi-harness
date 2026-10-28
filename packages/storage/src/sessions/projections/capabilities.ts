@@ -4,7 +4,6 @@ import { Type } from 'typebox';
 import {
   FrozenSkillSchema,
   FrozenMcpToolSchema,
-  SkillSelectionsSchema,
   ToolSourceSchema,
   ToolDiscoveryDiagnosticSchema,
   type HarnessEvent,
@@ -12,6 +11,7 @@ import {
 import { checked } from '../../shared/validation.js';
 import { StorageError } from '../../shared/errors.js';
 import * as schema from '../../sqlite/schema.js';
+import { CapabilityLoadSchema } from '../event-validation.js';
 
 const definition = Type.Object({
   name: Type.String({ minLength: 1, maxLength: 100 }),
@@ -24,14 +24,6 @@ const record = Type.Object(
     source: ToolSourceSchema,
     fingerprint: Type.String({ pattern: '^[a-f0-9]{64}$' }),
     external: Type.Optional(FrozenMcpToolSchema),
-  },
-  { additionalProperties: false },
-);
-const publicLoad = Type.Object(
-  {
-    revision: Type.Integer({ minimum: 2 }),
-    names: Type.Array(Type.String(), { maxItems: 128, uniqueItems: true }),
-    skills: SkillSelectionsSchema,
   },
   { additionalProperties: false },
 );
@@ -69,7 +61,7 @@ export function projectCapabilityLoad(
   event: HarnessEvent,
   privateData?: Record<string, unknown>,
 ): void {
-  const data = checked(publicLoad, event.data);
+  const data = checked(CapabilityLoadSchema, event.data);
   const payload = checked(privateLoad, requirePrivateData(privateData));
   const run =
     event.runId === null
@@ -196,5 +188,5 @@ export function currentCapabilityRevision(
     .orderBy(desc(schema.events.seq))
     .limit(1)
     .get();
-  return row ? checked(publicLoad, row.data).revision : 1;
+  return row ? checked(CapabilityLoadSchema, row.data).revision : 1;
 }

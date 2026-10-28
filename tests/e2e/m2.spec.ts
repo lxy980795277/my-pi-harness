@@ -5,7 +5,7 @@ import { AuthStatusSchema, SessionSnapshotSchema } from '@my-pi-harness/protocol
 import { Value } from 'typebox/value';
 import { test, expect } from './fixture.js';
 import { configureTestProvider } from './model-fixtures.js';
-import { chooseOption, openUserSettings } from './ui-controls.js';
+import { chooseConversationModel, chooseOption, openUserSettings } from './ui-controls.js';
 import { startToolModel } from './tool-model-server.js';
 import { registerTestWorkspace } from './workspace-fixtures.js';
 import { archiveTestSession } from './session-fixtures.js';
@@ -31,11 +31,7 @@ for (const policy of ['请求批准', '只读'] as const) {
         page.getByRole('combobox', { name: '选择工作区', exact: true }),
         '测试项目',
       );
-      await chooseOption(
-        page,
-        page.getByRole('combobox', { name: '对话模型', exact: true }),
-        'Queue Model · Chat',
-      );
+      await chooseConversationModel(page, 'Queue Model', 'Chat');
       if (policy === '请求批准') {
         await chooseOption(
           page,
@@ -187,11 +183,7 @@ test('响应丢失后确认原请求，跨页不重复计费或复活旧首发',
       page.getByRole('combobox', { name: '选择工作区', exact: true }),
       '恢复项目',
     );
-    await chooseOption(
-      page,
-      page.getByRole('combobox', { name: '对话模型', exact: true }),
-      'Queue Model · Chat',
-    );
+    await chooseConversationModel(page, 'Queue Model', 'Chat');
     await chooseOption(
       page,
       page.getByRole('combobox', { name: '执行批准方式', exact: true }),

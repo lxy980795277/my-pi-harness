@@ -80,8 +80,6 @@ export class WorkRuntime {
       const current = this.snapshot(sessionId).state;
       this.checkRevision(current, input);
       if (input.todos) this.validateTodos(sessionId, input.todos);
-      if (current.plan?.review === 'pending' && input.mode === 'execute')
-        throw new RuntimeError('PLAN_REVIEW_REQUIRED', '请先完成计划审核。');
       const { revision: _revision, expectedBranchId: _expectedBranchId, ...patch } = input;
       this.save(sessionId, { ...current, ...patch });
       return this.snapshot(sessionId);
@@ -271,7 +269,6 @@ export class WorkRuntime {
       this.checkRevision(current, input);
       const next = {
         ...initialWorkState(current.branchId),
-        mode: current.mode,
         plan: current.plan,
         todos: current.todos,
         revision: current.revision + 1,

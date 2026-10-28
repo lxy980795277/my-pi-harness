@@ -12,7 +12,7 @@ import { Value } from 'typebox/value';
 import { test, expect } from './fixture.js';
 import { configureTestProvider } from './model-fixtures.js';
 import { startToolSequenceModel } from './m2-completion-model.js';
-import { chooseOption } from './ui-controls.js';
+import { chooseConversationModel, chooseOption } from './ui-controls.js';
 import { expandCompletedProcesses } from './process-controls.js';
 
 test('完整工具链复用 SDK 调用ID，逐次审批、真实编辑与受限执行后保留历史', async ({
@@ -64,11 +64,7 @@ test('完整工具链复用 SDK 调用ID，逐次审批、真实编辑与受限�
       page.getByRole('combobox', { name: '选择工作区', exact: true }),
       workspace.name,
     );
-    await chooseOption(
-      page,
-      page.getByRole('combobox', { name: '对话模型', exact: true }),
-      'Queue Model · Chat',
-    );
+    await chooseConversationModel(page, 'Queue Model', 'Chat');
     await chooseOption(
       page,
       page.getByRole('combobox', { name: '执行批准方式', exact: true }),

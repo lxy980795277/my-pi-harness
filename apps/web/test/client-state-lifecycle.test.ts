@@ -48,7 +48,6 @@ describe('private client state lifecycle', () => {
     navigation.selectSession('existing-session');
     composer.setNewConversationModel(model);
     composer.setNewConversationApproval('full-access');
-    composer.setNewConversationWorkMode('plan');
     composer.setNewConversationDraft('discard this new draft');
     composer.setDraft('existing-session', 'keep the existing draft');
     useAttachmentDrafts.getState().add('existing-session', DRAFT_ATTACHMENT);
@@ -65,7 +64,6 @@ describe('private client state lifecycle', () => {
       newConversationDraft: '',
       newConversationModel: model,
       newConversationApproval: 'full-access',
-      newConversationWorkMode: 'execute',
       drafts: { 'existing-session': 'keep the existing draft' },
     });
     expect(useComposerStore.getState().newConversationGeneration).not.toBe(generation);
@@ -108,7 +106,6 @@ describe('private client state lifecycle', () => {
     composer.beginNewAttempt(generation, {
       model: { providerId: 'provider', modelId: 'model', thinkingLevel: 'off' },
       workspaceId: 'private-workspace',
-      workMode: 'plan',
       approvalMode: 'ask',
       input: { requestId: 'private-request', text: 'private input', mode: 'send' },
     });
@@ -134,7 +131,6 @@ describe('private client state lifecycle', () => {
       newConversationDraft: '',
       newConversationModel: null,
       newConversationApproval: 'full-access',
-      newConversationWorkMode: 'execute',
       newConversationAttempt: null,
     });
     expect(useComposerStore.getState().newConversationGeneration).not.toBe(generation);

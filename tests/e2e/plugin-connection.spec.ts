@@ -21,7 +21,7 @@ import {
 import { Type } from 'typebox';
 import { Value } from 'typebox/value';
 import { test, expect } from './fixture.js';
-import { openUserSettings, chooseOption } from './ui-controls.js';
+import { chooseConversationModel, openUserSettings, chooseOption } from './ui-controls.js';
 import { configureTestProvider } from './model-fixtures.js';
 import { startToolSequenceModel } from './m2-completion-model.js';
 
@@ -185,11 +185,7 @@ test('GitHub 授权与应用目录跨重启恢复，未手动选工具也可搜�
     await expect
       .poll(async () => (await readRemoteServers(page.request, daemon.origin))[0]?.catalogStatus)
       .toBe('ready');
-    await chooseOption(
-      page,
-      page.getByRole('combobox', { name: '对话模型', exact: true }),
-      'Queue Model · Chat',
-    );
+    await chooseConversationModel(page, 'Queue Model', 'Chat');
     await chooseOption(
       page,
       page.getByRole('combobox', { name: '执行批准方式', exact: true }),

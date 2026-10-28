@@ -8,7 +8,6 @@ import {
   type InputRequest,
   type SessionSummary,
   type SkillSelection,
-  type WorkState,
   type ToolDiscoveryDiagnostic,
 } from '@my-pi-harness/protocol';
 import { externalBindingKey, type ExternalTools, type FrozenMcpTool } from '../tools/external.js';
@@ -143,7 +142,6 @@ export class InputCapabilityResolver {
   public async freeze(
     session: SessionSummary,
     input: Pick<InputRequest, 'mcpTools' | 'skills'> & { text?: string },
-    mode: WorkState['mode'],
     signal: AbortSignal,
   ): Promise<FrozenInputCapabilities> {
     let external: readonly FrozenMcpTool[] = [];
@@ -152,7 +150,6 @@ export class InputCapabilityResolver {
       external = await this.options.external.freezeSelections(
         session.workspaceId,
         session.approvalMode,
-        mode,
         input.mcpTools ?? [],
         signal,
       );
@@ -161,7 +158,6 @@ export class InputCapabilityResolver {
       ? await this.options.discovery.freezeCandidates(
           session.workspaceId,
           session.approvalMode,
-          mode,
           signal,
         )
       : [];

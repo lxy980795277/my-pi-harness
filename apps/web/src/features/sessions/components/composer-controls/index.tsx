@@ -1,4 +1,4 @@
-import { Sparkles, Settings2, ListChecks } from 'lucide-react';
+import { Settings2 } from 'lucide-react';
 import type { FC } from 'react';
 import { Button } from '@/components/ui/button';
 import { SelectField } from '@/components/ui/select-field';
@@ -10,7 +10,7 @@ import {
 import type { SkillSelectionState } from '@/features/skills/types/skill';
 import type { McpSelectionState } from '@/features/mcp/types/mcp';
 import type { ComposerChoices } from '@/features/sessions/types/composer';
-import { WORK_MODE_OPTIONS } from '@/features/work/utils/work-view';
+import { ModelSelect } from '@/features/models/components/model-select';
 import { ApprovalSelect } from '@/features/sessions/components/approval-select';
 
 interface ComposerControlsProps {
@@ -76,43 +76,17 @@ export const ComposerControls: FC<ComposerControlsProps> = ({
         onValueChange={choices.changeApprovalMode}
         disabled={choices.disabled}
       />
-      <div className="flex min-w-0 items-center gap-1 text-muted-foreground">
-        <ListChecks width={16} height={16} className="shrink-0" aria-hidden />
-        <SelectField
-          id={`${id}-work-mode`}
-          ariaLabel="输入栏工作模式"
-          value={choices.workMode}
-          options={WORK_MODE_OPTIONS}
-          onValueChange={choices.changeWorkMode}
-          disabled={choices.workModeDisabled}
-          className="h-8 w-auto max-w-32 gap-1 rounded-lg border-transparent bg-transparent px-1 text-xs shadow-none"
-        />
-      </div>
-      <div className="flex min-w-0 items-center gap-1 text-muted-foreground">
-        <Sparkles width={16} height={16} className="shrink-0" aria-hidden />
-        <SelectField
-          id={`${id}-model`}
-          ariaLabel="对话模型"
-          value={choices.modelKey}
-          options={choices.modelOptions}
-          onValueChange={choices.changeModel}
-          disabled={choices.disabled || choices.modelOptions.length === 0}
-          className="h-8 w-auto max-w-64 gap-1 rounded-lg border-transparent bg-transparent px-1 text-xs shadow-none"
-          placeholder="选择模型"
-        />
-      </div>
-      {choices.thinkingOptions.length > 1 && (
-        <SelectField
-          id={`${id}-thinking`}
-          ariaLabel="思考等级"
-          value={choices.thinking}
-          options={choices.thinkingOptions}
-          onValueChange={choices.changeThinking}
-          disabled={choices.disabled}
-          className="h-8 w-auto max-w-20 gap-1 rounded-lg border-transparent bg-transparent px-1 text-xs shadow-none"
-        />
-      )}
-      {choices.modelOptions.length === 0 && (
+      <ModelSelect
+        id={`${id}-model`}
+        groups={choices.modelGroups}
+        value={choices.modelKey}
+        thinking={choices.thinking}
+        thinkingOptions={choices.thinkingOptions}
+        onModelChange={choices.changeModel}
+        onThinkingChange={choices.changeThinking}
+        disabled={choices.disabled}
+      />
+      {choices.modelGroups.length === 0 && (
         <Button
           type="button"
           variant="ghost"

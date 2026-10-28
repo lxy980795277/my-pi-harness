@@ -255,7 +255,6 @@ export const WorkStateSchema = Type.Object(
   {
     revision: Type.Integer({ minimum: 0 }),
     branchId: id,
-    mode: Type.Union([Type.Literal('execute'), Type.Literal('plan')]),
     rules: Type.Array(RuleSourceSchema, { maxItems: 16 }),
     usage: Type.Union([ContextUsageSchema, Type.Null()]),
     compaction: Type.Union([CompactionSchema, Type.Null()]),
@@ -293,7 +292,6 @@ export const WorkPatchSchema = Type.Object(
   {
     expectedBranchId: id,
     revision: Type.Integer({ minimum: 0 }),
-    mode: Type.Optional(Type.Union([Type.Literal('execute'), Type.Literal('plan')])),
     todos: Type.Optional(Type.Array(TodoSchema, { maxItems: 100 })),
   },
   { additionalProperties: false },
@@ -339,7 +337,6 @@ export function initialWorkState(branchId: string): WorkState {
   return {
     revision: 0,
     branchId,
-    mode: 'execute',
     rules: [],
     usage: null,
     compaction: null,

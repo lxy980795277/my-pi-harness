@@ -2,6 +2,12 @@ import { Type } from 'typebox';
 import { StoredToolResultSchema, type HarnessEvent } from '@my-pi-harness/protocol';
 import { StorageError } from '../shared/errors.js';
 import { checked } from '../shared/validation.js';
+import {
+  PreparedPrivateSchema,
+  PreparedEventSchema,
+  ToolContextEventSchema,
+} from './event-validation.js';
+import { projectStoredEvent } from './stored-event.js';
 
 /** Complete host records after disk references have been resolved. */
 export interface JournalRecord {
@@ -18,14 +24,6 @@ interface TransformedRecords {
 }
 
 const object = Type.Record(Type.String(), Type.Unknown());
-const contextInput = Type.Object(
-  {
-    version: Type.Literal(1),
-    systemPrompt: Type.String(),
-    messages: Type.Array(object),
-  },
-  { additionalProperties: false },
-);
 const contextStored = Type.Object(
   {
     version: Type.Literal(1),
@@ -34,8 +32,10 @@ const contextStored = Type.Object(
   },
   { additionalProperties: false },
 );
-const contextBranch = Type.Object({ branchId: Type.String({ minLength: 1 }) });
-const toolContext = Type.Object({ toolCallId: Type.String({ minLength: 1 }) });
+const contextBranch = Type.Pick(PreparedEventSchema, ['branchId'], { additionalProperties: true });
+const toolContext = Type.Pick(ToolContextEventSchema, ['toolCallId'], {
+  additionalProperties: true,
+});
 const terminalStatuses = new Set([
   'completed',
   'failed',
@@ -127,7 +127,7 @@ export function encodeJournalRecords(
     if (record.event.type !== 'context.prepared') continue;
     const key = contextKey(record.event);
     const payload = record.privateData ?? invalid('Journal request requires private data');
-    const context = checked(contextInput, payload);
+    const context = checked(PreparedPrivateSchema, payload);
     const baseline = state.get(key);
     const references = new Map(baseline?.map((message, index) => [JSON.stringify(message), index]));
     const messages = context.messages.map(
@@ -174,5 +174,6 @@ export function decodeJournalRecords(
     state.set(key, structuredClone(messages));
   }
   transformToolResults(records, true);
+  for (const record of records) record.event = projectStoredEvent(record.event);
   return { records, state };
 }

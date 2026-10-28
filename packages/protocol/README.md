@@ -4,6 +4,8 @@
 
 产品应用版本由根 `package.json` 通过 `pnpm version:sync` 生成，协议版本独立控制。源码检查使用 TS paths，发布消费者通过包 exports 加载 `dist`。
 
+协议18的会话创建和工作状态不包含执行/Plan模式参数。计划内容、审核、任务与人工提问仍由独立的上下文交互schema表达；输入的send/follow-up/steer继续表示发送与队列语义。
+
 `src/index.ts`只汇总公开导出，`src/version.ts`是版本脚本生成的固定入口。`application/`定义应用登录、模型设置与工作区协议；`sessions/`定义会话、流更新及上下文交互；`tools/`定义工具调用、私有冻结记录及办公产物；`extensions/`定义MCP、Skills、插件和服务连接；`host/`定义服务健康状态、桌面启动消息、有限桌面桥及外链校验。所有目录均保持浏览器安全，不引入宿主实现或Node依赖。
 
 字段、失败语义和桌面桥见 [协议文档](../../docs/03_API/overview.md)。改变协议时同时更新所有消费者和相关行为验证。

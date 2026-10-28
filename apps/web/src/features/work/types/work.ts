@@ -13,7 +13,6 @@ import type { UseQueryResult } from '@tanstack/react-query';
 import type { SelectOption } from '@/components/ui/select-field';
 import type { AsyncEvent } from '@/hooks/use-async-event';
 import type { Action, FormSubmit, InputChange, TextChange, ValueChange } from '@/types/events';
-import type { WorkMode } from '@/features/sessions/types/composer';
 
 export interface WorkView {
   query: UseQueryResult<WorkSnapshot, Error>;
@@ -35,7 +34,6 @@ export interface WorkView {
 export interface PlanPanelState {
   newTodo: string;
   changeTodo: InputChange;
-  mode: ValueChange<string>;
   addTodo: FormSubmit;
   saveTodo: (todo: Todo) => Promise<void>;
   removeTodo: (id: string) => Promise<void>;
@@ -117,13 +115,6 @@ export interface CompactionView {
   setConfirming: ValueChange<boolean>;
   openConfirmation: Action;
   selected: boolean;
-}
-export interface ComposerWorkMode {
-  mode: WorkMode;
-  disabled: boolean;
-  sendingBlocked: boolean;
-  change: ValueChange<string>;
-  error: string | null;
 }
 export interface PlanReviewView {
   feedback: string;
