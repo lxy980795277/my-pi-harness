@@ -17,6 +17,7 @@ import type {
   SessionSnapshot,
   SessionSummary,
   FrozenSkill,
+  LiveMessageDelta,
 } from '@my-pi-harness/protocol';
 import {
   decodeContextMessage,
@@ -26,7 +27,7 @@ import {
 import { RuntimeError } from '../errors.js';
 import type { ModelGateway } from '../models/gateway.js';
 import { RunExecution } from '../runs/execution.js';
-import type { EventInput, InputAcceptance, RuntimeStore } from './ports.js';
+import type { EventInput, InputAcceptance, RuntimeNotification, RuntimeStore } from './ports.js';
 import type { ToolRuntime } from '../tools/runtime.js';
 import { completeToolHistory } from '../context/tool-history.js';
 import type { WorkRuntime } from '../work/runtime.js';
@@ -51,6 +52,11 @@ import { capabilityContext, activeSkillContext } from '../capabilities/context.j
 import { ToolCatalogSearch, type ToolSearchEmbedder } from '../capabilities/search.js';
 import { freezeSkillMentions } from '../capabilities/skill-mentions.js';
 import { availableSkillHistory, skillHistoryIds } from '../capabilities/skill-history.js';
+import { AgentRuntime } from '../agents/runtime.js';
+import type { AgentStore } from '../agents/ports.js';
+import { AGENT_TOOL_DEFINITIONS } from '../agents/definitions.js';
+import { agentContext } from '../agents/run-hooks.js';
+import { runAcceptanceEvent } from '../runs/acceptance.js';
 
 export interface SessionRuntimeOptions {
   store: RuntimeStore;
@@ -63,6 +69,7 @@ export interface SessionRuntimeOptions {
   discovery?: ToolDiscoveryPort;
   skills?: SkillsPort;
   toolSearchEmbedder?: ToolSearchEmbedder;
+  agentStore?: AgentStore;
 }
 
 /** Session commands are serialized; committed facts remain authoritative across restarts. */
@@ -70,13 +77,14 @@ export class SessionRuntime {
   private readonly active = new Map<string, RunExecution>();
   private readonly commands = new Map<string, Promise<void>>();
   private readonly pendingStarts = new Map<string, Set<AbortController>>();
-  private readonly listeners = new Map<string, Set<(event: HarnessEvent) => void>>();
+  private readonly listeners = new Map<string, Set<(event: RuntimeNotification) => void>>();
   private readonly disabled = new Set<string>();
   private closed = false;
   private stopPromise: Promise<void> | undefined;
 
   private readonly capabilityInputs: InputCapabilityResolver;
   private readonly toolSearch: ToolCatalogSearch;
+  private readonly agentRuntime: AgentRuntime | undefined;
   public constructor(private readonly options: SessionRuntimeOptions) {
     this.toolSearch = new ToolCatalogSearch(options.toolSearchEmbedder);
     this.capabilityInputs = new InputCapabilityResolver({
@@ -85,6 +93,24 @@ export class SessionRuntime {
       ...(options.discovery ? { discovery: options.discovery } : {}),
       ...(options.skills ? { skills: options.skills } : {}),
     });
+    if (options.agentStore && options.tools)
+      this.agentRuntime = new AgentRuntime({
+        store: options.agentStore,
+        gateway: options.gateway,
+        tools: options.tools,
+        search: this.toolSearch,
+        ...(options.work ? { work: options.work } : {}),
+        ...(options.externalTools ? { externalTools: options.externalTools } : {}),
+        ...(options.skills ? { skills: options.skills } : {}),
+        commit: (id, events) => this.commit(id, events),
+        publishMessageDelta: (id, delta) => this.publishMessageDelta(id, delta),
+        onError: (error) => options.onError(error),
+      });
+  }
+
+  public get agents(): AgentRuntime {
+    if (!this.agentRuntime) throw new RuntimeError('AGENTS_UNAVAILABLE', '子 Agent 运行时未配置。');
+    return this.agentRuntime;
   }
 
   public createSession(input: ResolvedSessionCreateInput): SessionSummary {
@@ -111,12 +137,13 @@ export class SessionRuntime {
     });
   }
   public getSnapshot(sessionId: string): SessionSnapshot {
-    if (this.disabled.has(sessionId))
-      throw new RuntimeError(
-        'SESSION_UNAVAILABLE',
-        'Session persistence failed; restart after repairing storage',
-      );
+    this.assertReadable(sessionId);
     return this.options.store.getSnapshot(sessionId);
+  }
+  /** Host downloads read the current session head without materializing its transcript. */
+  public getSessionSummary(sessionId: string): SessionSummary {
+    this.assertReadable(sessionId);
+    return this.requireSession(sessionId);
   }
   public isProviderActive(providerId: string): boolean {
     return [...this.active.values()].some(({ options }) => options.run.providerId === providerId);
@@ -142,16 +169,12 @@ export class SessionRuntime {
   }
 
   /** Subscribe before reading the replay high-water mark; listeners do not delay the model. */
-  public subscribe(sessionId: string, listener: (event: HarnessEvent) => void): () => void {
-    if (this.disabled.has(sessionId))
-      throw new RuntimeError(
-        'SESSION_UNAVAILABLE',
-        'Session persistence failed; restart after repairing storage',
-      );
+  public subscribe(sessionId: string, listener: (event: RuntimeNotification) => void): () => void {
+    this.assertReadable(sessionId);
     this.requireSession(sessionId);
     let subscriptions = this.listeners.get(sessionId);
     if (subscriptions === undefined) {
-      subscriptions = new Set<(event: HarnessEvent) => void>();
+      subscriptions = new Set<(event: RuntimeNotification) => void>();
       this.listeners.set(sessionId, subscriptions);
     }
     subscriptions.add(listener);
@@ -401,7 +424,7 @@ export class SessionRuntime {
         throw new RuntimeError('SESSION_BUSY', 'Stop the active run before editing history');
       const snapshot = this.getSnapshot(sessionId);
       const original = snapshot.messages.find(({ id }) => id === input.messageId);
-      if (!original || original.role !== 'user')
+      if (!original || original.role !== 'user' || original.agentMessageId !== undefined)
         throw new RuntimeError(
           'MESSAGE_NOT_EDITABLE',
           'Select a user message in the current branch',
@@ -538,6 +561,7 @@ export class SessionRuntime {
       }
       const external = frozen.external;
       const activatedSkills = combinedSkills(frozen);
+      const agentSettings = this.agentRuntime?.settings();
       const at = Date.now();
       const run = {
         id: randomUUID(),
@@ -585,6 +609,7 @@ export class SessionRuntime {
           skills: skillCatalog,
           skillDiagnostics: frozen.skillDiagnostics ?? [],
         }),
+        ...(agentSettings?.enabled ? [agentContext(agentSettings.roles)] : []),
       ]
         .filter(Boolean)
         .join('\n\n');
@@ -618,6 +643,7 @@ export class SessionRuntime {
           [
             ...(this.options.discovery ? DISCOVERY_TOOL_DEFINITIONS : []),
             ...(this.options.skills ? SKILL_TOOL_DEFINITIONS : []),
+            ...(agentSettings?.enabled ? AGENT_TOOL_DEFINITIONS : []),
           ],
           OFFICE_TOOL_DEFINITIONS.filter(
             (tool) =>
@@ -651,32 +677,19 @@ export class SessionRuntime {
               },
             ]
           : []),
-        {
-          type: 'run.accepted',
-          runId: run.id,
-          at,
-          data: { run, requestId: input.requestId },
-          privateData: snapshotPrivateData({
-            version: 1,
-            model: resolved.model,
-            thinkingLevel: session.thinkingLevel,
-            systemPrompt,
-            workspaceId: session.workspaceId,
-            approvalMode: session.approvalMode,
-            tools: toolset.definitions,
-            mcpBindings: external,
-            mcpCandidates: frozen.candidates,
-            discoveryDiagnostics: frozen.diagnostics ?? [],
-            workspaceCandidates: session.workspaceId === null ? [] : OFFICE_TOOL_DEFINITIONS,
-            skills: activatedSkills,
-            capabilityRevision: 1,
-            toolSources: toolset.records.map(({ source, fingerprint, definition }) => ({
-              name: definition.name,
-              source,
-              fingerprint,
-            })),
-          }),
-        },
+        runAcceptanceEvent({
+          run,
+          session,
+          requestId: input.requestId,
+          resolved,
+          systemPrompt,
+          toolset,
+          external,
+          candidates: frozen.candidates,
+          diagnostics: frozen.diagnostics ?? [],
+          workspaceCandidates: session.workspaceId === null ? [] : OFFICE_TOOL_DEFINITIONS,
+          skills: activatedSkills,
+        }),
         ...(queuedInputId
           ? [{ type: 'queue.consumed', runId: run.id, at, data: { inputId: queuedInputId } }]
           : []),
@@ -706,14 +719,20 @@ export class SessionRuntime {
           ...(this.options.externalTools ? { externalTools: this.options.externalTools } : {}),
           queue: () => this.getSnapshot(session.id).queue,
           commit: (records) => this.commit(session.id, records),
+          publishMessageDelta: (delta) => this.publishMessageDelta(session.id, delta),
           onError: (error) => this.options.onError(error),
           ...(this.options.tools ? { tools: this.options.tools } : {}),
           ...(this.options.work ? { work: this.options.work } : {}),
+          ...(agentSettings?.enabled && this.agentRuntime
+            ? { agents: this.agentRuntime.rootHooks(session, run, agentSettings) }
+            : {}),
         });
+        this.agentRuntime?.attach(execution);
         this.active.set(session.id, execution);
         execution.rebuildQueue();
       } catch (error) {
         execution?.disposeUnstarted();
+        this.agentRuntime?.releaseRoot(run.id);
         this.active.delete(session.id);
         this.disabled.add(session.id);
         this.options.onError(error);
@@ -734,6 +753,7 @@ export class SessionRuntime {
           if (owned.persistenceFailed) this.disabled.add(session.id);
           const ownsSession = this.active.get(session.id) === owned;
           if (ownsSession) this.active.delete(session.id);
+          this.agentRuntime?.releaseRoot(run.id);
           resolved.release();
           if (ownsSession) {
             try {
@@ -886,11 +906,7 @@ export class SessionRuntime {
 
   private serialize<T>(sessionId: string, operation: () => T | Promise<T>): Promise<T> {
     this.ensureOpen();
-    if (this.disabled.has(sessionId))
-      throw new RuntimeError(
-        'SESSION_UNAVAILABLE',
-        'Session persistence failed; restart after repairing storage',
-      );
+    this.assertReadable(sessionId);
     const prior = this.commands.get(sessionId) ?? Promise.resolve();
     const result = prior.then(operation);
     const tail = result.then(
@@ -909,6 +925,13 @@ export class SessionRuntime {
     if (!session) throw new RuntimeError('SESSION_NOT_FOUND', 'Session does not exist');
     return session;
   }
+  private assertReadable(sessionId: string): void {
+    if (this.disabled.has(sessionId))
+      throw new RuntimeError(
+        'SESSION_UNAVAILABLE',
+        'Session persistence failed; restart after repairing storage',
+      );
+  }
   private ensureOpen(): void {
     if (this.closed) throw new RuntimeError('RUNTIME_CLOSED', 'Runtime is closing');
   }
@@ -917,6 +940,14 @@ export class SessionRuntime {
     this.publish(events);
   }
   private publish(events: readonly HarnessEvent[]): void {
+    this.agentRuntime?.observe(events);
+    this.notify(events);
+  }
+  private publishMessageDelta(sessionId: string, delta: LiveMessageDelta): void {
+    this.options.store.publishMessageDelta(sessionId, delta);
+    this.notify([{ type: 'message.delta', sessionId, runId: delta.runId }]);
+  }
+  private notify(events: readonly RuntimeNotification[]): void {
     for (const event of events) {
       const listeners = this.listeners.get(event.sessionId);
       if (listeners === undefined) continue;
@@ -931,10 +962,13 @@ export class SessionRuntime {
   }
   private async stop(): Promise<void> {
     this.closed = true;
+    const failures: unknown[] = [];
+    const agentClosing = this.agentRuntime?.close().catch((error: unknown) => {
+      failures.push(error);
+    });
     for (const sessionId of this.pendingStarts.keys()) this.cancelStarts(sessionId);
     for (const sessionId of this.commands.keys()) this.options.work?.cancelCompaction(sessionId);
     await Promise.all([...this.commands.values()]);
-    const failures: unknown[] = [];
     for (const execution of this.active.values()) {
       try {
         execution.cancel('shutdown');
@@ -942,7 +976,9 @@ export class SessionRuntime {
         failures.push(error);
       }
     }
-    await Promise.all([...this.active.values()].map(({ task }) => task));
+    const settled = await Promise.allSettled([...this.active.values()].map(({ task }) => task));
+    for (const result of settled) if (result.status === 'rejected') failures.push(result.reason);
+    await agentClosing;
     this.listeners.clear();
     if (failures.length > 0) throw new AggregateError(failures, 'Runtime shutdown failed');
   }

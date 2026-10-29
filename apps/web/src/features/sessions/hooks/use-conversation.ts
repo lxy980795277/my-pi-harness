@@ -1,5 +1,6 @@
 import type { ConversationState } from '@/features/sessions/types/session';
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { conversationMessages } from '@/features/sessions/utils/conversation-view';
 import { useSession } from '@/features/sessions/hooks/use-session';
 import { useSessionCommands } from '@/features/sessions/hooks/use-session-commands';
 import { fetchSessionLog } from '@/features/sessions/services/sessions';
@@ -55,7 +56,17 @@ export const useConversation = (sessionId: string): ConversationState => {
       await refetch();
     }, [refetch]),
   );
-  const snapshot = state.query.data;
+  const source = state.query.data;
+  const sourceMessages = source?.messages;
+  const messages = useMemo(() => {
+    if (sourceMessages === undefined) return undefined;
+    return conversationMessages(sourceMessages);
+  }, [sourceMessages]);
+  const snapshot = useMemo(() => {
+    if (source === undefined || messages === undefined) return undefined;
+    if (messages === source.messages) return source;
+    return { ...source, messages };
+  }, [messages, source]);
   let error = download.error;
   if (error === null) {
     error = reload.error;

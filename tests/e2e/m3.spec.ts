@@ -414,7 +414,14 @@ test('M3 计划反馈与批准保持同一次运行，快照恢复和两类重�
       .toBe(0);
     expect((await readWork(page, daemon.origin, id)).state.plan).toBeNull();
     expect((await readSession(page, daemon.origin, id)).messages).toEqual(original.messages);
-    expect(model.requests).toHaveLength(5);
+    const mainRequests = model.requests.filter((request) => {
+      return Array.isArray(request.body['tools']);
+    });
+    const summaryRequests = model.requests.filter((request) => {
+      return !Array.isArray(request.body['tools']);
+    });
+    expect(mainRequests).toHaveLength(5);
+    expect(summaryRequests).toHaveLength(completed.compactions.length);
   } finally {
     await daemon.stop();
     await model.close();
@@ -476,7 +483,14 @@ test('M3 无工作区时 Agent 可等待用户回答，并支持取消后继续'
       { questionId: 'priorities', optionIds: ['speed', 'quality'], text: '' },
     ]);
     expect((await readSession(page, daemon.origin, id)).session.workspaceId).toBeNull();
-    expect(model.requests).toHaveLength(4);
+    const mainRequests = model.requests.filter((request) => {
+      return Array.isArray(request.body['tools']);
+    });
+    const summaryRequests = model.requests.filter((request) => {
+      return !Array.isArray(request.body['tools']);
+    });
+    expect(mainRequests).toHaveLength(4);
+    expect(summaryRequests).toHaveLength(work.compactions.length);
   } finally {
     await daemon.stop();
     await model.close();

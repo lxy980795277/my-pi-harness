@@ -2,14 +2,12 @@ import Database from 'better-sqlite3';
 import { expect, it } from 'vitest';
 import { applyMigrations, SCHEMA_VERSION } from '../src/sqlite/migrations/apply.js';
 import { McpDirectoryRepository } from '../src/repositories/mcp-directory.js';
+import { installHistoricalSchema } from './fixtures/historical-schema.js';
 
 it('adds rebuildable catalog storage to schema seven while preserving existing configuration', () => {
   const database = new Database(':memory:');
   try {
-    applyMigrations(database);
-    database.exec('DROP TABLE mcp_catalog_snapshots');
-    database.prepare('DELETE FROM schema_migrations WHERE version=8').run();
-    database.pragma('user_version=7');
+    installHistoricalSchema(database, 7);
     const original = database.prepare('SELECT data FROM app_settings WHERE id=1').get();
     applyMigrations(database);
     expect(database.pragma('user_version', { simple: true })).toBe(SCHEMA_VERSION);

@@ -4,7 +4,7 @@ import {
   buildAnswerFooters,
   equalAnswerMetadata,
 } from '../src/features/sessions/utils/answer-metadata';
-import { reasoningPreview } from '../src/features/sessions/utils/reasoning-preview';
+import { reasoningPreview } from '../src/components/message-thinking/preview';
 
 const usage = (totalTokens: number): MessageUsage => {
   return {

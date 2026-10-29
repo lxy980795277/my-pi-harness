@@ -1,7 +1,7 @@
 import type { MessageView, SessionSnapshot } from '@my-pi-harness/protocol';
 
 /** Deterministic public facts for transport and projection tests without a model or filesystem. */
-export const sessionProjection = (seq = 1, text = 'initial'): SessionSnapshot => {
+export const sessionProjection = (seq = 1, text = 'initial', liveRevision = 0): SessionSnapshot => {
   return {
     session: {
       id: 'session',
@@ -62,6 +62,7 @@ export const sessionProjection = (seq = 1, text = 'initial'): SessionSnapshot =>
     queue: [],
     tools: [],
     snapshotSeq: seq,
+    liveRevision,
   };
 };
 

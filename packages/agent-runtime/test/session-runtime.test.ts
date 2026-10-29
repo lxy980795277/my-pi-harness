@@ -1,13 +1,15 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, realpath, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import type { StreamFn } from '@earendil-works/pi-agent-core';
 import {
   createModels,
   fauxAssistantMessage,
   fauxProvider,
+  createAssistantMessageEventStream,
   type TranscriptContext,
 } from '@earendil-works/pi-ai';
-import { openProfileStore } from '@my-pi-harness/storage';
+import { openProfileStore, sessionLogDirectory } from '@my-pi-harness/storage';
 import { describe, expect, it } from 'vitest';
 import { SessionRuntime } from '../src/sessions/runtime.js';
 import type { RuntimeStore } from '../src/sessions/ports.js';
@@ -33,7 +35,11 @@ function userTexts(context: TranscriptContext): string[] {
 }
 
 async function fixture(
-  options: { slow?: boolean; store?: (store: RuntimeStore) => RuntimeStore } = {},
+  options: {
+    slow?: boolean;
+    stream?: StreamFn;
+    store?: (store: RuntimeStore) => RuntimeStore;
+  } = {},
 ) {
   const directory = await mkdtemp(join(tmpdir(), 'my-pi-runtime-'));
   const store = await openProfileStore(directory);
@@ -50,7 +56,7 @@ async function fixture(
       resolve: () =>
         Promise.resolve({
           model: faux.models[0],
-          streamFn: models.streamSimple.bind(models),
+          streamFn: options.stream ?? models.streamSimple.bind(models),
           release: () => {},
         }),
     },
@@ -91,7 +97,7 @@ async function fixture(
 }
 
 describe('SessionRuntime durable execution', () => {
-  it('commits deltas before notifying and reopens final model context without duplicating accepted input', async () => {
+  it('publishes live text before notifying and persists only complete messages without duplicating accepted input', async () => {
     const f = await fixture();
     try {
       const contexts: string[][] = [];
@@ -102,7 +108,14 @@ describe('SessionRuntime durable execution', () => {
         },
       ]);
       const notified: number[] = [];
+      const streamed: string[] = [];
       const unsubscribe = f.runtime.subscribe(f.session.id, (event) => {
+        if (!('seq' in event)) {
+          const snapshot = f.runtime.getSnapshot(f.session.id);
+          expect(snapshot.liveRevision).toBeGreaterThan(0);
+          streamed.push(snapshot.messages.at(-1)?.text ?? '');
+          return;
+        }
         expect(f.store.readEvents(f.session.id, event.seq - 1, 1)[0]?.eventId).toBe(event.eventId);
         notified.push(event.seq);
       });
@@ -117,11 +130,18 @@ describe('SessionRuntime durable execution', () => {
       expect(snapshot.messages.map(({ text }) => text)).toEqual(['Only once', 'Persistent answer']);
       expect(snapshot.runs[0]?.status).toBe('completed');
       const events = f.store.readEvents(f.session.id, 0, 1000);
-      const deltas = events
-        .filter(({ type }) => type === 'message.delta')
-        .map(({ data }) => data.text)
-        .join('');
-      expect(deltas).toBe('Persistent answer');
+      expect(events.some(({ type }) => type === 'message.delta')).toBe(false);
+      expect(streamed.at(-1)).toBe('Persistent answer');
+      expect(snapshot.liveRevision).toBe(0);
+      const profile = await realpath(f.directory);
+      const journal = await readFile(
+        join(
+          sessionLogDirectory(profile, join(profile, '.my-pi-harness')),
+          `${f.session.id}.jsonl`,
+        ),
+        'utf8',
+      );
+      expect(journal).not.toContain('"message.delta"');
       expect(notified).toEqual([...notified].sort((a, b) => a - b));
       expect(
         await f.runtime.send(f.session.id, {
@@ -139,6 +159,7 @@ describe('SessionRuntime durable execution', () => {
         expect(
           reopened.getModelContext(f.session.id, snapshot.session.activeBranchId),
         ).toHaveLength(2);
+        expect(reopened.getSnapshot(f.session.id).messages).toEqual(snapshot.messages);
       } finally {
         reopened.close();
       }
@@ -213,9 +234,17 @@ describe('SessionRuntime durable execution', () => {
       f.faux.setResponses([fauxAssistantMessage('A long answer '.repeat(300))]);
       await f.runtime.send(f.session.id, { text: 'Start', mode: 'send', requestId: 'start' });
       await until(() =>
-        f.store.readEvents(f.session.id, 0, 1000).some(({ type }) => type === 'message.delta'),
+        f.runtime
+          .getSnapshot(f.session.id)
+          .messages.some((message) => message.status === 'streaming' && message.text.length > 0),
       );
+      const observed = f.runtime.getSnapshot(f.session.id).messages.at(-1);
+      if (!observed || observed.status !== 'streaming')
+        throw new Error('Expected a live assistant before queue mutation');
       await f.runtime.send(f.session.id, { text: 'Later', mode: 'follow-up', requestId: 'later' });
+      const afterQueue = f.runtime.getSnapshot(f.session.id).messages.at(-1);
+      expect(afterQueue?.id).toBe(observed.id);
+      expect(afterQueue?.text.startsWith(observed.text)).toBe(true);
       const [first, second] = await Promise.all([
         f.runtime.cancel(f.session.id),
         f.runtime.cancel(f.session.id),
@@ -223,6 +252,8 @@ describe('SessionRuntime durable execution', () => {
       expect(first.session.activeRunId).toBeNull();
       expect(second.session.activeRunId).toBeNull();
       expect(first.runs[0]?.status).toBe('cancelled');
+      expect(first.runs[0]?.error).toBeNull();
+      expect(first.messages.at(-1)?.text.startsWith(observed.text)).toBe(true);
       expect(first.queue).toHaveLength(1);
       expect(f.faux.state.callCount).toBe(1);
       await f.runtime.close();
@@ -244,6 +275,7 @@ describe('SessionRuntime durable execution', () => {
       });
       try {
         expect(resumed.getSnapshot(f.session.id).queue).toHaveLength(1);
+        expect(resumed.getSnapshot(f.session.id).messages.at(-1)).toEqual(first.messages.at(-1));
         expect(f.faux.state.callCount).toBe(1);
         const contexts: string[][] = [];
         f.faux.setResponses([
@@ -311,6 +343,7 @@ describe('SessionRuntime durable execution', () => {
       await f.runtime.send(f.session.id, { text: 'Fail', mode: 'send', requestId: 'failure' });
       await until(() => f.runtime.getSnapshot(f.session.id).session.activeRunId === null);
       expect(f.runtime.getSnapshot(f.session.id).runs[0]?.status).toBe('failed');
+      expect(f.runtime.getSnapshot(f.session.id).runs[0]?.error).toBe('模型请求失败，请稍后重试。');
       expect(JSON.stringify(f.store.readEvents(f.session.id, 0, 1000))).not.toContain(
         'private-test-key-error',
       );
@@ -318,6 +351,126 @@ describe('SessionRuntime durable execution', () => {
       await f.close();
     }
   });
+
+  it('records a safe timeout reason from the SDK final without retrying its model request', async () => {
+    const f = await fixture();
+    try {
+      f.faux.setResponses([
+        fauxAssistantMessage('', { stopReason: 'error', errorMessage: 'Request timed out.' }),
+      ]);
+      await f.runtime.send(f.session.id, { text: 'Timeout', mode: 'send', requestId: 'timeout' });
+      await until(() => f.runtime.getSnapshot(f.session.id).session.activeRunId === null);
+      const run = f.runtime.getSnapshot(f.session.id).runs[0];
+      expect(run?.status).toBe('failed');
+      expect(run?.error).toBe('模型请求超时，请稍后重试。');
+      expect(f.faux.state.callCount).toBe(1);
+    } finally {
+      await f.close();
+    }
+  });
+
+  for (const outcome of ['failed', 'cancelled'] as const) {
+    it(`persists the observed partial body after ${outcome} even when the SDK final omits it`, async () => {
+      let finish = (): void => undefined;
+      const f = await fixture({
+        stream: (_model, _context, options) => {
+          const stream = createAssistantMessageEventStream();
+          const partial = fauxAssistantMessage(
+            [
+              {
+                type: 'thinking',
+                thinking: 'Observed reasoning',
+                thinkingSignature: 'signed-observation',
+              },
+              { type: 'text', text: 'Observed partial answer' },
+            ],
+            { stopReason: 'pending' },
+          );
+          let finished = false;
+          finish = (): void => {
+            if (finished) return;
+            finished = true;
+            options?.signal?.removeEventListener('abort', finish);
+            const stopReason = outcome === 'cancelled' ? 'aborted' : 'error';
+            const terminal = fauxAssistantMessage('', { stopReason });
+            stream.push({ type: 'error', reason: stopReason, error: terminal });
+            stream.end(terminal);
+          };
+          options?.signal?.addEventListener('abort', finish, { once: true });
+          stream.push({ type: 'start', partial: { ...partial, content: [] } });
+          stream.push({
+            type: 'thinking_delta',
+            contentIndex: 0,
+            delta: 'Observed reasoning',
+            partial: { ...partial, content: partial.content.slice(0, 1) },
+          });
+          stream.push({
+            type: 'text_delta',
+            contentIndex: 1,
+            delta: 'Observed partial answer',
+            partial,
+          });
+          return stream;
+        },
+      });
+      try {
+        await f.runtime.send(f.session.id, {
+          text: 'Partial output',
+          mode: 'send',
+          requestId: 'partial-output',
+        });
+        await until(() => {
+          const message = f.runtime.getSnapshot(f.session.id).messages.at(-1);
+          return message?.status === 'streaming' && message.text.length > 0;
+        });
+        const live = f.runtime.getSnapshot(f.session.id).messages.at(-1);
+        expect(live?.status).toBe('streaming');
+        expect(live?.text).toBe('Observed partial answer');
+        expect(live?.thinking).toBe('Observed reasoning');
+        if (outcome === 'cancelled') await f.runtime.cancel(f.session.id);
+        else finish();
+        await until(() => f.runtime.getSnapshot(f.session.id).session.activeRunId === null);
+        const snapshot = f.runtime.getSnapshot(f.session.id);
+        const terminal = snapshot.messages.at(-1);
+        expect(terminal).toMatchObject({
+          id: live?.id,
+          status: outcome,
+          text: live?.text,
+          thinking: live?.thinking,
+          stopReason: outcome === 'cancelled' ? 'aborted' : 'error',
+        });
+        expect(terminal?.usage).toBeUndefined();
+        expect(snapshot.runs[0]?.status).toBe(outcome);
+        const events = f.store.readEvents(f.session.id, 0, 1000);
+        expect(events.some(({ type }) => type === 'message.delta')).toBe(false);
+        expect(events.filter(({ type }) => type === 'message.completed')).toHaveLength(1);
+        await f.runtime.close();
+        f.store.close();
+        const reopened = await openProfileStore(f.directory);
+        try {
+          expect(reopened.getSnapshot(f.session.id).messages.at(-1)).toEqual(terminal);
+          expect(
+            reopened.getModelContext(f.session.id, snapshot.session.activeBranchId),
+          ).toHaveLength(1);
+        } finally {
+          reopened.close();
+        }
+        const profile = await realpath(f.directory);
+        const journal = await readFile(
+          join(
+            sessionLogDirectory(profile, join(profile, '.my-pi-harness')),
+            `${f.session.id}.jsonl`,
+          ),
+          'utf8',
+        );
+        expect(journal).toContain('"thinkingSignature":"signed-observation"');
+        expect(journal).not.toContain('"message.delta"');
+      } finally {
+        finish();
+        await f.close();
+      }
+    });
+  }
 
   it('aborts and disables a session on an event transaction failure rather than broadcasting completion', async () => {
     let failed = false;
@@ -327,6 +480,7 @@ describe('SessionRuntime durable execution', () => {
         listSessions: () => actual.listSessions(),
         getSession: (id) => actual.getSession(id),
         getSnapshot: (id) => actual.getSnapshot(id),
+        publishMessageDelta: (id, delta) => actual.publishMessageDelta(id, delta),
         readEvents: (id, after, limit) => actual.readEvents(id, after, limit),
         getModelContext: (id, branch) => actual.getModelContext(id, branch),
         findRequest: (id, request) => actual.findRequest(id, request),
@@ -334,7 +488,7 @@ describe('SessionRuntime durable execution', () => {
         getQueuePrivateData: (id, input) => actual.getQueuePrivateData(id, input),
         recoverInterrupted: () => actual.recoverInterrupted(),
         append: (id, events) => {
-          if (events.some(({ type }) => type === 'message.delta')) {
+          if (events.some(({ type }) => type === 'message.completed')) {
             failed = true;
             throw new Error('Injected disk write failure');
           }
@@ -369,6 +523,7 @@ describe('SessionRuntime durable execution', () => {
           if (accepted) throw new Error('Injected post-accept read failure');
           return actual.getSnapshot(id);
         },
+        publishMessageDelta: (id, delta) => actual.publishMessageDelta(id, delta),
         readEvents: (id, after, limit) => actual.readEvents(id, after, limit),
         getModelContext: (id, branch) => actual.getModelContext(id, branch),
         getQueueBranch: (id, input) => actual.getQueueBranch(id, input),
@@ -394,6 +549,7 @@ describe('SessionRuntime durable execution', () => {
       expect(f.runtime.isProviderActive(f.faux.provider.id)).toBe(false);
       expect(f.faux.state.callCount).toBe(0);
       expect(() => f.runtime.getSnapshot(f.session.id)).toThrow('Session persistence failed');
+      expect(() => f.runtime.getSessionSummary(f.session.id)).toThrow('Session persistence failed');
       expect(f.store.getSnapshot(f.session.id).runs[0]?.status).toBe('running');
       expect(
         f.store.readEvents(f.session.id, 0, 1000).some(({ type }) => type === 'run.finished'),
@@ -418,7 +574,9 @@ describe('SessionRuntime durable execution', () => {
       f.faux.setResponses([fauxAssistantMessage('A long answer '.repeat(300))]);
       await f.runtime.send(f.session.id, { text: 'Original', mode: 'send', requestId: 'original' });
       await until(() =>
-        f.store.readEvents(f.session.id, 0, 1000).some(({ type }) => type === 'message.delta'),
+        f.runtime
+          .getSnapshot(f.session.id)
+          .messages.some((message) => message.status === 'streaming' && message.text.length > 0),
       );
       await f.runtime.send(f.session.id, {
         text: 'Paused input',

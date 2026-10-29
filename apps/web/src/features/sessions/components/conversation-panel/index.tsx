@@ -8,6 +8,7 @@ import { Notice } from '@/components/ui/notice';
 import { ConversationBody } from '@/features/sessions/components/conversation-body';
 import { useConversation } from '@/features/sessions/hooks/use-conversation';
 import { describeError } from '@/utils/describe-error';
+import { SessionTaskEntry } from '@/features/tasks/components/session-task-entry';
 
 interface ConversationPanelProps {
   sessionId: string;
@@ -67,6 +68,7 @@ export const ConversationPanel: FC<ConversationPanelProps> = memo(({ sessionId, 
               {snapshot.session.title}
             </h1>
             <div className="flex shrink-0 items-center gap-2">
+              <SessionTaskEntry sessionId={sessionId} />
               {lastRun && lastRun.status !== 'completed' && (
                 <Badge>{RUN_LABELS[lastRun.status]}</Badge>
               )}
@@ -111,11 +113,6 @@ export const ConversationPanel: FC<ConversationPanelProps> = memo(({ sessionId, 
           {error && (
             <div className="px-4 pt-3">
               <Notice tone="error">{error}</Notice>
-            </div>
-          )}
-          {lastRun?.error && (
-            <div className="px-4 pt-3">
-              <Notice tone="error">{lastRun.error}</Notice>
             </div>
           )}
           {lastRun?.status === 'interrupted' && (

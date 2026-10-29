@@ -5,7 +5,7 @@ import type { Action, ValueChange } from '@/types/events';
 import type { ApplicationInitialization } from '@/app/types/initialization';
 
 export type Theme = 'light' | 'dark';
-export type WorkspacePage = 'sessions' | 'runtime';
+export type WorkspacePage = 'sessions' | 'runtime' | 'tasks';
 
 export interface ApplicationShellState {
   initialization: ApplicationInitialization;

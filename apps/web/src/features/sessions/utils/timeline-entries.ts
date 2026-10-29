@@ -2,6 +2,44 @@ import type { MessageView, RunView, ToolCallView } from '@my-pi-harness/protocol
 import type { TimelineEntry } from '@/features/sessions/types/session';
 import { buildAnswerFooters } from '@/features/sessions/utils/answer-metadata';
 import { collapseAnswerProcesses } from '@/features/sessions/utils/answer-process';
+import { buildRunFailures } from '@/utils/run-failure';
+
+const placeUnattachedFailures = (
+  entries: TimelineEntry[],
+  failures: ReturnType<typeof buildRunFailures>['unattached'],
+  runs: readonly RunView[],
+): void => {
+  const runOrder = new Map(
+    runs.map((run, index) => {
+      return [run.id, index];
+    }),
+  );
+  for (const { run, text } of failures) {
+    let insertion = -1;
+    for (const [index, entry] of entries.entries()) {
+      if (
+        (entry.type === 'message' && entry.message.runId === run.id) ||
+        (entry.type === 'tool' && entry.tool.runId === run.id)
+      )
+        insertion = index + 1;
+    }
+    if (insertion === -1) {
+      const position = runOrder.get(run.id);
+      insertion = entries.findIndex((entry) => {
+        if (entry.type !== 'message' || entry.message.runId === null) return false;
+        const nextPosition = runOrder.get(entry.message.runId);
+        return position !== undefined && nextPosition !== undefined && nextPosition > position;
+      });
+    }
+    if (insertion === -1) insertion = entries.length;
+    entries.splice(insertion, 0, {
+      type: 'request-error',
+      id: `request-error:${run.id}`,
+      runId: run.id,
+      text,
+    });
+  }
+};
 
 const hasVisibleBody = (message: MessageView): boolean => {
   if (message.role !== 'assistant' || message.status !== 'complete') {
@@ -46,6 +84,7 @@ export const buildTimelineEntries = (
   branchId?: string,
 ): TimelineEntry[] => {
   const answerFooters = buildAnswerFooters(messages, runs, activeRunId, branchId);
+  const failures = buildRunFailures(messages, runs, branchId);
   const toolsByMessage = new Map<string, ToolCallView[]>();
   for (const tool of tools) {
     const group = toolsByMessage.get(tool.afterMessageId);
@@ -75,6 +114,8 @@ export const buildTimelineEntries = (
         message,
       };
       if (separateThinking) entry.part = 'body';
+      const failure = failures.messages.get(message.id);
+      if (failure !== undefined) entry.failure = failure;
       entries.push(entry);
     }
     for (const tool of toolsByMessage.get(message.id) ?? []) {
@@ -89,6 +130,7 @@ export const buildTimelineEntries = (
   if (toolsByMessage.size > 0) {
     throw new Error('工具调用缺少对应消息');
   }
+  placeUnattachedFailures(entries, failures.unattached, runs);
   if (activeRunId !== null && !hasActiveActivity(messages, tools, activeRunId)) {
     entries.push({ type: 'waiting', id: `waiting:${activeRunId}`, runId: activeRunId });
   }

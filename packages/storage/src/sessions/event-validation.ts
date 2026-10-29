@@ -14,6 +14,10 @@ import {
   ToolCallRecordSchema,
   ToolDiscoveryDiagnosticSchema,
   WorkStateSchema,
+  AgentTaskSchema,
+  AgentTaskOutcomeSchema,
+  AgentTaskWaitingSchema,
+  AgentMessageQueuedSchema,
 } from '@my-pi-harness/protocol';
 
 export const SessionCreatedSchema = Type.Object(
@@ -44,14 +48,6 @@ export const MessageCompletedSchema = Type.Object(
   { message: MessageViewSchema },
   { additionalProperties: false },
 );
-export const MessageDeltaSchema = Type.Object(
-  {
-    messageId: Type.String({ minLength: 1 }),
-    text: Type.Optional(Type.String()),
-    thinking: Type.Optional(Type.String()),
-  },
-  { additionalProperties: false },
-);
 export const InputIdSchema = Type.Object(
   { inputId: Type.String({ minLength: 1 }) },
   { additionalProperties: false },
@@ -75,7 +71,7 @@ export const QueueRequestSchema = Type.Object(
 );
 
 export const WorkEventSchema = Type.Object(
-  { state: WorkStateSchema },
+  { state: WorkStateSchema, taskId: Type.Optional(Type.String({ minLength: 1, maxLength: 160 })) },
   { additionalProperties: false },
 );
 export const CheckpointEventSchema = Type.Object(
@@ -96,6 +92,7 @@ export const PreparedEventSchema = Type.Object(
     messageIds: Type.Array(Type.String({ minLength: 1 }), { maxItems: 10_000 }),
     attachmentIds: Type.Optional(Type.Array(Type.String({ minLength: 1 }), { maxItems: 4096 })),
     capabilityRevision: Type.Optional(Type.Integer({ minimum: 1 })),
+    taskId: Type.Optional(Type.String({ minLength: 1, maxLength: 160 })),
   },
   { additionalProperties: false },
 );
@@ -128,15 +125,56 @@ export const CapabilityLoadSchema = Type.Object(
   { additionalProperties: false },
 );
 
+export const TaskCreatedSchema = Type.Object(
+  { task: AgentTaskSchema },
+  { additionalProperties: false },
+);
+export const TaskClosedSchema = Type.Object(
+  {
+    taskId: Type.String({ minLength: 1, maxLength: 160 }),
+    reason: AgentTaskOutcomeSchema,
+    closedAt: Type.Integer({ minimum: 0 }),
+    error: Type.Optional(Type.String({ maxLength: 2000 })),
+  },
+  { additionalProperties: false },
+);
+export const TaskWaitingSchema = Type.Object(
+  { taskId: Type.String({ minLength: 1, maxLength: 160 }), waiting: AgentTaskWaitingSchema },
+  { additionalProperties: false },
+);
+export const TaskMessageQueuedSchema = Type.Object(
+  { message: AgentMessageQueuedSchema },
+  { additionalProperties: false },
+);
+export const TaskMessageConsumedSchema = Type.Object(
+  {
+    messageId: Type.String({ minLength: 1, maxLength: 160 }),
+    consumedRunId: Type.String({ minLength: 1, maxLength: 160 }),
+  },
+  { additionalProperties: false },
+);
+export const TaskMessageUndeliveredSchema = Type.Object(
+  {
+    messageId: Type.String({ minLength: 1, maxLength: 160 }),
+    reason: Type.String({ minLength: 1, maxLength: 1000 }),
+  },
+  { additionalProperties: false },
+);
+
 /** Public payload fields consumed by projections; unregistered audit events keep their data. */
 export const EVENT_DATA_SCHEMAS: ReadonlyMap<string, TSchema> = new Map<string, TSchema>([
+  ['task.created', TaskCreatedSchema],
+  ['task.closed', TaskClosedSchema],
+  ['task.waiting', TaskWaitingSchema],
+  ['task.message_queued', TaskMessageQueuedSchema],
+  ['task.message_consumed', TaskMessageConsumedSchema],
+  ['task.message_undelivered', TaskMessageUndeliveredSchema],
   ['session.created', SessionCreatedSchema],
   ['session.configured', SessionPatchInputSchema],
   ['run.accepted', RunAcceptedSchema],
   ['run.finished', RunFinishedSchema],
   ['run.tools_loaded', CapabilityLoadSchema],
   ['message.started', MessageViewSchema],
-  ['message.delta', MessageDeltaSchema],
   ['message.completed', MessageCompletedSchema],
   ['queue.added', QueueInputSchema],
   ['queue.updated', QueueInputSchema],

@@ -31,6 +31,7 @@ export type TimelineContentEntry =
       createdAt: number;
       message: MessageView;
       part?: TimelineMessagePart;
+      failure?: string;
     }
   | { type: 'tool'; id: string; createdAt: number; tool: ToolCallView };
 
@@ -47,6 +48,7 @@ export type TimelineEntry =
   | TimelineContentEntry
   | TimelineProcessEntry
   | { type: 'answer-footer'; id: string; footer: AnswerFooter }
+  | { type: 'request-error'; id: string; runId: string; text: string }
   | { type: 'waiting'; id: string; runId: string };
 
 export interface LiveSession {

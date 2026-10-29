@@ -379,6 +379,9 @@ describe('built daemon recovery with real Pi HTTP streaming', () => {
       );
       expect(stopped.session.activeRunId).toBeNull();
       expect(stopped.runs[0]?.status).toBe('cancelled');
+      expect(stopped.messages).toContainEqual(
+        expect.objectContaining({ text: 'durable partial 1', status: 'cancelled' }),
+      );
       expect(stopped.queue.map(({ text }) => text)).toEqual(['Keep me pending after stop']);
       expect(provider.requests).toHaveLength(1);
 
@@ -402,9 +405,13 @@ describe('built daemon recovery with real Pi HTTP streaming', () => {
       expect(provider.requests[1]).toContain('Independent new request');
       expect(provider.requests[1]).not.toContain('Keep me pending after stop');
       await send(first, 'Request killed during streaming', 'crash');
-      await waitSnapshot(first, sessionId, (snapshot) =>
+      const streaming = await waitSnapshot(first, sessionId, (snapshot) =>
         snapshot.messages.some(({ text }) => text === 'durable partial 3'),
       );
+      expect(streaming.liveRevision).toBeGreaterThan(0);
+      const interrupted = streaming.messages.find(({ text }) => text === 'durable partial 3');
+      if (!interrupted || interrupted.status !== 'streaming')
+        throw new Error('Expected an unfinished assistant before killing the daemon');
       const beforeKill = await send(
         first,
         'Keep me pending after crash',
@@ -423,13 +430,21 @@ describe('built daemon recovery with real Pi HTTP streaming', () => {
       expect(restored.runs).toHaveLength(3);
       expect(restored.runs.filter(({ status }) => status === 'interrupted')).toHaveLength(1);
       expect(restored.messages).toContainEqual(
-        expect.objectContaining({ text: 'durable partial 3', status: 'interrupted' }),
+        expect.objectContaining({
+          id: interrupted.id,
+          text: '',
+          thinking: '',
+          status: 'interrupted',
+        }),
       );
+      for (const message of completed.messages)
+        expect(restored.messages.find(({ id }) => id === message.id)).toEqual(message);
       expect(restored.queue.map(({ text }) => text)).toEqual([
         'Keep me pending after stop',
         'Keep me pending after crash',
       ]);
       expect(restored.snapshotSeq).toBe(beforeKill.snapshotSeq + 1);
+      expect(restored.liveRevision).toBe(0);
       expect(provider.requests).toHaveLength(3);
       const replayed = await readStreamSnapshot(second, sessionId);
       expect(replayed).toEqual(restored);
@@ -437,7 +452,9 @@ describe('built daemon recovery with real Pi HTTP streaming', () => {
         sessionLogDirectory(await realpath(profile), join(profile, '.my-pi-harness')),
         `${sessionId}.jsonl`,
       );
-      const recoveredLines = (await readFile(recoveredLog, 'utf8')).trimEnd().split('\n');
+      const recoveredJsonl = await readFile(recoveredLog, 'utf8');
+      expect(recoveredJsonl).not.toContain('durable partial 3');
+      const recoveredLines = recoveredJsonl.trimEnd().split('\n');
       const recoveredEvents = recoveredLines.flatMap((line) => {
         const value: unknown = JSON.parse(line);
         return checked(SessionBatchSchema, value).records.map((record) => record.event);
@@ -449,6 +466,7 @@ describe('built daemon recovery with real Pi HTTP streaming', () => {
         type: 'run.finished',
         data: { status: 'interrupted' },
       });
+      expect(recoveredEvents.some(({ type }) => type === 'message.delta')).toBe(false);
       expect(JSON.stringify(replayed)).not.toContain('synthetic-key');
       expect(JSON.stringify(replayed)).not.toContain('privateData');
       await api(second, '/providers/recovery-provider/key', ProviderConfigSchema, 'POST', {
@@ -466,6 +484,11 @@ describe('built daemon recovery with real Pi HTTP streaming', () => {
       );
       expect(resumed.runs).toHaveLength(4);
       expect(resumed.runs.filter(({ status }) => status === 'completed')).toHaveLength(2);
+      expect(resumed.messages.find(({ id }) => id === interrupted.id)).toMatchObject({
+        text: '',
+        thinking: '',
+        status: 'interrupted',
+      });
       for (const number of [2, 4, 5])
         expect(resumed.messages).toContainEqual(
           expect.objectContaining({

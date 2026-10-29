@@ -64,6 +64,27 @@ afterEach(() => {
 });
 
 describe('bounded session SSE writer lifecycle', () => {
+  it('does not rebuild the main transcript for child deltas and keeps the next root interval exact', () => {
+    const f = fixture();
+    const close = f.start();
+    f.state.snapshot = sessionProjection(1, 'initial', 4);
+    f.changes.emit('change', { type: 'message.delta', runId: 'child-run' });
+    vi.advanceTimersByTime(32);
+    expect(f.reads).toHaveBeenCalledTimes(1);
+    expect(f.response.records).toHaveLength(1);
+    f.state.snapshot = sessionProjection(1, 'initial root extension', 7);
+    f.changes.emit('change', { type: 'message.delta', runId: 'run' });
+    vi.advanceTimersByTime(32);
+    expect(f.reads).toHaveBeenCalledTimes(2);
+    expect(f.response.records[1]).toContain('id: 1:7');
+    expect(f.response.records[1]).toContain(
+      '"baseSeq":1,"baseLiveRevision":0,"snapshotSeq":1,"liveRevision":7',
+    );
+    expect(f.response.records[1]).toContain('root extension');
+    close();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it('waits for drain and collapses intermediate commits into one latest transition', () => {
     const f = fixture();
     f.response.writable = false;
@@ -82,7 +103,9 @@ describe('bounded session SSE writer lifecycle', () => {
     vi.advanceTimersByTime(32);
     expect(f.response.records).toHaveLength(2);
     expect(f.reads).toHaveBeenCalledTimes(2);
-    expect(f.response.records[1]).toContain('"baseSeq":1,"snapshotSeq":8');
+    expect(f.response.records[1]).toContain(
+      '"baseSeq":1,"baseLiveRevision":0,"snapshotSeq":8,"liveRevision":0',
+    );
     expect(f.response.records[1]).toContain('"textDelta":" final"');
     close();
     expect(f.response.ended).toBe(true);

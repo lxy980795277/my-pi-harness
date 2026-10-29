@@ -112,6 +112,41 @@ afterEach(async () => {
 });
 
 describe('authoritative host session journals', () => {
+  it('refuses old durable message deltas instead of silently discarding their text during replay', async () => {
+    const value = await fixture();
+    const assistant: MessageView = {
+      ...user,
+      id: 'assistant',
+      role: 'assistant',
+      text: '',
+      status: 'streaming',
+    };
+    value.store.append('session', [...accept(), event('message.started', assistant, 'run')]);
+    const sequence = value.store.getSnapshot('session').snapshotSeq + 1;
+    value.store.close();
+    await fs.promises.appendFile(
+      logPath(value.directory),
+      serializedBatch({
+        records: [
+          {
+            event: {
+              version: 1,
+              eventId: 'old-delta',
+              sessionId: 'session',
+              runId: 'run',
+              seq: sequence,
+              type: 'message.delta',
+              at: 3,
+              data: { messageId: assistant.id, text: 'Old persistent output' },
+            },
+            privateData: null,
+          },
+        ],
+      }),
+    );
+    await expect(openProfileStore(value.directory)).rejects.toThrow('could not be replayed');
+  });
+
   it('downloads the exact durable prefix while later batches continue to append', async () => {
     const value = await fixture();
     value.store.append('session', accept());

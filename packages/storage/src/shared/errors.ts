@@ -11,6 +11,7 @@ export type StorageErrorCode =
   | 'RUN_NOT_FOUND'
   | 'PROVIDER_NOT_FOUND'
   | 'WORKSPACE_NOT_FOUND'
+  | 'AGENT_SETTINGS_INVALID'
   | 'CONFLICT'
   | 'INVALID_EVENT'
   | 'INVALID_RECORD'

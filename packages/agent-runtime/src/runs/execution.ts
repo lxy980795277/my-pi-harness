@@ -7,6 +7,8 @@ import type {
   RunView,
   SessionSummary,
   ToolCallRecord,
+  AgentMessage,
+  LiveMessageDelta,
 } from '@my-pi-harness/protocol';
 import { encodeContextMessage, encodeToolResult } from '../context/codec.js';
 import { RuntimeError } from '../errors.js';
@@ -25,6 +27,9 @@ import type { ToolRunContext } from '../tools/types.js';
 import type { RunCapabilities } from '../capabilities/run.js';
 import type { FrozenInputCapabilities } from '../capabilities/inputs.js';
 import { activeSkillContext } from '../capabilities/context.js';
+import type { AgentRunHooks } from '../agents/ports.js';
+import { communicationMessage } from '../context/agent-message.js';
+import { runFailureMessage } from './failure.js';
 
 interface RunExecutionOptions {
   session: SessionSummary;
@@ -39,11 +44,13 @@ interface RunExecutionOptions {
   capabilities?: RunCapabilities;
   acceptedCapabilities?: FrozenInputCapabilities;
   commit(events: readonly EventInput[]): void;
+  publishMessageDelta(delta: LiveMessageDelta): void;
   queue(): QueueInput[];
   onError(error: unknown): void;
   tools?: ToolRuntime;
   work?: WorkRuntime;
   externalTools?: ExternalTools;
+  agents?: AgentRunHooks;
 }
 
 function validToolIntents(message: AssistantMessage): boolean {
@@ -62,6 +69,32 @@ function validToolIntents(message: AssistantMessage): boolean {
   return true;
 }
 
+/** Interrupted SDK finals may omit a body that has already reached the live snapshot. */
+function terminalContent(
+  message: AssistantMessage,
+  current: MessageView,
+  partial?: AssistantMessage,
+): AssistantMessage {
+  const content = [...message.content];
+  const text = content
+    .filter((part) => part.type === 'text')
+    .map((part) => part.text)
+    .join('');
+  const thinking = content
+    .filter((part) => part.type === 'thinking')
+    .map((part) => part.thinking)
+    .join('');
+  if (text.length === 0 && current.text.length > 0)
+    content.push({ type: 'text', text: current.text });
+  if (thinking.length === 0 && current.thinking.length > 0) {
+    const observed = partial?.content.filter((part) => part.type === 'thinking') ?? [];
+    if (observed.map((part) => part.thinking).join('') === current.thinking)
+      content.unshift(...observed);
+    else content.unshift({ type: 'thinking', thinking: current.thinking });
+  }
+  return { ...message, content };
+}
+
 /** One SDK run; event subscribers never wait for this owner's idle promise. */
 export class RunExecution {
   public readonly agent: Agent;
@@ -70,9 +103,11 @@ export class RunExecution {
   public persistenceFailed = false;
   public outcome: RunView['status'] = 'running';
   private current: MessageView | undefined;
+  private partial: AssistantMessage | undefined;
   private final: AssistantMessage | undefined;
   private failure: unknown;
   private readonly queuedMessages = new WeakMap<UserMessage, QueueInput>();
+  private readonly agentMessages = new WeakMap<UserMessage, AgentMessage>();
   private readonly unsubscribe: () => void;
   private readonly eligible: Set<string>;
   private started = false;
@@ -100,6 +135,7 @@ export class RunExecution {
       toolContext = {
         session: options.session,
         run: options.run,
+        readOnly: options.session.approvalMode === 'read-only' || options.agents?.readOnly === true,
         signal: this.toolAbort.signal,
         supportsImages: options.resolved.model.input.includes('image'),
         recorded: this.recordedTools,
@@ -112,9 +148,17 @@ export class RunExecution {
         persistenceFailure: (error): never => this.failPersistence(error),
         stopAfterTool: (reason): void => this.cancel(reason),
         ...(options.capabilities ? { controls: options.capabilities } : {}),
+        ...(options.agents
+          ? {
+              agents: options.agents.controls,
+              beforeTool: options.agents.beforeTool,
+              modelStream: options.agents.stream,
+            }
+          : {}),
         outcomeUnknown: (message): void => {
           this.unknownOutcome = true;
-          this.failure = new RuntimeError('TOOL_OUTCOME_UNKNOWN', message);
+          this.failure ??= new RuntimeError('TOOL_OUTCOME_UNKNOWN', message);
+          options.agents?.fault(this.failure);
           this.agent.clearAllQueues();
           this.toolAbort.abort(this.failure);
           this.agent.abort();
@@ -142,9 +186,13 @@ export class RunExecution {
         }
         options.capabilities?.assertCurrent();
         if (external.length > 0) options.externalTools?.assertBindingsCurrent(external);
-        return await options.resolved.streamFn(model, context, streamOptions);
+        return await (options.agents?.stream ?? options.resolved.streamFn)(
+          model,
+          context,
+          streamOptions,
+        );
       },
-      sessionId: options.session.id,
+      sessionId: options.run.taskId ?? options.session.id,
       steeringMode: 'one-at-a-time',
       followUpMode: 'one-at-a-time',
       toolExecution: 'sequential',
@@ -156,7 +204,7 @@ export class RunExecution {
         } catch (error) {
           if (error instanceof RuntimeError && error.code === 'CAPABILITY_PERSISTENCE_FAILED')
             this.failPersistence(error);
-          this.failure = error;
+          this.failure ??= error;
           this.toolAbort.abort(error);
           this.agent.clearAllQueues();
           this.agent.abort();
@@ -200,11 +248,21 @@ export class RunExecution {
               if (this.unknownOutcome) throw this.failure;
               const work = options.work;
               if (!work) return messages;
+              const resolved = options.agents
+                ? {
+                    ...options.resolved,
+                    model: {
+                      ...options.resolved.model,
+                      maxTokens: options.agents.outputTokens(options.resolved.model.maxTokens),
+                    },
+                    streamFn: options.agents.stream,
+                  }
+                : options.resolved;
               try {
                 return await work.context.project({
                   session: options.session,
                   run: options.run,
-                  resolved: options.resolved,
+                  resolved,
                   messages,
                   basePrompt: options.basePrompt,
                   currentTask:
@@ -223,7 +281,7 @@ export class RunExecution {
                     : this.toolAbort.signal,
                 });
               } catch (error) {
-                this.failure = error;
+                this.failure ??= error;
                 throw error;
               }
             },
@@ -232,8 +290,14 @@ export class RunExecution {
       finishTurn: ({ message }) => {
         if (this.unknownOutcome) return { action: 'end' };
         this.turns += 1;
-        if (this.turns >= 32) {
-          this.failure = new RuntimeError('TURN_LIMIT', '工具循环达到本次运行的轮数上限。');
+        if (
+          this.turns >= (options.agents?.maxTurns ?? 32) &&
+          message.stopReason !== 'stop' &&
+          message.stopReason !== 'length' &&
+          message.stopReason !== 'error' &&
+          message.stopReason !== 'aborted'
+        ) {
+          this.failure ??= new RuntimeError('TURN_LIMIT', '工具循环达到本次运行的轮数上限。');
           return { action: 'end' };
         }
         if (
@@ -263,8 +327,9 @@ export class RunExecution {
     if (this.cancelled) return;
     this.cancelled = true;
     this.toolAbort.abort(new RuntimeError('RUN_CANCELLED', '运行已停止。'));
+    this.agent.clearAllQueues();
+    this.agent.abort();
     if (this.outcome !== 'running') {
-      this.agent.clearAllQueues();
       return;
     }
     this.commit([
@@ -275,6 +340,13 @@ export class RunExecution {
         data: { reason },
       },
     ]);
+    this.options.agents?.cancel(reason);
+  }
+
+  /** Tree failures stop actual SDK work without disguising failure as user cancellation. */
+  public fail(error: unknown): void {
+    this.failure ??= error;
+    this.toolAbort.abort(error);
     this.agent.clearAllQueues();
     this.agent.abort();
   }
@@ -299,6 +371,11 @@ export class RunExecution {
       this.queuedMessages.set(message, input);
       if (input.mode === 'steer') this.agent.steer(message);
       else this.agent.followUp(message);
+    }
+    for (const input of this.options.agents?.incoming() ?? []) {
+      const message = communicationMessage(input);
+      this.agentMessages.set(message, input);
+      this.agent.steer(message);
     }
   }
 
@@ -326,13 +403,24 @@ export class RunExecution {
       await this.agent.prompt(this.options.user);
       await this.agent.waitForIdle();
     } catch (error) {
-      this.failure = error;
+      this.failure ??= error;
       this.options.onError(error);
     } finally {
       this.unsubscribe();
       this.options.work?.context.release(this.options.run.id);
-      this.options.capabilities?.close();
       this.agent.clearAllQueues();
+    }
+    try {
+      const successful = this.final?.stopReason === 'stop' || this.final?.stopReason === 'length';
+      await this.options.agents?.finish(
+        this.cancelled || this.failure !== undefined || !successful,
+      );
+    } catch (error) {
+      this.failure ??= error;
+      this.options.agents?.fault(error);
+      this.options.onError(error);
+    } finally {
+      this.options.capabilities?.close();
     }
     if (this.persistenceFailed) return;
     this.recordUnstartedCalls();
@@ -342,20 +430,7 @@ export class RunExecution {
       : !this.failure && (reason === 'stop' || reason === 'length')
         ? 'completed'
         : 'failed';
-    if (this.current) {
-      this.current.status = this.outcome === 'cancelled' ? 'cancelled' : 'failed';
-      const at = Date.now();
-      this.current.finishedAt = at;
-      this.commit([
-        {
-          type: 'message.completed',
-          runId: this.options.run.id,
-          at,
-          data: { message: this.current },
-        },
-      ]);
-      this.current = undefined;
-    }
+    this.finishCurrent(this.outcome === 'cancelled' ? 'cancelled' : 'failed');
     this.commit([
       {
         type: 'run.finished',
@@ -364,12 +439,7 @@ export class RunExecution {
         data: {
           status: this.outcome,
           finishedAt: Date.now(),
-          error:
-            this.outcome === 'failed'
-              ? this.failure instanceof RuntimeError
-                ? this.failure.message
-                : 'The model request did not complete.'
-              : null,
+          error: this.outcome === 'failed' ? this.failureMessage() : null,
         },
       },
     ]);
@@ -382,21 +452,12 @@ export class RunExecution {
         if (event.message.role === 'user') {
           const input = this.queuedMessages.get(event.message);
           if (input) this.consumeInput(input, event.message);
+          const incoming = this.agentMessages.get(event.message);
+          if (incoming) this.consumeAgentInput(incoming, event.message);
         } else if (event.message.role === 'assistant') {
           this.discardedAssistantCalls = false;
-          if (this.current) {
-            this.current.status = 'failed';
-            const at = Date.now();
-            this.current.finishedAt = at;
-            this.commit([
-              {
-                type: 'message.completed',
-                runId: this.options.run.id,
-                at,
-                data: { message: this.current },
-              },
-            ]);
-          }
+          this.finishCurrent(this.cancelled ? 'cancelled' : 'failed');
+          this.partial = event.message;
           this.current = {
             id: randomUUID(),
             sessionId: this.options.session.id,
@@ -424,11 +485,12 @@ export class RunExecution {
         if (!this.current)
           throw new RuntimeError('STREAM_PROTOCOL', 'Model update has no active message');
         const update = event.assistantMessageEvent;
+        if (event.message.role === 'assistant') this.partial = event.message;
         if (update.type === 'text_delta' || update.type === 'thinking_delta') {
           const field = update.type === 'text_delta' ? 'text' : 'thinking';
           const next = this.current[field] + update.delta;
           if (next.length > 2_000_000) {
-            this.failure = new RuntimeError(
+            this.failure ??= new RuntimeError(
               'RESPONSE_LIMIT',
               'Model response exceeded the configured limit',
             );
@@ -436,14 +498,11 @@ export class RunExecution {
             throw this.failure;
           }
           this.current[field] = next;
-          this.commit([
-            {
-              type: 'message.delta',
-              runId: this.options.run.id,
-              at: Date.now(),
-              data: { messageId: this.current.id, [field]: update.delta },
-            },
-          ]);
+          this.options.publishMessageDelta({
+            runId: this.options.run.id,
+            messageId: this.current.id,
+            [field]: update.delta,
+          });
         }
         break;
       }
@@ -527,7 +586,7 @@ export class RunExecution {
         if (status === 'complete' && !validToolIntents(event.message)) {
           status = 'failed';
           this.discardedAssistantCalls = true;
-          this.failure = new RuntimeError(
+          this.failure ??= new RuntimeError(
             'MODEL_TOOL_INTENT_INVALID',
             '模型返回的工具调用标识或参数格式无效。',
           );
@@ -535,16 +594,20 @@ export class RunExecution {
           this.agent.clearAllQueues();
           this.agent.abort();
         }
-        const text = event.message.content
+        const terminal =
+          status === 'complete'
+            ? event.message
+            : terminalContent(event.message, this.current, this.partial);
+        const text = terminal.content
           .filter((part) => part.type === 'text')
           .map((part) => part.text)
           .join('');
-        const thinking = event.message.content
+        const thinking = terminal.content
           .filter((part) => part.type === 'thinking')
           .map((part) => part.thinking)
           .join('');
         if (text.length > 2_000_000 || thinking.length > 2_000_000) {
-          this.failure = new RuntimeError(
+          this.failure ??= new RuntimeError(
             'RESPONSE_LIMIT',
             'Model response exceeded the configured limit',
           );
@@ -552,7 +615,7 @@ export class RunExecution {
           throw this.failure;
         }
         const at = Date.now();
-        const usage = messageUsage(event.message.usage);
+        const usage = messageUsage(terminal.usage);
         this.current = {
           ...this.current,
           text,
@@ -568,7 +631,7 @@ export class RunExecution {
             runId: this.options.run.id,
             at,
             data: { message: this.current },
-            ...(status === 'complete' ? { privateData: encodeContextMessage(event.message) } : {}),
+            ...(validToolIntents(terminal) ? { privateData: encodeContextMessage(terminal) } : {}),
           },
         ]);
         this.lastAssistantMessageId = this.current.id;
@@ -588,6 +651,7 @@ export class RunExecution {
           });
         }
         this.current = undefined;
+        this.partial = undefined;
         break;
       }
       default:
@@ -662,7 +726,7 @@ export class RunExecution {
       }
       this.options.capabilities?.assertCurrent();
     } catch (cause) {
-      this.failure = new RuntimeError(
+      this.failure ??= new RuntimeError(
         'INPUT_AUTHORITY_REVOKED',
         '排队输入的授权已失效，消息已保留。',
         { cause },
@@ -715,6 +779,65 @@ export class RunExecution {
     }
   }
 
+  private failureMessage(): string {
+    if (this.failure !== undefined)
+      return runFailureMessage({ kind: 'owned', cause: this.failure });
+    const owned = this.final ? this.options.agents?.failure(this.final) : undefined;
+    return owned
+      ? runFailureMessage({ kind: 'owned', cause: owned })
+      : runFailureMessage({ kind: 'model', message: this.final?.errorMessage });
+  }
+
+  private finishCurrent(status: 'failed' | 'cancelled'): void {
+    if (!this.current) return;
+    const at = Date.now();
+    const stopReason = status === 'cancelled' ? 'aborted' : 'error';
+    const terminal = this.partial
+      ? terminalContent({ ...this.partial, stopReason }, this.current)
+      : undefined;
+    this.current = { ...this.current, status, stopReason, finishedAt: at };
+    this.commit([
+      {
+        type: 'message.completed',
+        runId: this.options.run.id,
+        at,
+        data: { message: this.current },
+        ...(terminal && validToolIntents(terminal)
+          ? { privateData: encodeContextMessage(terminal) }
+          : {}),
+      },
+    ]);
+    this.current = undefined;
+    this.partial = undefined;
+  }
+
+  private consumeAgentInput(input: AgentMessage, message: UserMessage): void {
+    const at = Date.now();
+    const view: MessageView = {
+      id: randomUUID(),
+      sessionId: this.options.session.id,
+      branchId: this.options.run.branchId,
+      runId: this.options.run.id,
+      role: 'user',
+      agentMessageId: input.id,
+      text: input.text,
+      thinking: '',
+      createdAt: at,
+      status: 'complete',
+      stopReason: null,
+    };
+    this.commit([
+      ...(this.options.agents?.consume(input, view) ?? []),
+      {
+        type: 'message.started',
+        runId: this.options.run.id,
+        at,
+        data: view,
+        privateData: encodeContextMessage(message),
+      },
+    ]);
+  }
+
   private toolset(): RunToolset {
     return this.options.capabilities?.active ?? this.options.toolset;
   }
@@ -722,6 +845,7 @@ export class RunExecution {
   private failPersistence(error: unknown): never {
     if (!this.persistenceFailed) {
       this.persistenceFailed = true;
+      this.options.agents?.fault(error);
       this.toolAbort.abort(error);
       this.failure = error;
       this.agent.clearAllQueues();

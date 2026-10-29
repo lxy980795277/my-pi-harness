@@ -420,3 +420,38 @@ Web三个类型面与生产构建、修改组件ESLint/Prettier、文档及diff�
 - 已验证开发态Electron原生保存及日志字节，main/preload构建与桥的单测通过；发布安装包、Windows、真实供应商及新授权的真人登录流程未在本轮重新验证，不将开发态证据等同于发布包验收。
 
 通信协议已升至11，本机开发服务已确认无活动Run后正常重启并通过健康检查。持久事件格式版本仍为1，消息完成事实新增可选usage/finishedAt字段；已有会话无需清理，未记录的用量不回填。
+
+## 思考与工具行统一样式（2026-10-29）
+
+R30 / AC-30在macOS、Node24.20.0、pnpm10.34.6的源码与Chromium范围内通过，待用户视觉验收。此前思考摘要为14px文字、15px图标及自然行高，工具摘要为12px文字、14px图标、32px行高且颜色更浅；现在两者共用ActivityRow，统一字号、图标槽、行高、8px间距、hover/focus颜色与焦点背景。思考保持原生details/summary，箭头只在标题hover或聚焦时替换，展开面板沿用工具的缩进、圆角、底色和内边距。
+
+MessageThinking及其预览函数移到公共组件目录，主聊天与子任务详情直接复用，删除旧组件路径及子任务重复展示，不留转发层。Markdown正文、工具忙态、审批逻辑和虚拟测高没有调整。此轮保留既有M5未提交内容，不新增依赖或修改协议/数据。
+
+实际执行：相关7个文件的定向ESLint通过；既有answer-metadata.test.ts的15项测试通过，仅同步组件私有预览函数的import，未新增样式镜像测试。Web build包含独立源码/测试类型检查并通过，最后间距调整后再执行vite build通过；源码约定911文件、导入检查845源码文件与相关格式检查通过。
+
+最终构建执行pnpm exec playwright test tests/e2e/answer-process.spec.ts -g "回答结束后收起完整过程"，1项通过、6.2秒，覆盖生成/完成、四条思考及三条工具、过程展开收起、内部工具开合、键盘与刷新。已查看该用例的process-expanded.png，思考摘要保持次要视觉层级；未对全部主题/缩放重做像素采样，未启动真实账号或Electron/Windows实机。未提交或推送。
+
+## 生成状态三点动效（2026-10-29）
+
+R31 / AC-31将MessageCard的生成中及MessageTimeline的首响应等待统一替换为共享LoadingDots：仅显示三个4px圆点，间距4px，以1.2秒周期及160毫秒错峰执行transform/opacity动画；减少动态效果时为静态三点。原消息28px、等待32px最小高度保留，状态文字仅供读屏，取消/失败/中断及工具忙态保留原提示。
+
+实际执行：三个TSX文件定向ESLint、a11y、源码约定912文件、导入检查846源码文件及格式检查通过；Web build包含源码/测试类型检查并通过。最终构建运行pnpm exec playwright test tests/e2e/conversation-rendering.spec.ts -g "首响应延迟|模型尚未返回内容"，2项通过、6.7秒，覆盖等待、刷新、正文接替以及停止后消失并保留已取消提示。已查看conversation-waiting.png，等待区域仅有三个圆点；未新增测试、修改模型/协议或触碰真实账号、开发端口，未验证Electron/Windows实机，未提交。
+
+## 请求错误在回答位置呈现（2026-10-29）
+
+R32 / AC-32及UC-07在macOS arm64、Node24.20.0、pnpm10.34.6和Chromium范围内通过，产品0.12.0，待用户体验。主对话移除顶部lastRun.error横条，以既有Run.error关联该次终态助手回答；保留部分正文，没有对应助手消息时生成展示用错误行。子任务沿用同一错误文案与组件，分页、无Run的准备失败和Task诊断去重有源码回归。错误使用React纯文本，未解析Markdown或HTML；取消仍保留取消语义，下载、读取和连接错误入口保留。
+
+运行层将SDK错误映射为固定的超时、网络、认证、限流、服务不可用或通用原因，不返回供应商异常原文。已拥有的运行错误保留原因，未知异常不被后续SDK提示遮盖；Agent Hook仅通过对应终态对象提供自身产生的受控错误，避免之前的复核/摘要错误影响本次请求。最后允许轮次上的timeout曾被轮数上限覆盖，新回归先复现失败，再验证修正。未新增协议或存储字段，历史通用英文只在界面本地化，不回填原日志。
+
+浏览器刷新回归最初失败：真实scrollTop为0、scrollHeight等于clientHeight（971px），虚拟列表却只挂载index2–7，首条用户消息及错误行未挂载；HTTP中的错误仍正确持久化。原因是自算initialOffset采用估算总高，浏览器限制实际偏移为0且没有scroll事件，虚拟库内部仍按末尾偏移计算。移除该字段后采用库默认0，保留现有虚拟化、测高、overscan和layout贴底；最终测试没有手动滚动补偿，刷新后可直接观察index0及三次回答，长历史首尾也仍可达。
+
+实际执行与结果：
+
+- `pnpm exec vitest run packages/agent-runtime/test/run-failure.test.ts packages/agent-runtime/test/session-runtime.test.ts packages/agent-runtime/test/agents-failures.test.ts packages/agent-runtime/test/agent-effects.test.ts`：4文件30项通过；最后轮次修正后单独运行agents-failures.test.ts的`last allowed child turn`两项通过，含1项新增回归，共31个不同用例。
+- `pnpm exec vitest run packages/agent-runtime/test/agent-runtime.test.ts packages/agent-runtime/test/agents-budget.test.ts packages/agent-runtime/test/start-cancellation.test.ts packages/agent-runtime/test/approval-review-guard.test.ts packages/agent-runtime/test/tool-runtime.test.ts`：5文件26项通过，覆盖预算、取消、审批和工具生命周期；与上述合计57个不同运行时用例。
+- `pnpm exec vitest run apps/web/test/run-failure.test.ts apps/web/test/task-view.test.ts apps/web/test/timeline-entries.test.ts apps/web/test/answer-metadata.test.ts`：4文件68项通过，覆盖历史归属、继承分支、空助手、已取消partial、子任务分页和准备失败、纯文本转义。旧timeline断言按新增错误行行为更新。
+- Runtime包typecheck、Web build中的源码/测试类型检查及E2E独立tsc通过。`pnpm build`为8项成功、5项缓存，13.822秒；最后移除initialOffset后再次执行Web build通过，最终产物为index-CMAwzuWL.js，保留既有Vite体积提示。
+- `pnpm exec playwright test tests/e2e/request-failure.spec.ts tests/e2e/conversation-scroll.spec.ts --grep "请求错误显示在各自回答位置|长历史只渲染有界消息" --workers=1`：最终2项通过，15.5秒。真实Pi连接隔离的受控HTTP服务，依次认证拒绝、部分正文后断流、成功回答，再刷新确认三次回答及各自错误；同时覆盖长历史有界挂载与首尾访问。
+- `pnpm lint`、`pnpm format:check`通过，包含a11y、857源码导入、923文件源码约定、201文档与版本一致性；随后修改的Hook和两个新增E2E文件另经定向ESLint/Prettier通过。最终文档及diff检查通过。
+
+已查看`output/playwright/request-errors-beside-answers.png`与`output/playwright/request-errors-after-reload.png`：首条认证错误位于其回答位置，第二条部分正文后有轻量错误文本，第三条成功回答正常，顶部无运行错误横条。未重新调用真实供应商、验收Electron/Windows或操作用户运行中的服务、凭据、会话与数据库；没有自动重试、调整模型超时、提交或推送。运行层的新分类需重新启动服务后用于后续请求，旧日志保留原有诊断粒度。

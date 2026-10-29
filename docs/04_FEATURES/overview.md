@@ -27,6 +27,17 @@ AC写可观察结果，不用「完善」「支持全部」代替具体条件。
 
 ## 当前Spec
 
+- [M5实现后的代码治理](202610300028_refactor_m5-code-governance/spec.md)
+- [M5代码治理验证](202610300028_refactor_m5-code-governance/verify.md)
+
+- [会话消息持久粒度整理](202610292030_refactor_session-persistence-granularity/spec.md)
+- [会话消息持久粒度验证](202610292030_refactor_session-persistence-granularity/verify.md)
+
+- [M5子Agent与任务看板](202610281702_feature_m5-subagents-board/spec.md)
+- [M5执行与数据设计](202610281702_feature_m5-subagents-board/execution.md)
+- [M5实施任务与完成门槛](202610281702_feature_m5-subagents-board/tasks.md)
+- [M5实现与验证](202610281702_feature_m5-subagents-board/verify.md)
+
 - [会话日志去版本与持久读取整理](202610281245_refactor_session-journal-reading/spec.md)
 
 - [输入栏模式清理与统一模型菜单](202610281140_refactor_composer-model-controls/spec.md)

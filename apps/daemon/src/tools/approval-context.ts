@@ -11,19 +11,23 @@ interface ApprovalContext {
 
 /** Build the independent reviewer's context from persisted requests and accepted work state. */
 export function approvalContext(
-  store: Pick<ProfileStore, 'getSnapshot' | 'getWorkState'>,
+  store: Pick<ProfileStore, 'getSnapshot' | 'getWorkState' | 'getTaskWorkState'>,
   sessionId: string,
+  taskId?: string,
 ): ApprovalContext {
   const snapshot = store.getSnapshot(sessionId);
-  const state = store.getWorkState(sessionId, snapshot.session.activeBranchId);
+  const rootState = store.getWorkState(sessionId, snapshot.session.activeBranchId);
+  const state = taskId === undefined ? rootState : store.getTaskWorkState(sessionId, taskId);
   return {
     userRequests: snapshot.messages
-      .filter((message) => message.role === 'user')
+      .filter((message) => message.role === 'user' && message.agentMessageId === undefined)
       .map(({ id: messageId, text }) => ({ messageId, text })),
     projectInstructions: state.rules.map(({ path, content }) => ({ path, content })),
     savedPlan: state.plan,
     savedSummary: state.compaction?.summary ?? null,
-    answeredQuestions: answeredQuestions(state.questions),
+    answeredQuestions: answeredQuestions(
+      taskId === undefined ? rootState.questions : [...rootState.questions, ...state.questions],
+    ),
   };
 }
 

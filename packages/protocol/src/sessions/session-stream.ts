@@ -41,14 +41,16 @@ export const SessionChangeSchema = Type.Union([
   Type.Object({ type: Type.Literal('tool.remove'), id }, options),
 ]);
 
-/** A bounded transition for exactly one selected branch and committed sequence interval. */
+/** A bounded transition for one branch, including text between recorded events. */
 export const SessionPatchSchema = Type.Object(
   {
     kind: Type.Literal('patch'),
     sessionId: id,
     branchId: id,
     baseSeq: sequence,
+    baseLiveRevision: sequence,
     snapshotSeq: sequence,
+    liveRevision: sequence,
     session: SessionSummarySchema,
     changes: Type.Array(SessionChangeSchema, { maxItems: 256 }),
   },

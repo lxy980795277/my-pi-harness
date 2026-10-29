@@ -1,6 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { EventEmitter } from 'node:events';
 import {
   SessionStreamUpdateSchema,
   type MessageView,
@@ -8,7 +9,7 @@ import {
 } from '@my-pi-harness/protocol';
 import { createMemoryCredentialStore } from '@my-pi-harness/storage';
 import { Value } from 'typebox/value';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { loadDaemonConfig } from '../src/application/config.js';
 import { createDaemonApplication, type DaemonApplication } from '../src/http/server.js';
 import { createApplicationServices } from '../src/application/services.js';
@@ -73,6 +74,16 @@ describe('private session projection SSE', () => {
       const services = await createApplicationServices(config, {
         credentials: createMemoryCredentialStore(),
       });
+      const notifications = new EventEmitter();
+      const subscribe = services.runtime.subscribe.bind(services.runtime);
+      vi.spyOn(services.runtime, 'subscribe').mockImplementation((id, listener) => {
+        const close = subscribe(id, listener);
+        notifications.on(id, listener);
+        return (): void => {
+          notifications.off(id, listener);
+          close();
+        };
+      });
       application = await createDaemonApplication(config, undefined, services);
       const origin = await application.server.listen({ host: '127.0.0.1', port: 0 });
       const grant = await loginFixture(origin, services);
@@ -89,7 +100,7 @@ describe('private session projection SSE', () => {
         id: 'streamed-message',
         sessionId: session.id,
         branchId: session.activeBranchId,
-        runId: null,
+        runId: 'stream-run',
         role: 'assistant',
         text: prefix,
         thinking: '',
@@ -105,10 +116,29 @@ describe('private session projection SSE', () => {
         status: 'complete',
       };
       services.runtime.record(session.id, [
-        { type: 'message.started', runId: null, at: 2, data: user },
+        {
+          type: 'run.accepted',
+          runId: 'stream-run',
+          at: 2,
+          data: {
+            requestId: 'stream-request',
+            run: {
+              id: 'stream-run',
+              sessionId: session.id,
+              branchId: session.activeBranchId,
+              providerId: 'fixture',
+              modelId: 'model',
+              status: 'running',
+              createdAt: 2,
+              finishedAt: null,
+              error: null,
+            },
+          },
+        },
+        { type: 'message.started', runId: 'stream-run', at: 2, data: user },
         {
           type: 'message.started',
-          runId: null,
+          runId: 'stream-run',
           at: 2,
           data: message,
           privateData: { marker: 'private-host-metadata' },
@@ -128,26 +158,25 @@ describe('private session projection SSE', () => {
       expect(initial.raw).not.toContain('session.event');
       expect(initial.raw).not.toContain('private-host-metadata');
       const baseSeq = services.runtime.getSnapshot(session.id).snapshotSeq;
-      services.runtime.record(session.id, [
-        { type: 'message.delta', runId: null, at: 3, data: { messageId: message.id, text: 'new' } },
-        {
+      for (const fields of [{ text: 'new' }, { text: ' text' }, { thinking: 'reasoning' }]) {
+        services.store.publishMessageDelta(session.id, {
+          runId: 'stream-run',
+          messageId: message.id,
+          ...fields,
+        });
+        notifications.emit(session.id, {
           type: 'message.delta',
-          runId: null,
-          at: 3,
-          data: { messageId: message.id, text: ' text' },
-        },
-        {
-          type: 'message.delta',
-          runId: null,
-          at: 3,
-          data: { messageId: message.id, thinking: 'reasoning' },
-        },
-      ]);
+          sessionId: session.id,
+          runId: 'stream-run',
+        });
+      }
       const delta = await reader.next();
       expect(delta.update).toMatchObject({
         kind: 'patch',
         baseSeq,
-        snapshotSeq: baseSeq + 3,
+        baseLiveRevision: 0,
+        snapshotSeq: baseSeq,
+        liveRevision: 3,
         changes: [
           {
             type: 'message.append',
@@ -159,7 +188,25 @@ describe('private session projection SSE', () => {
       });
       expect(delta.raw).not.toContain(prefix);
       expect(delta.raw.length).toBeLessThan(1600);
-      expect(delta.id).toBe(String(baseSeq + 3));
+      expect(delta.id).toBe(`${baseSeq}:3`);
+      const partialReconnect = requireBody(
+        await fetch(url, {
+          headers: { Cookie: grant.cookie, 'Last-Event-ID': initial.id },
+          signal: AbortSignal.timeout(5000),
+        }),
+      );
+      readers.push(partialReconnect);
+      const partialBaseline = await partialReconnect.next();
+      expect(partialBaseline.update).toMatchObject({
+        kind: 'snapshot',
+        snapshot: {
+          snapshotSeq: baseSeq,
+          liveRevision: 3,
+          messages: [{}, { text: `${prefix}new text`, thinking: 'reasoning' }],
+        },
+      });
+      await partialReconnect.close();
+      readers.pop();
       const complete = {
         ...message,
         text: `${prefix}corrected final`,
@@ -168,12 +215,28 @@ describe('private session projection SSE', () => {
         stopReason: 'stop',
       };
       services.runtime.record(session.id, [
-        { type: 'message.completed', runId: null, at: 4, data: { message: complete } },
+        { type: 'message.completed', runId: 'stream-run', at: 4, data: { message: complete } },
       ]);
       const terminal = await reader.next();
       expect(terminal.update).toMatchObject({
         kind: 'patch',
+        baseSeq,
+        baseLiveRevision: 3,
+        snapshotSeq: baseSeq + 1,
+        liveRevision: 0,
         changes: [{ type: 'message.set', index: 1, message: complete }],
+      });
+      services.runtime.record(session.id, [
+        {
+          type: 'run.finished',
+          runId: 'stream-run',
+          at: 4,
+          data: { status: 'completed', finishedAt: 4, error: null },
+        },
+      ]);
+      expect((await reader.next()).update).toMatchObject({
+        kind: 'patch',
+        changes: [{ type: 'run.set', run: { status: 'completed' } }],
       });
       const reconnected = requireBody(
         await fetch(url, {

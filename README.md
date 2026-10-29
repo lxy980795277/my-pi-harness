@@ -2,7 +2,7 @@
 
 基于 Pi 的本地优先 PC Agent Runtime，独立实现，支持 Electron 与浏览器共用界面。第一阶段逐步对齐标杆功能，第二阶段迭代自己的产品能力；Computer Use 延后。
 
-当前已加入 **GitHub应用登录**（M4前置专项），支持持久登录与单profile账号归属。已实现 **M3 上下文与交互**：项目AGENTS规则、附件与文件引用、上下文预算/裁剪/压缩、人工提问、Plan/Todos、检查点对比恢复和工作状态重置；保留模型设置、持久会话、队列/分支，以及M2工作区、文件/PDF/图片与Web工具。权限提供请求批准、独立AI帮我批准与完全访问，macOS Shell按策略隔离；会话执行事实保存为完整宿主JSONL，SQLite保存配置与可重建投影。Windows/Linux Shell仍明确不可用；完整范围和平台限制见[路线图](docs/00_OVERVIEW/roadmap.md)。
+当前提供GitHub应用登录、模型设置、持久会话、队列/分支、工作区与受控工具、上下文管理，以及MCP、Skills、插件和办公能力。M5已加入独立上下文的子Agent、并行/嵌套任务、通信与停止、角色预算及任务看板，正在完成整体验证。权限提供请求批准、独立AI帮我批准与完全访问，macOS Shell按策略隔离；会话执行事实保存为宿主JSONL，SQLite保存配置与可重建投影。Windows/Linux Shell仍不可用，真实账号和平台验收独立记录；范围及状态见[路线图](docs/00_OVERVIEW/roadmap.md)。
 
 ## 开始开发
 

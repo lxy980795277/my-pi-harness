@@ -4,7 +4,7 @@
 
 **模块**：`packages/agent-runtime/`、`apps/daemon/src/application/services.ts`
 
-**实现锚点**：`ModelGateway`、`SessionRuntime`、`RunExecution`、`ToolRuntime`、`WorkInteractions`
+**实现锚点**：`ModelGateway`、`SessionRuntime`、`AgentRuntime`、`RunExecution`、`ToolRuntime`、`WorkInteractions`
 
 **状态**：已实现；本机自动化通过，真实供应商与平台验收范围见对应功能验证记录
 
@@ -90,7 +90,7 @@ SDK 的 `prompt()` 正常返回不代表产品 Run 成功。运行时还检查�
 
 ## 三、Session、Run 与分支
 
-Session 是用户长期打开的对话；Run 是某次输入触发的执行；Branch 表示被选中的消息历史。一个 Session 同时最多有一个活跃 Run，不同 Session 可以独立运行。
+Session是用户长期打开的对话；Run是一次实际Pi执行；Branch表示被选中的消息历史。一个Session同时最多有一个活跃根Run，子Run由Task关联并具备独立上下文；不同Session可以独立运行。子任务归属、预算及结构化收束见[子Agent设计](子Agent与任务看板设计.md)。
 
 ```text
 Session
@@ -233,7 +233,7 @@ MCP输入在接受或排队时冻结配置revision、profile身份、访问/凭�
 
 `SessionRuntime.commit()` 先调用 `RuntimeStore.append()`，成功后才发布事件。订阅者异常单独报告，不阻塞模型等待 SDK idle，也不撤销已提交事实。
 
-`RunExecution.receive()` 将文本与思考 delta 写入 `message.delta`；完整 assistant 内容写入 `message.completed`。私有模型消息保存于 `privateData`，不混入公开 SSE。
+`RunExecution.receive()`通过独立publishMessageDelta入口发布文本与思考片段，由storage的内存覆盖层提供实时快照，不写JSONL或SQLite。正常结束、取消和失败的完整assistant内容一次写入message.completed；私有模型消息保存于privateData，不混入公开SSE。真正崩溃前的未完成内存片段不恢复，持久事实与恢复水位见[存储设计](会话存储与恢复设计.md)。
 
 工具结果额外记录为带 assistant 锚点的 `tool.context`。后续请求通过 `completeToolHistory()` 排除中断造成的不完整工具周期，不伪造成功结果补齐配对。
 

@@ -1,7 +1,7 @@
 import type { ApprovalMode, EditInput, ToolDecisionInput } from '@my-pi-harness/protocol';
 import { memo, type FC } from 'react';
 import { MessageCard } from '@/features/sessions/components/message-card';
-import { MessageThinking } from '@/features/sessions/components/message-thinking';
+import { MessageThinking } from '@/components/message-thinking';
 import { ToolCard } from '@/features/sessions/components/tool-card';
 import type { TimelineContentEntry } from '@/features/sessions/types/session';
 
@@ -31,6 +31,7 @@ export const TimelineContent: FC<TimelineContentProps> = memo(
         workspaceId={workspaceId}
         approvalMode={approvalMode}
         message={entry.message}
+        failure={entry.failure ?? null}
         canEdit={canEdit}
         onEdit={onEdit}
       />

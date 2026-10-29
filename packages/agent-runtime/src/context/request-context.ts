@@ -19,6 +19,7 @@ import { renderSummary, summarizeContext } from './summary.js';
 import { assertCompleteToolCycles, type ContextToolDefinition } from './budget.js';
 import type { RunToolDefinition } from '../tools/toolset.js';
 import { activeSkillContext } from '../capabilities/context.js';
+import { communicationMessage } from './agent-message.js';
 
 interface RequestProjection {
   session: SessionSummary;
@@ -41,8 +42,9 @@ interface RequestBaseline {
 function anchors(
   messages: readonly Message[],
   stored: readonly MessageView[],
+  originalInputs: ReadonlyMap<string, Message>,
 ): Map<Message, string> {
-  const ids = contextSourceIds(messages, stored);
+  const ids = contextSourceIds(messages, stored, originalInputs);
   const result = new Map<Message, string>();
   let index = 0;
   let assistantId: string | undefined;
@@ -70,8 +72,12 @@ export class WorkContext {
 
   public async project(input: RequestProjection): Promise<Message[]> {
     input.signal.throwIfAborted();
-    const snapshot = this.work.options.store.getSnapshot(input.session.id);
-    const sourceAnchors = anchors(input.messages, snapshot.messages);
+    const snapshot = this.work.sessionSnapshot(input.session.id);
+    const sourceAnchors = anchors(
+      input.messages,
+      snapshot.messages,
+      this.communicationInputs(input.session.id, snapshot.messages),
+    );
     let state = this.work.snapshot(input.session.id).state;
     const ids = this.work.visibleIds(
       state,
@@ -202,6 +208,7 @@ export class WorkContext {
         runId: input.run.id,
         at: Date.now(),
         data: {
+          ...(this.work.taskId === undefined ? {} : { taskId: this.work.taskId }),
           branchId: input.run.branchId,
           usage,
           messageIds,
@@ -295,6 +302,31 @@ export class WorkContext {
       tools,
     ).estimatedTokens;
     return this.work.save(sessionId, next, runId);
+  }
+
+  private communicationInputs(
+    sessionId: string,
+    messages: readonly MessageView[],
+  ): Map<string, Message> {
+    const marked = messages.filter(
+      (message): message is MessageView & { agentMessageId: string } =>
+        message.agentMessageId !== undefined,
+    );
+    const inputs = new Map<string, Message>();
+    if (marked.length === 0) return inputs;
+    const store = this.work.options.store;
+    if (!store.listAgentMessages)
+      throw new RuntimeError('CONTEXT_SOURCE_INVALID', '无法读取任务通信的持久来源。');
+    const queued = new Map(
+      store.listAgentMessages(sessionId).map((message) => [message.id, message]),
+    );
+    for (const message of marked) {
+      const source = queued.get(message.agentMessageId);
+      if (!source || source.status !== 'consumed' || source.consumedRunId !== message.runId)
+        throw new RuntimeError('CONTEXT_SOURCE_INVALID', '任务通信不属于此模型输入。');
+      inputs.set(message.id, communicationMessage(source));
+    }
+    return inputs;
   }
 
   private marker(state: WorkState): string {

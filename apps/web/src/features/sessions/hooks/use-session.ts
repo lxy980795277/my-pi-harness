@@ -7,6 +7,7 @@ import { subscribeLiveSession } from '@/features/sessions/queries/live-session';
 import { mergeSessionSnapshot, retainNewestSnapshot } from '@/features/sessions/queries/projection';
 import { fetchSession } from '@/features/sessions/services/sessions';
 import { useAsyncEvent } from '@/hooks/use-async-event';
+import { drainInvalidations, type RefreshOwner } from '@/utils/invalidation-refresh';
 
 interface ConnectionState {
   id: string;
@@ -35,25 +36,41 @@ export const useSession = (id: string): LiveSession => {
     },
   });
 
-  const { run: refreshWork } = useAsyncEvent(
-    useCallback(async (): Promise<void> => {
-      await queryClient.invalidateQueries({ queryKey: ['work', id] });
-    }, [id, queryClient]),
+  const { run: refreshWork, cancel } = useAsyncEvent(
+    useCallback(
+      async (signal: AbortSignal, owner: RefreshOwner): Promise<void> => {
+        await drainInvalidations(signal, owner, async (): Promise<void> => {
+          await queryClient.invalidateQueries({ queryKey: ['work', id] });
+        });
+      },
+      [id, queryClient],
+    ),
   );
 
   useEffect(() => {
     let workTimer: ReturnType<typeof setTimeout> | undefined;
+    let workSequence = -1;
+    let freshBaseline = true;
+    const owner: RefreshOwner = { dirty: false, closed: false };
     const close = subscribeLiveSession(id, {
       snapshot: (snapshot): void => {
+        if (owner.closed) return;
         mergeSessionSnapshot(queryClient, snapshot);
+        const workChanged = freshBaseline || snapshot.snapshotSeq > workSequence;
+        workSequence = Math.max(workSequence, snapshot.snapshotSeq);
+        freshBaseline = false;
+        if (!workChanged) return;
+        owner.dirty = true;
         if (workTimer === undefined) {
           workTimer = setTimeout((): void => {
             workTimer = undefined;
-            refreshWork();
+            if (!owner.closed) refreshWork(owner);
           }, 300);
         }
       },
       connection: (status, error): void => {
+        if (owner.closed) return;
+        if (status === 'connecting') freshBaseline = true;
         setConnectionState((current): ConnectionState => {
           if (current.id === id && current.status === status && current.error === error) {
             return current;
@@ -63,10 +80,13 @@ export const useSession = (id: string): LiveSession => {
       },
     });
     return (): void => {
+      owner.closed = true;
+      owner.dirty = false;
       close();
       clearTimeout(workTimer);
+      cancel();
     };
-  }, [id, queryClient, refreshWork]);
+  }, [cancel, id, queryClient, refreshWork]);
 
   let connection: SessionConnectionStatus = 'connecting';
   let connectionError: string | null = null;

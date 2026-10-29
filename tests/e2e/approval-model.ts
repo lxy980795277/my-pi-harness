@@ -3,6 +3,7 @@ import type { ModelRequest, TestModelServer } from './model-server.js';
 
 export interface ApprovalTestModel extends TestModelServer {
   reviews: ModelRequest[];
+  summaries: ModelRequest[];
 }
 const isRecord = (value: unknown): value is Record<string, unknown> => {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -38,10 +39,11 @@ const isReview = (text: string): boolean => {
   );
 };
 
-/** Serves the real tool loop and an independent review request identified by its public JSON payload. */
+/** Serves the real tool loop, independent approval review, and structured context summary requests. */
 export async function startApprovalModel(review: 'allow' | 'invalid'): Promise<ApprovalTestModel> {
   const requests: ModelRequest[] = [];
   const reviews: ModelRequest[] = [];
+  const summaries: ModelRequest[] = [];
   const server = createServer((request, response) => {
     const chunks: Buffer[] = [];
     request.on('data', (chunk: Buffer) => {
@@ -64,7 +66,9 @@ export async function startApprovalModel(review: 'allow' | 'invalid'): Promise<A
           }
         }
         const reviewing = isReview(lastUserText(messages));
+        const summarizing = !reviewing && !Array.isArray(input['tools']);
         if (reviewing) reviews.push(entry);
+        if (summarizing) summaries.push(entry);
         response.writeHead(200, {
           'Content-Type': 'text/event-stream',
           'Cache-Control': 'no-store',
@@ -83,6 +87,19 @@ export async function startApprovalModel(review: 'allow' | 'invalid'): Promise<A
               reason: '本次修改只创建用户要求的工作区测试文件。',
             });
           send({ content });
+          send({}, 'stop');
+        } else if (summarizing) {
+          send({
+            content: JSON.stringify({
+              objective: '创建用户要求的 approved.txt 测试文件',
+              constraints: ['遵守本次会话的执行批准策略'],
+              decisions: ['文件内容为 Approval fixture content'],
+              completed: ['已读取历史消息'],
+              pending: ['根据实际工具结果确认文件创建完成'],
+              blockers: [],
+              nextAction: '核对工具结果并报告完成',
+            }),
+          });
           send({}, 'stop');
         } else if (
           messages.some((message) => {
@@ -130,6 +147,7 @@ export async function startApprovalModel(review: 'allow' | 'invalid'): Promise<A
     origin: `http://127.0.0.1:${address.port}`,
     requests,
     reviews,
+    summaries,
     close: async (): Promise<void> => {
       server.closeAllConnections();
       await new Promise<void>((resolve, reject) => {

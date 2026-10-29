@@ -1,4 +1,5 @@
 export * from './sessions/context.js';
+export * from './sessions/live.js';
 export * from './extensions/mcp.js';
 export * from './tools/tool-results.js';
 export * from './extensions/skills.js';
@@ -150,3 +151,4 @@ export type {
 } from './host/desktop.js';
 export * from './extensions/connections.js';
 export * from './tools/frozen-tools.js';
+export * from './sessions/agents.js';

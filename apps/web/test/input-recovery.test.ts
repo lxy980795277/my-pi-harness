@@ -2,7 +2,7 @@ import type { InputRequest } from '@my-pi-harness/protocol';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { useNavigationStore } from '../src/app/stores/navigation';
 import { useComposerStore } from '../src/features/sessions/stores/composer';
-import { isRejectedInput } from '../src/features/sessions/utils/input-outcome';
+import { isRejectedInput } from '../src/utils/input-outcome';
 import { RequestError } from '../src/services/base-request';
 
 beforeEach(() => {

@@ -14,6 +14,7 @@ import {
 import { StorageError } from '../../shared/errors.js';
 import { ToolProjection } from './tools.js';
 import { WorkRepository } from './work.js';
+import { AgentTaskProjection } from './agents.js';
 import { projectCapabilityLoad } from './capabilities.js';
 import * as schema from '../../sqlite/schema.js';
 import { checked } from '../../shared/validation.js';
@@ -21,7 +22,6 @@ import {
   BranchSelectionSchema,
   InputIdSchema,
   MessageCompletedSchema,
-  MessageDeltaSchema,
   QueueRequestSchema,
   RunAcceptedSchema,
   RunFinishedSchema,
@@ -31,10 +31,12 @@ import {
 export class ProjectionWriter {
   private readonly tools: ToolProjection;
   private readonly work: WorkRepository;
+  private readonly agents: AgentTaskProjection;
 
   public constructor(private readonly db: BetterSQLite3Database<typeof schema>) {
     this.tools = new ToolProjection(db);
     this.work = new WorkRepository(db);
+    this.agents = new AgentTaskProjection(db);
   }
 
   /** Validate and load an existing session whose durable cursor agrees with its projection. */
@@ -87,10 +89,14 @@ export class ProjectionWriter {
       throw new StorageError('INVALID_EVENT', 'Message identity does not match its event');
     }
     const session = this.session(event.sessionId);
-    if (message.branchId !== session.activeBranchId || message.runId !== session.activeRunId) {
+    const run = event.runId === null ? undefined : this.run(event);
+    if (
+      message.branchId !== session.activeBranchId ||
+      (run?.taskId === undefined && message.runId !== session.activeRunId) ||
+      (run !== undefined && run.status !== 'running')
+    ) {
       throw new StorageError('CONFLICT', 'Message must belong to the active branch and run');
     }
-    if (event.runId !== null) this.run(event);
     this.db
       .insert(schema.messages)
       .values({
@@ -100,6 +106,25 @@ export class ProjectionWriter {
         privateData: privateData ?? null,
       })
       .run();
+    if (run?.taskId !== undefined) {
+      const task = this.db
+        .select()
+        .from(schema.agentTasks)
+        .where(eq(schema.agentTasks.id, run.taskId))
+        .get();
+      if (!task || task.sessionId !== event.sessionId || task.closedAt !== null)
+        throw new StorageError('INVALID_EVENT', 'Message task does not belong to this execution');
+      const last = this.db
+        .select({ last: max(schema.taskMessages.ordinal) })
+        .from(schema.taskMessages)
+        .where(eq(schema.taskMessages.taskId, run.taskId))
+        .get();
+      this.db
+        .insert(schema.taskMessages)
+        .values({ taskId: run.taskId, messageId: message.id, ordinal: (last?.last ?? 0) + 1 })
+        .run();
+      return;
+    }
     const row = this.db
       .select({ last: max(schema.branchMessages.ordinal) })
       .from(schema.branchMessages)
@@ -112,6 +137,8 @@ export class ProjectionWriter {
   }
 
   private validateMessageStatistics(message: MessageView): void {
+    if (message.agentMessageId !== undefined && message.role !== 'user')
+      throw new StorageError('INVALID_EVENT', 'Agent communications must be explicit model inputs');
     if (message.finishedAt === undefined && message.usage === undefined) return;
     if (message.role !== 'assistant' || message.status === 'streaming') {
       throw new StorageError(
@@ -134,14 +161,46 @@ export class ProjectionWriter {
     ) {
       throw new StorageError('INVALID_EVENT', 'Accepted run identity or initial state is invalid');
     }
-    if (session.activeRunId !== null)
-      throw new StorageError('CONFLICT', 'This session already has an active run');
+    if (run.taskId === undefined) {
+      if (session.activeRunId !== null)
+        throw new StorageError('CONFLICT', 'This session already has an active run');
+    } else {
+      const task = this.db
+        .select()
+        .from(schema.agentTasks)
+        .where(eq(schema.agentTasks.id, run.taskId))
+        .get();
+      const parent = task
+        ? this.db.select().from(schema.runs).where(eq(schema.runs.id, task.parentRunId)).get()
+        : undefined;
+      if (
+        !task ||
+        task.sessionId !== event.sessionId ||
+        task.closedAt !== null ||
+        parent?.data.status !== 'running' ||
+        session.activeRunId !== task.rootRunId
+      )
+        throw new StorageError(
+          'CONFLICT',
+          'Child run requires an open task and active parent tree',
+        );
+      if (
+        this.db
+          .select()
+          .from(schema.runs)
+          .where(eq(schema.runs.taskId, run.taskId))
+          .all()
+          .some((row) => row.data.status === 'running')
+      )
+        throw new StorageError('CONFLICT', 'Task already has an active run');
+    }
     this.db
       .insert(schema.runs)
       .values({
         id: run.id,
         sessionId: run.sessionId,
         branchId: run.branchId,
+        taskId: run.taskId ?? null,
         data: run,
         privateData: privateData ?? null,
       })
@@ -155,7 +214,7 @@ export class ProjectionWriter {
         inputId: null,
       })
       .run();
-    this.saveSession({ ...session, activeRunId: run.id });
+    if (run.taskId === undefined) this.saveSession({ ...session, activeRunId: run.id });
   }
 
   private finishRun(event: HarnessEvent): void {
@@ -164,8 +223,9 @@ export class ProjectionWriter {
     if (run.status !== 'running')
       throw new StorageError('CONFLICT', 'Run already has a terminal outcome');
     const session = this.session(event.sessionId);
-    if (session.activeRunId !== run.id)
+    if (run.taskId === undefined && session.activeRunId !== run.id)
       throw new StorageError('INVALID_RECORD', 'Run is not the active session run');
+    this.agents.assertChildrenClosed(event.sessionId, run.id);
     this.db
       .update(schema.runs)
       .set({ data: { ...run, ...finished } })
@@ -186,7 +246,7 @@ export class ProjectionWriter {
         .where(eq(schema.messages.id, message.id))
         .run();
     }
-    this.saveSession({ ...session, activeRunId: null });
+    if (run.taskId === undefined) this.saveSession({ ...session, activeRunId: null });
   }
 
   private createBranch(event: HarnessEvent): void {
@@ -279,6 +339,24 @@ export class ProjectionWriter {
    */
   public apply(event: HarnessEvent, privateData?: Record<string, unknown>): void {
     switch (event.type) {
+      case 'task.created':
+        this.agents.create(event);
+        break;
+      case 'task.closed':
+        this.agents.close(event);
+        break;
+      case 'task.waiting':
+        this.agents.waiting(event);
+        break;
+      case 'task.message_queued':
+        this.agents.queue(event);
+        break;
+      case 'task.message_consumed':
+        this.agents.consume(event);
+        break;
+      case 'task.message_undelivered':
+        this.agents.undelivered(event);
+        break;
       case 'run.tools_loaded':
         projectCapabilityLoad(this.db, event, privateData);
         break;
@@ -315,23 +393,6 @@ export class ProjectionWriter {
       case 'message.started':
         this.addMessage(event, privateData);
         break;
-      case 'message.delta': {
-        const delta = checked(MessageDeltaSchema, event.data);
-        const message = this.message(event, delta.messageId);
-        if (message.role !== 'assistant' || message.status !== 'streaming')
-          throw new StorageError('CONFLICT', 'Message no longer accepts stream deltas');
-        const updated = checked(MessageViewSchema, {
-          ...message,
-          text: message.text + (delta.text ?? ''),
-          thinking: message.thinking + (delta.thinking ?? ''),
-        });
-        this.db
-          .update(schema.messages)
-          .set({ data: updated })
-          .where(eq(schema.messages.id, message.id))
-          .run();
-        break;
-      }
       case 'message.completed': {
         const completed = checked(MessageCompletedSchema, event.data);
         const message = completed.message;

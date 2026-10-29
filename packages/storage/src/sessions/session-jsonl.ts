@@ -18,6 +18,7 @@ import { HarnessEventSchema } from '@my-pi-harness/protocol';
 import { StorageError } from '../shared/errors.js';
 import type { PrivateSessionFiles } from './private-files.js';
 import { checked } from '../shared/validation.js';
+import { assertPersistentEvent } from './event-persistence.js';
 import {
   decodeJournalRecords,
   encodeJournalRecords,
@@ -239,6 +240,7 @@ export class SessionJournal {
     const firstSeq = (cursor?.seq ?? 0) + 1;
     for (const [index, record] of records.entries()) {
       checked(HarnessEventSchema, record.event);
+      assertPersistentEvent(record.event.type);
       if (record.event.sessionId !== sessionId || record.event.seq !== firstSeq + index)
         throw new StorageError('INVALID_RECORD', 'Session command sequence is invalid');
     }

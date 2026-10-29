@@ -12,6 +12,7 @@ const snapshot = (
   text: string,
   branchId = 'main',
   sessionId = 'session',
+  liveRevision = 0,
 ): SessionSnapshot => {
   return {
     session: {
@@ -47,10 +48,23 @@ const snapshot = (
     queue: [],
     tools: [],
     snapshotSeq: seq,
+    liveRevision,
   };
 };
 
 describe('committed session projection cache', () => {
+  it('keeps newer partial text over equal-sequence HTTP data and accepts a later durable reset', () => {
+    const initial = snapshot(5, 'prefix', 'main', 'session', 1);
+    const live = retainNewestSnapshot(initial, snapshot(5, 'prefix next', 'main', 'session', 4));
+    expect(live.messages[0]?.text).toBe('prefix next');
+    expect(retainNewestSnapshot(live, snapshot(5, 'old HTTP', 'main', 'session', 2))).toBe(live);
+    expect(retainNewestSnapshot(live, snapshot(5, 'duplicate', 'main', 'session', 4))).toBe(live);
+    const recovered = retainNewestSnapshot(live, snapshot(6, 'interrupted durable result'));
+    expect(recovered.liveRevision).toBe(0);
+    expect(recovered.messages[0]?.text).toBe('interrupted durable result');
+    expect(retainNewestSnapshot(recovered, live)).toBe(recovered);
+  });
+
   it('keeps live content when an earlier HTTP read resolves after the SSE batch', async () => {
     const client = new QueryClient();
     client.setQueryData(['session', 'session'], snapshot(1, '开始'));

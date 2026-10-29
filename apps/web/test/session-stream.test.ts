@@ -11,7 +11,9 @@ const append = (baseSeq = 1, snapshotSeq = 2): SessionPatch => {
     sessionId: 'session',
     branchId: 'main',
     baseSeq,
+    baseLiveRevision: 0,
     snapshotSeq,
+    liveRevision: 0,
     session: sessionProjection(snapshotSeq).session,
     changes: [
       { type: 'message.append', id: 'assistant', textDelta: ' next', thinkingDelta: 'reasoning' },
@@ -20,6 +22,31 @@ const append = (baseSeq = 1, snapshotSeq = 2): SessionPatch => {
 };
 
 describe('session stream projection reducer', () => {
+  it('checks live revision intervals at the same durable sequence and accepts a new durable baseline after restart', () => {
+    const initial = sessionProjection(3, 'prefix', 4);
+    const update = { ...append(3, 3), baseLiveRevision: 4, liveRevision: 6 };
+    const live = applySessionStreamUpdate(initial, update, 'session');
+    expect(live).toMatchObject({ snapshotSeq: 3, liveRevision: 6 });
+    expect(projectionMessage(live).text).toBe('prefix next');
+    expect(applySessionStreamUpdate(live, update, 'session')).toBe(live);
+    expect(() =>
+      applySessionStreamUpdate(initial, { ...update, baseLiveRevision: 3 }, 'session'),
+    ).toThrow('缺口');
+    expect(() =>
+      applySessionStreamUpdate(initial, { ...update, baseLiveRevision: 5 }, 'session'),
+    ).toThrow('缺口');
+    const recovered = sessionProjection(4, 'durable interrupted result');
+    const next = applySessionStreamUpdate(
+      live,
+      { kind: 'snapshot', snapshot: recovered },
+      'session',
+    );
+    expect(next).toBe(recovered);
+    expect(applySessionStreamUpdate(next, { kind: 'snapshot', snapshot: live }, 'session')).toBe(
+      next,
+    );
+  });
+
   it('appends text and reasoning while preserving all stable entities and collection references', () => {
     const initial = sessionProjection();
     const next = applySessionStreamUpdate(initial, append(), 'session');

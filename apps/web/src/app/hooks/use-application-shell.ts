@@ -12,7 +12,11 @@ import { readLoginCallback } from '@/features/auth/utils/login-entry';
 import { useSettingsStore } from '@/features/settings/stores/settings';
 import { useAsyncEvent } from '@/hooks/use-async-event';
 
-const PAGE_LABELS: Record<WorkspacePage, string> = { sessions: '新对话', runtime: '运行状态' };
+const PAGE_LABELS: Record<WorkspacePage, string> = {
+  sessions: '新对话',
+  runtime: '运行状态',
+  tasks: '任务看板',
+};
 const THEME_LABELS = { light: '切换到深色主题', dark: '切换到浅色主题' } as const;
 
 /** Shell commands share one cancellable owner; secrets never enter mutation variables. */

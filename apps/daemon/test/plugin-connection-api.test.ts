@@ -380,6 +380,7 @@ it('only daemon ToolRuntime web_fetch can enter the read gateway, which attaches
       finishedAt: null,
       error: null,
     },
+    readOnly: false,
     signal: new AbortController().signal,
     supportsImages: false,
     recorded: new Set(),

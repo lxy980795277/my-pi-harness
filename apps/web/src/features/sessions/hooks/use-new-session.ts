@@ -27,7 +27,7 @@ import {
 } from '@/features/sessions/utils/composer-options';
 import { useComposerSkillSelection } from '@/features/skills/hooks/use-composer-skill-selection';
 import { useComposerMcpSelection } from '@/features/mcp/hooks/use-composer-mcp-selection';
-import { isRejectedInput } from '@/features/sessions/utils/input-outcome';
+import { isRejectedInput } from '@/utils/input-outcome';
 import { useWorkspaces } from '@/features/workspaces/hooks/use-workspaces';
 import { useAsyncEvent } from '@/hooks/use-async-event';
 

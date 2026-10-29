@@ -99,6 +99,11 @@ export async function executeSessionTool(
   signal: AbortSignal,
 ): Promise<string> {
   signal.throwIfAborted();
+  if (
+    work.taskId !== undefined &&
+    (name === 'restore_context_checkpoint' || name === 'reset_working_state')
+  )
+    throw new RuntimeError('TASK_SCOPE_CONFLICT', '子任务不能重置或恢复主会话工作状态。');
   if (name === 'ask_user' && Value.Check(ask, args))
     return await work.ask(sessionId, runId, toolCallId, args.questions, signal);
   if (name === 'update_plan' && Value.Check(plan, args))

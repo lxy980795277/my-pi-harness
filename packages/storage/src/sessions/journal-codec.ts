@@ -15,8 +15,15 @@ export interface JournalRecord {
   privateData: Record<string, unknown> | null;
 }
 
-/** Preceding request messages by Run and branch; terminal Runs release their session baselines. */
-export type JournalCodecState = ReadonlyMap<string, readonly Record<string, unknown>[]>;
+type BranchBaselines = ReadonlyMap<string, readonly Record<string, unknown>[]>;
+
+/** Each Run owns its branch baselines; finishing a child never clears its active relatives. */
+export type JournalCodecState = ReadonlyMap<string, BranchBaselines>;
+
+interface ContextOwner {
+  runId: string;
+  branchId: string;
+}
 
 interface TransformedRecords {
   records: JournalRecord[];
@@ -53,10 +60,26 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
-function contextKey(event: HarnessEvent): string {
+function contextOwner(event: HarnessEvent): ContextOwner {
   const { branchId } = checked(contextBranch, event.data);
   if (event.runId === null || event.runId.length === 0) invalid('Journal request requires a Run');
-  return JSON.stringify([event.runId, branchId]);
+  return { runId: event.runId, branchId };
+}
+
+function releaseRun(state: Map<string, BranchBaselines>, event: HarnessEvent): void {
+  if (event.type !== 'run.finished') return;
+  if (event.runId === null) invalid('Journal terminal record requires a Run');
+  state.delete(event.runId);
+}
+
+function saveBaseline(
+  state: Map<string, BranchBaselines>,
+  owner: ContextOwner,
+  messages: readonly Record<string, unknown>[],
+): void {
+  const branches = new Map(state.get(owner.runId));
+  branches.set(owner.branchId, structuredClone(messages));
+  state.set(owner.runId, branches);
 }
 
 function systemContent(messages: readonly Record<string, unknown>[]): string | undefined {
@@ -123,17 +146,17 @@ export function encodeJournalRecords(
   const records = structuredClone([...input]);
   const state = new Map(previous);
   for (const record of records) {
-    if (record.event.type === 'run.finished') state.clear();
+    releaseRun(state, record.event);
     if (record.event.type !== 'context.prepared') continue;
-    const key = contextKey(record.event);
+    const owner = contextOwner(record.event);
     const payload = record.privateData ?? invalid('Journal request requires private data');
     const context = checked(PreparedPrivateSchema, payload);
-    const baseline = state.get(key);
+    const baseline = state.get(owner.runId)?.get(owner.branchId);
     const references = new Map(baseline?.map((message, index) => [JSON.stringify(message), index]));
     const messages = context.messages.map(
       (message) => references.get(JSON.stringify(message)) ?? message,
     );
-    state.set(key, structuredClone(context.messages));
+    saveBaseline(state, owner, context.messages);
     if (context.systemPrompt === systemContent(context.messages)) payload['systemPrompt'] = 0;
     payload['messages'] = messages;
   }
@@ -154,11 +177,11 @@ export function decodeJournalRecords(
   const records = structuredClone([...input]);
   const state = new Map(previous);
   for (const record of records) {
-    if (record.event.type === 'run.finished') state.clear();
+    releaseRun(state, record.event);
     if (record.event.type !== 'context.prepared') continue;
-    const key = contextKey(record.event);
+    const owner = contextOwner(record.event);
     const context = checked(contextStored, record.privateData);
-    const baseline = state.get(key);
+    const baseline = state.get(owner.runId)?.get(owner.branchId);
     const messages = context.messages.map((message) => {
       if (typeof message !== 'number') return message;
       const referenced = baseline?.[message];
@@ -171,7 +194,7 @@ export function decodeJournalRecords(
       context['systemPrompt'] = prompt;
     }
     context['messages'] = messages;
-    state.set(key, structuredClone(messages));
+    saveBaseline(state, owner, messages);
   }
   transformToolResults(records, true);
   for (const record of records) record.event = projectStoredEvent(record.event);

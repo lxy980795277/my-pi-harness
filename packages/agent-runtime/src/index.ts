@@ -1,5 +1,7 @@
 export { ModelGateway, type ModelGatewayOptions, type ResolvedModel } from './models/gateway.js';
 export { SessionRuntime, type SessionRuntimeOptions } from './sessions/runtime.js';
+export { AgentRuntime, type AgentRuntimeOptions } from './agents/runtime.js';
+export type { AgentStore } from './agents/ports.js';
 export { RuntimeError } from './errors.js';
 export {
   createPiCredentialStore,
@@ -19,7 +21,12 @@ export type {
   FrozenMcpTool,
 } from './tools/external.js';
 export type { ExternalToolAuthorization } from '@my-pi-harness/protocol';
-export type { EventInput, InputAcceptance, RuntimeStore } from './sessions/ports.js';
+export type {
+  EventInput,
+  InputAcceptance,
+  RuntimeNotification,
+  RuntimeStore,
+} from './sessions/ports.js';
 export type { ProviderStore } from './models/ports.js';
 export { WorkRuntime } from './work/runtime.js';
 export type { WorkRuntimeOptions, WorkStore } from './work/ports.js';

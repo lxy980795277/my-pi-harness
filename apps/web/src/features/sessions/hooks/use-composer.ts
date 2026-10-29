@@ -13,7 +13,7 @@ import {
 } from '@/features/skills/hooks/use-composer-skill-selection';
 import { useComposerMcpSelection } from '@/features/mcp/hooks/use-composer-mcp-selection';
 import { EMPTY_MCP_SELECTIONS } from '@/features/mcp/utils/mcp-selection';
-import { isRejectedInput } from '@/features/sessions/utils/input-outcome';
+import { isRejectedInput } from '@/utils/input-outcome';
 
 /** Uncertain retries keep their request id; successful submission clears only that session's draft. */
 export const useComposer = (

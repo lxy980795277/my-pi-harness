@@ -2,7 +2,19 @@
 
 本页管理功能范围与里程碑顺序，详细验收由各里程碑 Spec 承担。`规划` 不表示能力已经可用；只有实现与必要验证都完成后才能调整状态。
 
-当前继续M4[插件全链路审计](../04_FEATURES/202610201932_feature_m4-capabilities/plugin-completion.md#插件能力全链路对齐审计2026-10-27)：已补齐MCP目录准备与恢复、搜索自动加载、资源启动对账、Skill跨Run/压缩继承及动态Office激活，完成macOS源码、浏览器、CPU向量和部署资源验证，见[实际记录](../04_FEATURES/202610201932_feature_m4-capabilities/plugin-completion-verify.md#插件能力全链路对齐审计2026-10-27)。已完成同目录[未提交改动冗余审查](../04_FEATURES/202610201932_feature_m4-capabilities/plugin-completion.md#未提交改动冗余审查2026-10-27)，清理被新链路替代的旧入口与重复实现。真实账号仓库访问和平台验收仍单列，M5尚未开始。
+当前已完成[M5子Agent与任务看板](../04_FEATURES/202610281702_feature_m5-subagents-board/spec.md)的M5.1–M5.5工程实现及macOS自动化验证，真实Pi、临时存储、API及Chromium链路通过，见[验证记录](../04_FEATURES/202610281702_feature_m5-subagents-board/verify.md)。待用户体验、真实供应商、Electron及Windows实机验收；M6仍为后续规划。M4的真实账号、Office视觉和平台验收继续保留原归属，不因M5实现而标为完成。
+
+2026-10-30完成[M5实现后的代码治理](../04_FEATURES/202610300028_refactor_m5-code-governance/spec.md)及[本机验证](../04_FEATURES/202610300028_refactor_m5-code-governance/verify.md)：修复未确认任务重试、Work刷新、准备故障分类、子产物下载、任务查询与请求基线释放，清理冗余DTO、字段和过期说明，保留全部类型与静态规则。协议21、SQLite9、产品0.12.0；未清理真实数据、启动M6或自动提交，平台验收继续保留。
+
+2026-10-30完成M5审批继承修复（AC-12）的本机工程验证：子任务审批策略继承父Run，独立执行只读角色的能力限制，消除完全访问下正常网页读取的额外批准；补齐工具指纹归一、动态工具、嵌套和续作回归。证据见M5 Spec及verify，真实供应商和平台范围保持原状态。
+
+2026-10-29完成[会话消息持久粒度整理](../04_FEATURES/202610292030_refactor_session-persistence-granularity/spec.md)及[本机验证](../04_FEATURES/202610292030_refactor_session-persistence-granularity/verify.md)：流式正文/思考仅作实时内存更新，完整消息和必要执行事实持久化，快照增加独立实时水位并同步恢复。属于M1/M3/M5已实现链路维护；已按授权清理本项目旧会话及数据库会话投影，独立配置保留，协议20/SQLite9，不进入M6/M7。
+
+2026-10-29补充[对话呈现R30/R31](../04_FEATURES/202610191647_feature_conversation-rendering/spec.md)：思考与工具摘要共用轻量行外观，主聊天及子任务复用思考组件；生成/首响应等待统一为三点动效。仅Renderer展示修复，不改变M5执行或后续里程碑范围。
+
+同日完成R32请求错误呈现修复的本机工程验证：原因显示在各自回答位置，保留部分正文与历史归属，移除顶部重复运行错误横条；运行层提供安全分类文案，复用现有Run.error，补齐刷新短历史首行可达回归。不改变协议、存储格式或里程碑范围，待用户体验，证据见上述Spec的verify。
+
+M4[插件全链路审计](../04_FEATURES/202610201932_feature_m4-capabilities/plugin-completion.md#插件能力全链路对齐审计2026-10-27)已补齐MCP目录准备与恢复、搜索自动加载、资源启动对账、Skill跨Run/压缩继承及动态Office激活，完成macOS源码、浏览器、CPU向量和部署资源验证，见[实际记录](../04_FEATURES/202610201932_feature_m4-capabilities/plugin-completion-verify.md#插件能力全链路对齐审计2026-10-27)。同目录[未提交改动冗余审查](../04_FEATURES/202610201932_feature_m4-capabilities/plugin-completion.md#未提交改动冗余审查2026-10-27)已清理被新链路替代的旧入口与重复实现。
 
 Spec目录采用北京时间 `YYYYMMDDHHmm_category_name/`；历史补齐分钟仅用于排序，不能用来推断开发工时。新建和后续小修的规则见[功能文档入口](../04_FEATURES/overview.md)。
 
@@ -40,7 +52,7 @@ Spec目录采用北京时间 `YYYYMMDDHHmm_category_name/`；历史补齐分钟�
 | M4.7 外部服务连接                                                                           | 五个服务族、Plugin OAuth、受限REST gateway及共享MCP凭据                                                                       | 实现与macOS定向验证完成；外部环境证据见本轮验证                       |
 | M4.8 办公文档工作流                                                                         | 文档读取/PDF页图、四类办公任务、独立资源、依赖检测及文件交付                                                                  | 实现及结构/PDF页图验证完成；Office必要视觉检查待完成                  |
 | M4.9 联调与交付                                                                             | Web/Electron、真实SDK/Pi、恢复/取消、M1–M3回归与平台/账号证据                                                                 | 本机源码/浏览器/桌面通过；平台、账号与正式发布待验收                  |
-| M5 子 Agent 与看板                                                                          | 角色与预算、执行树、嵌套委派/等待/通信/停止、独立上下文、任务看板、进度/待处理/人工确认                                       | 本轮提交后进入设计，尚未实现                                          |
+| [M5 子 Agent 与看板](../04_FEATURES/202610281702_feature_m5-subagents-board/spec.md)        | 角色与预算、执行树、嵌套委派/等待/通信/停止、独立上下文、任务看板、进度/待处理/人工确认                                       | 工程实现与macOS自动化通过；用户、真实供应商及桌面平台待验收           |
 | M6 记忆与搜索                                                                               | user / workspace 长期记忆、学习与增改删、画像、FTS与本地embedding混合召回、Session搜索、工具目录检索                          | 规划                                                                  |
 | M7 完整对齐验收                                                                             | 主/子Trace、请求快照、用量和费用估算、文件撤销重做、长会话恢复与JSONL导入导出、全功能回归、安装包与平台验收                   | 规划                                                                  |
 | 后续 Computer Use 专项                                                                      | 原生观察、语义树、窗口截图、输入、应用授权、受限脚本与AI光标                                                                  | 当前版本排除，不纳入 M0–M7 完成标准                                   |

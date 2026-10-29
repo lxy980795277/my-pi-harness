@@ -56,7 +56,13 @@ export class RunToolset {
       const name = selection.definition.name;
       if (this.#routes.has(name))
         throw new RuntimeError('TOOL_NAME_CONFLICT', `工具名称重复：${name}`);
-      const frozen = freeze(Value.Clone(selection));
+      const frozen = freeze(
+        Value.Clone({
+          definition: selection.definition,
+          source: selection.source,
+          ...(selection.external ? { external: selection.external } : {}),
+        }),
+      );
       const digest = frozen.external
         ? frozen.external.selection.definitionFingerprint
         : fingerprint(frozen);

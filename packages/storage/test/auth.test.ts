@@ -6,6 +6,7 @@ import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   openProfileStore,
+  SCHEMA_VERSION,
   type LocalClient,
   type ProfileStore,
   type VerifiedIdentity,
@@ -300,7 +301,7 @@ describe('application login schema migration', () => {
     );
     expect(
       inspect(value, (connection) => connection.pragma('user_version', { simple: true })),
-    ).toBe(8);
+    ).toBe(SCHEMA_VERSION);
     await reopen(value);
     expect(value.store.auth.profileOwner()?.name).toBe(identity.name);
   });

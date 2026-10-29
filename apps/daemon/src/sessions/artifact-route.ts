@@ -4,6 +4,7 @@ import { Type } from 'typebox';
 import { Value } from 'typebox/value';
 import { OfficeArtifactSchema } from '@my-pi-harness/protocol';
 import { RuntimeError, type SessionRuntime } from '@my-pi-harness/agent-runtime';
+import type { ProfileStore } from '@my-pi-harness/storage';
 import { ExecutionError, openRegular, workspacePath } from '@my-pi-harness/execution';
 import type { FastifyInstance } from 'fastify';
 import type { WorkspaceService } from '../workspaces/service.js';
@@ -29,7 +30,8 @@ const resultSchema = Type.Object(
 /** Download only a completed native Office tool's exact published bytes, never a client-supplied path. */
 export function registerOfficeArtifactRoute(
   server: FastifyInstance,
-  runtime: Pick<SessionRuntime, 'getSnapshot'>,
+  runtime: Pick<SessionRuntime, 'getSessionSummary'>,
+  store: Pick<ProfileStore, 'getVisibleTool'>,
   workspaces: Pick<WorkspaceService, 'requireAvailable'>,
 ): void {
   const active = new Set<AbortController>();
@@ -57,8 +59,8 @@ export function registerOfficeArtifactRoute(
     },
     async (request, reply) => {
       if (closing) throw new RuntimeError('OFFICE_ARTIFACT_CLOSED', '产物服务正在关闭。');
-      const snapshot = runtime.getSnapshot(request.params.id);
-      const tool = snapshot.tools.find((item) => item.id === request.params.toolId);
+      const session = runtime.getSessionSummary(request.params.id);
+      const tool = store.getVisibleTool(session.id, request.params.toolId);
       if (
         !tool ||
         tool.status !== 'completed' ||
@@ -66,7 +68,7 @@ export function registerOfficeArtifactRoute(
         tool.binding.kind !== 'accepted' ||
         tool.binding.source.kind !== 'workspace' ||
         tool.result === null ||
-        snapshot.session.workspaceId === null
+        session.workspaceId === null
       )
         throw new RuntimeError('OFFICE_ARTIFACT_NOT_FOUND', '此工具没有可下载的办公产物。');
       let value: unknown;
@@ -96,7 +98,7 @@ export function registerOfficeArtifactRoute(
       reply.raw.once('close', closed);
       const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(10_000)]);
       try {
-        const workspace = await workspaces.requireAvailable(snapshot.session.workspaceId);
+        const workspace = await workspaces.requireAvailable(session.workspaceId);
         const path = await workspacePath(workspace.rootPath, artifact.path, false);
         const file = await openRegular(path, 33_554_432);
         let bytes: Buffer;

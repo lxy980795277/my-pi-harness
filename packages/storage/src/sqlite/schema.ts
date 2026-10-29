@@ -13,6 +13,9 @@ import type {
   WorkState,
   Attachment,
   Checkpoint,
+  AgentTask,
+  AgentMessage,
+  AgentSettings,
 } from '@my-pi-harness/protocol';
 
 /** Private SQLite columns never serve as HTTP responses without protocol validation. */
@@ -69,8 +72,58 @@ export const runs = sqliteTable('runs', {
   id: text('id').primaryKey(),
   sessionId: text('session_id').notNull(),
   branchId: text('branch_id').notNull(),
+  taskId: text('task_id'),
   data: text('data', { mode: 'json' }).$type<RunView>().notNull(),
   privateData: text('private_data', { mode: 'json' }).$type<Record<string, unknown>>(),
+});
+
+export const agentTasks = sqliteTable('agent_tasks', {
+  id: text('id').primaryKey(),
+  sessionId: text('session_id').notNull(),
+  sourceToolCallId: text('source_tool_call_id').notNull().unique(),
+  parentRunId: text('parent_run_id').notNull(),
+  rootRunId: text('root_run_id').notNull(),
+  branchId: text('branch_id').notNull(),
+  anchorMessageId: text('anchor_message_id').notNull(),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+  waiting: text('waiting'),
+  closedAt: integer('closed_at'),
+  closeReason: text('close_reason'),
+  error: text('error'),
+  data: text('data', { mode: 'json' }).$type<AgentTask>().notNull(),
+});
+
+export const taskMessages = sqliteTable(
+  'task_messages',
+  {
+    taskId: text('task_id').notNull(),
+    messageId: text('message_id').notNull(),
+    ordinal: integer('ordinal').notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.taskId, table.messageId] })],
+);
+
+export const taskWorkStates = sqliteTable('task_work_states', {
+  taskId: text('task_id').primaryKey(),
+  sessionId: text('session_id').notNull(),
+  revision: integer('revision').notNull(),
+  data: text('data', { mode: 'json' }).$type<WorkState>().notNull(),
+});
+
+export const agentMessages = sqliteTable('agent_messages', {
+  id: text('id').primaryKey(),
+  sessionId: text('session_id').notNull(),
+  sourceRunId: text('source_run_id').notNull(),
+  targetRunId: text('target_run_id'),
+  targetTaskId: text('target_task_id'),
+  data: text('data', { mode: 'json' }).$type<AgentMessage>().notNull(),
+});
+
+export const agentSettings = sqliteTable('agent_settings', {
+  id: integer('id').primaryKey(),
+  revision: integer('revision').notNull(),
+  data: text('data', { mode: 'json' }).$type<AgentSettings>().notNull(),
 });
 
 export const messages = sqliteTable('messages', {

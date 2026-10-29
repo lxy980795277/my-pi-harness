@@ -9,6 +9,9 @@ import { useAttachmentDrafts } from '../src/features/attachments/stores/attachme
 import { useComposerStore } from '../src/features/sessions/stores/composer';
 import { useTimelineStore } from '../src/features/sessions/stores/timeline';
 import { useSettingsStore } from '../src/features/settings/stores/settings';
+import { useTaskPresentationStore } from '../src/features/tasks/stores/tasks';
+import { taskMessageKey, useTaskMessageStore } from '../src/features/tasks/stores/messages';
+import { useWorkDraftStore } from '../src/features/work/stores/drafts';
 
 const DRAFT_ATTACHMENT: Attachment = {
   id: 'draft-attachment',
@@ -116,6 +119,18 @@ describe('private client state lifecycle', () => {
     useAttachmentDrafts.getState().setBusy('private-session', true);
     useTimelineStore.getState().setToolExpanded('private-session', 'private-tool', true);
     useTimelineStore.getState().toggleProcess('private-session', 'private-input');
+    useTaskPresentationStore.getState().open('private-session', 'private-task');
+    useTaskPresentationStore.getState().setFilter('pending');
+    const taskKey = taskMessageKey('private-session', 'private-task');
+    useTaskMessageStore.getState().setDraft(taskKey, 'private task input');
+    useTaskMessageStore.getState().prepare(taskKey, {
+      requestId: 'private-task-message',
+      text: 'private task input',
+      continue: true,
+      expectedRunId: 'private-task-run',
+    });
+    useWorkDraftStore.getState().text('private-question', 'item', 'private answer');
+    useWorkDraftStore.getState().setFeedback('private-plan', 'private feedback');
 
     readClientAction(useResetClientState)();
     composer.markNewAttemptCreated(generation, 'late-private-session');
@@ -145,5 +160,12 @@ describe('private client state lifecycle', () => {
     expect(useAttachmentDrafts.getState()).toMatchObject({ drafts: {}, busy: {} });
     expect(useTimelineStore.getState().expandedTools).toEqual({});
     expect(useTimelineStore.getState().expandedProcesses).toEqual({});
+    expect(useTaskPresentationStore.getState()).toMatchObject({
+      sessionId: null,
+      taskId: null,
+      filter: 'all',
+    });
+    expect(useWorkDraftStore.getState()).toMatchObject({ questions: {}, feedback: {} });
+    expect(useTaskMessageStore.getState()).toMatchObject({ drafts: {}, attempts: {} });
   });
 });

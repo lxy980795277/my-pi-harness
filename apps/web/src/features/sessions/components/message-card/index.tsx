@@ -1,8 +1,10 @@
 import type { ApprovalMode, EditInput, MessageView } from '@my-pi-harness/protocol';
-import { Check, Copy, LoaderCircle, Pencil } from 'lucide-react';
+import { Check, Copy, Pencil } from 'lucide-react';
 import { memo, type FC } from 'react';
 
 import { Markdown } from '@/components/markdown';
+import { LoadingDots } from '@/components/loading-dots';
+import { RequestFailure } from '@/components/request-failure';
 import { AttachmentList } from '@/features/attachments/components/attachment-list';
 import { SkillPicker } from '@/features/skills/components/skill-picker';
 import { McpToolPicker } from '@/features/mcp/components/mcp-tool-picker';
@@ -18,6 +20,7 @@ interface MessageCardProps {
   workspaceId: string | null;
   approvalMode: ApprovalMode;
   message: MessageView;
+  failure: string | null;
   canEdit: boolean;
   onEdit: (input: EditInput) => Promise<void>;
 }
@@ -33,7 +36,7 @@ const STATUS_LABELS: Record<MessageView['status'], string> = {
 
 /** Displays message text and attachments; editing creates a new branch rather than replacing this fact. */
 export const MessageCard: FC<MessageCardProps> = memo(
-  ({ message, workspaceId, approvalMode, canEdit, onEdit }) => {
+  ({ message, failure, workspaceId, approvalMode, canEdit, onEdit }) => {
     const { editing, text, changeText, submit, start, cancel, pending, error, mcp, skills } =
       useMessageEditor(message, workspaceId, approvalMode, onEdit);
     const copy = useCopyText(message.text);
@@ -74,14 +77,13 @@ export const MessageCard: FC<MessageCardProps> = memo(
             )}
           >
             {streaming && (
-              <LoaderCircle
-                width={13}
-                height={13}
-                className="animate-spin motion-reduce:animate-none"
-                aria-hidden
-              />
+              <span className="mr-2 inline-flex items-center" role="status">
+                <LoadingDots />
+                <span className="sr-only">{STATUS_LABELS.streaming}</span>
+              </span>
             )}
-            {message.status !== 'complete' && (
+            {failure !== null && <RequestFailure text={failure} />}
+            {failure === null && !streaming && message.status !== 'complete' && (
               <span className="mr-2" role="status">
                 {STATUS_LABELS[message.status]}
               </span>
@@ -166,6 +168,7 @@ export const MessageCard: FC<MessageCardProps> = memo(
       previous.workspaceId === next.workspaceId &&
       previous.approvalMode === next.approvalMode &&
       previous.message === next.message &&
+      previous.failure === next.failure &&
       previous.canEdit === next.canEdit &&
       previous.onEdit === next.onEdit
     );

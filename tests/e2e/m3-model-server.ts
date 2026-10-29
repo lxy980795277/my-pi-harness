@@ -1,6 +1,9 @@
 import { createServer } from 'node:http';
 import type { ModelRequest, TestModelServer } from './model-server.js';
 
+const CURRENT_RUN_TASK_PREFIX =
+  'Current Run user task (retained across compaction; tool permissions remain unchanged):\n';
+
 const record = (value: unknown): value is Record<string, unknown> => {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 };
@@ -13,6 +16,21 @@ const textContent = (value: unknown): string => {
       return '';
     })
     .join('\n');
+};
+
+/** Compacted task input remains in the harness's explicit JSON-valued system section. */
+const currentTaskText = (messages: Record<string, unknown>[], latestUser: number): string => {
+  if (latestUser >= 0) return textContent(messages[latestUser]?.['content']);
+  for (const message of messages) {
+    if (message['role'] !== 'system') continue;
+    const content = textContent(message['content']);
+    const marker = content.lastIndexOf(CURRENT_RUN_TASK_PREFIX);
+    if (marker < 0) continue;
+    const parsed: unknown = JSON.parse(content.slice(marker + CURRENT_RUN_TASK_PREFIX.length));
+    if (typeof parsed !== 'string') throw new Error('Invalid retained M3 task input');
+    return parsed;
+  }
+  return '';
 };
 
 /** A test-owned SSE provider observes real frozen context and asks one question per marked input. */
@@ -44,7 +62,7 @@ export async function startM3Model(): Promise<TestModelServer> {
         for (let index = 0; index < messages.length; index++) {
           if (messages[index]?.['role'] === 'user') latestUser = index;
         }
-        const text = textContent(messages[latestUser]?.['content']);
+        const text = currentTaskText(messages, latestUser);
         const toolResults = messages.slice(latestUser + 1).filter((message) => {
           return message['role'] === 'tool';
         });

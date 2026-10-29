@@ -1,6 +1,7 @@
 import type { ToolCallView, ToolDecisionInput } from '@my-pi-harness/protocol';
 import { ChevronRight, LoaderCircle, ShieldCheck } from 'lucide-react';
 import { memo, type FC } from 'react';
+import { ActivityRow } from '@/components/activity-row';
 import { Button } from '@/components/ui/button';
 import { Notice } from '@/components/ui/notice';
 import { ApprovalAudit } from '@/features/sessions/components/approval-audit';
@@ -18,10 +19,9 @@ export const ToolCard: FC<ToolCardProps> = memo(({ tool, onDecide }) => {
   const state = useToolCard(tool, onDecide);
   return (
     <div className="min-w-0 space-y-1" aria-label={`${tool.name} 工具调用`} aria-busy={state.busy}>
-      <Button
+      <ActivityRow
         type="button"
-        variant="ghost"
-        className="group/tool-row h-8 w-full min-w-0 justify-start gap-2 border-0 px-0 text-xs font-normal text-muted-foreground/80 transition-none hover:bg-transparent focus-visible:bg-muted/50 focus-visible:outline-none disabled:opacity-100"
+        className="group/tool-row"
         onClick={state.toggleDetails}
         aria-expanded={state.detailsOpen}
         aria-controls={`tool-details-${tool.id}`}
@@ -80,7 +80,7 @@ export const ToolCard: FC<ToolCardProps> = memo(({ tool, onDecide }) => {
             {state.statusLabel}
           </span>
         )}
-      </Button>
+      </ActivityRow>
       {state.detailsOpen && (
         <div
           id={`tool-details-${tool.id}`}

@@ -11,6 +11,8 @@ import { PairingPage } from '@/features/auth/components/pairing-page';
 import { RuntimePage } from '@/features/runtime/components/runtime-page';
 import { SessionsPage } from '@/features/sessions/components/sessions-page';
 import { SettingsDialog } from '@/features/settings/components/settings-dialog';
+import { TaskHost } from '@/features/tasks/components/task-host';
+import { TasksPage } from '@/features/tasks/components/tasks-page';
 import { describeError } from '@/utils/describe-error';
 
 /** Private application surfaces mount only after local trust and application login succeed. */
@@ -100,6 +102,11 @@ export const App: FC = () => {
             <RuntimePage />
           </div>
         )}
+        {state.page === 'tasks' && (
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <TasksPage />
+          </div>
+        )}
         {state.page === 'sessions' && (
           <div className="min-h-0 flex-1">
             <SessionsPage userName={state.userName} />
@@ -109,6 +116,7 @@ export const App: FC = () => {
       {state.settingsOpen && (
         <SettingsDialog theme={state.theme} onToggleTheme={state.toggleTheme} />
       )}
+      <TaskHost />
     </div>
   );
 };

@@ -121,6 +121,76 @@ afterEach(async () => {
 });
 
 describe('journal request encoding', () => {
+  it('keeps parent and sibling request references when a child Run finishes', () => {
+    const parent = request(1);
+    const child = request(2);
+    child.event.runId = 'child';
+    const sibling = request(3);
+    sibling.event.runId = 'sibling';
+    const initial = encodeJournalRecords([parent, child, sibling], new Map());
+    const terminal = finished(4);
+    terminal.event.runId = 'child';
+    const nextParent = request(5);
+    const nextSibling = request(6);
+    nextSibling.event.runId = 'sibling';
+    const ending = encodeJournalRecords([terminal], initial.state);
+    const next = encodeJournalRecords([nextParent, nextSibling], ending.state);
+    expect(privatePayload(next.records[0])['messages']).toEqual([0, 1]);
+    expect(privatePayload(next.records[1])['messages']).toEqual([0, 1]);
+    expect(ending.state.has('child')).toBe(false);
+    expect(ending.state.size).toBe(2);
+    expect(initial.state.size).toBe(3);
+    const initialDecoded = decodeJournalRecords(initial.records, new Map());
+    const endingDecoded = decodeJournalRecords(ending.records, initialDecoded.state);
+    const nextDecoded = decodeJournalRecords(next.records, endingDecoded.state);
+    expect(nextDecoded.records).toEqual([nextParent, nextSibling]);
+    const selfContained = encodeJournalRecords([nextParent], new Map());
+    expect(decodeJournalRecords(selfContained.records, endingDecoded.state).records).toEqual([
+      nextParent,
+    ]);
+    expect(endingDecoded.state.has('child')).toBe(false);
+    expect(endingDecoded.state.size).toBe(2);
+    const parentDone = encodeJournalRecords([finished(7)], next.state);
+    expect(parentDone.state.size).toBe(1);
+  });
+
+  it('persists interleaved Run references across journal appends and restores their exact private requests', async () => {
+    const { journal, files, path } = await fixture();
+    const parent = request(1);
+    const child = request(2);
+    child.event.runId = 'child';
+    const sibling = request(3);
+    sibling.event.runId = 'sibling';
+    const terminal = finished(4);
+    terminal.event.runId = 'child';
+    const nextParent = request(5);
+    const nextSibling = request(6);
+    nextSibling.event.runId = 'sibling';
+    journal.append('session', [parent, child, sibling]);
+    journal.append('session', [terminal]);
+    journal.append('session', [nextParent, nextSibling]);
+    const lines = (await readFile(path, 'utf8')).trimEnd().split('\n');
+    const last = diskBatch(lines.at(-1));
+    expect(last.records.map((record) => privatePayload(record)['messages'])).toEqual([
+      [0, 1],
+      [0, 1],
+    ]);
+    const recovered = new SessionJournal(files);
+    expect([...recovered.read('session')].flat()).toEqual([
+      parent,
+      child,
+      sibling,
+      terminal,
+      nextParent,
+      nextSibling,
+    ]);
+    const later = request(7);
+    later.event.runId = 'sibling';
+    recovered.append('session', [later]);
+    const finalLines = (await readFile(path, 'utf8')).trimEnd().split('\n');
+    expect(privatePayload(diskBatch(finalLines.at(-1)).records[0])['messages']).toEqual([0, 1]);
+  });
+
   it('stores native private objects and restores prompts and repeated messages with their key order', () => {
     const initial = request(1);
     const first = encodeJournalRecords([initial], new Map());
@@ -181,7 +251,7 @@ describe('journal request encoding', () => {
     privatePayload(decoded.records[0])['messages'] = [];
     const next = encodeJournalRecords([request(2)], decoded.state);
     expect(next.records[0]?.privateData?.['messages']).toEqual([0, 1]);
-    expect([...first.state.values()][0]).toHaveLength(2);
+    expect(first.state.get('run')?.get('main')).toHaveLength(2);
   });
 
   it('releases completed Run baselines and never references another Run', () => {
@@ -219,7 +289,7 @@ describe('journal request encoding', () => {
     privatePayload(input)['messages'] = [0];
     expect(() => decodeJournalRecords([input], new Map())).toThrow('reference');
     const other: JournalCodecState = new Map([
-      [JSON.stringify(['run', 'other']), [message('system', 'prompt')]],
+      ['run', new Map([['other', [message('system', 'prompt')]]])],
     ]);
     expect(() => decodeJournalRecords([input], other)).toThrow('reference');
   });
@@ -237,12 +307,12 @@ describe('journal request encoding', () => {
 
   it('does not advance the supplied baseline when a later record fails', () => {
     const previous = encodeJournalRecords([request(1)], new Map()).state;
-    const before = JSON.stringify([...previous]);
+    const before = structuredClone(previous);
     const changed = request(2, [message('system', 'prompt'), message('user', 'changed')]);
     const invalid = request(3);
     privatePayload(invalid)['messages'] = [99];
     expect(() => decodeJournalRecords([changed, invalid], previous)).toThrow('reference');
-    expect(JSON.stringify([...previous])).toBe(before);
+    expect(previous).toEqual(before);
   });
 });
 

@@ -4,7 +4,13 @@ import type {
   SessionSnapshot,
   SessionSummary,
   FrozenSkill,
+  LiveMessageDelta,
 } from '@my-pi-harness/protocol';
+
+/** Durable events retain their journal identity; live deltas only announce an updated snapshot. */
+export type RuntimeNotification =
+  | HarnessEvent
+  | { type: 'message.delta'; sessionId: string; runId: string };
 
 /** One short local transaction; privateData never enters the public event. */
 export interface EventInput {
@@ -29,6 +35,7 @@ export interface RuntimeStore {
   listSessions(): SessionSummary[];
   getSession(id: string): SessionSummary | undefined;
   getSnapshot(id: string): SessionSnapshot;
+  publishMessageDelta(sessionId: string, delta: LiveMessageDelta): void;
   append(sessionId: string, events: readonly EventInput[]): HarnessEvent[];
   readEvents(sessionId: string, afterSeq: number, limit: number): HarnessEvent[];
   getModelContext(

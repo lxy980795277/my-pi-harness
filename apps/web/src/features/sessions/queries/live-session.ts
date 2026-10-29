@@ -60,10 +60,11 @@ export const subscribeLiveSession = (id: string, observer: LiveSessionObserver):
         }
         const parsed: unknown = JSON.parse(event.data);
         const update = parseResponse(SessionStreamUpdateSchema, parsed);
-        let sequence: number;
-        if (update.kind === 'snapshot') sequence = update.snapshot.snapshotSeq;
-        else sequence = update.snapshotSeq;
-        if (event.lastEventId !== String(sequence)) {
+        let cursor: string;
+        if (update.kind === 'snapshot')
+          cursor = `${update.snapshot.snapshotSeq}:${update.snapshot.liveRevision}`;
+        else cursor = `${update.snapshotSeq}:${update.liveRevision}`;
+        if (event.lastEventId !== cursor) {
           throw new Error('会话事件游标与内容不一致。');
         }
         const next = applySessionStreamUpdate(current, update, id);

@@ -16,6 +16,7 @@ declare global {
 
 const expectSessionLogBatches = (text: string): void => {
   expect(text.endsWith('\n')).toBe(true);
+  expect(text).not.toContain('"type":"message.delta"');
   for (const line of text.trimEnd().split('\n')) {
     const entry: unknown = JSON.parse(line);
     expect(entry).toEqual({
@@ -77,7 +78,8 @@ test('会话标题栏全宽展示，下载完整 JSONL 并在失败后重试', a
     await expect(
       header.getByRole('heading', { name: '对话日志下载验收', exact: true }),
     ).toBeVisible();
-    await expect(header.getByRole('button')).toHaveCount(1);
+    await expect(header.getByRole('button')).toHaveCount(2);
+    await expect(header.getByRole('button', { name: '打开会话任务', exact: true })).toBeVisible();
     await expect(page.getByRole('combobox', { name: '历史分支', exact: true })).toHaveCount(0);
     await expect(page.getByRole('button', { name: '删除会话', exact: true })).toHaveCount(0);
     await expect(page.getByText(/会话与模型设置/u)).toHaveCount(0);
@@ -143,7 +145,7 @@ test('运行中下载固定已提交 JSONL 前缀，完成后再次下载包含�
   page,
   daemon,
 }, testInfo) => {
-  const prefix = '这是下载时已经提交的首段正文。';
+  const prefix = '这是下载时已经展示的首段正文。';
   const suffix = '这是首次下载后才会生成的最终内容。';
   const model = await startMarkdownModel(prefix, `\n\n${suffix}`);
   try {
@@ -164,6 +166,8 @@ test('运行中下载固定已提交 JSONL 前缀，完成后再次下载包含�
       throw new Error('Cannot read the running session before log download');
     }
     expect(active.session.activeRunId).not.toBeNull();
+    expect(active.liveRevision).toBeGreaterThan(0);
+    expect(active.messages.at(-1)?.text).toContain(prefix);
     const firstDownloading = page.waitForEvent('download');
     await download.click();
     const firstFile = await firstDownloading;
@@ -173,7 +177,7 @@ test('运行中下载固定已提交 JSONL 前缀，完成后再次下载包含�
     const firstBytes = await readFile(firstPath);
     const firstText = firstBytes.toString('utf8');
     expectSessionLogBatches(firstText);
-    expect(firstText).toContain(prefix);
+    expect(firstText).not.toContain(prefix);
     expect(firstText).not.toContain(suffix);
     await expect(page.getByRole('button', { name: '停止', exact: true })).toBeVisible();
 
@@ -189,6 +193,7 @@ test('运行中下载固定已提交 JSONL 前缀，完成后再次下载包含�
     const finalBytes = await readFile(finalPath);
     expect(finalBytes.subarray(0, firstBytes.length).equals(firstBytes)).toBe(true);
     const finalText = finalBytes.toString('utf8');
+    expect(finalText).toContain(prefix);
     expect(finalText).toContain(suffix);
     expectSessionLogBatches(finalText);
     expect(model.requests).toBe(1);

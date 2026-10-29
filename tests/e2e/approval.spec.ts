@@ -1,7 +1,11 @@
 import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { AuthStatusSchema, SessionSnapshotSchema } from '@my-pi-harness/protocol';
+import {
+  AuthStatusSchema,
+  SessionSnapshotSchema,
+  WorkSnapshotSchema,
+} from '@my-pi-harness/protocol';
 import { Value } from 'typebox/value';
 import { startApprovalModel } from './approval-model.js';
 import { registerTestWorkspace } from './workspace-fixtures.js';
@@ -154,8 +158,18 @@ for (const scenario of ['auto-allow', 'full-access', 'auto-fallback'] as const) 
         page.getByRole('combobox', { name: '执行批准方式', exact: true }),
         label,
       );
+      const creation = page.waitForResponse((response) => {
+        return (
+          response.request().method() === 'POST' &&
+          new URL(response.url()).pathname === '/api/sessions'
+        );
+      });
       await page.getByLabel('消息', { exact: true }).fill('请创建 approved.txt 测试文件');
       await page.getByRole('button', { name: '发送', exact: true }).click();
+      const createdResponse = await creation;
+      const created: unknown = await createdResponse.json();
+      if (!createdResponse.ok() || !Value.Check(SessionSnapshotSchema, created))
+        throw new Error('Approval fixture session creation failed');
       const card = page.getByLabel('write_file 工具调用', { exact: true });
       if (scenario === 'auto-fallback') {
         await expect(card.getByRole('button', { name: '允许本次操作', exact: true })).toBeVisible();
@@ -185,11 +199,31 @@ for (const scenario of ['auto-allow', 'full-access', 'auto-fallback'] as const) 
       if (scenario === 'full-access') {
         await expect(audit).toContainText('完全访问权限 · 已批准');
         expect(model.reviews).toHaveLength(0);
-        expect(model.requests).toHaveLength(2);
       } else {
         expect(model.reviews).toHaveLength(1);
-        expect(model.requests).toHaveLength(3);
         expect(model.reviews[0]?.body['tools'] ?? []).toEqual([]);
+      }
+      const mainRequests = model.requests.filter((request) => {
+        return Array.isArray(request.body['tools']) && !model.reviews.includes(request);
+      });
+      expect(mainRequests).toHaveLength(2);
+      expect(model.requests).toHaveLength(
+        mainRequests.length + model.reviews.length + model.summaries.length,
+      );
+      const workResponse = await page.request.get(
+        `${daemon.origin}/api/sessions/${encodeURIComponent(created.session.id)}/work?branchId=${encodeURIComponent(created.session.activeBranchId)}`,
+      );
+      const work: unknown = await workResponse.json();
+      if (
+        !workResponse.ok() ||
+        !Value.Check(WorkSnapshotSchema, work) ||
+        work.state.branchId !== created.session.activeBranchId
+      )
+        throw new Error('Invalid completed approval work snapshot');
+      expect(model.summaries).toHaveLength(work.compactions.length);
+      for (const compaction of work.compactions) {
+        expect(compaction.strategy).toBe('model');
+        expect(compaction.reason).toBe('automatic');
       }
       await page.reload();
       await page.getByRole('button', { name: /^请创建 approved.txt 测试文件 / }).click();

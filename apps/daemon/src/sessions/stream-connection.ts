@@ -1,4 +1,4 @@
-import type { SessionSnapshot } from '@my-pi-harness/protocol';
+import type { HarnessEvent, SessionSnapshot } from '@my-pi-harness/protocol';
 import { createSessionUpdate } from './stream-update.js';
 
 interface StreamResponse {
@@ -13,7 +13,7 @@ interface StreamResponse {
 interface SessionStreamOptions {
   response: StreamResponse;
   snapshot: () => SessionSnapshot;
-  subscribe: (changed: () => void) => () => void;
+  subscribe: (changed: (event?: Pick<HarnessEvent, 'type' | 'runId'>) => void) => () => void;
   authorized: () => boolean;
   watchAuthorization: (revoked: () => void) => () => void;
   onClose: () => void;
@@ -114,7 +114,7 @@ export const startSessionStream = (options: SessionStreamOptions): (() => void) 
       const current = options.snapshot();
       const update = createSessionUpdate(previous, current);
       if (!update) return;
-      const record = `event: session.update\nid: ${current.snapshotSeq}\ndata: ${JSON.stringify(update)}\n\n`;
+      const record = `event: session.update\nid: ${current.snapshotSeq}:${current.liveRevision}\ndata: ${JSON.stringify(update)}\n\n`;
       if (Buffer.byteLength(record) > 8 * 1024 * 1024) {
         abort();
         return;
@@ -131,8 +131,14 @@ export const startSessionStream = (options: SessionStreamOptions): (() => void) 
   response.once('close', cleanup);
   try {
     // Subscription precedes the synchronous baseline read; commits cannot fall into a gap.
-    unsubscribe = options.subscribe(() => {
+    unsubscribe = options.subscribe((event) => {
       if (stopped) return;
+      if (
+        event?.type === 'message.delta' &&
+        previous &&
+        event.runId !== previous.session.activeRunId
+      )
+        return;
       if (draining) {
         changedWhileDraining = true;
         return;

@@ -62,11 +62,6 @@ export const useMessageTimeline = (
     },
     getItemKey,
     estimateSize,
-    initialOffset: () => {
-      let offset = 32;
-      for (const entry of entries) offset += estimateTimelineEntry(entry);
-      return offset;
-    },
     initialRect: { width: 1, height: 1 },
     overscan: 5,
     paddingStart: 24,

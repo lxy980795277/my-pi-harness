@@ -1,5 +1,5 @@
 import type { AuthStatus } from '@my-pi-harness/protocol';
-import { CircleDot, Cpu, Link2, MessageSquarePlus } from 'lucide-react';
+import { CircleDot, Cpu, GitBranch, Link2, MessageSquarePlus } from 'lucide-react';
 import type { FC } from 'react';
 
 import { NavigationItem } from '@/app/components/navigation-item';
@@ -53,6 +53,13 @@ export const WorkspaceNavigation: FC<WorkspaceNavigationProps> = ({
           <MessageSquarePlus width={18} height={18} aria-hidden />
           新对话
         </Button>
+        <NavigationItem
+          page="tasks"
+          activePage={page}
+          label="任务看板"
+          icon={GitBranch}
+          onNavigate={onNavigate}
+        />
         <NavigationItem
           page="runtime"
           activePage={page}

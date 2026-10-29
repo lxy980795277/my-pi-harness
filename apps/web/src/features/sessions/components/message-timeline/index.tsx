@@ -7,7 +7,9 @@ import type {
   ToolDecisionInput,
 } from '@my-pi-harness/protocol';
 import type { FC, ReactNode } from 'react';
-import { ArrowDown, LoaderCircle } from 'lucide-react';
+import { ArrowDown } from 'lucide-react';
+import { LoadingDots } from '@/components/loading-dots';
+import { RequestFailure } from '@/components/request-failure';
 import { Button } from '@/components/ui/button';
 import { AnswerFooter } from '@/features/sessions/components/answer-footer';
 import { AnswerProcess } from '@/features/sessions/components/answer-process';
@@ -89,19 +91,19 @@ export const MessageTimeline: FC<MessageTimelineProps> = ({
                     />
                   )}
                   {entry.type === 'answer-footer' && <AnswerFooter footer={entry.footer} />}
+                  {entry.type === 'request-error' && (
+                    <article className="min-w-0" aria-label="Agent的消息">
+                      <RequestFailure text={entry.text} />
+                    </article>
+                  )}
                   {entry.type === 'waiting' && (
                     <div
                       className="flex min-h-8 items-center gap-2 py-1 text-sm text-muted-foreground"
                       role="status"
                       aria-label="正在等待响应"
                     >
-                      <LoaderCircle
-                        width={14}
-                        height={14}
-                        className="animate-spin motion-reduce:animate-none"
-                        aria-hidden
-                      />
-                      正在等待响应…
+                      <LoadingDots />
+                      <span className="sr-only">正在等待响应</span>
                     </div>
                   )}
                 </div>

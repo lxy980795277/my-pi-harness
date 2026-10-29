@@ -6,6 +6,11 @@ import { ToolProjection } from './projections/tools.js';
 import { checked } from '../shared/validation.js';
 import * as schema from '../sqlite/schema.js';
 
+interface ContextRow {
+  message: ReturnType<typeof checked<typeof MessageViewSchema>>;
+  privateData: Record<string, unknown> | null;
+}
+
 /** Read-only assembly of branch codecs and their atomically committed tool outcomes. */
 export class ModelContextQuery {
   private readonly tools: ToolProjection;
@@ -35,6 +40,40 @@ export class ModelContextQuery {
         message: checked(MessageViewSchema, row.data),
         privateData: row.privateData,
       }));
+    return this.assemble(sessionId, rows, messageIds);
+  }
+
+  public readTask(
+    sessionId: string,
+    taskId: string,
+    messageIds?: readonly string[],
+  ): Record<string, unknown>[] {
+    const task = this.db
+      .select()
+      .from(schema.agentTasks)
+      .where(eq(schema.agentTasks.id, taskId))
+      .get();
+    if (!task || task.sessionId !== sessionId)
+      throw new StorageError('INVALID_RECORD', 'Context task does not belong to this session');
+    const rows = this.db
+      .select({ data: schema.messages.data, privateData: schema.messages.privateData })
+      .from(schema.taskMessages)
+      .innerJoin(schema.messages, eq(schema.messages.id, schema.taskMessages.messageId))
+      .where(and(eq(schema.taskMessages.taskId, taskId), eq(schema.messages.sessionId, sessionId)))
+      .orderBy(asc(schema.taskMessages.ordinal))
+      .all()
+      .map((row) => ({
+        message: checked(MessageViewSchema, row.data),
+        privateData: row.privateData,
+      }));
+    return this.assemble(sessionId, rows, messageIds);
+  }
+
+  private assemble(
+    sessionId: string,
+    rows: readonly ContextRow[],
+    messageIds?: readonly string[],
+  ): Record<string, unknown>[] {
     const selected = messageIds === undefined ? undefined : new Set(messageIds);
     const contexts = this.tools.contexts(sessionId);
     if (

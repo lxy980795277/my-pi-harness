@@ -1,4 +1,8 @@
-import { SessionStreamUpdateSchema, type SessionStreamUpdate } from '@my-pi-harness/protocol';
+import {
+  LiveMessageDeltaSchema,
+  SessionStreamUpdateSchema,
+  type SessionStreamUpdate,
+} from '@my-pi-harness/protocol';
 import { Value } from 'typebox/value';
 import { describe, expect, it } from 'vitest';
 import {
@@ -14,6 +18,47 @@ const patch = (update: SessionStreamUpdate | undefined) => {
 };
 
 describe('committed session stream batches', () => {
+  it('validates a live append target and requires bounded text or thinking data', () => {
+    expect(
+      Value.Check(LiveMessageDeltaSchema, { runId: 'run', messageId: 'message', text: 'a' }),
+    ).toBe(true);
+    expect(
+      Value.Check(LiveMessageDeltaSchema, { runId: 'run', messageId: 'message', thinking: '' }),
+    ).toBe(true);
+    for (const value of [
+      { runId: 'run', messageId: 'message' },
+      { runId: null, messageId: 'message', text: 'a' },
+      { runId: 'run', messageId: '', text: 'a' },
+      { runId: 'run', messageId: 'message', text: 'a', seq: 1 },
+      { runId: 'run', messageId: 'message', text: 'a'.repeat(2_000_001) },
+    ])
+      expect(Value.Check(LiveMessageDeltaSchema, value)).toBe(false);
+  });
+
+  it('streams partial text without advancing the committed sequence and resets its live revision on commit', () => {
+    const initial = sessionProjection(7, 'prefix', 2);
+    const live = sessionProjection(7, 'prefix append', 5);
+    const delta = patch(createSessionUpdate(initial, live));
+    expect(delta).toMatchObject({
+      baseSeq: 7,
+      baseLiveRevision: 2,
+      snapshotSeq: 7,
+      liveRevision: 5,
+    });
+    expect(delta.changes).toEqual([
+      { type: 'message.append', id: 'assistant', textDelta: ' append', thinkingDelta: '' },
+    ]);
+    expect(createSessionUpdate(live, initial)).toBeUndefined();
+    const committed = sessionProjection(8, 'final', 0);
+    projectionMessage(committed).status = 'complete';
+    expect(patch(createSessionUpdate(live, committed))).toMatchObject({
+      baseSeq: 7,
+      baseLiveRevision: 5,
+      snapshotSeq: 8,
+      liveRevision: 0,
+    });
+  });
+
   it('starts from one authoritative snapshot and does not resend an unchanged sequence', () => {
     const initial = sessionProjection();
     expect(createSessionUpdate(undefined, initial)).toEqual({

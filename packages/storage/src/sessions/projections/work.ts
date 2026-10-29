@@ -8,6 +8,7 @@ import {
   type Checkpoint,
   type HarnessEvent,
   type WorkState,
+  type Compaction,
 } from '@my-pi-harness/protocol';
 import { StorageError } from '../../shared/errors.js';
 import * as schema from '../../sqlite/schema.js';
@@ -55,7 +56,15 @@ export class WorkRepository {
     return checked(WorkEventSchema, row.data).state.contextStartAfterMessageId;
   }
 
-  private messageIds(branchId: string): string[] {
+  private messageIds(branchId: string, taskId?: string): string[] {
+    if (taskId !== undefined)
+      return this.db
+        .select({ id: schema.taskMessages.messageId })
+        .from(schema.taskMessages)
+        .where(eq(schema.taskMessages.taskId, taskId))
+        .orderBy(asc(schema.taskMessages.ordinal))
+        .all()
+        .map((row) => row.id);
     return this.db
       .select({ id: schema.branchMessages.messageId })
       .from(schema.branchMessages)
@@ -79,6 +88,80 @@ export class WorkRepository {
     if (state.branchId !== branchId || state.revision !== row.revision)
       throw new StorageError('INVALID_RECORD', 'Stored work state identity is inconsistent');
     return state;
+  }
+
+  public getTask(sessionId: string, taskId: string): WorkState {
+    const task = this.db
+      .select()
+      .from(schema.agentTasks)
+      .where(eq(schema.agentTasks.id, taskId))
+      .get();
+    if (!task || task.sessionId !== sessionId)
+      throw new StorageError('INVALID_RECORD', 'Work task does not belong to this session');
+    const row = this.db
+      .select()
+      .from(schema.taskWorkStates)
+      .where(eq(schema.taskWorkStates.taskId, taskId))
+      .get();
+    if (!row) return initialWorkState(task.branchId);
+    const state = checked(WorkStateSchema, row.data);
+    if (
+      row.sessionId !== sessionId ||
+      state.branchId !== task.branchId ||
+      state.revision !== row.revision
+    )
+      throw new StorageError('INVALID_RECORD', 'Task work state identity is inconsistent');
+    return state;
+  }
+
+  public interruptedTaskStates(sessionId: string): { taskId: string; state: WorkState }[] {
+    return this.db
+      .select()
+      .from(schema.taskWorkStates)
+      .where(eq(schema.taskWorkStates.sessionId, sessionId))
+      .all()
+      .map((row) => ({ taskId: row.taskId, state: this.getTask(sessionId, row.taskId) }))
+      .filter(
+        ({ state }) =>
+          state.plan?.review === 'pending' ||
+          state.questions.some((question) => question.status === 'pending'),
+      );
+  }
+
+  public compactions(sessionId: string, branchId: string, taskId?: string): Compaction[] {
+    const state =
+      taskId === undefined ? this.get(sessionId, branchId) : this.getTask(sessionId, taskId);
+    const versions = new Map<string, Compaction>();
+    const selected = new Set<string>();
+    if (state.compaction) selected.add(state.compaction.id);
+    for (const row of this.db
+      .select({ data: schema.events.data })
+      .from(schema.events)
+      .where(
+        and(
+          eq(schema.events.sessionId, sessionId),
+          eq(schema.events.type, 'work.updated'),
+          taskId === undefined
+            ? sql`json_extract(${schema.events.data}, '$.taskId') IS NULL`
+            : sql`json_extract(${schema.events.data}, '$.taskId') = ${taskId}`,
+        ),
+      )
+      .orderBy(asc(schema.events.seq))
+      .all()) {
+      const recorded = checked(WorkEventSchema, row.data).state;
+      if (recorded.compaction) {
+        versions.set(recorded.compaction.id, recorded.compaction);
+        if (recorded.branchId === branchId) selected.add(recorded.compaction.id);
+      }
+    }
+    for (const id of selected) {
+      const parentId = versions.get(id)?.parentId;
+      if (parentId !== null && parentId !== undefined) selected.add(parentId);
+    }
+    const messageIds = new Set(this.messageIds(branchId, taskId));
+    return [...versions.values()].filter(
+      (version) => selected.has(version.id) && messageIds.has(version.throughMessageId),
+    );
   }
 
   public interruptedStates(sessionId: string): WorkState[] {
@@ -105,9 +188,11 @@ export class WorkRepository {
       .map((row) => checked(CheckpointSchema, row.data));
   }
 
-  private validateState(sessionId: string, state: WorkState): void {
+  private validateState(sessionId: string, state: WorkState, taskId?: string): void {
     this.requireBranch(sessionId, state.branchId);
-    const ids = this.messageIds(state.branchId);
+    if (taskId !== undefined && this.getTask(sessionId, taskId).branchId !== state.branchId)
+      throw new StorageError('INVALID_EVENT', 'Task work branch is inconsistent');
+    const ids = this.messageIds(state.branchId, taskId);
     for (const anchor of [state.contextStartAfterMessageId, state.compaction?.throughMessageId]) {
       if (anchor !== null && anchor !== undefined && !ids.includes(anchor))
         throw new StorageError('INVALID_EVENT', 'Context anchor is outside the work branch');
@@ -127,7 +212,8 @@ export class WorkRepository {
         .get();
       if (
         existing &&
-        !isDeepStrictEqual(checked(WorkStateSchema, existing.data['state']).compaction, version)
+        (existing.data['taskId'] !== taskId ||
+          !isDeepStrictEqual(checked(WorkStateSchema, existing.data['state']).compaction, version))
       )
         throw new StorageError('CONFLICT', 'An existing compaction version cannot be rewritten');
       if (!existing && version.parentId !== null) {
@@ -139,6 +225,9 @@ export class WorkRepository {
               eq(schema.events.sessionId, sessionId),
               eq(schema.events.type, 'work.updated'),
               sql`json_extract(${schema.events.data}, '$.state.compaction.id') = ${version.parentId}`,
+              taskId === undefined
+                ? sql`json_extract(${schema.events.data}, '$.taskId') IS NULL`
+                : sql`json_extract(${schema.events.data}, '$.taskId') = ${taskId}`,
             ),
           )
           .get();
@@ -159,7 +248,12 @@ export class WorkRepository {
         .from(schema.runs)
         .where(eq(schema.runs.id, question.runId))
         .get();
-      if (!run || run.sessionId !== sessionId || run.branchId !== state.branchId)
+      if (
+        !run ||
+        run.sessionId !== sessionId ||
+        run.branchId !== state.branchId ||
+        run.data.taskId !== taskId
+      )
         throw new StorageError('INVALID_EVENT', 'Question run is outside the work branch');
     }
     if (new Set(state.todos.map((todo) => todo.id)).size !== state.todos.length)
@@ -167,15 +261,34 @@ export class WorkRepository {
   }
 
   public update(event: HarnessEvent): void {
-    const { state } = checked(WorkEventSchema, event.data);
-    this.validateState(event.sessionId, state);
-    const previous = this.get(event.sessionId, state.branchId);
+    const { state, taskId } = checked(WorkEventSchema, event.data);
+    this.validateState(event.sessionId, state, taskId);
+    const previous =
+      taskId === undefined
+        ? this.get(event.sessionId, state.branchId)
+        : this.getTask(event.sessionId, taskId);
     if (state.revision !== previous.revision + 1)
       throw new StorageError('CONFLICT', 'Work state revision has changed');
     if (event.runId !== null) {
       const run = this.db.select().from(schema.runs).where(eq(schema.runs.id, event.runId)).get();
-      if (!run || run.sessionId !== event.sessionId || run.branchId !== state.branchId)
+      if (
+        !run ||
+        run.sessionId !== event.sessionId ||
+        run.branchId !== state.branchId ||
+        run.data.taskId !== taskId
+      )
         throw new StorageError('INVALID_EVENT', 'Work update does not belong to the event run');
+    }
+    if (taskId !== undefined) {
+      this.db
+        .insert(schema.taskWorkStates)
+        .values({ taskId, sessionId: event.sessionId, revision: state.revision, data: state })
+        .onConflictDoUpdate({
+          target: schema.taskWorkStates.taskId,
+          set: { revision: state.revision, data: state },
+        })
+        .run();
+      return;
     }
     this.db
       .insert(schema.workStates)
@@ -266,7 +379,8 @@ export class WorkRepository {
     if (
       !session ||
       !run ||
-      session.activeRunId !== run.id ||
+      (run.data.taskId === undefined && session.activeRunId !== run.id) ||
+      run.data.taskId !== input.taskId ||
       run.sessionId !== event.sessionId ||
       run.data.status !== 'running' ||
       run.branchId !== input.branchId ||
@@ -276,7 +390,7 @@ export class WorkRepository {
         'INVALID_EVENT',
         'Prepared context must belong to the active run and branch',
       );
-    const ids = this.messageIds(input.branchId);
+    const ids = this.messageIds(input.branchId, input.taskId);
     let cursor = -1;
     for (const id of input.messageIds) {
       const next = ids.indexOf(id, cursor + 1);

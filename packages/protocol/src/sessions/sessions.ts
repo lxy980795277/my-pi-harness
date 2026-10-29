@@ -58,6 +58,7 @@ export const MessageUsageSchema = Type.Object(
 /** Public message projection; provider-specific replay metadata stays on the host. */
 export const MessageViewSchema = Type.Object(
   {
+    agentMessageId: Type.Optional(id),
     mcpTools: Type.Optional(McpToolSelectionsSchema),
     skills: Type.Optional(SkillSelectionsSchema),
     id,
@@ -86,6 +87,7 @@ export const MessageViewSchema = Type.Object(
 /** Durable host outcome; SDK completion and HTTP acceptance do not imply success. */
 export const RunViewSchema = Type.Object(
   {
+    taskId: Type.Optional(id),
     mcpTools: Type.Optional(McpToolSelectionsSchema),
     skills: Type.Optional(SkillSelectionsSchema),
     id,
@@ -138,7 +140,7 @@ export const BranchViewSchema = Type.Object(
   { additionalProperties: false },
 );
 
-/** A transactional projection and sequence used by both HTTP and SSE clients. */
+/** Recorded facts and active in-memory text, ordered by committed sequence then live revision. */
 export const SessionSnapshotSchema = Type.Object(
   {
     session: SessionSummarySchema,
@@ -148,6 +150,7 @@ export const SessionSnapshotSchema = Type.Object(
     queue: Type.Array(QueueInputSchema),
     tools: Type.Array(ToolCallViewSchema),
     snapshotSeq: Type.Integer({ minimum: 0 }),
+    liveRevision: Type.Integer({ minimum: 0 }),
   },
   { additionalProperties: false },
 );

@@ -79,7 +79,12 @@ async function createApplication() {
     },
     githubFetch,
   });
-  return createDaemonApplication(config, undefined, services);
+  const application = await createDaemonApplication(config, undefined, services);
+  // The real gateway token check still protects this exact test-owned read target.
+  application.server.get('/api/skill-gateway/fixture/read', () => ({
+    result: 'M5-READONLY-GET-OK',
+  }));
+  return application;
 }
 let application = await createApplication();
 let restarting;

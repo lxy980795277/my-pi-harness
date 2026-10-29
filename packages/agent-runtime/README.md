@@ -9,6 +9,7 @@ Node端的模型接入与持久会话运行层，使用固定的Pi core/ai 1.1.0
 | `models/`       | 模型清单、Provider实例、模型认证与凭据适配；不负责应用或插件OAuth |
 | `sessions/`     | 单会话命令串行、队列、分支、持久事实发布与宿主存储端口            |
 | `runs/`         | 单Run的Pi Agent生命周期、流式事件、工具结果及消息用量             |
+| `agents/`       | 子任务树、角色、模型请求预算、通信、写入拥有者与后代结算          |
 | `tools/`        | 冻结工具集合、执行路由、逐次审批复核与外部工具端口                |
 | `capabilities/` | 接受输入时冻结Skill和候选目录、检索、激活及下一请求可见版本       |
 | `work/`         | Plan、Todos、用户提问、检查点和相应会话工具                       |
@@ -30,7 +31,19 @@ Node端的模型接入与持久会话运行层，使用固定的Pi core/ai 1.1.0
 
 `resolveSessionInput`解析显式选择或持久化全局默认，创建前检查模型、思考等级、启用与认证；失效默认不会改用其他模型。已有会话仍保留自己的选择。
 
-`SessionRuntime`序列化单会话命令；每个Session只有一个活跃Run，不同Session可独立运行。输入、Run配置与模型上下文版本先原子提交，再创建真实Agent请求。SDK事件立即映射为独立公开字段，delta先提交后广播；订阅者不等待SDK idle，真正结算由Run所有者等待。绑定工作区的会话通过`ToolRuntime`提供受策略与单次审批约束的工具循环；没有工作区不自动获得本机目录权限，deferred不会被误报为完整成功。
+`SessionRuntime`序列化单会话命令；每个Session只有一个活跃根Run，不同Session可独立运行。子Run通过Task归属并由AgentRuntime管理，仍复用RunExecution和同Session日志。输入、Run配置与模型上下文先提交，再创建真实Agent请求。SDK事件映射为独立公开字段，完整事实先持久化后通知，流式片段通过独立内存入口发布；订阅者不等待SDK idle，真正结算由Run所有者等待。绑定工作区的会话通过ToolRuntime提供受策略与单次审批约束的工具循环；没有工作区不获得本机目录权限，deferred不会被误报为完整成功。
+
+## 子Agent与任务树
+
+宿主通过agentStore启用Task查询和配置，AgentRuntime提供角色、spawn/wait/status/message/stop及树级预算。Task保留sourceToolCallId，子Run保留taskId，祖先关系由原工具事实推导；根快照排除子转录，WorkRuntime.forTask复用独立上下文与人工交互。任务通信有agentMessageId来源，模型正文编码和持久来源匹配由context拥有。
+
+子Run继承父审批策略，角色只读作为独立能力限制进入统一工具执行上下文；允许的读取不因角色只读变成人工批准，副作用仍在审批和派发前拒绝。冻结、嵌套及续作语义见[子Agent设计](../../docs/09_TECHNICAL/子Agent与任务看板设计.md#角色能力与写入)，不添加公开协议或重复持久字段。
+
+父Run终态前结算后代，正常完成才join，失败和停止取消所属子树。仅在实际资源结算后释放lease和写入拥有者，关闭等待全部后代再传播失败；重启恢复不执行模型或工具。机制见[子Agent设计](../../docs/09_TECHNICAL/子Agent与任务看板设计.md)，接口由[任务协议](../../docs/03_API/agents.md)拥有。
+
+主/子Run的正文与思考片段通过RuntimeStore.publishMessageDelta更新内存实时投影，订阅仅收到轻量变化通知；不提交JSONL或SQLite。完整消息在成功、取消或失败时一次持久化，失败SDK空final保留已观测partial；工具审批、派发屏障与终态仍经过持久commit。公开快照的持久seq与实时liveRevision见[会话协议](../../docs/03_API/model-session.md#事件快照与断线)。
+
+Run失败沿用error字段记录安全原因，主/子执行共用同一入口；应用拥有的运行错误保留说明，模型异常只输出受控分类或通用提示。具体公开语义见[会话协议](../../docs/03_API/model-session.md#事件快照与断线)，取消不产生失败原因，不将SDK异常原文发送到Renderer。
 
 `RunToolset`在接受Run前由实际`ToolRuntime`能力与工作区选择一次，深拷贝并冻结定义，同时保留TypeBox元数据。接受审计的`tools`、Pi声明、上下文预算及运行时路由共用该集合；来源与稳定定义指纹单独保存为私有`toolSources`，不进入模型工具schema。`ToolRuntime`仅在已接受集合内查找来源和定义，重名与未接受的路由明确拒绝；底层execution及会话执行器对固定内置目录的参数复核继续生效。MCP来源从宿主ExternalTools端口获得有界、可执行的冻结定义与非秘密授权，Run接受审计同时保存工具选择及授权绑定。配置、信任、凭据和SDK连接由daemon/integrations拥有，runtime不直接访问SDK或SQL。
 

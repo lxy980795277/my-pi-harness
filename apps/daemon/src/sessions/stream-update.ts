@@ -71,18 +71,22 @@ const messageChange = (
       thinkingDelta: message.thinking.slice(previous.thinking.length),
     };
   }
-  // New, rewritten and terminal messages carry their exact committed body and metadata.
+  // New, rewritten and terminal messages carry their exact body and metadata.
   return { type: 'message.set', index, message };
 };
 
-/** Diffs committed projections; oversized batches and reordered/changed branches use a snapshot. */
+/** Diffs recorded facts and live text; oversized batches or changed branches use a snapshot. */
 export const createSessionUpdate = (
   previous: SessionSnapshot | undefined,
   current: SessionSnapshot,
 ): SessionStreamUpdate | undefined => {
   if (!previous) return { kind: 'snapshot', snapshot: current };
   if (previous.session.id !== current.session.id) throw new Error('Session stream owner changed');
-  if (current.snapshotSeq <= previous.snapshotSeq) return undefined;
+  if (
+    current.snapshotSeq < previous.snapshotSeq ||
+    (current.snapshotSeq === previous.snapshotSeq && current.liveRevision <= previous.liveRevision)
+  )
+    return undefined;
   if (previous.session.activeBranchId !== current.session.activeBranchId)
     return { kind: 'snapshot', snapshot: current };
 
@@ -116,7 +120,9 @@ export const createSessionUpdate = (
     sessionId: current.session.id,
     branchId: current.session.activeBranchId,
     baseSeq: previous.snapshotSeq,
+    baseLiveRevision: previous.liveRevision,
     snapshotSeq: current.snapshotSeq,
+    liveRevision: current.liveRevision,
     session: current.session,
     changes,
   };

@@ -262,11 +262,12 @@ export async function createApplicationServices(
       },
       reviewer: new ModelApprovalReviewer({
         gateway: ownedGateway,
-        context: (id) => approvalContext(store, id),
+        context: (id, taskId) => approvalContext(store, id, taskId),
       }),
     });
     const runtime = new SessionRuntime({
       store,
+      agentStore: store,
       gateway,
       onError: options.onError ?? (() => undefined),
       tools,

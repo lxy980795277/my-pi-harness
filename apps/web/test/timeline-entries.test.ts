@@ -138,13 +138,10 @@ describe('session timeline placement', () => {
     const tools = [tool('first', 'preamble', 20), tool('second', 'preamble', 25)];
     for (const status of ['completed', 'cancelled', 'failed', 'interrupted'] as const) {
       const entries = buildTimelineEntries(messages, tools, null, [run(status)], 'branch');
-      expect(entries.map((entry) => entry.id)).toEqual([
-        'message:user',
-        'message:preamble',
-        'tool:first',
-        'tool:second',
-        'answer:user',
-      ]);
+      const expected = ['message:user', 'message:preamble', 'tool:first', 'tool:second'];
+      if (status === 'failed') expected.push('request-error:run');
+      expected.push('answer:user');
+      expect(entries.map((entry) => entry.id)).toEqual(expected);
       expect(entries.at(-1)).toMatchObject({
         type: 'answer-footer',
         footer: { inputId: 'user', copyText: '正在检查文件' },

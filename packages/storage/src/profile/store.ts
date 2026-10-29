@@ -10,7 +10,6 @@ import {
   RunViewSchema,
   SessionSnapshotSchema,
   SessionSummarySchema,
-  WorkStateSchema,
   type Compaction,
   type HarnessEvent,
   type AppSettings,
@@ -24,6 +23,16 @@ import {
   type AttachmentContent,
   type Checkpoint,
   type FrozenSkill,
+  type AgentTaskSummary,
+  type AgentTaskDetail,
+  type AgentMessageTarget,
+  type AgentMessage,
+  type AgentBoard,
+  type AgentBoardQuery,
+  type AgentSettings,
+  type AgentSettingsInput,
+  type LiveMessageDelta,
+  type ToolCallView,
 } from '@my-pi-harness/protocol';
 import { StorageError } from '../shared/errors.js';
 import { AuthRepository } from '../repositories/auth.js';
@@ -44,20 +53,21 @@ import {
 } from '../sessions/session-jsonl.js';
 import { PrivateSessionFiles } from '../sessions/private-files.js';
 import { AttachmentBlobs } from '../sessions/attachment-blobs.js';
-import { interruptionEvents } from '../sessions/interruption.js';
+import { agentInterruptionEvents } from '../sessions/agent-recovery.js';
 import { validateToolBatch } from '../sessions/projections/tool-batch.js';
 import { ModelContextQuery } from '../sessions/model-context.js';
 import type { ProfileStoreOptions } from '../sessions/session-log-directory.js';
 import { SkillContextQuery } from '../sessions/skill-context.js';
+import { AgentTaskQuery } from '../sessions/agent-tasks.js';
+import { AgentSettingsRepository } from '../repositories/agent-settings.js';
+import { validateAgentBatch } from '../sessions/agent-batch.js';
 import * as schema from '../sqlite/schema.js';
 import type { CreateSessionInput, EventInput, RequestAcceptance } from '../sessions/types.js';
-import { assertJson, checked } from '../shared/validation.js';
-import {
-  InputIdSchema,
-  QueueRequestSchema,
-  RunAcceptedSchema,
-  SessionCreatedSchema,
-} from '../sessions/event-validation.js';
+import { checked } from '../shared/validation.js';
+import { QueueRequestSchema, SessionCreatedSchema } from '../sessions/event-validation.js';
+import { SessionEventCommit } from '../sessions/event-commit.js';
+import { assertPersistentEvent } from '../sessions/event-persistence.js';
+import { LiveMessages } from '../sessions/live-messages.js';
 
 /** JSONL session facts, immutable attachments and SQLite configuration/projections for one daemon. */
 export class ProfileStore {
@@ -73,6 +83,10 @@ export class ProfileStore {
   private readonly tools: ToolProjection;
   private readonly modelContext: ModelContextQuery;
   private readonly work: WorkRepository;
+  private readonly agentTasks: AgentTaskQuery;
+  private readonly agentSettings: AgentSettingsRepository;
+  private readonly eventCommit: SessionEventCommit;
+  private readonly live: LiveMessages;
   private closed = false;
   private readonly files: PrivateSessionFiles;
   private readonly journal: SessionJournal;
@@ -102,6 +116,12 @@ export class ProfileStore {
     this.tools = new ToolProjection(this.db);
     this.modelContext = new ModelContextQuery(this.db);
     this.work = new WorkRepository(this.db);
+    this.agentTasks = new AgentTaskQuery(this.db);
+    this.agentSettings = new AgentSettingsRepository(this.db);
+    this.eventCommit = new SessionEventCommit(this.db, this.projector, (record) => {
+      this.pendingRecords.push(record);
+    });
+    this.live = new LiveMessages(this.db);
     this.files = new PrivateSessionFiles(lock.directory, options.sessionLogRoot);
     this.journal = new SessionJournal(this.files);
     this.blobs = new AttachmentBlobs(this.files);
@@ -163,6 +183,10 @@ export class ProfileStore {
     this.sqlite
       .transaction(() => {
         for (const table of [
+          schema.taskMessages,
+          schema.taskWorkStates,
+          schema.agentMessages,
+          schema.agentTasks,
           schema.toolContexts,
           schema.toolCalls,
           schema.branchMessages,
@@ -190,6 +214,14 @@ export class ProfileStore {
         for (const id of ids) {
           for (const records of this.journal.read(id)) {
             validateToolBatch(records.map(({ event, privateData }) => ({ ...event, privateData })));
+            validateAgentBatch(
+              this.db,
+              id,
+              records.map(({ event, privateData }) => ({
+                ...event,
+                ...(privateData === null ? {} : { privateData }),
+              })),
+            );
             for (const { event, privateData } of records) {
               if (event.type === 'session.created') this.createProjection(event);
               else this.projector.apply(event, privateData ?? undefined);
@@ -256,7 +288,7 @@ export class ProfileStore {
     let logged = false;
     this.transactionDepth += 1;
     try {
-      return this.sqlite
+      const result = this.sqlite
         .transaction(() => {
           const result = operation();
           if (outer && !readOnly && this.pendingRecords.length > 0) {
@@ -284,6 +316,8 @@ export class ProfileStore {
           return result;
         })
         .immediate();
+      if (outer && logged) this.live.committed(this.pendingRecords.map(({ event }) => event));
+      return result;
     } catch (error: unknown) {
       this.pendingRecords.length = previousLength;
       if (logged) {
@@ -315,6 +349,7 @@ export class ProfileStore {
   public close(): void {
     if (this.closed) return;
     this.closed = true;
+    this.live.clear();
     try {
       try {
         this.files.close();
@@ -507,8 +542,14 @@ export class ProfileStore {
         session,
         snapshotSeq: session.snapshotSeq,
         branches: branchRows.map((row) => checked(BranchViewSchema, row.data)),
-        messages: messageRows.map((row) => checked(MessageViewSchema, row.data)),
-        runs: runRows.map((row) => checked(RunViewSchema, row.data)),
+        messages: this.live.merge(
+          id,
+          messageRows.map((row) => checked(MessageViewSchema, row.data)),
+        ),
+        liveRevision: this.live.revision(id),
+        runs: runRows
+          .filter((row) => row.taskId === null)
+          .map((row) => checked(RunViewSchema, row.data)),
         tools: this.tools.list(id, session.activeBranchId),
         queue: queued
           .map((row) => checked(QueueInputSchema, row.data))
@@ -516,6 +557,16 @@ export class ProfileStore {
             (left, right) => left.createdAt - right.createdAt || left.id.localeCompare(right.id),
           ),
       });
+    }, true);
+  }
+
+  /** Read one tool visible in the current branch without loading either root or child transcripts. */
+  public getVisibleTool(sessionId: string, toolId: string): ToolCallView | undefined {
+    if (this.writeFailure) throw this.writeFailure;
+    return this.transaction(() => {
+      const session = this.getSession(sessionId);
+      if (!session) return undefined;
+      return this.tools.visible(sessionId, toolId, session.activeBranchId);
     }, true);
   }
 
@@ -542,39 +593,7 @@ export class ProfileStore {
     const session = this.getSession(sessionId);
     if (!session)
       throw new StorageError('SESSION_NOT_FOUND', 'Session does not exist or is archived');
-    const selectedBranch = branchId ?? session.activeBranchId;
-    const selectedState = this.work.get(sessionId, selectedBranch);
-    const versions = new Map<string, Compaction>();
-    const selected = new Set<string>();
-    if (selectedState.compaction) selected.add(selectedState.compaction.id);
-    const rows = this.db
-      .select({ data: schema.events.data })
-      .from(schema.events)
-      .where(and(eq(schema.events.sessionId, sessionId), eq(schema.events.type, 'work.updated')))
-      .orderBy(asc(schema.events.seq))
-      .all();
-    for (const row of rows) {
-      const state = checked(WorkStateSchema, row.data['state']);
-      if (state.compaction !== null) {
-        versions.set(state.compaction.id, state.compaction);
-        if (state.branchId === selectedBranch) selected.add(state.compaction.id);
-      }
-    }
-    for (const id of selected) {
-      const parentId = versions.get(id)?.parentId;
-      if (parentId !== null && parentId !== undefined) selected.add(parentId);
-    }
-    const messageIds = new Set(
-      this.db
-        .select({ id: schema.branchMessages.messageId })
-        .from(schema.branchMessages)
-        .where(eq(schema.branchMessages.branchId, selectedBranch))
-        .all()
-        .map((row) => row.id),
-    );
-    return [...versions.values()].filter(
-      (version) => selected.has(version.id) && messageIds.has(version.throughMessageId),
-    );
+    return this.work.compactions(sessionId, branchId ?? session.activeBranchId);
   }
 
   /** Store frozen content privately; replacing an existing attachment ID is rejected. */
@@ -711,118 +730,17 @@ export class ProfileStore {
       .map((row) => checked(HarnessEventSchema, row));
   }
 
-  private duplicate(sessionId: string, inputs: readonly EventInput[]): boolean {
-    if (inputs.length === 1 && inputs[0]?.type === 'run.finished') {
-      const input = inputs[0];
-      if (input.runId !== null) {
-        const row = this.db
-          .select()
-          .from(schema.runs)
-          .where(and(eq(schema.runs.id, input.runId), eq(schema.runs.sessionId, sessionId)))
-          .get();
-        if (row) {
-          const run = checked(RunViewSchema, row.data);
-          if (
-            run.status !== 'running' &&
-            run.status === input.data['status'] &&
-            run.error === input.data['error']
-          )
-            return true;
-        }
-      }
-    }
-    for (const input of inputs) {
-      let requestId: string | undefined;
-      let incoming: RequestAcceptance | undefined;
-      if (input.type === 'run.accepted') {
-        const value = checked(RunAcceptedSchema, input.data);
-        const run = value.run;
-        requestId = value.requestId;
-        incoming = { runId: run.id, inputId: null };
-      } else if (input.type === 'queue.added' && input.privateData !== undefined) {
-        const value = checked(QueueInputSchema, input.data);
-        requestId = checked(QueueRequestSchema, input.privateData).requestId;
-        incoming = { runId: null, inputId: value.id };
-      }
-      if (requestId === undefined || incoming === undefined) continue;
-      const previous = this.findRequest(sessionId, requestId);
-      if (!previous) continue;
-      if (previous.runId !== incoming.runId || previous.inputId !== incoming.inputId)
-        throw new StorageError('CONFLICT', 'Request ID has already accepted another input');
-      return true;
-    }
-    return false;
+  /** Append durable facts; transient output uses its separate process-local entry point. */
+  public append(sessionId: string, inputs: readonly EventInput[]): HarnessEvent[] {
+    for (const input of inputs) assertPersistentEvent(input.type);
+    return this.transaction(() => this.eventCommit.append(sessionId, inputs));
   }
 
-  /** Append a complete command batch, immutable facts and projections in one short transaction. */
-  public append(sessionId: string, inputs: readonly EventInput[]): HarnessEvent[] {
-    return this.transaction(() => {
-      const current = this.db
-        .select()
-        .from(schema.sessions)
-        .where(eq(schema.sessions.id, sessionId))
-        .get();
-      if (current?.archived) {
-        if (inputs.length === 1 && inputs[0]?.type === 'session.deleted') return [];
-        throw new StorageError('SESSION_NOT_FOUND', 'Session is archived');
-      }
-      const session = this.projector.session(sessionId);
-      if (this.duplicate(sessionId, inputs)) return [];
-      for (const input of inputs) {
-        if (input.type !== 'queue.consumed') continue;
-        const { inputId } = checked(InputIdSchema, input.data);
-        const row = this.db
-          .select()
-          .from(schema.queue)
-          .where(and(eq(schema.queue.id, inputId), eq(schema.queue.sessionId, sessionId)))
-          .get();
-        if (!row) throw new StorageError('CONFLICT', 'Queued input no longer exists');
-        const queued = checked(QueueInputSchema, row.data);
-        const message = inputs.find(
-          (candidate) =>
-            candidate.type === 'message.started' &&
-            candidate.runId === input.runId &&
-            candidate.data['role'] === 'user' &&
-            candidate.data['text'] === queued.text,
-        );
-        if (!message)
-          throw new StorageError(
-            'INVALID_EVENT',
-            'Queue consumption must atomically commit its user message',
-          );
-      }
-      const accepted: HarnessEvent[] = [];
-      for (const [index, input] of inputs.entries()) {
-        assertJson(input.data);
-        if (input.privateData !== undefined) assertJson(input.privateData);
-        const privateData =
-          input.privateData === undefined ? undefined : structuredClone(input.privateData);
-        const data: unknown = JSON.parse(JSON.stringify(input.data));
-        const event = checked(HarnessEventSchema, {
-          version: 1,
-          eventId: randomUUID(),
-          sessionId,
-          runId: input.runId,
-          seq: session.snapshotSeq + index + 1,
-          type: input.type,
-          at: input.at,
-          data,
-        });
-        this.projector.apply(event, privateData);
-        this.db
-          .insert(schema.events)
-          .values({
-            ...event,
-            privateData: event.type === 'context.prepared' ? null : (privateData ?? null),
-          })
-          .run();
-        this.pendingRecords.push({ event, privateData: privateData ?? null });
-        accepted.push(event);
-      }
-
-      validateToolBatch(inputs);
-      return accepted;
-    });
+  /** Append live output without a SQLite transaction, durable cursor advance or journal write. */
+  public publishMessageDelta(sessionId: string, delta: LiveMessageDelta): void {
+    this.assertOpen();
+    if (this.writeFailure) throw this.writeFailure;
+    this.live.publish(sessionId, delta);
   }
 
   /** Return only complete branch messages with private replay codecs and canonical outcomes. */
@@ -854,23 +772,112 @@ export class ProfileStore {
     return new SkillContextQuery(this.db).read(sessionId, branchId, messageIds);
   }
 
+  public getAgentSettings(): AgentSettings {
+    this.assertOpen();
+    return this.agentSettings.get();
+  }
+
+  public putAgentSettings(input: AgentSettingsInput): AgentSettings {
+    return this.transaction(() => this.agentSettings.put(input));
+  }
+
+  public listAgentTasks(sessionId: string, branchId?: string): AgentTaskSummary[] {
+    return this.transaction(() => this.agentTasks.list(sessionId, branchId), true);
+  }
+
+  public listAgentBoard(query: AgentBoardQuery = {}): AgentBoard {
+    return this.transaction(() => this.agentTasks.board(query), true);
+  }
+
+  public getAgentTask(sessionId: string, taskId: string): AgentTaskSummary | undefined {
+    return this.transaction(() => this.agentTasks.get(sessionId, taskId), true);
+  }
+
+  public findTaskBySource(
+    sessionId: string,
+    sourceToolCallId: string,
+  ): AgentTaskSummary | undefined {
+    this.assertOpen();
+    const row = this.db
+      .select({ id: schema.agentTasks.id })
+      .from(schema.agentTasks)
+      .where(
+        and(
+          eq(schema.agentTasks.sessionId, sessionId),
+          eq(schema.agentTasks.sourceToolCallId, sourceToolCallId),
+        ),
+      )
+      .get();
+    return row ? this.agentTasks.get(sessionId, row.id) : undefined;
+  }
+
+  public getAgentTaskDetail(
+    sessionId: string,
+    taskId: string,
+    cursor = 0,
+    limit = 100,
+  ): AgentTaskDetail {
+    return this.transaction(() => {
+      const detail = this.agentTasks.detail(sessionId, taskId, cursor, limit);
+      return {
+        ...detail,
+        messages: this.live.merge(sessionId, detail.messages),
+        liveRevision: this.live.revision(sessionId),
+      };
+    }, true);
+  }
+
+  public listAgentMessages(sessionId: string, target?: AgentMessageTarget): AgentMessage[] {
+    return this.transaction(() => this.agentTasks.queue(sessionId, target), true);
+  }
+
+  public getTaskSnapshot(sessionId: string, taskId: string): SessionSnapshot {
+    return this.transaction(() => {
+      const snapshot = this.agentTasks.snapshot(sessionId, taskId);
+      return {
+        ...snapshot,
+        messages: this.live.merge(sessionId, snapshot.messages),
+        liveRevision: this.live.revision(sessionId),
+      };
+    }, true);
+  }
+
+  public getTaskWorkState(sessionId: string, taskId: string): WorkState {
+    this.assertOpen();
+    return this.work.getTask(sessionId, taskId);
+  }
+
+  public listTaskCompactions(sessionId: string, taskId: string): Compaction[] {
+    this.assertOpen();
+    const task = this.agentTasks.row(sessionId, taskId);
+    return this.work.compactions(sessionId, task.branchId, taskId);
+  }
+
+  public getTaskCompactionContextStart(
+    sessionId: string,
+    taskId: string,
+    compactionId: string,
+  ): string | null {
+    if (!this.listTaskCompactions(sessionId, taskId).some((version) => version.id === compactionId))
+      throw new StorageError('INVALID_RECORD', 'Compaction does not belong to this task');
+    return this.work.compactionContextStart(sessionId, compactionId);
+  }
+
+  public getTaskModelContext(
+    sessionId: string,
+    taskId: string,
+    messageIds?: readonly string[],
+  ): Record<string, unknown>[] {
+    this.assertOpen();
+    return this.modelContext.readTask(sessionId, taskId, messageIds);
+  }
+
   /** Preserve partial output and queue; stale resources become interrupted, never retried. */
   public recoverInterrupted(): HarnessEvent[] {
     const output: HarnessEvent[] = [];
     for (const session of this.listSessions()) {
       const at = Date.now();
-      const tools = this.db
-        .select({ id: schema.runs.id })
-        .from(schema.runs)
-        .where(eq(schema.runs.sessionId, session.id))
-        .all()
-        .flatMap(({ id }) => this.tools.recovery(session.id, id, at));
-      const inputs = interruptionEvents(
-        session,
-        this.work.interruptedStates(session.id),
-        tools,
-        at,
-      );
+      const inputs = agentInterruptionEvents(this.db, session, at);
       if (inputs.length > 0) output.push(...this.append(session.id, inputs));
     }
     return output;

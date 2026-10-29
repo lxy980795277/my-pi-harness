@@ -20,6 +20,7 @@ import { registerMcpDirectoryRoutes } from '../mcp/directory-routes.js';
 import { registerMcpConfigurationRoutes } from '../mcp/configuration-routes.js';
 import { registerConnectionRoutes } from '../connections/routes.js';
 import { registerPluginConnectionRoutes } from '../plugin-connections/routes.js';
+import { registerAgentRoutes } from '../agents/routes.js';
 
 /** Install application routes; health and public process identity remain readable. */
 export function registerApplicationRoutes(
@@ -38,10 +39,11 @@ export function registerApplicationRoutes(
   registerModelRoutes(server, gateway);
   registerSessionRoutes(server, runtime, auth, gateway, services.workspaces);
   registerSessionLogRoute(server, services.store);
-  registerOfficeArtifactRoute(server, runtime, services.workspaces);
+  registerOfficeArtifactRoute(server, runtime, services.store, services.workspaces);
   registerWorkspaceRoutes(server, services.workspaces);
   registerToolRoutes(server, services.tools);
   registerWorkRoutes(server, services.work);
+  registerAgentRoutes(server, services);
   registerAttachmentRoutes(server, services.attachments);
   registerMcpRoutes(server, services.mcp);
   registerRemoteMcpRoutes(server, services.remoteMcp, () => services.webOrigin());

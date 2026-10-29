@@ -1,5 +1,6 @@
 import type { SessionSnapshot, SessionSummary } from '@my-pi-harness/protocol';
 import { replaceEqualDeep, type QueryClient } from '@tanstack/react-query';
+import { isNewerSnapshot } from '@/utils/snapshot-position';
 
 /** Accepts HTTP and SSE facts in one place so an older refetch cannot erase live text. */
 export const retainNewestSnapshot = (
@@ -12,13 +13,13 @@ export const retainNewestSnapshot = (
   if (current && current.session.id !== incoming.session.id) {
     throw new Error('不能合并不同会话的状态。');
   }
-  if (current && incoming.snapshotSeq <= current.snapshotSeq) {
+  if (current && !isNewerSnapshot(incoming, current)) {
     return current;
   }
   return replaceEqualDeep(current, incoming);
 };
 
-/** Installs a committed response into the same cache used by the live timeline. */
+/** Merges public HTTP and SSE snapshots into the same monotonic timeline cache. */
 export const mergeSessionSnapshot = (queryClient: QueryClient, incoming: SessionSnapshot): void => {
   queryClient.setQueryData<SessionSnapshot>(['session', incoming.session.id], (current) => {
     return retainNewestSnapshot(current, incoming);

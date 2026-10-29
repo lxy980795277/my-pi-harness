@@ -4,7 +4,7 @@
 
 应用版本与协议版本用途不同：应用版本来自根版本生成流程；`PROTOCOL_VERSION` 管理跨端协议兼容。修改协议时更新所有消费者和相应检查，不能用产品版本代替兼容判定。
 
-当前协议为18，包含本地/远程MCP、工具目录与动态加载、Skill选择及插件/服务连接，冻结调用来源、派发事实和unknown终态；包含远程MCP草稿连接测试和只读内置插件详情预览。客户端与daemon必须采用相同协议版本，开发期不保留旧协议兼容。SQLite schema为8，公开事件envelope为1；Session JSONL外层仅有records/checksum，不设批次版本，实际磁盘格式见[存储说明](../../packages/storage/README.md)。这些职责不随HTTP版本机械变化。
+当前协议为21，包含本地/远程MCP、工具目录与动态加载、Skill选择及插件/服务连接、子Agent任务与看板，以及持久seq和实时liveRevision分离的会话快照。任务详情移除无消费者的messagesQueue，正文和相关工具按页读取，内部通信事实与查询保持。客户端与daemon必须采用相同协议版本，开发期不保留旧协议兼容。SQLite schema为9，公开持久事件envelope为1；Session JSONL外层仅有records/checksum，不设批次版本，实际磁盘格式见[存储说明](../../packages/storage/README.md)。这些职责不随HTTP版本机械变化。
 
 ## M0 HTTP
 
@@ -60,5 +60,9 @@ Server配置、秘密槽位、按隔离范围的启动授权、发现/测试、�
 Run内工具加载与Skill冻结事实见[运行时能力协议](capability-runtime.md)。`DesktopBridge.revealSkillDirectory(skillId, workspaceId)`只接收已注册Skill ID与工作区ID；main携带当前应用Cookie及CSRF向宿主解析目录，再交系统打开，不接收Renderer提供的任意文件路径。
 
 Skills创建/安装、插件管理接口见[Skills与插件协议](skills-plugins.md)，插件OAuth、共享Token及只读网关见[插件连接协议](plugin-connections.md)，高级独立账户见[外部连接协议](connections.md)。
+
+## M5任务协议
+
+子Agent角色、执行树、任务看板、任务通信与停止、独立人工交互及共享摘要事件见[子Agent协议](agents.md)。执行结果与任务状态由同一会话日志投影，摘要通知不代替会话有序事件。
 
 HTTP/SSE传输、MCP OAuth与目录管理见[远程MCP协议](remote-mcp.md)；工具动态schema始终在宿主解析，不将外部schema直接交给HTTP验证器。

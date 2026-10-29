@@ -6,7 +6,11 @@ export const estimateTimelineEntry = (entry: TimelineEntry): number => {
   if (entry.type === 'tool') {
     return 44;
   }
-  if (entry.type === 'waiting' || entry.type === 'answer-footer') {
+  if (
+    entry.type === 'waiting' ||
+    entry.type === 'answer-footer' ||
+    entry.type === 'request-error'
+  ) {
     return 56;
   }
   if (entry.part === 'thinking') return 32;

@@ -16,13 +16,14 @@ class FixtureEventSource extends EventTarget {
     this.closed = true;
   }
   update(value: SessionStreamUpdate, id?: string): void {
-    let sequence: number;
-    if (value.kind === 'snapshot') sequence = value.snapshot.snapshotSeq;
-    else sequence = value.snapshotSeq;
+    let cursor: string;
+    if (value.kind === 'snapshot')
+      cursor = `${value.snapshot.snapshotSeq}:${value.snapshot.liveRevision}`;
+    else cursor = `${value.snapshotSeq}:${value.liveRevision}`;
     this.dispatchEvent(
       new MessageEvent('session.update', {
         data: JSON.stringify(value),
-        lastEventId: id ?? String(sequence),
+        lastEventId: id ?? cursor,
       }),
     );
   }
@@ -39,7 +40,9 @@ const append = (baseSeq = 1, snapshotSeq = 2): SessionPatch => {
     sessionId: 'session',
     branchId: 'main',
     baseSeq,
+    baseLiveRevision: 0,
     snapshotSeq,
+    liveRevision: 0,
     session: sessionProjection(snapshotSeq).session,
     changes: [{ type: 'message.append', id: 'assistant', textDelta: '+', thinkingDelta: '' }],
   };
@@ -57,6 +60,32 @@ afterEach(() => {
 });
 
 describe('owned live session subscription', () => {
+  it('reconnects from the full partial text at the same durable sequence without replaying a delta', () => {
+    const snapshot = vi.fn();
+    const close = subscribeLiveSession('session', { snapshot, connection: vi.fn() });
+    source().onopen?.();
+    source().update({ kind: 'snapshot', snapshot: sessionProjection(3, 'prefix', 2) });
+    source().update({ ...append(3, 3), baseLiveRevision: 2, liveRevision: 4 });
+    vi.advanceTimersByTime(32);
+    expect(snapshot).toHaveBeenLastCalledWith(
+      expect.objectContaining({ snapshotSeq: 3, liveRevision: 4 }),
+    );
+    source().onerror?.();
+    source().onopen?.();
+    source().update({ kind: 'snapshot', snapshot: sessionProjection(3, 'prefix+ caught up', 7) });
+    source().update({ ...append(3, 3), baseLiveRevision: 7, liveRevision: 8 });
+    vi.advanceTimersByTime(32);
+    expect(snapshot).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        snapshotSeq: 3,
+        liveRevision: 8,
+        messages: [expect.anything(), expect.objectContaining({ text: 'prefix+ caught up+' })],
+      }),
+    );
+    close();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it('reconnects with an actionable error when an opened stream never sends a baseline', () => {
     const snapshot = vi.fn();
     const connection = vi.fn();

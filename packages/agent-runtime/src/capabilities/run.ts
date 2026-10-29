@@ -397,13 +397,7 @@ export class RunCapabilities implements RunControls {
         },
       });
     }
-    const next = new RunToolset(
-      records.map(({ definition, source, external }) => ({
-        definition,
-        source,
-        ...(external ? { external } : {}),
-      })),
-    );
+    const next = new RunToolset(records);
     const skills = [...this.activeSkills.values(), ...this.pendingSkills.values()];
     const pendingSkills = [...this.pendingSkills.values()];
     this.options.skillPort?.assertBindingsCurrent(skills);

@@ -20,7 +20,7 @@ import {
   type WorkState,
 } from '@my-pi-harness/protocol';
 import { RuntimeError } from '../errors.js';
-import type { WorkRuntimeOptions } from './ports.js';
+import type { WorkRuntimeOptions, WorkScope } from './ports.js';
 import type { ResolvedModel } from '../models/gateway.js';
 import type { EventInput } from '../sessions/ports.js';
 import { decodeContextMessage } from '../context/codec.js';
@@ -43,15 +43,58 @@ export class WorkRuntime {
   public readonly context = new WorkContext(this);
   private readonly interactions = new WorkInteractions(this);
   private readonly compactions = new Map<string, Set<AbortController>>();
-  public constructor(public readonly options: WorkRuntimeOptions) {}
+  private readonly taskScopes = new Map<string, WorkRuntime>();
+  public constructor(
+    public readonly options: WorkRuntimeOptions,
+    private readonly scope?: WorkScope,
+  ) {}
 
-  public snapshot(sessionId: string, expectedBranchId?: string): WorkSnapshot {
-    const state = this.options.store.getWorkState(sessionId);
+  public get taskId(): string | undefined {
+    return this.scope?.taskId;
+  }
+
+  /** Reuse context and interaction logic while keeping each task's mutable work separate. */
+  public forTask(sessionId: string, taskId: string): WorkRuntime {
+    this.lifetime.signal.throwIfAborted();
+    if (this.scope) {
+      if (this.scope.sessionId !== sessionId || this.scope.taskId !== taskId)
+        throw new RuntimeError('TASK_SCOPE_CONFLICT', '不能将任务工作状态切换到其他任务。');
+      return this;
+    }
+    const key = JSON.stringify([sessionId, taskId]);
+    let work = this.taskScopes.get(key);
+    if (!work) {
+      this.options.store.getTaskWorkState(sessionId, taskId);
+      work = new WorkRuntime(this.options, { sessionId, taskId });
+      this.taskScopes.set(key, work);
+    }
+    return work;
+  }
+
+  /** Release settled task waiters and request baselines; persisted history remains available. */
+  public releaseTask(sessionId: string, taskId: string): void {
+    const key = JSON.stringify([sessionId, taskId]);
+    this.taskScopes.get(key)?.close();
+    this.taskScopes.delete(key);
+  }
+
+  public sessionSnapshot(sessionId: string): SessionSnapshot {
+    this.checkSessionScope(sessionId);
+    if (this.scope) return this.options.store.getTaskSnapshot(sessionId, this.scope.taskId);
+    return this.options.store.getSnapshot(sessionId);
+  }
+
+  public snapshot(sessionId: string, expectedBranchId?: string, taskId?: string): WorkSnapshot {
+    if (taskId !== undefined)
+      return this.forTask(sessionId, taskId).snapshot(sessionId, expectedBranchId);
+    const state = this.workState(sessionId);
     if (expectedBranchId !== undefined) this.checkBranch(state, expectedBranchId);
     return {
       state,
-      checkpoints: this.options.store.listCheckpoints(sessionId),
-      compactions: this.options.store.listCompactions(sessionId, state.branchId),
+      checkpoints: this.scope ? [] : this.options.store.listCheckpoints(sessionId),
+      compactions: this.scope
+        ? this.options.store.listTaskCompactions(sessionId, this.scope.taskId)
+        : this.options.store.listCompactions(sessionId, state.branchId),
     };
   }
 
@@ -61,14 +104,14 @@ export class WorkRuntime {
     runId: string | null = null,
     privateData?: Record<string, unknown>,
   ): WorkState {
-    const current = this.options.store.getWorkState(sessionId, state.branchId);
+    const current = this.workState(sessionId, state.branchId);
     const next = { ...state, revision: current.revision + 1 };
     this.options.commit(sessionId, [
       {
         type: 'work.updated',
         runId,
         at: Date.now(),
-        data: { state: next },
+        data: { state: next, ...(this.scope ? { taskId: this.scope.taskId } : {}) },
         ...(privateData === undefined ? {} : { privateData }),
       },
     ]);
@@ -117,11 +160,11 @@ export class WorkRuntime {
       ? AbortSignal.any([signal, this.lifetime.signal])
       : this.lifetime.signal;
     preparationSignal.throwIfAborted();
-    const existing = this.options.store.getSnapshot(session.id);
+    const existing = this.sessionSnapshot(session.id);
     const newBranch = !existing.branches.some((branch) => branch.id === session.activeBranchId);
     const state = newBranch
       ? initialWorkState(session.activeBranchId)
-      : this.options.store.getWorkState(session.id, session.activeBranchId);
+      : this.workState(session.id, session.activeBranchId);
     const visibleIds = this.visibleIds(state, messageIds);
     const historyAttachmentIds = existing.messages
       .filter((message) => visibleIds.includes(message.id))
@@ -157,6 +200,7 @@ export class WorkRuntime {
     input: ContextReset,
     signal?: AbortSignal,
   ): Promise<WorkSnapshot> {
+    this.requireRootWork();
     const { controller, release } = this.ownCompaction(sessionId);
     const combined = AbortSignal.any([
       controller.signal,
@@ -200,6 +244,7 @@ export class WorkRuntime {
   }
 
   public createCheckpoint(sessionId: string, input: CheckpointCreate): Promise<WorkSnapshot> {
+    this.requireRootWork();
     return this.options.command(sessionId, (snapshot) => {
       this.checkBranch(this.snapshot(sessionId).state, input.expectedBranchId);
       if (this.options.store.listCheckpoints(sessionId).length >= 100)
@@ -225,6 +270,7 @@ export class WorkRuntime {
     checkpointId: string,
     input: ContextReset,
   ): Promise<WorkSnapshot> {
+    this.requireRootWork();
     return this.options.command(sessionId, () => {
       this.checkRevision(this.snapshot(sessionId).state, input);
       const checkpoint = this.options.store
@@ -264,6 +310,7 @@ export class WorkRuntime {
   }
 
   public reset(sessionId: string, input: ContextReset): Promise<WorkSnapshot> {
+    this.requireRootWork();
     return this.options.command(sessionId, (snapshot) => {
       const current = this.snapshot(sessionId).state;
       this.checkRevision(current, input);
@@ -293,7 +340,10 @@ export class WorkRuntime {
     sessionId: string,
     questionId: string,
     answers: QuestionResponse[] | null,
+    taskId?: string,
   ): Promise<WorkSnapshot> {
+    if (taskId !== undefined)
+      return this.forTask(sessionId, taskId).answer(sessionId, questionId, answers);
     return this.options.command(
       sessionId,
       () => {
@@ -338,7 +388,14 @@ export class WorkRuntime {
     );
   }
 
-  public reviewPlan(sessionId: string, planId: string, input: PlanReview): Promise<WorkSnapshot> {
+  public reviewPlan(
+    sessionId: string,
+    planId: string,
+    input: PlanReview,
+    taskId?: string,
+  ): Promise<WorkSnapshot> {
+    if (taskId !== undefined)
+      return this.forTask(sessionId, taskId).reviewPlan(sessionId, planId, input);
     return this.options.command(
       sessionId,
       () => {
@@ -384,11 +441,9 @@ export class WorkRuntime {
     runId: string | null = null,
   ): void {
     const state = this.snapshot(sessionId).state;
-    const compaction = this.options.store
-      .listCompactions(sessionId, state.branchId)
-      .find(({ id }) => id === compactionId);
+    const compaction = this.snapshot(sessionId).compactions.find(({ id }) => id === compactionId);
     if (!compaction) throw new RuntimeError('COMPACTION_NOT_FOUND', '上下文检查点不存在。');
-    const snapshot = this.options.store.getSnapshot(sessionId);
+    const snapshot = this.sessionSnapshot(sessionId);
     this.save(
       sessionId,
       {
@@ -410,7 +465,7 @@ export class WorkRuntime {
       limit > 20
     )
       throw new RuntimeError('HISTORY_QUERY_INVALID', '检索词需为2至200字符，结果最多20项。');
-    const snapshot = this.options.store.getSnapshot(sessionId);
+    const snapshot = this.sessionSnapshot(sessionId);
     const needle = query.toLocaleLowerCase();
     const attachmentRefs = new Map<string, number>();
     for (const message of snapshot.messages.slice(-10_000)) {
@@ -464,13 +519,13 @@ export class WorkRuntime {
       matches,
       scanned,
       scannedCharacters,
-      scope: 'current session selected branch',
+      scope: this.scope ? 'current agent task' : 'current session selected branch',
     });
   }
 
   public validateTodos(sessionId: string, todos: Todo[], runId?: string): void {
     const state = this.snapshot(sessionId).state;
-    const snapshot = this.options.store.getSnapshot(sessionId);
+    const snapshot = this.sessionSnapshot(sessionId);
     if (new Set(todos.map(({ id }) => id)).size !== todos.length)
       throw new RuntimeError('TODO_INVALID', '任务ID不能重复。');
     if (todos.filter(({ status }) => status === 'in_progress').length > 1)
@@ -508,10 +563,13 @@ export class WorkRuntime {
 
   public close(): void {
     this.lifetime.abort();
+    for (const work of this.taskScopes.values()) work.close();
+    this.taskScopes.clear();
   }
 
   /** Cancellation must precede session serialization because a summary may own that command slot. */
   public cancelCompaction(sessionId: string): void {
+    for (const work of this.taskScopes.values()) work.cancelCompaction(sessionId);
     const controllers = this.compactions.get(sessionId);
     if (controllers === undefined) return;
     for (const controller of controllers) controller.abort();
@@ -557,9 +615,29 @@ export class WorkRuntime {
   }
 
   private history(sessionId: string, branchId: string, ids: readonly string[]): Message[] {
-    return completeToolHistory(
-      this.options.store.getModelContext(sessionId, branchId, ids).map(decodeContextMessage),
-    );
+    const stored = this.scope
+      ? this.options.store.getTaskModelContext(sessionId, this.scope.taskId, ids)
+      : this.options.store.getModelContext(sessionId, branchId, ids);
+    return completeToolHistory(stored.map(decodeContextMessage));
+  }
+
+  private workState(sessionId: string, branchId?: string): WorkState {
+    this.checkSessionScope(sessionId);
+    if (this.scope) return this.options.store.getTaskWorkState(sessionId, this.scope.taskId);
+    return this.options.store.getWorkState(sessionId, branchId);
+  }
+
+  private checkSessionScope(sessionId: string): void {
+    if (this.scope && this.scope.sessionId !== sessionId)
+      throw new RuntimeError('TASK_SCOPE_CONFLICT', '任务工作状态不属于此会话。');
+  }
+
+  private requireRootWork(): void {
+    if (this.scope)
+      throw new RuntimeError(
+        'TASK_SCOPE_CONFLICT',
+        '该操作只允许用于主会话，子任务使用独立上下文。',
+      );
   }
 
   private async compactHistory(

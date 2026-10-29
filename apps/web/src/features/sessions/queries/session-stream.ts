@@ -4,6 +4,7 @@ import type {
   SessionSnapshot,
   SessionStreamUpdate,
 } from '@my-pi-harness/protocol';
+import { isNewerSnapshot } from '@/utils/snapshot-position';
 
 interface SessionEntity {
   id: string;
@@ -122,7 +123,7 @@ const unsupportedChange = (_change: never): never => {
   throw new Error('会话增量包含未支持的操作。');
 };
 
-/** Applies one exact sequence interval atomically; gaps require a new authoritative baseline. */
+/** Applies an exact recorded/live interval atomically; gaps require a fresh baseline. */
 export const applySessionStreamUpdate = (
   current: SessionSnapshot | undefined,
   update: SessionStreamUpdate,
@@ -130,7 +131,7 @@ export const applySessionStreamUpdate = (
 ): SessionSnapshot => {
   if (update.kind === 'snapshot') {
     verifySessionSnapshot(update.snapshot, sessionId);
-    if (current && update.snapshot.snapshotSeq <= current.snapshotSeq) {
+    if (current && !isNewerSnapshot(update.snapshot, current)) {
       return current;
     }
     return update.snapshot;
@@ -140,17 +141,21 @@ export const applySessionStreamUpdate = (
     update.session.id !== sessionId ||
     update.session.snapshotSeq !== update.snapshotSeq ||
     update.session.activeBranchId !== update.branchId ||
-    update.snapshotSeq <= update.baseSeq
+    !isNewerSnapshot(update, {
+      snapshotSeq: update.baseSeq,
+      liveRevision: update.baseLiveRevision,
+    })
   ) {
     throw new Error('会话增量的标识、分支或序号不一致。');
   }
-  if (current && update.snapshotSeq <= current.snapshotSeq) {
+  if (current && !isNewerSnapshot(update, current)) {
     return current;
   }
   if (
     !current ||
     current.session.id !== sessionId ||
     current.snapshotSeq !== update.baseSeq ||
+    current.liveRevision !== update.baseLiveRevision ||
     current.session.activeBranchId !== update.branchId
   ) {
     throw new Error('会话增量出现缺口，需要重新同步。');
@@ -211,6 +216,7 @@ export const applySessionStreamUpdate = (
   return {
     session: update.session,
     snapshotSeq: update.snapshotSeq,
+    liveRevision: update.liveRevision,
     messages,
     branches,
     runs,

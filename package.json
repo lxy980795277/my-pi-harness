@@ -1,6 +1,6 @@
 {
   "name": "my-pi-harness",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "private": true,
   "type": "module",
   "description": "Local-first PC agent harness built independently on Pi",
@@ -16,7 +16,7 @@
     "dev:desktop": "node scripts/dev.mjs --desktop",
     "build": "pnpm version:sync && turbo run build",
     "typecheck": "tsc --noEmit && tsc -p tests/e2e/tsconfig.json --noEmit && turbo run typecheck",
-    "lint": "eslint . && pnpm lint:a11y && node scripts/check-boundaries.mjs && node scripts/check-source-conventions.mjs && node scripts/check-docs.mjs && pnpm version:check",
+    "lint": "node --max-old-space-size=8192 node_modules/eslint/bin/eslint.js . && pnpm lint:a11y && node scripts/check-boundaries.mjs && node scripts/check-source-conventions.mjs && node scripts/check-docs.mjs && pnpm version:check",
     "lint:a11y": "oxlint --config .oxlintrc.json apps/web/src",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

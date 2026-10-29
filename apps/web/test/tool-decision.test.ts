@@ -23,6 +23,7 @@ const snapshot: SessionSnapshot = {
   queue: [],
   tools: [],
   snapshotSeq: 4,
+  liveRevision: 0,
 };
 
 const response = (body: unknown): Response => {

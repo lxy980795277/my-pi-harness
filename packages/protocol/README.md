@@ -11,3 +11,5 @@
 字段、失败语义和桌面桥见 [协议文档](../../docs/03_API/overview.md)。改变协议时同时更新所有消费者和相关行为验证。
 
 应用身份使用`AppUser`、`LoginProvider`、`LoginSessionInfo`、`LoginFlow`，`AuthStatus`分别表达本机信任与应用登录。未登录不返回profile用户资料；公开登录流程只包含用户验证码，不含私有device_code、上游Token或应用bearer。模型授权继续使用独立`AuthFlow`。
+
+`sessions/agents.ts`定义子Agent角色与限制、任务摘要/分页详情、通信、停止命令及看板筛选。`RunView.taskId`省略表示根执行，存在时指向同Session的子任务；任务源仅持久化`sourceToolCallId`，公开摘要中的父子关系和用量由宿主投影，不要求日志重复保存。`MessageView.agentMessageId`标识通信形成的模型输入，关联原始通信，不能冒充用户提问或进入提问编辑入口。`defaultAgentSettings()`是角色与预算默认值的唯一解析入口，宿主保存设置时检查revision和模型选择关联。全局任务变更SSE只发送`ready/changed`失效通知，不携带任务正文或凭据。

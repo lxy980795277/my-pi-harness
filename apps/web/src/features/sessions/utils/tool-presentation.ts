@@ -16,6 +16,10 @@ import {
   Terminal,
   Undo2,
   Wrench,
+  GitBranch,
+  Send,
+  Square,
+  Clock,
   type LucideIcon,
 } from 'lucide-react';
 import type { ToolPresentation } from '@/features/sessions/types/tool';
@@ -27,6 +31,11 @@ interface ToolDefinition {
 }
 
 const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
+  spawn_agent: { name: '委派任务', Icon: GitBranch, argument: 'title' },
+  get_agent_status: { name: '查看任务', Icon: GitBranch },
+  wait_agents: { name: '等待子任务', Icon: Clock },
+  send_agent_message: { name: '发送任务消息', Icon: Send, argument: 'text' },
+  stop_agent: { name: '停止子任务', Icon: Square },
   tool_search: { name: '检索工具', Icon: Search, argument: 'query' },
   load_tools: { name: '加载工具', Icon: Plug },
   skill_search: { name: '检索 Skill', Icon: Search, argument: 'query' },

@@ -139,9 +139,14 @@ export class ToolRuntime {
       policy = { ...policy, approvalRequired: false, mutating: false };
     if (name === 'request_skill_tools')
       policy = { approvalRequired: true, mutating: false, summary: '授予本次运行的Skill工具权限' };
+    const blockedByReadOnly = context.readOnly && policy.mutating;
     const at = Date.now();
     let status: ToolCallRecord['status'] = 'running';
-    if (policy.approvalRequired && context.session.approvalMode !== 'full-access') {
+    if (
+      !blockedByReadOnly &&
+      policy.approvalRequired &&
+      context.session.approvalMode !== 'full-access'
+    ) {
       status = 'awaiting_approval';
       if (context.session.approvalMode === 'auto') status = 'reviewing';
     }
@@ -226,18 +231,37 @@ export class ToolRuntime {
     };
     commit('tool.requested');
     context.recorded.add(tool.id);
+    let releaseTool = (): void => undefined;
     try {
+      if (blockedByReadOnly) {
+        tool.status = 'denied';
+        throw new RuntimeError('TOOL_READ_ONLY', '当前运行仅允许只读操作。');
+      }
+      if (context.beforeTool) releaseTool = await context.beforeTool(policy.mutating, signal);
+      signal.throwIfAborted();
       if (name === 'pdf_read_pages' && !context.supportsImages)
         throw new RuntimeError('MODEL_CAPABILITY', '读取PDF页图需要支持图像的模型。');
+      if (context.agents?.has(name)) {
+        const content = await context.agents.execute(name, tool.arguments, tool.id, signal);
+        tool.status = 'completed';
+        tool.result = content
+          .filter((part) => part.type === 'text')
+          .map((part) => part.text)
+          .join('\n')
+          .slice(0, 128_000);
+        return finish({ content, details: undefined });
+      }
       if (
         selected.source.kind === 'session' &&
         name !== 'web_fetch' &&
         !context.controls?.has(name)
       ) {
-        if (!this.options.work)
-          throw new RuntimeError('TOOL_NOT_AVAILABLE', '会话工具运行时不可用。');
+        const work = context.run.taskId
+          ? this.options.work?.forTask(context.session.id, context.run.taskId)
+          : this.options.work;
+        if (!work) throw new RuntimeError('TOOL_NOT_AVAILABLE', '会话工具运行时不可用。');
         const text = await executeSessionTool(
-          this.options.work,
+          work,
           context.session.id,
           context.run.id,
           tool.id,
@@ -249,10 +273,6 @@ export class ToolRuntime {
         tool.result = text;
         tool.summary = text.slice(0, 4000);
         return finish({ content: [{ type: 'text', text }], details: undefined });
-      }
-      if (context.session.approvalMode === 'read-only' && policy.mutating) {
-        tool.status = 'denied';
-        throw new RuntimeError('TOOL_READ_ONLY', '当前会话为只读模式，禁止此操作。');
       }
       if (policy.approvalRequired) {
         let decision: ApprovalReviewResult['decision'] = 'ask';
@@ -270,7 +290,9 @@ export class ToolRuntime {
                 {
                   session: context.session,
                   runId: context.run.id,
+                  ...(context.run.taskId ? { taskId: context.run.taskId } : {}),
                   tool,
+                  ...(context.modelStream ? { modelStream: context.modelStream } : {}),
                   commit: (events) => context.commit(events),
                 },
                 signal,
@@ -362,7 +384,7 @@ export class ToolRuntime {
       let result: ExecutionResult;
       if (name === 'web_fetch') {
         result = await executeWebFetch(tool.arguments, {
-          readOnly: context.session.approvalMode === 'read-only',
+          readOnly: context.readOnly,
           ...(this.options.skillGateway ? { skillGateway: this.options.skillGateway } : {}),
           signal,
         });
@@ -374,7 +396,7 @@ export class ToolRuntime {
         result = await executeTool(name, tool.arguments, {
           workspaceRoot: workspace.rootPath,
           profileDirectory: this.options.profileDirectory,
-          readOnly: context.session.approvalMode === 'read-only',
+          readOnly: context.readOnly,
           shellAccess: context.session.approvalMode === 'full-access' ? 'full-access' : 'sandboxed',
           ...(this.options.officePythonPath
             ? { officePythonPath: this.options.officePythonPath }
@@ -417,6 +439,8 @@ export class ToolRuntime {
         details: undefined,
         isError: true,
       });
+    } finally {
+      releaseTool();
     }
   }
 

@@ -31,6 +31,10 @@ export function registerRequestErrors(server: FastifyInstance): void {
       void reply.code(401).send({ code: error.code, message: '本机授权已过期，请重新授权。' });
       return;
     }
+    if (error instanceof StorageError && error.code === 'AGENT_SETTINGS_INVALID') {
+      void reply.code(422).send({ code: error.code, message: error.message });
+      return;
+    }
     if (error instanceof Error && 'validation' in error && error.validation) {
       void reply.code(400).send({ code: 'INVALID_REQUEST', message: '请求字段或类型无效。' });
       return;

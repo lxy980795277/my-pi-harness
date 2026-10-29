@@ -10,16 +10,17 @@ Node 24 宿主使用的同步存储。JSONL保存会话执行事实，独立不�
 
 ## 数据所有权
 
-| 数据                                                                  | 权威位置             | SQLite职责                           |
-| --------------------------------------------------------------------- | -------------------- | ------------------------------------ |
-| 会话创建、标题、归档、消息、Run、工具、队列、分支、工作状态与会话快照 | 每会话JSONL          | 可重建查询投影及事件分页             |
-| 模型消息codec、冻结请求与队列幂等元数据                               | JSONL中的privateData | 仅宿主读取的恢复投影                 |
-| 附件元数据、冻结文本和图片内容                                        | checksummed附件文件  | 可重建元数据索引，不保存正文         |
-| Provider配置、厂商绑定、工作区、应用设置                              | SQLite               | 权威配置，不能从会话日志恢复         |
-| 用户、外部身份、profile归属、本机客户端和应用登录会话                 | SQLite               | 权威认证事实，投影重建不删除         |
-| MCP Server配置、秘密引用、作用域启动授权及profile身份epoch            | SQLite               | 权威配置，独立于浏览器登录与会话投影 |
-| 模型 Key、高级账户和独立 MCP OAuth Token                              | 系统凭据库           | 只保存引用，不保存秘密               |
-| 插件共享 OAuth Token 与账号                                           | profile 私有 JSON    | 不保存 Token 或账户桥接记录          |
+| 数据                                                                      | 权威位置             | SQLite职责                           |
+| ------------------------------------------------------------------------- | -------------------- | ------------------------------------ |
+| 会话创建、标题、归档、消息、Run、工具、队列、分支、工作状态、子任务与通信 | 每会话JSONL          | 可重建查询投影及事件分页             |
+| 模型消息codec、冻结请求与队列幂等元数据                                   | JSONL中的privateData | 仅宿主读取的恢复投影                 |
+| 附件元数据、冻结文本和图片内容                                            | checksummed附件文件  | 可重建元数据索引，不保存正文         |
+| Provider配置、厂商绑定、工作区、应用设置                                  | SQLite               | 权威配置，不能从会话日志恢复         |
+| 子Agent角色、启停、模型选择与执行限制                                     | SQLite               | 独立配置，投影重建不删除             |
+| 用户、外部身份、profile归属、本机客户端和应用登录会话                     | SQLite               | 权威认证事实，投影重建不删除         |
+| MCP Server配置、秘密引用、作用域启动授权及profile身份epoch                | SQLite               | 权威配置，独立于浏览器登录与会话投影 |
+| 模型 Key、高级账户和独立 MCP OAuth Token                                  | 系统凭据库           | 只保存引用，不保存秘密               |
+| 插件共享 OAuth Token 与账号                                               | profile 私有 JSON    | 不保存 Token 或账户桥接记录          |
 
 JSONL是宿主私有数据，包含模型恢复所需的完整codec和工具结果。普通HTTP/SSE通过`readEvents()`选择公开envelope或`getSnapshot()`返回公开投影；用户明确下载日志时，由受保护的[会话日志接口](../../docs/03_API/model-session.md#事件快照与断线)读取原始已提交JSONL前缀，保留全部分支和恢复数据。图片base64仅在受保护附件内容接口按需提供。上下文中用户主动提供的正文和工具结果可能包含敏感信息，宿主日志不等于脱敏导出。
 
@@ -29,9 +30,13 @@ JSONL是宿主私有数据，包含模型恢复所需的完整codec和工具结�
 
 一个命令的完整事件批先在SQLite短事务内验证关联、状态和revision；所有事件通过后，将公开envelope及其privateData编码为一行批记录，追加JSONL并fsync，最后提交SQLite投影。创建会话仅保存会话与初始分支，空工作状态由分支派生。队列消费和对应用户消息也属于同一批；后续任一事件非法时不写日志、不提交任何投影。返回后调用者才发布SSE。
 
+文本与思考片段通过publishMessageDelta更新独立内存覆盖层，不调用持久事务或写入JSONL/SQLite；append拒绝message.delta。getSnapshot、getTaskSnapshot和任务详情合并当前partial，模型历史只读取持久完整消息。snapshotSeq仍为连续持久水位，liveRevision仅在当前seq内递增，成功持久提交后归零但保留其他活动partial；完整消息或Run终态清理对应覆盖层。正常取消/失败由运行时保存已观测完整正文，真正崩溃前未完成的内存片段不恢复；启动持久中断全部在途根/子执行，保证客户端水位继续前进。
+
+AgentTaskQuery将详情分页限制落实到SQL ordinal范围及本页消息ID，工具仅取本页锚点和待审批项，子树用量仅提取计量字段；完整任务快照保留给运行时，不作为详情分页的中间结果。getVisibleTool按会话和工具ID检查当前分支保留的根消息或Task外层委派锚点，支持继承前缀里的子工具，拒绝不可见、跨会话及失步写入状态；不扫描整份转录或合并子消息到主快照。
+
 新写入的每行仅包含records及SHA-256 checksum，不保存批次版本。读取先对原始对象除checksum外的全部字段验证校验和，再选择records回放；既有行的额外元数据参与校验但不决定读取分支，原始历史不会因此重写。session归属与连续seq由每条event校验，eventId仍唯一。一次事务只属于一个会话；中断恢复分别提交每个会话。单行最多32 MiB、10000个事件，读取按64 KiB分块；无效UTF-8、校验和不符、非法记录、重复或断序明确拒绝。
 
-privateData使用原生JSON对象，模型codec、队列绑定和请求messages不再嵌套JSON字符串。磁盘工具展示result与同批canonical文本完全相同时，以`{from:'tool.context'}`引用正文；不同或更丰富的展示值仍完整保存。context.prepared.messages使用完整codec对象或同Run、同branch上一请求的消息索引，systemPrompt为字符串或指向首system消息内容的0。首次请求必须自包含，结束Run释放基线。SessionJournal.read先验证原始行checksum再还原完整记录，返回逐事务records数组；原始文件下载保留引用编码。
+privateData使用原生JSON对象，模型codec、队列绑定和请求messages不再嵌套JSON字符串。磁盘工具展示result与同批canonical文本完全相同时，以`{from:'tool.context'}`引用正文；不同或更丰富的展示值仍完整保存。context.prepared.messages使用完整codec对象或同Run、同branch上一请求的消息索引，systemPrompt为字符串或指向首system消息内容的0。首次请求必须自包含，结束Run只释放自身基线，其他活动Run不重写未变历史。SessionJournal.read先验证原始行checksum再还原完整记录，返回逐事务records数组；原始文件下载保留引用编码。
 
 `event-validation.ts`是公开持久payload的单一schema所有者，codec在完成解引用和原请求基线保存后，经`stored-event.ts`按相同定义选择当前公开字段；废弃附加字段不进入新投影，privateData和原文件不改写。必要数据与关系继续由所属投影校验，未知progress/audit数据保持原语义；HTTP和新写业务不使用此宽松读取路径。完整职责见[持久字段投影](../../docs/09_TECHNICAL/会话存储与恢复设计.md#412-持久字段投影)。
 
@@ -41,7 +46,7 @@ SQLite的private_data列使用JSON对象映射，字段与表版本不变。完�
 
 每次启动在一个SQLite事务内清空会话派生表和附件索引，从附件文件与JSONL重新投影；Provider、Workspace、Settings和应用登录事实不受影响。仅最后一行未完成的JSON片段可以截掉；结构完整但缺换行的合法记录补换行后保留；完整坏记录拒绝，不静默覆盖。已有SQLite会话缺少对应日志或没有有效创建记录时明确失败，不从SQLite反向填充日志。更换根目录需要携带权威日志和附件，不能得到一个看似空白的会话列表。
 
-恢复前校验消息及未消费队列引用的附件文件存在。旧Run、未派发工具、待答问题和待审核计划追加为interrupted；工具已有派发屏障但没有明确结果时追加unknown。保留部分输出和队列，不自动调用模型、执行工具或沿用审批。
+恢复前校验消息及未消费队列引用的附件文件存在。旧Run、未派发工具、待答问题和待审核计划追加为interrupted；工具已有派发屏障但没有明确结果时追加unknown。保留已持久输出和队列，不恢复未完成的内存片段，不自动调用模型、执行工具或沿用审批。
 
 ## 路径、附件与安全
 
@@ -89,8 +94,18 @@ SQLite schema按版本和checksum校验：0001保存配置与会话投影，0002
 
 ## M4能力配置与会话事实
 
-当前SQLite schema为8；第7代迁移移除已退役插件默认账户的归属标记，保留原账户及系统凭据引用，第8代添加`mcp_catalog_snapshots`派生目录。目录按Server及作用域保存非秘密授权指纹、有界协议定义JSON和发现时间，不保存凭据字节或可执行TypeBox对象；宿主恢复时重验官方协议与当前授权。目录可重建，损坏或失效不能授予信任，也不能替代配置/秘密。MCP目录开关/精确只读授权、远程配置、Skill启停、插件安装及高级外部服务连接是SQLite配置事实；插件共享 OAuth 按上述私有 JSON 独立保存，其他秘密保留系统凭据库。Skill冻结文件保存于profile的不可变版本目录，资源使用hash校验和Run lease，不能仅备份会话日志替代这些资源。
+当前SQLite schema为9；第7代迁移移除已退役插件默认账户的归属标记，保留原账户及系统凭据引用，第8代添加`mcp_catalog_snapshots`派生目录，第9代加入下述子任务投影与独立角色配置。目录按Server及作用域保存非秘密授权指纹、有界协议定义JSON和发现时间，不保存凭据字节或可执行TypeBox对象；宿主恢复时重验官方协议与当前授权。目录可重建，损坏或失效不能授予信任，也不能替代配置/秘密。MCP目录开关/精确只读授权、远程配置、Skill启停、插件安装及高级外部服务连接是SQLite配置事实；插件共享 OAuth 按上述私有 JSON 独立保存，其他秘密保留系统凭据库。Skill冻结文件保存于profile的不可变版本目录，资源使用hash校验和Run lease，不能仅备份会话日志替代这些资源。
 
 `run.accepted`私有数据保存初始工具、不可变候选目录与Skill正文/授权；`run.tools_loaded`保存递增可见版本、完整定义/来源及冻结Skill。投影校验版本连续、公开名称对应私有定义、加载项来自原候选、初始工具/Skill不能悄悄丢失。`context.prepared.capabilityRevision`必须等于当前可见版本。服务插件的只读网关地址保存在冻结Skill中，私有网关访问能力不进入日志。重建不连接上游或重做请求。
 
 `getSkillContext(sessionId, branchId, messageIds?)`从当前分支可回放消息的接受与加载事实读取冻结指令，按事件顺序核对消息锚点，保留每个Skill最近版本，最多16项。分支后缀、被排除消息和其他会话不参与继承；重启不读取新磁盘正文。调用方决定压缩/重置的历史范围并重验当前启用、安装代和授权；该查询不提供工具权限或公开HTTP接口。
+
+## M5子任务数据
+
+子任务与根执行共用Session的JSONL和seq。`task.created`只记录稳定任务ID、源委派工具ID、标题、冻结角色和限制；父Run、根Run、分支及消息锚点由原工具记录推导，仅存可重建索引。子Run通过可选`taskId`归属任务，省略表示根Run，`session.activeRunId`始终只指向根执行。
+
+子消息写入`task_messages`顺序表，不进入主分支消息列表；`getTaskSnapshot()`、`getTaskModelContext()`、`getTaskWorkState()`及`listTaskCompactions()`只读取所选任务。`work.updated`和`context.prepared`用可选`taskId`明确作用域，根和子请求、摘要锚点及人工问题所属Run必须匹配。`getSnapshot()`不加载子转录；任务树沿最外层委派的助手消息锚点判断分支可见性，避免编辑同Run中后续输入时错误保留被截断的子任务。
+
+通信先保存`task.message_queued`，消费事件与对应目标模型输入必须同批，`MessageView.agentMessageId`唯一关联原通信，正文与目标Run同时核对；不能只凭相同文本匹配用户消息，也不允许一个消费关联多个输入。原通信是单独来源，不能作为真正的用户提问展示或编辑；未消费内容不会触发模型请求。父Run终态要求所属任务已经关闭，任务关闭要求本身与后代没有在途执行。启动按叶到根结束子Run和任务，将未消费通信结算为未送达，保留已完成消息及结果，不重做模型或工具副作用。
+
+`listAgentBoard()`在分页前按当前分支、工作区及执行/人工等待/终态筛选，详情按任务消息ordinal分页。角色配置通过独立`agent_settings`保存并检查revision；默认值由protocol的`defaultAgentSettings()`产生，日志重建不删除用户配置。

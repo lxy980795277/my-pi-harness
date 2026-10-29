@@ -148,10 +148,13 @@ describe('SQLite event and projection transactions', () => {
   it('commits ordered facts and projections together without exposing private codecs', async () => {
     const { store } = await fixture();
     accept(store);
-    store.append('session', [
-      event('message.started', 'run', assistant()),
-      event('message.delta', 'run', { messageId: 'assistant', text: 'Answer', thinking: 'Reason' }),
-    ]);
+    store.append('session', [event('message.started', 'run', assistant())]);
+    store.publishMessageDelta('session', {
+      runId: 'run',
+      messageId: 'assistant',
+      text: 'Answer',
+      thinking: 'Reason',
+    });
     const complete: MessageView = {
       ...assistant(),
       text: 'Answer',
@@ -166,9 +169,9 @@ describe('SQLite event and projection transactions', () => {
     const snapshot = store.getSnapshot('session');
     expect(snapshot.session.activeRunId).toBeNull();
     expect(snapshot.messages.map((message) => message.text)).toEqual(['Question', 'Answer']);
-    expect(snapshot.snapshotSeq).toBe(7);
+    expect(snapshot.snapshotSeq).toBe(6);
     const events = store.readEvents('session');
-    expect(events.map((value) => value.seq)).toEqual([1, 2, 3, 4, 5, 6, 7]);
+    expect(events.map((value) => value.seq)).toEqual([1, 2, 3, 4, 5, 6]);
     expect(JSON.stringify(events)).not.toContain('private frozen model');
     expect(JSON.stringify(snapshot)).not.toContain('assistant-codec');
     expect(store.getModelContext('session', 'main')).toEqual([
@@ -267,20 +270,25 @@ describe('SQLite event and projection transactions', () => {
     expect(() => store.getModelContext('session', 'main')).toThrow('missing its provider codec');
   });
 
-  it('interrupts a surviving active run after reopen and preserves partial text and pending queue', async () => {
+  it('interrupts a surviving active run after reopen and retains durable messages and pending queue', async () => {
     const value = await fixture();
     accept(value.store);
     value.store.append('session', [
       event('message.started', 'run', assistant()),
-      event('message.delta', 'run', { messageId: 'assistant', text: 'Partial' }),
       event('queue.added', 'run', queued(), queueMetadata('queued')),
     ]);
+    value.store.publishMessageDelta('session', {
+      runId: 'run',
+      messageId: 'assistant',
+      text: 'Partial',
+    });
+    expect(value.store.getSnapshot('session').messages[1]?.text).toBe('Partial');
     value.store.close();
     value.store = await openProfileStore(value.directory);
     const snapshot = value.store.getSnapshot('session');
     expect(snapshot.session.activeRunId).toBeNull();
     expect(snapshot.runs[0]?.status).toBe('interrupted');
-    expect(snapshot.messages[1]).toMatchObject({ text: 'Partial', status: 'interrupted' });
+    expect(snapshot.messages[1]).toMatchObject({ text: '', status: 'interrupted' });
     expect(snapshot.messages[1]?.finishedAt).toBe(snapshot.runs[0]?.finishedAt);
     expect(snapshot.messages[1]).not.toHaveProperty('usage');
     expect(snapshot.queue).toHaveLength(1);

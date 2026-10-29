@@ -71,17 +71,19 @@ AuthFlow.prompt.type区分text、secret、select和manual_code；可含placehold
 
 终态助手MessageView可带`finishedAt`（宿主记录的完成时间，Unix毫秒）和`usage`（inputTokens、outputTokens、cacheReadTokens、cacheWriteTokens、totalTokens，非负安全整数）。每次模型步骤的`message.completed`记录这组字段，终态SSE以message.set同步；中断时保留已提交用量并补完成时间。totalTokens沿用Pi供应商归一化结果，不把缓存再次相加。没有供应商用量、Pi全零默认值或历史未记录时usage缺省，不按正文估算，不改写JSONL补造。统计字段只能出现在终态助手消息，用户消息与streaming消息携带它们时拒绝写入。
 
-HarnessEvent仍是JSONL中的公开事实封套，包含固定格式version:1、eventId、sessionId、可空runId、seq、type、at和公开data。seq在单Session事务中单调递增，先持久化批事实，再提交消息/Run/队列投影，最后通知订阅者。HTTP继续返回已提交SessionSnapshot；正文、思考和工具结果仍存原文，不保存Markdown HTML或解析树。
+HarnessEvent是JSONL中的公开持久事实封套，包含固定格式version:1、eventId、sessionId、可空runId、seq、type、at和公开data。seq在单Session事务中连续递增，先持久化批事实，再提交消息/Run/队列投影，最后通知订阅者。message.delta通过独立publishMessageDelta入口更新内存，不进入JSONL或SQLite；完整message.completed在正常完成、取消或失败时持久化。HTTP的SessionSnapshot合并当前内存正文/思考，增加非持久liveRevision；同snapshotSeq内每次实时更新递增，成功持久提交后归零，但其他活动消息的partial保留。正文、思考和工具结果仍存原文，不保存Markdown HTML或解析树。
 
-SSE仅发送 `session.update`，id为已提交snapshotSeq，data通过SessionStreamUpdateSchema校验。每条新连接（包含EventSource自动重连）先发送 `{kind:"snapshot",snapshot}` 作为完整基线；不接受afterSeq查询，也不根据Last-Event-ID重放事实。服务先订阅再同步读取基线，避免提交落入订阅空隙。连接存活期间将已提交变化按32ms合并为patch，不再同时传输事实事件和整份会话。
+SSE仅发送 `session.update`，id为`${snapshotSeq}:${liveRevision}`，data通过SessionStreamUpdateSchema校验。每条新连接（包含EventSource自动重连）先发送 `{kind:"snapshot",snapshot}` 作为含当前实时内容的完整基线；不接受afterSeq查询，也不根据Last-Event-ID重放事实或流式片段。服务先订阅再同步读取基线，避免变化落入订阅空隙。连接存活期间将变化按32ms合并为patch，不再同时传输事实事件和整份会话。
 
-patch包含sessionId、branchId、baseSeq、snapshotSeq、当前SessionSummary和changes。baseSeq指向该连接上一个已发送投影，snapshotSeq允许跨过同批多个事实；消息、分支、Run、队列和工具只发送变化条目。集合的set带目标index，删除先于插入，既有条目的相对顺序保持不变。消息正文/思考处于streaming且仅追加时，message.append只含id、textDelta和thinkingDelta；新消息、非追加修改及终态用message.set给出准确完整值。仅工作状态发生变化时仍发送空changes以推进序号，Web据此刷新独立工作状态。活动分支改变、既有条目重排、超过256项或序列化超过512KiB时改发完整基线。
+patch包含sessionId、branchId、baseSeq、baseLiveRevision、snapshotSeq、liveRevision、当前SessionSummary和changes。基线水位必须同时匹配该连接上一个投影，目标水位按(snapshotSeq,liveRevision)字典序严格前进；持久seq允许跨过同批多个事实，相同seq上的实时增量也可推送。消息、分支、Run、队列和工具只发送变化条目；set带目标index，删除先于插入，既有条目相对顺序保持。消息正文/思考处于streaming且仅追加时，message.append只含id、textDelta和thinkingDelta；新消息、非追加修改及终态用message.set给出准确完整值。仅工作状态变化时仍发送空changes推进持久序号，纯liveRevision变化不触发Web工作状态重查。活动分支改变、既有条目重排、超过256项或序列化超过512KiB时改发完整基线。
 
-Web独立追踪当前连接的基线，逐批检查标识、分支、序号、目标存在性和修改唯一性。旧/重复序号忽略；缺口或重叠不能部分应用，连接关闭后以100ms到2s的有界退避重新请求完整基线。每次SSE打开后5秒仍未收到有效基线时，同样报告同步超时并重建连接；收到基线、原生断线或订阅清理均取消该计时器。每32ms将最新接受状态合批写入Query，并保留未变化条目/集合引用。HTTP迟到响应与SSE共用单调缓存，较旧响应不能覆盖新状态；HTTP先到达较高序号时，SSE仍按自己的连续基线追赶。切换会话或卸载取消连接、重试和待发布批次，不将旧会话增量应用到新目标。
+Web独立追踪当前连接的基线，逐批检查标识、分支、双水位、目标存在性和修改唯一性。旧/重复水位忽略；缺口或重叠不能部分应用，连接关闭后以100ms到2s的有界退避重新请求完整基线。每次SSE打开后5秒仍未收到有效基线时，同样报告同步超时并重建连接；收到基线、原生断线或订阅清理均取消该计时器。每32ms将最新接受状态合批写入Query，并保留未变化条目/集合引用。HTTP迟到响应与SSE共用双水位缓存，较旧响应不能覆盖新状态；HTTP先到较高水位时，SSE仍按自己的连续基线追赶。切换会话或卸载取消连接、重试和待发布批次，不将旧会话增量应用到新目标。
 
-连接使用15秒注释心跳和8MiB单记录上限。Node写缓冲需要drain时暂停后续写入，只保留需要刷新这一标记；恢复后直接读取最新投影，不累积每个中间批次，5秒未恢复则断开。关闭立即清理心跳、drain/合批计时器、授权观察和订阅；正常可写连接在注销或停服时结束HTTP响应，背压、超时与异常连接强制销毁，不等待慢客户端排空。当前优化属于公开传输与客户端投影更新；daemon仍读取完整已提交投影后计算差异，不是JSONL格式改造或服务端增量存储。超出单记录上限的完整会话需要后续分页能力，本轮不宣称无限历史可在一个基线中恢复。
+连接使用15秒注释心跳和8MiB单记录上限。Node写缓冲需要drain时暂停后续写入，只保留需要刷新这一标记；恢复后直接读取最新合并投影，不积累每个中间批次，5秒未恢复则断开。关闭立即清理心跳、drain/合批计时器、授权观察和订阅；正常可写连接在注销或停服时结束HTTP响应，背压、超时与异常连接强制销毁，不等待慢客户端排空。daemon仍读取完整公开投影并合并内存partial后计算差异；超出单记录上限的完整会话需要后续分页，不宣称无限历史可在一个基线中恢复。
 
-终态区分completed、cancelled、failed和interrupted，SDK Promise resolve不等于成功。存储提交失败时取消模型并停用该会话，读取或再执行返回503/SESSION_UNAVAILABLE；不能广播未提交的完成。重启先取得profile所有权，再为遗留运行追加中断事实；MCP有派发屏障却无可靠结果时保留unknown说明，不自动重发，已终态历史不改写。
+终态区分completed、cancelled、failed和interrupted，SDK Promise resolve不等于成功。正常取消/失败在退出前保存已观测正文和思考，SDK错误的空消息不能抹掉已显示内容；真正崩溃前仅在内存、尚未完成的片段不恢复。存储提交失败时取消模型并停用该会话，读取或再执行返回503/SESSION_UNAVAILABLE；不能广播未提交的完成。重启先取得profile所有权，再为全部遗留根/子运行追加中断事实，持久seq前进后再提供快照，旧实时水位不会阻断新状态；MCP有派发屏障却无可靠结果时保留unknown，不自动重发，已终态历史不改写。
+
+失败原因保存在既有Run.error中，MessageView不重复保存。运行层保留应用拥有的安全失败说明，将供应商异常归类为超时、网络、认证、限流或服务不可用的固定文案；未知异常使用通用失败提示，不公开SDK异常原文、响应体、请求头或堆栈。取消时error保持null。界面按runId关联该次失败回答，空回答也显示原因，不将最近一次错误作为整个会话的顶部提示；历史已提交记录不回填或改写。
 
 每个会话在<logRoot>/sessions/<profileHash>/<sessionId>.jsonl保存完整宿主批日志，作为会话执行事实源；路径由[架构](../01_ARCHITECTURE/overview.md#启动配置)定义。完整批次校验后先持久化JSONL，再提交SQLite投影和推送公开事件。宿主记录含恢复所需privateData，普通HTTP/SSE仅输出公开投影；附件内容保存在独立校验文件。写入或投影失败返回503/SESSION_LOG_UNAVAILABLE并冻结后续持久写入，重启校验日志并重建投影，不重复执行副作用。不能从SQLite回填或覆盖权威日志，完整坏行明确拒绝。存储规则见[storage](../../packages/storage/README.md)。
 

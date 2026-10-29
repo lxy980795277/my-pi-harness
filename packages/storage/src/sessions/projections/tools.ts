@@ -1,4 +1,4 @@
-import { and, asc, desc, eq } from 'drizzle-orm';
+import { and, asc, desc, eq, sql } from 'drizzle-orm';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import {
   MessageViewSchema,
@@ -25,6 +25,83 @@ import { ToolContextEventSchema, ToolEventSchema } from '../event-validation.js'
 /** Tool cards and private results are projected within their session event transaction. */
 export class ToolProjection {
   public constructor(private readonly db: BetterSQLite3Database<typeof schema>) {}
+
+  /** Resolve one owned tool through the root or task delegation anchor retained by this branch. */
+  public visible(sessionId: string, toolId: string, branchId: string): ToolCallView | undefined {
+    const row = this.db
+      .select({
+        id: schema.toolCalls.id,
+        runId: schema.toolCalls.runId,
+        branchId: schema.toolCalls.branchId,
+        anchor: schema.toolCalls.anchorMessageId,
+        tool: schema.toolCalls.data,
+        run: schema.runs.data,
+        runSessionId: schema.runs.sessionId,
+        runBranchId: schema.runs.branchId,
+        runTaskId: schema.runs.taskId,
+        taskSessionId: schema.agentTasks.sessionId,
+        taskBranchId: schema.agentTasks.branchId,
+        taskAnchor: schema.agentTasks.anchorMessageId,
+        messageSessionId: schema.messages.sessionId,
+        messageRunId: sql<string | null>`json_extract(${schema.messages.data}, '$.runId')`,
+        taskMessageId: schema.taskMessages.messageId,
+      })
+      .from(schema.toolCalls)
+      .leftJoin(schema.runs, eq(schema.runs.id, schema.toolCalls.runId))
+      .leftJoin(schema.agentTasks, eq(schema.agentTasks.id, schema.runs.taskId))
+      .leftJoin(schema.messages, eq(schema.messages.id, schema.toolCalls.anchorMessageId))
+      .leftJoin(
+        schema.taskMessages,
+        and(
+          eq(schema.taskMessages.taskId, schema.runs.taskId),
+          eq(schema.taskMessages.messageId, schema.toolCalls.anchorMessageId),
+        ),
+      )
+      .where(and(eq(schema.toolCalls.id, toolId), eq(schema.toolCalls.sessionId, sessionId)))
+      .get();
+    if (!row) return undefined;
+    const tool = checked(ToolCallRecordSchema, row.tool);
+    const run = checked(RunViewSchema, row.run);
+    if (
+      tool.id !== row.id ||
+      tool.sessionId !== sessionId ||
+      tool.runId !== row.runId ||
+      tool.branchId !== row.branchId ||
+      run.id !== row.runId ||
+      run.sessionId !== sessionId ||
+      row.runSessionId !== sessionId ||
+      run.branchId !== row.branchId ||
+      row.runBranchId !== row.branchId ||
+      (run.taskId ?? null) !== row.runTaskId ||
+      row.messageSessionId !== sessionId ||
+      row.messageRunId !== run.id
+    )
+      throw new StorageError('INVALID_RECORD', 'Tool provenance does not match its execution');
+    let anchor = row.anchor;
+    if (run.taskId !== undefined) {
+      if (
+        row.taskSessionId !== sessionId ||
+        row.taskBranchId !== run.branchId ||
+        row.taskAnchor === null ||
+        row.taskMessageId !== row.anchor
+      )
+        throw new StorageError('INVALID_RECORD', 'Tool task provenance is inconsistent');
+      anchor = row.taskAnchor;
+    }
+    const visible = this.db
+      .select({ id: schema.branchMessages.messageId })
+      .from(schema.branchMessages)
+      .where(
+        and(
+          eq(schema.branchMessages.branchId, branchId),
+          eq(schema.branchMessages.messageId, anchor),
+        ),
+      )
+      .get();
+    return visible
+      ? checked(ToolCallViewSchema, { ...tool, afterMessageId: row.anchor })
+      : undefined;
+  }
 
   public list(sessionId: string, branchId: string): ToolCallView[] {
     const requestedSeqs = new Map(
@@ -222,20 +299,36 @@ export class ToolProjection {
         'CONFLICT',
         'Tool request requires an active run or an interrupted recovery intent',
       );
-    const row = this.db
-      .select({ data: schema.messages.data, privateData: schema.messages.privateData })
-      .from(schema.branchMessages)
-      .innerJoin(schema.messages, eq(schema.messages.id, schema.branchMessages.messageId))
-      .where(
-        and(
-          eq(schema.branchMessages.branchId, tool.branchId),
-          eq(schema.messages.sessionId, tool.sessionId),
-          ...(afterMessageId === undefined ? [] : [eq(schema.messages.id, afterMessageId)]),
-        ),
-      )
-      .orderBy(desc(schema.branchMessages.ordinal))
-      .limit(1)
-      .get();
+    const row =
+      run.taskId === undefined
+        ? this.db
+            .select({ data: schema.messages.data, privateData: schema.messages.privateData })
+            .from(schema.branchMessages)
+            .innerJoin(schema.messages, eq(schema.messages.id, schema.branchMessages.messageId))
+            .where(
+              and(
+                eq(schema.branchMessages.branchId, tool.branchId),
+                eq(schema.messages.sessionId, tool.sessionId),
+                ...(afterMessageId === undefined ? [] : [eq(schema.messages.id, afterMessageId)]),
+              ),
+            )
+            .orderBy(desc(schema.branchMessages.ordinal))
+            .limit(1)
+            .get()
+        : this.db
+            .select({ data: schema.messages.data, privateData: schema.messages.privateData })
+            .from(schema.taskMessages)
+            .innerJoin(schema.messages, eq(schema.messages.id, schema.taskMessages.messageId))
+            .where(
+              and(
+                eq(schema.taskMessages.taskId, run.taskId),
+                eq(schema.messages.sessionId, tool.sessionId),
+                ...(afterMessageId === undefined ? [] : [eq(schema.messages.id, afterMessageId)]),
+              ),
+            )
+            .orderBy(desc(schema.taskMessages.ordinal))
+            .limit(1)
+            .get();
     if (!row)
       throw new StorageError('INVALID_EVENT', 'Tool request requires its assistant message');
     const anchor = checked(MessageViewSchema, row.data);
