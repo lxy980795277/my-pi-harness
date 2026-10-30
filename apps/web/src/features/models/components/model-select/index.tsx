@@ -96,7 +96,10 @@ export const ModelSelect: FC<ModelSelectProps> = ({
                         aria-label={option.label}
                         disabled={option.disabled ?? false}
                       >
-                        {option.name}
+                        <span className="inline-flex min-w-0 items-center gap-2">
+                          <ModelMenuIcon builtinId={group.builtinId} />
+                          <span className="truncate">{option.name}</span>
+                        </span>
                       </DropdownMenuRadioItem>
                     );
                   })}

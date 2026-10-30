@@ -70,7 +70,7 @@ export const ComposerSurface: FC<ComposerSurfaceProps> = ({
           onCompositionStart={keyboard.compositionStart}
           onCompositionEnd={keyboard.compositionEnd}
           onPaste={attachment.paste}
-          className="max-h-48 min-h-12 resize-none rounded-xl border-0 bg-transparent px-2 py-1 text-sm focus-visible:border-transparent focus-visible:ring-0"
+          className="max-h-48 min-h-12 resize-none rounded-xl border-0 bg-transparent px-2 py-1 text-sm"
         />
         {attachmentIds.length > 0 && (
           <div className="px-2 pt-2">

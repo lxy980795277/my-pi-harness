@@ -34,7 +34,7 @@ export const ToolCard: FC<ToolCardProps> = memo(({ tool, onDecide }) => {
               width={14}
               height={14}
               data-slot="tool-icon"
-              className="absolute inset-0 group-hover/tool-row:hidden group-focus-visible/tool-row:hidden"
+              className="absolute inset-0 group-hover/tool-row:hidden"
             />
           )}
           {state.busy && (
@@ -42,7 +42,7 @@ export const ToolCard: FC<ToolCardProps> = memo(({ tool, onDecide }) => {
               width={14}
               height={14}
               data-slot="tool-loading"
-              className="absolute inset-0 animate-spin group-hover/tool-row:hidden group-focus-visible/tool-row:hidden motion-reduce:animate-none"
+              className="absolute inset-0 animate-spin group-hover/tool-row:hidden motion-reduce:animate-none"
             />
           )}
           <ChevronRight
@@ -50,7 +50,7 @@ export const ToolCard: FC<ToolCardProps> = memo(({ tool, onDecide }) => {
             height={14}
             data-slot="tool-chevron"
             className={cn(
-              'absolute inset-0 hidden group-hover/tool-row:block group-focus-visible/tool-row:block',
+              'absolute inset-0 hidden group-hover/tool-row:block',
               state.detailsOpen && 'rotate-90',
             )}
           />

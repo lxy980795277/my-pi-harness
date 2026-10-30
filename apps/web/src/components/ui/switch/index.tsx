@@ -11,7 +11,7 @@ export const Switch: FC<ComponentProps<typeof SwitchPrimitive.Root>> = ({
   return (
     <SwitchPrimitive.Root
       className={cn(
-        'inline-flex h-6 w-10 shrink-0 cursor-pointer items-center rounded-full border border-transparent bg-secondary transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-primary',
+        'inline-flex h-6 w-10 shrink-0 cursor-pointer items-center rounded-full border border-transparent bg-secondary transition-colors outline-none disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-primary',
         className,
       )}
       {...props}

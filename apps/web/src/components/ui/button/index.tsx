@@ -7,7 +7,7 @@ type ButtonProps = ComponentProps<'button'> &
   VariantProps<typeof buttonVariants> & { asChild?: boolean };
 
 const buttonVariants = cva(
-  'inline-flex shrink-0 items-center justify-center gap-2 rounded border text-xs font-medium transition-colors focus-visible:border-ring focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0',
+  'inline-flex shrink-0 items-center justify-center gap-2 rounded border text-xs font-medium transition-colors outline-none disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0',
   {
     variants: {
       variant: {
@@ -29,7 +29,7 @@ const buttonVariants = cva(
   },
 );
 
-/** shadcn-style button primitive with keyboard-visible focus and typed variants. */
+/** shadcn-style button primitive with typed visual variants and optional child composition. */
 export const Button: FC<ButtonProps> = ({
   className,
   variant,

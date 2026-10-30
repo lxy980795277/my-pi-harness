@@ -28,7 +28,7 @@ export const WorkspaceGroup: FC<WorkspaceGroupProps> = ({
 }) => {
   const state = useWorkspaceGroup(group, onNewConversation, onRename, onRemove);
   return (
-    <div className="space-y-0.5" role="group" aria-label={group.name}>
+    <div className="space-y-0" role="group" aria-label={group.name}>
       <div className={state.rowClassName}>
         <Button
           type="button"
@@ -39,10 +39,10 @@ export const WorkspaceGroup: FC<WorkspaceGroupProps> = ({
           title={group.workspace?.rootPath}
         >
           <span className="relative inline-flex h-4 w-4 shrink-0" aria-hidden>
-            <span className="text-workspace-folder group-hover/workspace:opacity-0 group-focus-visible/folder:opacity-0">
+            <span className="text-workspace-folder group-hover/workspace:opacity-0">
               <WorkspaceIcon icon={group.workspace?.icon ?? 'folder'} expanded={state.expanded} />
             </span>
-            <span className="absolute inset-0 text-muted-foreground opacity-0 group-hover/workspace:opacity-100 group-focus-visible/folder:opacity-100">
+            <span className="absolute inset-0 text-muted-foreground opacity-0 group-hover/workspace:opacity-100">
               {state.expanded && <ChevronDown width={16} height={16} aria-hidden />}
               {!state.expanded && <ChevronRight width={16} height={16} aria-hidden />}
             </span>
@@ -54,7 +54,7 @@ export const WorkspaceGroup: FC<WorkspaceGroupProps> = ({
       {state.expanded && (
         <div>
           {group.sessions.length === 0 && (
-            <p className="px-2 py-2 text-[11px] text-muted-foreground">还没有对话</p>
+            <p className="py-2 pr-2 pl-[33px] text-[11px] text-muted-foreground/70">暂无对话</p>
           )}
           <div className="space-y-0.5" aria-label={`${group.name} 的对话`}>
             {group.sessions.map((session) => {

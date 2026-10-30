@@ -69,18 +69,15 @@ export const useWorkspaceGroup = (
     changeMenuOpen,
     menuTrigger,
     closeMenuFocus,
-    rowClassName: cn(
-      'group/workspace relative rounded-lg hover:bg-muted has-[:focus-visible]:bg-muted',
-      {
-        'bg-muted': menuOpen,
-      },
-    ),
+    rowClassName: cn('group/workspace relative rounded-lg hover:bg-muted', {
+      'bg-muted': menuOpen,
+    }),
     actionsClassName: cn(
-      'pointer-events-none absolute top-1/2 right-1 flex -translate-y-1/2 items-center gap-0.5 opacity-0 transition-none group-has-[:focus-visible]/workspace:pointer-events-auto group-has-[:focus-visible]/workspace:opacity-100 group-hover/workspace:pointer-events-auto group-hover/workspace:opacity-100',
+      'pointer-events-none absolute top-1/2 right-1 flex -translate-y-1/2 items-center gap-0.5 opacity-0 transition-none group-hover/workspace:pointer-events-auto group-hover/workspace:opacity-100',
       { 'pointer-events-auto opacity-100': menuOpen },
     ),
     className: cn(
-      'group/folder h-8 w-full min-w-0 justify-start gap-2 rounded-lg pl-2 text-left text-xs transition-none hover:bg-transparent',
+      'h-8 w-full min-w-0 justify-start gap-2 rounded-lg pl-2 text-left text-xs transition-none hover:bg-transparent',
       titlePadding,
     ),
   };

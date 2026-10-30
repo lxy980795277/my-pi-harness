@@ -27,7 +27,7 @@ export const AnswerProcess: FC<AnswerProcessProps> = memo(
           <Button
             type="button"
             variant="ghost"
-            className="h-8 w-full justify-start gap-1 border-0 px-0 text-xs font-normal text-muted-foreground/80 transition-none hover:bg-transparent focus-visible:bg-muted/50"
+            className="h-8 w-full justify-start gap-1 border-0 px-0 text-xs font-normal text-muted-foreground/80 transition-none hover:bg-transparent"
             aria-label={state.actionLabel}
             aria-expanded={state.expanded}
             aria-controls={state.contentId}

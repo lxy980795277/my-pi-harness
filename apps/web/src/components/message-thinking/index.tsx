@@ -19,12 +19,12 @@ export const MessageThinking: FC<MessageThinkingProps> = memo(({ text, streaming
             <Atom
               width={14}
               height={14}
-              className="absolute inset-0 group-hover/reasoning:hidden group-focus-visible/reasoning:hidden"
+              className="absolute inset-0 group-hover/reasoning:hidden"
             />
             <ChevronRight
               width={14}
               height={14}
-              className="absolute inset-0 hidden group-open/thinking:rotate-90 group-hover/reasoning:block group-focus-visible/reasoning:block"
+              className="absolute inset-0 hidden group-open/thinking:rotate-90 group-hover/reasoning:block"
             />
           </span>
           <span className="shrink-0">思考</span>

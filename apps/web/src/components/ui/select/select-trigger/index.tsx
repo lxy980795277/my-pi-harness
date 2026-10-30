@@ -13,7 +13,7 @@ export const SelectTrigger: FC<ComponentProps<typeof SelectPrimitive.Trigger>> =
   return (
     <SelectPrimitive.Trigger
       className={cn(
-        'flex h-9 w-full min-w-0 items-center justify-between gap-2 rounded-xl border border-border bg-background px-3 text-xs text-foreground outline-none focus-visible:bg-accent/60 disabled:cursor-not-allowed disabled:opacity-50 [&>span]:truncate',
+        'flex h-9 w-full min-w-0 items-center justify-between gap-2 rounded-xl border border-border bg-background px-3 text-xs text-foreground outline-none disabled:cursor-not-allowed disabled:opacity-50 [&>span]:truncate',
         className,
       )}
       {...props}

@@ -29,7 +29,7 @@ export const WorkspaceIconPicker: FC<WorkspaceIconPickerProps> = ({
           type="button"
           variant="ghost"
           size="icon"
-          className="h-9 w-10 rounded-none border-0 border-r border-border text-foreground focus-visible:border-border focus-visible:-outline-offset-4"
+          className="h-9 w-10 rounded-none border-0 border-r border-border text-foreground"
           aria-label="选择工作区图标"
           disabled={disabled}
         >

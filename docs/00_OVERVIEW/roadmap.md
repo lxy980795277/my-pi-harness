@@ -4,6 +4,8 @@
 
 当前已完成[M5子Agent与任务看板](../04_FEATURES/202610281702_feature_m5-subagents-board/spec.md)的M5.1–M5.5工程实现及macOS自动化验证，真实Pi、临时存储、API及Chromium链路通过，见[验证记录](../04_FEATURES/202610281702_feature_m5-subagents-board/verify.md)。待用户体验、真实供应商、Electron及Windows实机验收；M6仍为后续规划。M4的真实账号、Office视觉和平台验收继续保留原归属，不因M5实现而标为完成。
 
+2026-10-30的模型菜单品牌与文案、[移除focus-visible样式](../04_FEATURES/202610281140_refactor_composer-model-controls/spec.md#移除focus-visible样式2026-10-30)、空对话提示属于既有UI维护，见[模型菜单](../04_FEATURES/202610281140_refactor_composer-model-controls/spec.md#模型品牌与触发器精简2026-10-30)和[导航维护](../04_FEATURES/202610151400_refactor_workspace-navigation/spec.md#空对话提示调整2026-10-30)，不进入M6。
+
 2026-10-30完成[M5实现后的代码治理](../04_FEATURES/202610300028_refactor_m5-code-governance/spec.md)及[本机验证](../04_FEATURES/202610300028_refactor_m5-code-governance/verify.md)：修复未确认任务重试、Work刷新、准备故障分类、子产物下载、任务查询与请求基线释放，清理冗余DTO、字段和过期说明，保留全部类型与静态规则。协议21、SQLite9、产品0.12.0；未清理真实数据、启动M6或自动提交，平台验收继续保留。
 
 2026-10-30完成M5审批继承修复（AC-12）的本机工程验证：子任务审批策略继承父Run，独立执行只读角色的能力限制，消除完全访问下正常网页读取的额外批准；补齐工具指纹归一、动态工具、嵌套和续作回归。证据见M5 Spec及verify，真实供应商和平台范围保持原状态。

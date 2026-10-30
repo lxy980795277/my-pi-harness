@@ -56,7 +56,7 @@
 - 动作图标使用 lucide-react，尺寸用相等 width/height，不用 size，装饰图标 aria-hidden。Provider 品牌仅允许已引入的 `@lobehub/icons-static-svg` 静态资产，不因此引入第二套动作图标库。
 - 样式用 Tailwind 与语义 token；复杂样式可用本组件 index.scss，BEM 命名、嵌套不超过三层、不写 &-xxx 拼接。不写 JSX style、硬编码颜色或 CSS 变量 fallback；背景与 foreground 成对，维护浅/深主题，样式 import 最后。
 - Dialog、Select、ScrollArea 等基础组件的动态样式使用页面 nonce；生产 style-src 与 nonce 由宿主生成，不用 unsafe-inline/unsafe-eval 绕过 CSP。
-- Select统一以轻微背景表示焦点，不因关闭菜单后的自动回焦新增边框或光圈；保留焦点恢复与键盘选择。对话输入容器仅在文本输入聚焦时改变边框，不由底部工具栏选择器触发。
+- Web不添加focus-visible样式及其group/has变体，不用等效focus高亮或额外焦点状态管理替代；保留Radix默认回焦与键盘选择。对话输入容器仅在文本输入聚焦时改变边框，不由底部工具栏选择器触发。
 - Select和Popover下拉默认从触发器下方开始边对齐，向右展开，保留视口碰撞避让；工作区选项只显示图标和名称，不添加路径说明行或路径悬停提示。
 - 列表按数据规模和交互需要选择普通文档流、分页或虚拟化。当前对话使用TanStack Virtual、稳定业务key、默认动态测高与有限overscan；虚拟库通过directDomUpdates拥有数值height与transform，应用不自管虚拟总高或行位置。不允许业务数据或颜色进入style，不开放JSX style，不放宽CSP；保留消息memo、Markdown稳定内容块复用与流式合批。历史分页按实际需要引入，不将该选择强制套用其他列表。
 - 当前Markdown固定字号、行高与间距使用整数px；公开components覆盖保留产品行为，Tailwind需显式扫描Streamdown构建样式源。块间距由本地CSS统一拥有，根space-y-0避免与库默认spacing职责冲突；松散列表段落保持block。默认rehype安全插件仅按需要移除raw，保留sanitize/harden与skipHtml，不将整数px视为消除所有缩放或像素量化的保证。

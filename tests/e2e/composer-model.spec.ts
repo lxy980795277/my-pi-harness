@@ -84,11 +84,60 @@ test('模型菜单顶部共享推理入口，切换能力与已有会话保存�
       0,
     );
     await expect(page.getByRole('combobox', { name: '思考等级', exact: true })).toHaveCount(0);
+    const outside = await page
+      .getByRole('heading', { name: '我们从哪里开始？', exact: true })
+      .boundingBox();
+    if (outside === null) throw new Error('The conversation heading must have visible bounds');
+    for (const name of ['选择工作区', '执行批准方式']) {
+      const control = page.getByRole('combobox', { name, exact: true });
+      const appearance = await control.evaluate((element) => {
+        const style = getComputedStyle(element);
+        return { background: style.backgroundColor, shadow: style.boxShadow };
+      });
+      await control.click();
+      const listbox = page.getByRole('listbox');
+      await expect(listbox).toBeVisible();
+      await expect(listbox).toHaveCSS('pointer-events', 'auto');
+      await expect(page.getByRole('option', { selected: true })).toBeFocused();
+      await page.screenshot({ path: testInfo.outputPath(`composer-${name}-open.png`) });
+      await page.mouse.click(outside.x + 4, outside.y + 4);
+      await expect(listbox).toBeHidden();
+      await expect(control).toBeFocused();
+      await expect(control).toHaveCSS('background-color', appearance.background);
+      await control.press('Enter');
+      await expect(page.getByRole('option', { selected: true })).toBeFocused();
+      await page.keyboard.press('Escape');
+      await expect(control).toBeFocused();
+      await expect(control).toHaveCSS('background-color', appearance.background);
+      await expect(control).toHaveCSS('outline-style', 'none');
+      await expect(control).toHaveCSS('box-shadow', appearance.shadow);
+    }
     await chooseConversationModel(page, provider.name, 'Reasoning A');
     const trigger = page.getByRole('button', { name: '对话模型', exact: true });
+    await expect(trigger).toBeFocused();
+    await expect(trigger).toHaveCSS('outline-style', 'none');
+    await expect(trigger).toContainText('Reasoning A');
+    await expect(trigger).not.toContainText(`${provider.name} ·`);
     await trigger.click();
     const mainMenu = page.getByRole('menu', { name: '模型与推理设置', exact: true });
+    await expect(mainMenu).toBeVisible();
+    await expect(mainMenu).toHaveCSS('pointer-events', 'auto');
+    await page.screenshot({ path: testInfo.outputPath('composer-model-open.png') });
+    await page.mouse.click(outside.x + 4, outside.y + 4);
+    await expect(mainMenu).toBeHidden();
+    await expect(trigger).toBeFocused();
+    await expect(trigger).toHaveCSS('box-shadow', 'none');
+    await page.screenshot({ path: testInfo.outputPath('composer-model-focus.png') });
+    await trigger.click();
     await expect(mainMenu.getByRole('menuitem').first()).toHaveAccessibleName('推理强度');
+    await page.getByRole('menuitem', { name: provider.name, exact: true }).hover();
+    const modelMenu = page.getByRole('menu', { name: provider.name, exact: true });
+    const modelOptions = modelMenu.getByRole('menuitemradio');
+    await expect(modelOptions).toHaveCount(provider.models.length);
+    for (const option of await modelOptions.all()) {
+      await expect(option.locator('svg').first()).toBeVisible();
+    }
+    await page.screenshot({ path: testInfo.outputPath('composer-model-options.png') });
     const reasoning = page.getByRole('menuitem', { name: '推理强度', exact: true });
     await expect(reasoning).toHaveCount(1);
     await reasoning.hover();

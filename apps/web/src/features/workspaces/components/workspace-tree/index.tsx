@@ -28,7 +28,7 @@ export const WorkspaceTree: FC = () => {
           <Plus width={16} height={16} aria-hidden />
         </Button>
       </div>
-      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 pb-4">
+      <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-4">
         {state.error && <Notice tone="error">{state.error}</Notice>}
         {!state.pending && state.groups.length === 0 && (
           <p className="px-2 text-xs leading-6 text-muted-foreground">

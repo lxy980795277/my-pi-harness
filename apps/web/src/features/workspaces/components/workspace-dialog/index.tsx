@@ -41,7 +41,7 @@ export const WorkspaceDialog: FC<WorkspaceDialogProps> = ({ workspace, onClose }
               onChange={state.changeName}
               disabled={state.pending}
               placeholder="工作区名称"
-              className="h-9 rounded-none border-0 bg-transparent px-3 focus-visible:ring-0"
+              className="h-9 rounded-none border-0 bg-transparent px-3"
             />
           </div>
           <WorkspaceDirectoryPicker

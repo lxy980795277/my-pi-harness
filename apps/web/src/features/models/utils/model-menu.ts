@@ -76,7 +76,8 @@ export const modelMenuPresentation = (
       return entry.value === selected;
     });
     if (option !== undefined) {
-      label = option.label;
+      label = option.name;
+      if (option.disabled) label = option.label;
       builtinId = group.builtinId;
       break;
     }

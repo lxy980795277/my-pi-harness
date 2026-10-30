@@ -11,7 +11,7 @@ export const ActivityRow: FC<ActivityRowProps> = ({ className, ...props }) => {
       variant="ghost"
       {...props}
       className={cn(
-        'flex h-8 w-full min-w-0 cursor-pointer items-center justify-start gap-2 border-0 px-0 text-xs font-normal text-muted-foreground/80 transition-none hover:bg-transparent focus-visible:bg-muted/50 focus-visible:outline-none disabled:opacity-100',
+        'flex h-8 w-full min-w-0 cursor-pointer items-center justify-start gap-2 border-0 px-0 text-xs font-normal text-muted-foreground/80 transition-none hover:bg-transparent disabled:opacity-100',
         className,
       )}
     />

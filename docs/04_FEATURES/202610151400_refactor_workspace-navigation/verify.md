@@ -59,3 +59,9 @@
 AC-07本机复验通过：工作区选项hover/focus后没有tooltip或title，输入栏触发器及祖先没有title；鼠标和逐步键盘选择仍只显示名称。既有整行hover、更多菜单、更名/删除、明确加号新建与窄视口避让继续通过。应用仍0.2.1，macOS arm64、Node24.20.0与Chromium，未提交或推送。
 
 实际检查：修改的8份Web源码及E2E定向ESLint、Prettier、E2E类型检查通过；`pnpm --filter @my-pi-harness/web build`包含三个Web类型编译面与Vite构建通过；`pnpm exec playwright test tests/e2e/workspace-navigation.spec.ts tests/e2e/approval.spec.ts -g "目录只展开|工作区选项仅展示|工作区加号|权限菜单展示"`通过4项。源码约定394份通过，源码及依赖清单/锁文件已无Tooltip、workspacePath或Tooltip专用Select包装引用。收尾执行文档门禁与`git diff --check`，未重复全仓测试、daemon构建或桌面打包。
+
+## 空对话提示复验（2026-10-30）
+
+产品0.13.0、协议21、SQLite9保持。空提示为“暂无对话”，11px字号、muted-foreground/70、左侧33px，与目录名称和会话标题对齐。已查看受控浏览器的popup-focus-and-empty-workspace.png，并完成该文件ESLint、格式、Web构建及工作区导航回归；原目录间距改动保持，不归为本次实现。未使用真实服务、清理用户数据或提交。
+
+焦点呈现和菜单回焦的当前行为与验证由[移除focus-visible样式](../202610281140_refactor_composer-model-controls/verify.md#移除focus-visible样式验证2026-10-30)拥有；型号图标与触发器文案由同一模型菜单Spec拥有。

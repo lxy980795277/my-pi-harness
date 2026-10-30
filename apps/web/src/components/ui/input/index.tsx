@@ -8,7 +8,7 @@ export const Input: FC<ComponentProps<'input'>> = ({ className, ...props }) => {
     <input
       data-slot="input"
       className={cn(
-        'h-9 w-full min-w-0 rounded border border-border bg-background px-3 text-sm text-foreground outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-error-foreground',
+        'h-9 w-full min-w-0 rounded border border-border bg-background px-3 text-sm text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-error-foreground',
         className,
       )}
       {...props}

@@ -100,7 +100,7 @@ describe('explicit model selection', () => {
     const groups = buildModelMenuGroups([provider()], null);
     const key = modelSelectionKey('local', 'model');
     const current = modelMenuPresentation(groups, key, 'high', buildThinkingOptions(model));
-    expect(current.label).toBe('Local · Model');
+    expect(current.label).toBe('Model');
     expect(current.thinkingLabel).toBe('高');
     expect(current.thinkingOptions.map((option) => option.value)).toEqual(['off', 'low', 'high']);
     const disabled = modelMenuPresentation(groups, key, 'off', buildThinkingOptions(undefined));

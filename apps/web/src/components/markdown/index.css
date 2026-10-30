@@ -100,10 +100,6 @@
 .markdown a:hover {
   text-decoration-color: currentColor;
 }
-.markdown a:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: 2px;
-}
 .markdown hr {
   margin-block: 24px;
   border-color: var(--border);
