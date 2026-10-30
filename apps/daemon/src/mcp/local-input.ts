@@ -1,28 +1,8 @@
 import { isAbsolute } from 'node:path';
 import { RuntimeError } from '@my-pi-harness/agent-runtime';
+import { isAllowedProcessEnvironmentName } from '@my-pi-harness/execution';
 import type { McpServerInput } from '@my-pi-harness/protocol';
 
-const forbiddenEnvironment = new Set([
-  'PATH',
-  'HOME',
-  'TMPDIR',
-  'TMP',
-  'TEMP',
-  'NODE_OPTIONS',
-  'NODE_PATH',
-  'BASH_ENV',
-  'ENV',
-  'DYLD_INSERT_LIBRARIES',
-  'DYLD_LIBRARY_PATH',
-  'LD_PRELOAD',
-  'LD_LIBRARY_PATH',
-  'SHELL',
-  'ZDOTDIR',
-  'PYTHONPATH',
-  'PYTHONHOME',
-  'RUBYOPT',
-  'PERL5OPT',
-]);
 const MAX_ENVIRONMENT_VARIABLES = 64;
 
 function fail(code: string, message: string): never {
@@ -46,12 +26,7 @@ export function validateLocalMcpInput(input: McpServerInput): McpServerInput {
     names.add(slot.environmentName);
   }
   for (const key of names) {
-    if (
-      !/^[A-Za-z_][A-Za-z0-9_]*$/.test(key) ||
-      forbiddenEnvironment.has(key.toUpperCase()) ||
-      key.startsWith('DYLD_') ||
-      key.startsWith('LD_')
-    )
+    if (!isAllowedProcessEnvironmentName(key))
       fail('MCP_ENVIRONMENT_INVALID', '配置不能覆盖宿主的启动控制环境变量。');
   }
   for (const value of [...input.args, ...Object.values(input.publicEnvironment)]) {

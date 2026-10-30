@@ -105,7 +105,9 @@ describe('AI approval model admission', () => {
     let guarded = 0;
     const stream: StreamFn = () => {
       guarded += 1;
-      return Promise.reject(new RuntimeError('AGENT_BUDGET', 'No request budget remains'));
+      return Promise.reject(
+        new RuntimeError('AGENT_TURN_LIMIT', 'The request turn limit was reached'),
+      );
     };
     const verdict = await f.reviewer.review(
       { ...f.input, modelStream: stream },

@@ -6,6 +6,7 @@ import { dirname, isAbsolute, join } from 'node:path';
 import { ExecutionError, checkCancelled } from '../core/errors.js';
 import { stopOwnedProcessGroup, waitForProcessClose } from './cleanup.js';
 import { sandboxProfile } from './sandbox.js';
+import { isAllowedProcessEnvironmentName } from './environment.js';
 import { resolveWorkspaceRoot } from '../filesystem/workspace-path.js';
 
 export type ProcessScope = 'sandboxed' | 'full-access';
@@ -48,8 +49,6 @@ export interface PersistentProcess {
   close(): Promise<void>;
 }
 
-const CONTROL_ENVIRONMENT =
-  /^(?:PATH|HOME|TMPDIR|TMP|TEMP|SHELL|ENV|BASH_ENV|NODE_.*|LD_.*|DYLD_.*|PYTHON.*|RUBY.*|PERL.*|ZDOTDIR|GIT_.*)$/i;
 const MAX_WRITE_BYTES = 4 * 1024 * 1024;
 const STDERR_RING_BYTES = 64 * 1024;
 
@@ -76,11 +75,7 @@ export async function resolvePersistentProcess(
     throw new ExecutionError('INVALID_PROGRAM', 'The program must be a regular executable');
   await access(command, constants.X_OK);
   for (const [name, value] of Object.entries(input.environment)) {
-    if (
-      !/^[A-Za-z_][A-Za-z0-9_]*$/.test(name) ||
-      CONTROL_ENVIRONMENT.test(name) ||
-      value.includes('\0')
-    ) {
+    if (!isAllowedProcessEnvironmentName(name) || value.includes('\0')) {
       throw new ExecutionError(
         'INVALID_ENVIRONMENT',
         'A launch-control environment variable is not allowed',

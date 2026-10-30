@@ -101,6 +101,52 @@ async function trust(
 }
 
 describe('protected MCP configuration API', () => {
+  it('rejects launch controls in public and secret names before saving or previewing configuration', async () => {
+    const value = await fixture();
+    try {
+      const allowed: McpServerInput = {
+        ...value.input,
+        secretSlots: [{ slotId: 'api', environmentName: 'API_TOKEN' }],
+      };
+      const server = await create(value, allowed);
+      const preview = await value.send('/api/mcp/configuration/preview', 'POST', {
+        version: 1,
+        local: [{ ...allowed, name: 'Preview fixture' }],
+        remote: [],
+      });
+      expect(preview.status).toBe(200);
+      expect(await preview.json()).toMatchObject({ local: ['Preview fixture'] });
+
+      for (const name of [
+        'NODE_TLS_REJECT_UNAUTHORIZED',
+        'GIT_CONFIG_COUNT',
+        'RUBYLIB',
+        'dyld_custom_library',
+      ]) {
+        for (const source of ['public', 'secret']) {
+          const input: McpServerInput = { ...allowed, name: 'Rejected fixture' };
+          if (source === 'public') input.publicEnvironment = { [name]: 'synthetic-value' };
+          else input.secretSlots = [{ slotId: 'api', environmentName: name }];
+          const requests = [
+            ['/api/mcp/servers', 'POST', input],
+            [`/api/mcp/servers/${server.id}`, 'PUT', { ...input, expectedRevision: 1 }],
+            ['/api/mcp/configuration/preview', 'POST', { version: 1, local: [input], remote: [] }],
+          ] as const;
+          for (const [path, method, body] of requests) {
+            const response = await value.send(path, method, body);
+            expect(response.status, `${source} ${name} at ${path}`).toBe(422);
+            expect(await response.json()).toMatchObject({ code: 'MCP_ENVIRONMENT_INVALID' });
+          }
+        }
+      }
+      expect(value.services.mcp.list()).toEqual([server]);
+      expect(value.protocol.state.starts).toBe(0);
+      expect(await value.credentials.list()).toEqual([]);
+    } finally {
+      await value.close();
+    }
+  });
+
   it('keeps GET and startup preview inert, validates CAS and requires each isolation scope explicitly', async () => {
     const value = await fixture();
     try {

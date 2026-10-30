@@ -1,3 +1,5 @@
+import type { AgentChange } from '@my-pi-harness/protocol';
+
 interface ChangeStreamResponse {
   readonly destroyed: boolean;
   write(chunk: string): boolean;
@@ -53,7 +55,7 @@ export function startAgentChangeStream(options: AgentChangeStreamOptions): () =>
     cleanup();
     options.response.destroy();
   };
-  const send = (kind: 'ready' | 'changed'): void => {
+  const send = (kind: AgentChange['kind']): void => {
     timer = undefined;
     if (closed) return;
     if (options.response.destroyed) {

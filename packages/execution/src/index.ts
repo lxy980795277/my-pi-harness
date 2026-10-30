@@ -30,6 +30,7 @@ export type {
 
 export { extractDocument } from './documents/extract-document.js';
 export { resolvePersistentProcess, startPersistentProcess } from './process/persistent.js';
+export { isAllowedProcessEnvironmentName } from './process/environment.js';
 export type {
   PersistentProcess,
   PersistentProcessInput,

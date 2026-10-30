@@ -9,7 +9,7 @@ Node端的模型接入与持久会话运行层，使用固定的Pi core/ai 1.1.0
 | `models/`       | 模型清单、Provider实例、模型认证与凭据适配；不负责应用或插件OAuth |
 | `sessions/`     | 单会话命令串行、队列、分支、持久事实发布与宿主存储端口            |
 | `runs/`         | 单Run的Pi Agent生命周期、流式事件、工具结果及消息用量             |
-| `agents/`       | 子任务树、角色、模型请求预算、通信、写入拥有者与后代结算          |
+| `agents/`       | 子任务树、角色、模型请求并发调度、通信、写入拥有者与后代结算      |
 | `tools/`        | 冻结工具集合、执行路由、逐次审批复核与外部工具端口                |
 | `capabilities/` | 接受输入时冻结Skill和候选目录、检索、激活及下一请求可见版本       |
 | `work/`         | Plan、Todos、用户提问、检查点和相应会话工具                       |
@@ -35,7 +35,7 @@ Node端的模型接入与持久会话运行层，使用固定的Pi core/ai 1.1.0
 
 ## 子Agent与任务树
 
-宿主通过agentStore启用Task查询和配置，AgentRuntime提供角色、spawn/wait/status/message/stop及树级预算。Task保留sourceToolCallId，子Run保留taskId，祖先关系由原工具事实推导；根快照排除子转录，WorkRuntime.forTask复用独立上下文与人工交互。任务通信有agentMessageId来源，模型正文编码和持久来源匹配由context拥有。
+宿主通过agentStore启用Task查询和配置，AgentRuntime提供角色、spawn/wait/status/message/stop及树级请求调度。AgentRequestScheduler只管理全局与祖先子树的并发名额，流真正结算后才释放，不以累计用量限制请求。Task保留sourceToolCallId，子Run保留taskId，祖先关系由原工具事实推导；根快照排除子转录，WorkRuntime.forTask复用独立上下文与人工交互。任务通信有agentMessageId来源，模型正文编码和持久来源匹配由context拥有。
 
 子Run继承父审批策略，角色只读作为独立能力限制进入统一工具执行上下文；允许的读取不因角色只读变成人工批准，副作用仍在审批和派发前拒绝。冻结、嵌套及续作语义见[子Agent设计](../../docs/09_TECHNICAL/子Agent与任务看板设计.md#角色能力与写入)，不添加公开协议或重复持久字段。
 

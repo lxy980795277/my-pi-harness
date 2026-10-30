@@ -41,3 +41,31 @@
 已查看output/playwright/m5-readonly-full-access-get.png及M5浅色/窄屏证据；自动化模型、GitHub和网关均为隔离fixture，不是用户真实账户或供应商验收。未重新打包/启动Electron安装包、执行Windows实机、签名公证或真实外部授权；既有平台缺口保持。
 
 协议21需完整重启前后端，不清理用户数据库或会话，SQLite schema仍9，产品版本仍0.12.0。全部工作区已有有效改动保留，暂存区为空，未commit、push或创建发布记录。
+
+## 累计Token限制移除后的治理与提交（2026-10-30）
+
+本轮对应Spec新增治理范围，维护已实现的M0–M5，不开发M6。产品及APP_VERSION为0.14.0，公开协议22、SQLite schema9。按当前差异复核runtime请求并发/取消/Usage、protocol/storage配置与旧字段投影、Web tasks的Query/Store/表单及E2E、MCP/插件调用方；兼查DesktopApplication、daemon监督、preload及dev/process-tree/version脚本的资源归属和依赖入口。扫描不是逐行审计全仓，也不把文件行数或一次静态无引用当删除依据。
+
+确认并处理1类中级、6类低级问题：
+
+- 中：本地MCP配置与执行层的环境变量名单已漂移。规则统一由execution/process/environment.ts拥有，配置保存、导入预览与执行复用；公开环境/秘密槽位拒绝NODE*、GIT*、RUBY等遗漏项和大小写前缀，领域错误、NUL及副作用限制保持。真实HTTP拒绝后配置不变、无进程启动、无凭据写入。
+- 低：删除WaitAgentsInput、SendAgentInput两个没有任何源码/测试/公开入口消费者的类型别名，保留实际schema。
+- 低：共用resumeQueue/startRemaining的eligible筛选和launch组装；候选集合由调用点传入，手动恢复仍抛错，自动续跑仍返回并由原onError处理失败。
+- 低：默认worker和设置组件注释的预算概念改为执行限制，不改写用户已保存角色。
+- 低：用户指南准确说明只汇总已记录Usage、可能不完整；任务没有混合用量完整性标记，不宣称已展示不存在的提示或精确费用。
+- 低：RemoteMcpTransport及schema、AgentChange kind回归protocol单一所有者，删除重复字面量定义。
+- 低：MCP队列fixture窗口调整为32K，保留全部业务断言。此前失败trace证实8K窗口的6827输入token触发自动摘要，按请求序号推进的fixture把摘要误当disconnect轮次；没有修改生产压缩策略或放宽工具状态/次数/调用顺序断言。
+
+包级依赖候选扫描结合公开exports、动态入口、schema、测试、脚本与发布资源核对，未确认应移除的依赖；仍被当前产品支持的SSE适配和追加审计表保持。未为可选空值风格建立新抽象或添加扫描豁免。
+
+最终验证使用仓库Node24.20.0、pnpm10.34.6及独立临时fixture：
+
+- `pnpm build`：8项构建成功、无缓存，15.95秒，包含最终0.14.0/协议22及新增execution导出；保留既有renderer config和Vite chunk提示。
+- `pnpm exec vitest run packages/execution/test/process-environment.test.ts packages/execution/test/persistent-process.test.ts apps/daemon/test/mcp-api.test.ts apps/daemon/test/agent-change-stream.test.ts packages/integrations/test/plugin-apps.test.ts packages/integrations/test/remote.test.ts`：6文件84项通过，4.23秒，包含18项纯名称及创建/更新/导入预览的真实拒绝。
+- `pnpm test:artifact`：2文件6项通过，11.11秒，覆盖最终构建导出的daemon CLI、IPC、恢复与关闭。
+- `pnpm exec vitest run packages/agent-runtime/test/session-runtime.test.ts`：12项通过，2.34秒；`node scripts/check-boundaries.mjs`检查868源码文件、`node scripts/check-source-conventions.mjs`检查936文件，均通过。
+- `pnpm exec playwright test tests/e2e/m1.spec.ts tests/e2e/mcp.spec.ts --grep "停止保留队列|MCP 运行集合锁定" --workers=1`：队列场景通过；MCP场景复现上述fixture问题。修正后`pnpm exec playwright test tests/e2e/mcp.spec.ts --grep "MCP 运行集合锁定" --workers=1`一项通过，8.5秒。两项业务路径均完成，重跑不累计为新场景。
+
+移除额度本身的高累计用量、缺Usage、并发和取消、旧数据只读投影、新字段拒绝及M5八项浏览器证据仍由[M5验证](../202610281702_feature_m5-subagents-board/verify.md#移除累计token限制2026-10-30)维护，不为提交重复调用真实供应商。既有提交钩子继续执行lint-staged、lint、typecheck与源码测试，提交结果另作回执，不将尚未执行的钩子结果提前记为通过。
+
+已同步当前API、技术方案、README、指南、治理Spec、roadmap与0.14.0 Release Note。此前M6记忆/搜索文档随本次提交保留为规划，不预建代码；不改历史验证版本与范围。未操作用户profile、会话、凭据或4311/5174服务，测试原始记录和截图不纳入Git；未重建桌面应用目录、运行新Electron/Windows或真实账户验收，不推送。

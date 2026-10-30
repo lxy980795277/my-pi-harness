@@ -27,7 +27,7 @@
 | `apps/web`               | 页面、交互、HTTP/SSE客户端、状态呈现                                 | Node API、凭据与Agent实例                 |
 | `apps/daemon`            | API装配、本机信任与应用登录、事件重放、profile与服务生命周期         | 页面组件与桌面窗口                        |
 | `apps/desktop`           | Electron窗口、有限preload桥、daemon启动和退出、桌面资源与发布装配    | Agent Loop、业务数据库与工具实现          |
-| `packages/agent-runtime` | Pi模型、认证与主/子Run编排、任务树及预算、审批、取消、队列和分支     | Electron、React、Fastify与SQL实现         |
+| `packages/agent-runtime` | Pi模型、认证与主/子Run编排、任务树及请求调度、审批、取消、队列和分支 | Electron、React、Fastify与SQL实现         |
 | `packages/execution`     | 有界文件/PDF、Web与按策略隔离的macOS Shell执行                       | Pi Loop、审批拥有者、数据库与页面         |
 | `packages/integrations`  | MCP传输/目录/租约、Skills资源/安装、插件manifest与服务OAuth/网关声明 | 数据库、启动授权决策、Pi Loop、HTTP与页面 |
 | `packages/storage`       | JSONL批日志、SQLite配置/投影、附件文件、profile锁、系统凭据          | 模型调用和页面状态                        |
@@ -41,14 +41,14 @@
 
 源码目录表达实际拥有者，领域内直接引用具体实现。package根`index.ts`只提供公开导出，daemon根`bootstrap.ts`保留进程启动；生成的protocol版本文件和真正包级错误可留在根目录。没有旧路径兼容转发文件，也不以utils收纳未判断归属的代码。
 
-| 源码目录                     | 内部职责                                                                                                                                                                                                                                   |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `apps/daemon/src`            | `application`负责配置、启动准备和服务装配；`http`负责Fastify、访问校验、错误映射、请求/SSE及Web资源；auth、models、sessions、mcp等领域直接位于src                                                                                          |
-| `packages/execution/src`     | `core`负责执行入口与公共定义；`filesystem`负责文件和路径；`process`负责Shell、持久进程、沙箱和回收；`documents`负责内容提取；`web`负责抓取；`office`负责办公生成和编辑                                                                     |
-| `packages/integrations/src`  | `mcp`负责传输、目录、schema与租约；`network`提供受限远端访问；`skills`、`plugins`、`connections`及`search`分别拥有资源、插件声明、手动账户和本地向量适配                                                                                   |
-| `packages/protocol/src`      | `application`、`sessions`、`tools`、`extensions`和`host`按协议领域提供浏览器安全schema/DTO；host命名不授予Node能力                                                                                                                         |
-| `packages/storage/src`       | `profile`负责打开与跨介质提交/恢复；`sqlite`负责表和迁移；`sessions`负责JSONL、附件、查询及派生投影；`repositories`负责独立配置；`credentials`负责凭据；`shared`仅放包级错误与校验                                                         |
-| `packages/agent-runtime/src` | `models`负责Provider及模型认证；`sessions`负责主会话；`agents`负责任务树、角色、预算、通信与收束；`runs`复用单次Pi执行；`tools`负责执行与审批；`capabilities`负责发现、绑定和动态加载；`work`负责独立工作状态；`context`负责模型请求上下文 |
+| 源码目录                     | 内部职责                                                                                                                                                                                                                                       |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/daemon/src`            | `application`负责配置、启动准备和服务装配；`http`负责Fastify、访问校验、错误映射、请求/SSE及Web资源；auth、models、sessions、mcp等领域直接位于src                                                                                              |
+| `packages/execution/src`     | `core`负责执行入口与公共定义；`filesystem`负责文件和路径；`process`负责Shell、持久进程、沙箱和回收；`documents`负责内容提取；`web`负责抓取；`office`负责办公生成和编辑                                                                         |
+| `packages/integrations/src`  | `mcp`负责传输、目录、schema与租约；`network`提供受限远端访问；`skills`、`plugins`、`connections`及`search`分别拥有资源、插件声明、手动账户和本地向量适配                                                                                       |
+| `packages/protocol/src`      | `application`、`sessions`、`tools`、`extensions`和`host`按协议领域提供浏览器安全schema/DTO；host命名不授予Node能力                                                                                                                             |
+| `packages/storage/src`       | `profile`负责打开与跨介质提交/恢复；`sqlite`负责表和迁移；`sessions`负责JSONL、附件、查询及派生投影；`repositories`负责独立配置；`credentials`负责凭据；`shared`仅放包级错误与校验                                                             |
+| `packages/agent-runtime/src` | `models`负责Provider及模型认证；`sessions`负责主会话；`agents`负责任务树、角色、请求调度、通信与收束；`runs`复用单次Pi执行；`tools`负责执行与审批；`capabilities`负责发现、绑定和动态加载；`work`负责独立工作状态；`context`负责模型请求上下文 |
 
 ProfileStore保留JSONL、SQLite、锁和失败冻结的单一编排，模型配置仓储通过它的事务入口写入。模型Provider认证、应用登录与插件OAuth继续由各自领域拥有；共享网络访问不归入某一个供应商或MCP传输。
 
@@ -99,7 +99,7 @@ Web开发的 `DAEMON_ORIGIN` 指定同源代理目标，缺省连接上述独立
 
 ## M5任务所有权
 
-M5的AgentRuntime拥有同Session日志内的子任务树，RunExecution继续拥有每次实际Pi执行。主快照与子转录分开查询，WorkRuntime.forTask复用独立上下文与人工交互；daemon任务API和Web看板消费同一事实。角色、并发预算、通信来源、写入拥有者和树级停止机制见[子Agent设计](../09_TECHNICAL/子Agent与任务看板设计.md)，不由MCP或插件拥有。
+M5的AgentRuntime拥有同Session日志内的子任务树，RunExecution继续拥有每次实际Pi执行。主快照与子转录分开查询，WorkRuntime.forTask复用独立上下文与人工交互；daemon任务API和Web看板消费同一事实。角色、请求并发、通信来源、写入拥有者和树级停止机制见[子Agent设计](../09_TECHNICAL/子Agent与任务看板设计.md)，不由MCP或插件拥有。
 
 ## M4能力所有权
 

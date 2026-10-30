@@ -33,7 +33,6 @@ export const AgentLimitsSchema = Type.Object(
     maxConcurrentRequests: Type.Integer({ minimum: 1, maximum: 8 }),
     maxTurns: Type.Integer({ minimum: 1, maximum: 32 }),
     timeoutMs: Type.Integer({ minimum: 1000, maximum: 3_600_000 }),
-    tokenBudget: Type.Integer({ minimum: 1024, maximum: 2_000_000 }),
     maxOutputTokens: Type.Integer({ minimum: 128, maximum: 32_768 }),
   },
   { additionalProperties: false },
@@ -228,7 +227,6 @@ export function defaultAgentSettings(): AgentSettings {
       maxConcurrentRequests: 4,
       maxTurns: 16,
       timeoutMs: 600_000,
-      tokenBudget: 200_000,
       maxOutputTokens: 4096,
     },
     roles: [
@@ -259,7 +257,7 @@ export function defaultAgentSettings(): AgentSettings {
         name: '执行',
         description: '在父任务授予的范围内完成修改并验证结果。',
         instructions:
-          '完成分配的任务，遵守继承的权限、写入拥有权与预算。报告实际修改、验证及剩余问题。',
+          '完成分配的任务，遵守继承的权限、写入拥有权与执行限制。报告实际修改、验证及剩余问题。',
         enabled: true,
         access: 'write',
         providerId: null,

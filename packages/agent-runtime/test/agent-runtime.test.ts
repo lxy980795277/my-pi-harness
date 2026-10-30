@@ -1,4 +1,5 @@
 import { fauxAssistantMessage } from '@earendil-works/pi-ai';
+import { setImmediate as nextImmediate } from 'node:timers/promises';
 import { describe, expect, it, vi } from 'vitest';
 import {
   agentChanged,
@@ -106,6 +107,89 @@ describe('durable structured Agent execution through real Pi', () => {
       expect(f.leases()).toEqual({ acquired: 2, released: 2 });
     } finally {
       blocked.release();
+      await f.close();
+    }
+  });
+
+  it('keeps a cancelled request in its slot until the returned model stream really settles', async () => {
+    const firstEntered = agentGate();
+    const settleFirst = agentGate();
+    let secondEntered = false;
+    const f = await agentFixture({
+      settings: (settings) => ({
+        ...settings,
+        limits: { ...settings.limits, maxConcurrentRequests: 1 },
+      }),
+      response: async (context) => {
+        const task = firstTask(context);
+        if (task === 'SLOW_STREAM_CLEANUP') {
+          firstEntered.release();
+          // The provider keeps its returned stream open during asynchronous cancellation cleanup.
+          await settleFirst.promise;
+          return fauxAssistantMessage('Cancelled before delivery');
+        }
+        if (task === 'NEXT_STREAM') {
+          secondEntered = true;
+          return fauxAssistantMessage('Next request completed');
+        }
+        if (!hasResult(context, 'spawn_agent'))
+          return fauxAssistantMessage(
+            [
+              {
+                type: 'toolCall',
+                id: 'slow-stream',
+                name: 'spawn_agent',
+                arguments: {
+                  title: 'Slow stream cleanup',
+                  task: 'SLOW_STREAM_CLEANUP',
+                  roleId: 'researcher',
+                },
+              },
+              {
+                type: 'toolCall',
+                id: 'next-stream',
+                name: 'spawn_agent',
+                arguments: { title: 'Next stream', task: 'NEXT_STREAM', roleId: 'researcher' },
+              },
+            ],
+            { stopReason: 'toolUse' },
+          );
+        if (!hasResult(context, 'wait_agents')) return waitForResults(context);
+        return fauxAssistantMessage('Root collected the cancelled and completed requests');
+      },
+    });
+    try {
+      await f.runtime.send(f.session.id, {
+        text: 'ROOT_STREAM_CLEANUP',
+        mode: 'send',
+        requestId: 'stream-cleanup',
+      });
+      await withinDeadline(firstEntered.promise, 'First returned model stream never opened');
+      const first = f.runtime.agents
+        .list(f.session.id)
+        .tasks.find((task) => task.title === 'Slow stream cleanup');
+      if (!first) throw new Error('Missing first model stream task');
+      let stopped = false;
+      const stopping = f.runtime.agents
+        .stop(f.session.id, first.id, { expectedRunId: first.latestRunId })
+        .then(() => {
+          stopped = true;
+        });
+      await nextImmediate();
+      expect(stopped).toBe(false);
+      expect(secondEntered).toBe(false);
+      settleFirst.release();
+      await withinDeadline(stopping, 'Task stop did not await model stream settlement');
+      await agentsIdle(f);
+      const tasks = f.runtime.agents.list(f.session.id).tasks;
+      expect(tasks.find((task) => task.id === first.id)?.status).toBe('cancelled');
+      expect(tasks.find((task) => task.title === 'Next stream')?.status).toBe('completed');
+      expect(secondEntered).toBe(true);
+      expect(f.maxRequests()).toBe(1);
+      expect(f.leases()).toEqual({ acquired: 3, released: 3 });
+      expect(f.errors).toEqual([]);
+    } finally {
+      settleFirst.release();
       await f.close();
     }
   });

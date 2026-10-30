@@ -130,3 +130,28 @@ C的SDK错误文本包含503，但没有结构化HTTP状态字段；公开错误
 本次增量为文档及产品版本元数据，根版本和APP_VERSION同步至0.13.2；公开协议21、SQLite schema9保持，未清理数据或新增依赖。实际桌面包和真实模型证据仍为上述0.13.1，不将版本生成当作新包验证。M5开发及本机验收正式收口，Windows、正式发布及完整产品体验沿既有后续统一验收范围跟踪，M4账户和Office视觉缺口保持原归属，M6尚未开始。
 
 本轮已执行各修改文档的定向Prettier格式化、`node scripts/check-docs.mjs`（206份文档）、`pnpm version:sync`、`pnpm version:check`和`git diff --check`，均通过。复用上述真实模型与桌面证据，不为文档收口再次调用模型或重建应用目录；当前本地验收产物、一次性控制器和任何凭据均不纳入提交。
+
+## 移除累计token限制（2026-10-30）
+
+本轮为M5维护，产品仍为0.13.2，公开协议22、SQLite schema9。移除AgentLimits.tokenBudget、默认额度、设置及任务详情预算项、spawn额度参数和AGENT_BUDGET拒绝；AgentRequestScheduler只拥有根树与祖先子树的并发名额，完整流真正结算后幂等释放。用量仍由完整助手消息及子树查询聚合，摘要/复核沿用原计量口径；上下文容量、轮数、时限、单请求输出、任务数/深度、审批和取消保持独立。
+
+真实GDP日志的只读审查发现：首次委派前九次请求累计333411 token，原逻辑在首次委派后才启用200000额度拒绝。没有将上一轮的467.6K用量误计入本轮。修复回归通过真实Pi执行及临时JSONL/SQLite，受控供应商用量为委派前333414 token：首次委派、嵌套任务、wait_agents与主汇总全部完成，真实消息计量及父子聚合保持；缺Usage场景也完成且不补造计量。回归中允许32轮以隔离缺Usage场景与独立轮数限制，不修改默认16轮策略，不将合成用量当作真实供应商账单。
+
+持久设置读取只选择当前schema字段并继续校验必填值、revision及角色关联；原SQLite JSON不改写。既有checksummed task.created通过原持久投影忽略废弃字段，原JSONL逐字保持；新设置/写入拒绝旧字段，缺必填值及类型/范围损坏继续拒绝。没有增加旧协议分支、改写用户日志、清库或新增可配置“无限预算”。
+
+实际检查均使用仓库Node24.20.0与pnpm10.34.6：
+
+- `pnpm exec vitest run packages/agent-runtime/test/agent-request-usage.test.ts packages/agent-runtime/test/agent-runtime.test.ts packages/agent-runtime/test/agent-collaboration.test.ts packages/agent-runtime/test/agent-effects.test.ts packages/agent-runtime/test/agent-permissions.test.ts`：5文件19项通过，覆盖高用量与缺Usage、独立上下文、权限、通信及结算。
+- `pnpm exec vitest run packages/agent-runtime/test/agent-runtime.test.ts packages/agent-runtime/test/agents-request-scheduler.test.ts packages/agent-runtime/test/agents-failures.test.ts packages/agent-runtime/test/run-failure.test.ts packages/agent-runtime/test/approval-review-guard.test.ts`：5文件33项通过，覆盖并发排队、祖先限制、取消准入与流清理、幂等释放、独立轮数/超时、运行失败及复核。与上一命令重复的用例不累计。
+- `pnpm exec vitest run packages/storage/test/agent-limits-persistence.test.ts packages/storage/test/agent-tasks.test.ts packages/storage/test/agent-query.test.ts packages/storage/test/stored-event.test.ts apps/daemon/test/agent-api.test.ts`：5文件37项通过，3.30秒，覆盖临时数据库/日志、任务查询、旧字段只读投影及新HTTP设置严格校验。
+- `pnpm typecheck`：根/E2E与8项workspace任务通过；`pnpm lint`通过ESLint、a11y、866源码导入、934文件声明约定、209文件文档和版本检查。后续仅补文档/测试的检查单列。
+- `pnpm build`：8任务成功、无缓存，15.736秒；保留既有Electron renderer config与Vite chunk体积提示。
+- `pnpm exec playwright test tests/e2e/m5.spec.ts --workers=1`：8项通过，41.4秒，覆盖真实临时daemon/Pi/HTTP与Chromium。详情无Token预算、已记录用量显示1100；设置无整树预算，保存的请求无tokenBudget，并发及单次输出限制仍可更新。三种审批策略、提问草稿、任务通信、停止与响应丢失重试保持。
+
+已查看output/playwright/m5-task-detail-light.png及m5-task-detail-dark-narrow.png：浅色与600px深色详情均无预算行，用量可读。截图为本地忽略输出，不提交。测试使用临时profile、动态端口、受控模型和合成身份；未调用真实模型、操作实际GitHub授权、重跑Electron/Windows或终止用户4311/5174服务。先前平台证据保持其原版本与范围，本轮不扩大验收结论。
+
+技术方案、API、README、用户指南与M5任务已同步；已有M6规划保留并改用请求调度/上下文预算术语，不进入M6实现。完整重启项目后协议与执行策略同步生效，历史失败不会被改写为成功。未提交或推送。
+
+最后工具边界补测先复现Type.Partial丢失原additionalProperties设置：旧limits.tokenBudget仍被接受并创建子Task。委派schema改为显式传入严格对象选项；没有增加旧字段特判。修复后`pnpm exec vitest run packages/agent-runtime/test/agent-request-usage.test.ts`三项全部通过（3.33秒），证明旧字段产生普通工具参数错误、不创建子任务且父Run正常完成；两项高用量/缺Usage回归仍通过。`pnpm exec tsc -p packages/agent-runtime/tsconfig.json --noEmit`及该测试/定义的定向ESLint、Prettier检查通过。
+
+补测后的`pnpm --filter @my-pi-harness/agent-runtime build`通过，随后`pnpm exec playwright test tests/e2e/m5.spec.ts --grep "M5 真实委派隔离" --workers=1`一项通过（6.5秒），验证最终schema下合法委派、设置和用量显示保持；与前述8项不累计为新场景。最终源码约定检查934文件、文档检查209文件及git diff --check通过；变更文件已格式化，暂存区为空。

@@ -4,7 +4,7 @@ import { AgentSettingsEditor } from '@/features/tasks/components/agent-settings-
 import { useAgentSettingsQuery } from '@/features/tasks/hooks/use-agent-settings';
 import { describeError } from '@/utils/describe-error';
 
-/** Role and budget settings share the daemon's revision-checked configuration. */
+/** Role and execution limit settings share the daemon's revision-checked configuration. */
 export const AgentSettingsPanel: FC = () => {
   const query = useAgentSettingsQuery();
   return (

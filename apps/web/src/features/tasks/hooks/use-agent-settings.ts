@@ -12,7 +12,6 @@ const LIMIT_LABELS: Record<keyof AgentLimits, string> = {
   maxConcurrentRequests: '并发模型请求数',
   maxTurns: '每次执行轮数上限',
   timeoutMs: '整树执行时限（秒）',
-  tokenBudget: '整树 Token 预算',
   maxOutputTokens: '单次请求输出上限',
 };
 

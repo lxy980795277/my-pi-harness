@@ -121,6 +121,15 @@ describe('protected task HTTP APIs', () => {
     expect(
       (await f.send('/api/agent-settings', 'PUT', { ...changed, unexpected: true })).status,
     ).toBe(400);
+    expect(
+      (
+        await f.send('/api/agent-settings', 'PUT', {
+          ...changed,
+          limits: { ...changed.limits, tokenBudget: 200_000 },
+        })
+      ).status,
+    ).toBe(400);
+    expect(updated).not.toHaveProperty('limits.tokenBudget');
     if (!Value.Check(AgentSettingsSchema, updated)) throw new Error('Invalid saved settings');
     const role = updated.roles[0];
     if (role === undefined) throw new Error('Missing role fixture');

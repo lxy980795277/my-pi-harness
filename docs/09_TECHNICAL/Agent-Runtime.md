@@ -90,7 +90,7 @@ SDK 的 `prompt()` 正常返回不代表产品 Run 成功。运行时还检查�
 
 ## 三、Session、Run 与分支
 
-Session是用户长期打开的对话；Run是一次实际Pi执行；Branch表示被选中的消息历史。一个Session同时最多有一个活跃根Run，子Run由Task关联并具备独立上下文；不同Session可以独立运行。子任务归属、预算及结构化收束见[子Agent设计](子Agent与任务看板设计.md)。
+Session是用户长期打开的对话；Run是一次实际Pi执行；Branch表示被选中的消息历史。一个Session同时最多有一个活跃根Run，子Run由Task关联并具备独立上下文；不同Session可以独立运行。子任务归属、并发调度及结构化收束见[子Agent设计](子Agent与任务看板设计.md)。
 
 ```text
 Session

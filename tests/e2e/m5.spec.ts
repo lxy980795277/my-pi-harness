@@ -157,6 +157,9 @@ test('M5 真实委派隔离上下文，结果、任务树、看板和设置可�
     await expect(dialog).toContainText('M5-CHILD-ISOLATED');
     await expect(dialog).toContainText('M5-CHILD-RESULT');
     await expect(dialog).not.toContainText('M5-ROOT-SECRET');
+    await expect(dialog.getByText('Token 预算', { exact: true })).toHaveCount(0);
+    await expect(dialog.getByText('已记录 Token', { exact: true })).toBeVisible();
+    await expect(dialog.getByText('1,100', { exact: true })).toBeVisible();
     await mkdir('output/playwright', { recursive: true });
     await page.screenshot({ path: 'output/playwright/m5-task-detail-light.png' });
     await page.keyboard.press('Escape');
@@ -173,7 +176,9 @@ test('M5 真实委派隔离上下文，结果、任务树、看板和设置可�
     await openUserSettings(page);
     await page.getByRole('tab', { name: '子 Agent', exact: true }).click();
     await expect(page.getByLabel('允许 Agent 委派子任务', { exact: true })).toBeChecked();
+    await expect(page.getByLabel('整树 Token 预算', { exact: true })).toHaveCount(0);
     await page.getByLabel('并发模型请求数', { exact: true }).fill('2');
+    await page.getByLabel('单次请求输出上限', { exact: true }).fill('2048');
     const save = page.waitForResponse((response) => {
       return (
         new URL(response.url()).pathname === '/api/agent-settings' &&
@@ -181,7 +186,11 @@ test('M5 真实委派隔离上下文，结果、任务树、看板和设置可�
       );
     });
     await page.getByRole('button', { name: '保存子 Agent 设置', exact: true }).click();
-    expect((await save).ok()).toBe(true);
+    const saved = await save;
+    expect(saved.ok()).toBe(true);
+    const settings: unknown = saved.request().postDataJSON();
+    expect(settings).toMatchObject({ limits: { maxConcurrentRequests: 2, maxOutputTokens: 2048 } });
+    expect(settings).not.toHaveProperty('limits.tokenBudget');
     await page.getByRole('tab', { name: '通用设置', exact: true }).click();
     await page.getByLabel('深色模式', { exact: true }).click();
     await page.getByRole('button', { name: '关闭设置', exact: true }).click();

@@ -38,6 +38,17 @@
 - [x] 执行受影响检查，记录实际通过和未验证范围。
 - [x] 同步权威文档、roadmap及[治理证据](verify.md)。
 
+### 累计token限制移除后的治理与提交（2026-10-30）
+
+用户要求再次执行治理并提交当前改动。本轮重点为[M5移除累计token限制](../202610281702_feature_m5-subagents-board/spec.md#移除累计token预算2026-10-30)的全部差异及其消费者，并对Renderer、daemon/能力包、Electron、脚本/依赖执行风险扫描。治理不恢复累计额度、不放宽其他限制、不清理真实数据或操作用户服务。先前未提交的[M6规划](../202610301722_feature_m6-memory-search/spec.md)一并保留；没有M6功能实现，不将规划写为完成。
+
+当前授权覆盖治理修复和本地提交，替代前述工程轮次的“不提交”范围；不推送。按当前治理规范复核命名/类型、弃用、复杂空值、重复状态、死代码及依赖入口，删除需有实际消费者证据。历史验收保留原版本与范围，新的治理和提交检查另记于verify。
+
+- [x] 审查全部当前差异及四类风险范围，登记有证据的问题。
+- [x] 清理实际冗余或职责问题，同步消费者和相关说明。
+- [x] 对治理修改执行必要验证，复用未变化的已有通过结果。
+- [x] 同步验证、产品版本和Release Note，完成本地提交前的暂存自查。
+
 ## Issues
 
 本轮审查与修复已完成，实际范围及检查结果见[治理验证](verify.md)；子任务审批继承及动态工具集指纹修复属于[M5 Spec](../202610281702_feature_m5-subagents-board/spec.md)的AC-12范围，其验证与问题记录继续由原功能文档拥有。
@@ -52,3 +63,12 @@
 - [中，已修复] journal-codec在任意run.finished时清除整个Session的请求基线，子Run结束会使活跃父/兄弟的后续请求重复落盘完整历史。只释放已结束Run的基线，保持其他Run独立；用交错编解码验证引用恢复及落盘粒度，不修改历史记录。
 - [低，已清理] AgentBudget的RequestWaiter.signal只有初始化、没有读取；取消处理直接使用所属闭包的signal。移除这一冗余字段和赋值，保留监听清理与准入行为。
 - [中，已修复] 全仓类型感知ESLint在默认约4GiB堆上限退出134，CI同样通过pnpm check调用该入口。lint脚本仅为ESLint进程显式设置8GiB上限，保留全部规则、范围及后续gate，不要求用户或CI手工设置全局NODE_OPTIONS。
+- [中，已修复，本轮] apps/daemon/src/mcp/local-input.ts与packages/execution/src/process/persistent.ts分别维护启动控制环境变量规则；配置入口遗漏NODE*、GIT*、RUBY等变量和大小写前缀，能保存的配置在执行预览时才被拒绝。由execution拥有环境变量名称判定，配置保存、导入预览与执行复用，保留各自错误和秘密值校验。
+- [低，已修复，本轮] integrations的RemoteMcpBinding/AppSchema、daemon的PluginAppConfiguration与Agent变更流重复声明protocol已拥有的传输和通知枚举。复用RemoteMcpTransport及schema、AgentChange，避免共享协议变化时遗漏消费者，不新增转发类型或业务能力。
+
+- [低，已清理，本轮] agents/definitions.ts的WaitAgentsInput和SendAgentInput仅有声明，无源码、测试、文档或公开入口消费者；删除别名，保留被模型与执行校验使用的schema。
+- [低，已整理，本轮] SessionRuntime.resumeQueue与startRemaining重复筛选可合并输入并组装相同launch参数。由同一所有者的launchQueued复用，候选集合仍由调用点决定，手动恢复错误、自动返回及onError保持原语义。
+- [低，已修正，本轮] 默认worker指令和设置组件注释仍使用已删除的预算概念；统一为执行限制，不改写用户已保存的角色说明。
+- [低，已修正，本轮] 子Agent指南承诺缺少Usage会展示“不完整说明”，但任务摘要只有已记录数值或暂无计量，没有混合用量完整性标记；说明改为仅汇总已记录Usage且可能不完整，不增加DTO字段或虚构费用。
+
+- [低，已修正，本轮] MCP队列浏览器场景用8K窗口和按请求序号推进的主工具fixture，完整工具目录使续跑触发自动摘要并消耗disconnect步骤，随后得到最终文本而没有第二次调用。失败trace已证实6827输入token超过5734.4压缩阈值；该场景改用32K测试窗口，保留未知结果、请求次数、两次工具状态及调用顺序全部断言。上下文压缩仍由M3专项覆盖，不修改产品容量或压缩策略。

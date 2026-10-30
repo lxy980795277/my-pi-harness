@@ -1,4 +1,3 @@
-import type { AgentLimits } from '@my-pi-harness/protocol';
 import { RuntimeError } from '../errors.js';
 
 interface RequestWaiter {
@@ -8,64 +7,33 @@ interface RequestWaiter {
 
 export interface AgentRequestScope {
   id: string;
-  limit: number;
-  concurrency?: number;
+  concurrency: number;
 }
 
-/** One root's shared request capacity and token reservations; child limits never allocate a second balance. */
-export class AgentBudget {
+/** Share one root's model slots while enforcing each ancestor's subtree concurrency. */
+export class AgentRequestScheduler {
   private active = 0;
-  private spent = 0;
-  private reserved = 0;
   private readonly waiters: RequestWaiter[] = [];
-  private readonly taskSpent = new Map<string, number>();
-  private readonly taskReserved = new Map<string, number>();
   private readonly taskActive = new Map<string, number>();
 
-  public constructor(private readonly limits: AgentLimits) {}
+  public constructor(private readonly maxConcurrentRequests: number) {}
 
   public async request(
-    input: number,
-    output: number,
     scopes: readonly AgentRequestScope[],
     signal: AbortSignal,
-    enforce = true,
-  ): Promise<(usage: number | undefined) => void> {
+  ): Promise<() => void> {
     signal.throwIfAborted();
     await this.enter(scopes, signal);
-    const amount = input + output;
     try {
       signal.throwIfAborted();
-      if (
-        enforce &&
-        (this.spent + this.reserved + amount > this.limits.tokenBudget ||
-          scopes.some(
-            (scope) =>
-              (this.taskSpent.get(scope.id) ?? 0) +
-                (this.taskReserved.get(scope.id) ?? 0) +
-                amount >
-              scope.limit,
-          ))
-      )
-        throw new RuntimeError('AGENT_BUDGET', '任务树的剩余 token 预算不足以发起下一次请求。');
-      this.reserved += amount;
-      for (const scope of scopes)
-        this.taskReserved.set(scope.id, (this.taskReserved.get(scope.id) ?? 0) + amount);
     } catch (error) {
       this.leave(scopes);
       throw error;
     }
-    let settled = false;
-    return (usage): void => {
-      if (settled) return;
-      settled = true;
-      const cost = usage ?? amount;
-      this.reserved -= amount;
-      this.spent += cost;
-      for (const scope of scopes) {
-        this.taskReserved.set(scope.id, (this.taskReserved.get(scope.id) ?? 0) - amount);
-        this.taskSpent.set(scope.id, (this.taskSpent.get(scope.id) ?? 0) + cost);
-      }
+    let released = false;
+    return (): void => {
+      if (released) return;
+      released = true;
       this.leave(scopes);
     };
   }
@@ -97,15 +65,11 @@ export class AgentBudget {
   }
 
   private canEnter(scopes: readonly AgentRequestScope[]): boolean {
-    return scopes.every(
-      (scope) =>
-        (this.taskActive.get(scope.id) ?? 0) <
-        (scope.concurrency ?? this.limits.maxConcurrentRequests),
-    );
+    return scopes.every((scope) => (this.taskActive.get(scope.id) ?? 0) < scope.concurrency);
   }
 
   private drain(): void {
-    while (this.active < this.limits.maxConcurrentRequests) {
+    while (this.active < this.maxConcurrentRequests) {
       const index = this.waiters.findIndex((waiter) => this.canEnter(waiter.scopes));
       if (index === -1) return;
       const waiter = this.waiters.splice(index, 1)[0];

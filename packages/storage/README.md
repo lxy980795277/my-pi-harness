@@ -8,6 +8,8 @@ Node 24 宿主使用的同步存储。JSONL保存会话执行事实，独立不�
 
 模型配置、厂商绑定和默认模型由`ModelSettingsRepository`查询与更新，`ProfileStore`保持对外方法和事务所有权。配置更新通过宿主提供的事务函数执行，继续服从profile关闭状态和日志写入失败后的写入冻结，不另建提交或恢复路径。
 
+AgentSettingsRepository读取持久JSON时只投影当前AgentSettingsSchema字段，校验必填值、revision与角色关联；废弃附加字段不改写原记录。新设置写入仍严格校验，不接受已删除的累计token额度。任务历史沿既有持久事件投影处理，不增设旧版本分支。
+
 ## 数据所有权
 
 | 数据                                                                      | 权威位置             | SQLite职责                           |

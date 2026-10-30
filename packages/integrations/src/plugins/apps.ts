@@ -3,7 +3,11 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Type, type Static } from 'typebox';
 import { Value } from 'typebox/value';
-import { ConnectionServiceIdSchema, type PluginManifest } from '@my-pi-harness/protocol';
+import {
+  ConnectionServiceIdSchema,
+  RemoteMcpTransportSchema,
+  type PluginManifest,
+} from '@my-pi-harness/protocol';
 import { PluginError } from './errors.js';
 import { parseRemoteUrl } from '../network/remote-fetch.js';
 
@@ -22,7 +26,7 @@ const AppSchema = Type.Object(
     name: Type.String({ minLength: 1, maxLength: 100 }),
     description: Type.String({ minLength: 1, maxLength: 1024 }),
     credentialSource: Type.Enum(['plugin-oauth', 'mcp-oauth', 'none']),
-    transport: Type.Enum(['streamable-http', 'sse']),
+    transport: RemoteMcpTransportSchema,
     endpoint: Type.String({ minLength: 1, maxLength: 2048 }),
   },
   object,

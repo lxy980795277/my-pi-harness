@@ -1,2 +1,2 @@
 /** Generated from the root package.json by scripts/version.mjs. */
-export const APP_VERSION = '0.13.2';
+export const APP_VERSION = '0.14.0';

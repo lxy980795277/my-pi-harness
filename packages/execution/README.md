@@ -52,7 +52,7 @@ Web 工具只使用标准 80/443 端口，拒绝 URL 凭据、非公网地址、
 
 ## 持久双向进程
 
-`resolvePersistentProcess` 在不启动程序的情况下解析真实可执行文件、文件身份与已注册工作根，拒绝相对程序路径、启动控制环境和非法参数。`startPersistentProcess` 只启动这份已解析配置，spawn 前后核对程序身份；stdin/stdout 双向通道交由明确拥有者处理，不暴露 ChildProcess。MCP 的协议、目录和请求身份由 integrations 拥有。
+`resolvePersistentProcess` 在不启动程序的情况下解析真实可执行文件、文件身份与已注册工作根，拒绝相对程序路径、启动控制环境和非法参数。环境变量名称由`process/environment.ts`的`isAllowedProcessEnvironmentName`统一判定：只允许合法标识符，不区分大小写拒绝宿主路径、Shell和运行时启动控制变量；daemon配置保存及导入预览复用同一规则，公开环境和秘密槽位一致检查。各入口另外拒绝值中的NUL。`startPersistentProcess` 只启动这份已解析配置，spawn 前后核对程序身份；stdin/stdout 双向通道交由明确拥有者处理，不暴露 ChildProcess。MCP 的协议、目录和请求身份由 integrations 拥有。
 
 持久进程与 Shell 共用进程组 TERM/KILL 和真实管道关闭检查。默认沙箱使用独占 HOME/TMPDIR、拒绝网络；full-access 单独传入，使用宿主权限。写队列最多 4 MiB，排队结束与实际写入前再次检查取消；stdout/stderr 分别有累计和速率上限，stderr 环形诊断过滤已知秘密。`close` 同步拒绝写入、幂等且可等待，完成进程组/管道回收后才删除临时目录；失败明确报告，leader exit 不算完成。执行器仅保证所属 POSIX 进程组，主动脱组后代不在该回收保证内。
 

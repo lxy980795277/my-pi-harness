@@ -1,11 +1,15 @@
 import { BUILTIN_PLUGIN_APPS, PluginError } from '@my-pi-harness/integrations';
-import type { ConnectionServiceId, PluginManifest } from '@my-pi-harness/protocol';
+import type {
+  ConnectionServiceId,
+  PluginManifest,
+  RemoteMcpTransport,
+} from '@my-pi-harness/protocol';
 
 interface PluginAppConfiguration {
   id: string;
   serviceId: ConnectionServiceId;
   endpoint: string;
-  transport: 'streamable-http' | 'sse';
+  transport: RemoteMcpTransport;
   credentialSource: NonNullable<PluginManifest['apps'][number]['credentialSource']>;
 }
 

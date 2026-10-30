@@ -27,6 +27,10 @@ AC写可观察结果，不用「完善」「支持全部」代替具体条件。
 
 ## 当前Spec
 
+- [M6记忆与搜索规划](202610301722_feature_m6-memory-search/spec.md)
+- [M6数据、检索与请求设计](202610301722_feature_m6-memory-search/design.md)
+- [M6实施顺序与完成门槛](202610301722_feature_m6-memory-search/tasks.md)
+
 - [M5实现后的代码治理](202610300028_refactor_m5-code-governance/spec.md)
 - [M5代码治理验证](202610300028_refactor_m5-code-governance/verify.md)
 

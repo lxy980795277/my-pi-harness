@@ -61,7 +61,7 @@ export const AgentSettingsEditor: FC<AgentSettingsEditorProps> = ({ initial }) =
           })}
         </div>
         <p className="text-xs leading-5 text-muted-foreground">
-          Token 预算按请求预留和实际用量结算；所有角色继续受父任务的工作区和审批策略约束。
+          所有角色继续受父任务的工作区和审批策略约束。
         </p>
       </section>
       {state.save.error && <Notice tone="error">{state.save.error}</Notice>}

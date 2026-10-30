@@ -17,8 +17,6 @@ import {
   isAgentTool,
 } from './definitions.js';
 import { RuntimeError } from '../errors.js';
-import { messageTokens } from '../context/budget.js';
-import { messageUsage } from '../runs/message-usage.js';
 
 function failedStream(
   model: Model<Api>,
@@ -164,7 +162,7 @@ export function createAgentHooks(owner: AgentRuntime, node: AgentNode): AgentRun
       const signal = options?.signal
         ? AbortSignal.any([node.controller.signal, options.signal])
         : node.controller.signal;
-      let release: ((usage: number | undefined) => void) | undefined;
+      let release: (() => void) | undefined;
       try {
         signal.throwIfAborted();
         const delegated =
@@ -178,20 +176,15 @@ export function createAgentHooks(owner: AgentRuntime, node: AgentNode): AgentRun
           options?.maxTokens ?? model.maxTokens,
           outputTokens(model.maxTokens),
         );
-        const input = context.messages.reduce(
-          (total, message) => total + messageTokens(message),
-          256,
-        );
         const scopes = [];
         for (let entry: AgentNode | undefined = node; entry; entry = entry.parent)
           if (entry.task)
             scopes.push({
               id: entry.task.id,
-              limit: entry.limits.tokenBudget,
               concurrency: entry.limits.maxConcurrentRequests,
             });
         owner.waiting(node, 'model');
-        release = await node.tree.budget.request(input, maxTokens, scopes, signal, delegated);
+        release = await node.tree.scheduler.request(scopes, signal);
         owner.waiting(node, null);
         const execution = node.execution;
         if (!execution) throw new RuntimeError('AGENT_NOT_READY', '执行尚未完成初始化。');
@@ -200,34 +193,20 @@ export function createAgentHooks(owner: AgentRuntime, node: AgentNode): AgentRun
           signal,
           maxTokens,
         });
-        const settle = release;
+        const releaseSlot = release;
         const completion = stream
           .result()
-          .then(
-            (message) => {
-              const usage = messageUsage(message.usage);
-              settle(
-                usage === undefined
-                  ? undefined
-                  : usage.totalTokens ||
-                      usage.inputTokens +
-                        usage.outputTokens +
-                        usage.cacheReadTokens +
-                        usage.cacheWriteTokens,
-              );
-            },
-            (error: unknown) => {
-              settle(undefined);
-              owner.options.onError(error);
-            },
-          )
+          .then(releaseSlot, (error: unknown) => {
+            releaseSlot();
+            owner.options.onError(error);
+          })
           .finally(() => {
             node.requests.delete(completion);
           });
         node.requests.add(completion);
         return stream;
       } catch (error) {
-        release?.(undefined);
+        release?.();
         node.error = error;
         return failedStream(model, error, signal, failures);
       }

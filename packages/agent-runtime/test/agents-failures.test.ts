@@ -87,42 +87,34 @@ describe('Agent failure ownership through real Pi and temporary journals', () =>
     },
   );
 
-  it.each([
-    {
-      limits: { tokenBudget: 1024 },
-      reason: '任务树的剩余 token 预算不足以发起下一次请求。',
-    },
-    { limits: { maxTurns: 1 }, reason: '任务已达到模型请求轮数上限。' },
-  ])(
-    'records the exact admission failure $reason on its failed Run',
-    async ({ limits, reason }) => {
-      const f = await agentFixture({
-        settings: (settings) => ({ ...settings, limits: { ...settings.limits, ...limits } }),
-        response: (context) => {
-          if (firstTask(context) === 'LIMITED_CHILD') return fauxAssistantMessage('Child result');
-          if (!hasResult(context, 'spawn_agent')) return delegate('Bounded child', 'LIMITED_CHILD');
-          return fauxAssistantMessage('A denied parent request must not reach this provider');
-        },
+  it('records the exact turn limit failure on its failed Run', async () => {
+    const reason = '任务已达到模型请求轮数上限。';
+    const f = await agentFixture({
+      settings: (settings) => ({ ...settings, limits: { ...settings.limits, maxTurns: 1 } }),
+      response: (context) => {
+        if (firstTask(context) === 'LIMITED_CHILD') return fauxAssistantMessage('Child result');
+        if (!hasResult(context, 'spawn_agent')) return delegate('Bounded child', 'LIMITED_CHILD');
+        return fauxAssistantMessage('A denied parent request must not reach this provider');
+      },
+    });
+    try {
+      await f.runtime.send(f.session.id, {
+        text: 'ROOT_ADMISSION_FAILURE',
+        mode: 'send',
+        requestId: 'admission-failure',
       });
-      try {
-        await f.runtime.send(f.session.id, {
-          text: 'ROOT_ADMISSION_FAILURE',
-          mode: 'send',
-          requestId: 'admission-failure',
-        });
-        await agentsIdle(f);
-        expect(f.runtime.getSnapshot(f.session.id).runs[0]).toMatchObject({
-          status: 'failed',
-          error: reason,
-        });
-        expect(
-          f.requests.filter((request) => request.task === 'ROOT_ADMISSION_FAILURE'),
-        ).toHaveLength(1);
-      } finally {
-        await f.close();
-      }
-    },
-  );
+      await agentsIdle(f);
+      expect(f.runtime.getSnapshot(f.session.id).runs[0]).toMatchObject({
+        status: 'failed',
+        error: reason,
+      });
+      expect(
+        f.requests.filter((request) => request.task === 'ROOT_ADMISSION_FAILURE'),
+      ).toHaveLength(1);
+    } finally {
+      await f.close();
+    }
+  });
 
   it.each([false, true])(
     'preserves the last allowed child turn outcome (timeout=%s)',

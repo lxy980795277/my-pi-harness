@@ -3,9 +3,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   createModels,
+  createAssistantMessageEventStream,
   fauxProvider,
   type AssistantMessage,
+  type AssistantMessageEventStream,
   type TranscriptContext,
+  type Usage,
 } from '@earendil-works/pi-ai';
 import type { AgentSettings, ApprovalMode, SessionSummary } from '@my-pi-harness/protocol';
 import { openProfileStore } from '@my-pi-harness/storage';
@@ -26,6 +29,7 @@ interface AgentFixtureOptions {
     signal: AbortSignal | undefined,
     sessionId: string | undefined,
   ): Promise<void>;
+  reportedUsage?(context: TranscriptContext): Usage;
   workspace?: boolean;
   approvalMode?: ApprovalMode;
   externalTools?: ExternalTools;
@@ -92,6 +96,20 @@ export function firstTask(context: TranscriptContext): string {
     .join('\n');
 }
 
+/** Replace faux estimates at the SDK terminal event to exercise provider usage and its absence. */
+async function forwardReportedUsage(
+  source: AssistantMessageEventStream,
+  target: AssistantMessageEventStream,
+  usage: Usage,
+): Promise<void> {
+  for await (const event of source) {
+    if (event.type === 'done') target.push({ ...event, message: { ...event.message, usage } });
+    else if (event.type === 'error') target.push({ ...event, error: { ...event.error, usage } });
+    else target.push(event);
+  }
+  target.end({ ...(await source.result()), usage });
+}
+
 export async function agentFixture(options: AgentFixtureOptions): Promise<AgentFixture> {
   const directory = await realpath(await mkdtemp(join(tmpdir(), 'my-pi-agents-')));
   const store = await openProfileStore(join(directory, 'profile'));
@@ -117,7 +135,14 @@ export async function agentFixture(options: AgentFixtureOptions): Promise<AgentF
     input?.signal?.throwIfAborted();
     activeRequests += 1;
     maxRequests = Math.max(maxRequests, activeRequests);
-    const stream = models.streamSimple(model, context, input);
+    let stream = models.streamSimple(model, context, input);
+    if (options.reportedUsage) {
+      const target = createAssistantMessageEventStream();
+      const forwarded = forwardReportedUsage(stream, target, options.reportedUsage(context));
+      const forwarding = forwarded.finally(() => streams.delete(forwarding));
+      streams.add(forwarding);
+      stream = target;
+    }
     const release = (): void => {
       activeRequests -= 1;
     };

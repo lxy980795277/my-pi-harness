@@ -1,5 +1,6 @@
 import { eq } from 'drizzle-orm';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
+import { Value } from 'typebox/value';
 import {
   AgentSettingsSchema,
   defaultAgentSettings,
@@ -21,7 +22,7 @@ export class AgentSettingsRepository {
       .where(eq(schema.agentSettings.id, 1))
       .get();
     if (!row) return defaultAgentSettings();
-    const settings = checked(AgentSettingsSchema, row.data);
+    const settings = checked(AgentSettingsSchema, Value.Clean(AgentSettingsSchema, row.data));
     if (row.revision !== settings.revision)
       throw new StorageError('INVALID_RECORD', 'Agent settings revision is inconsistent');
     const issue = this.issue(settings);

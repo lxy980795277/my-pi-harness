@@ -6,12 +6,12 @@ import type {
   SessionSummary,
 } from '@my-pi-harness/protocol';
 import type { RunExecution } from '../runs/execution.js';
-import type { AgentBudget } from './budget.js';
+import type { AgentRequestScheduler } from './request-scheduler.js';
 
 export interface AgentTree {
   rootRunId: string;
   settings: AgentSettings;
-  budget: AgentBudget;
+  scheduler: AgentRequestScheduler;
   nodes: Set<AgentNode>;
   writer: string | null;
   writes: Map<string, number>;

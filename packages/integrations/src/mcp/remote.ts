@@ -11,6 +11,7 @@ import {
 } from '@modelcontextprotocol/client';
 import { Value } from 'typebox/value';
 import { Type } from 'typebox';
+import type { RemoteMcpTransport } from '@my-pi-harness/protocol';
 import { discoverCatalog } from './catalog.js';
 import { McpError } from './errors.js';
 import { fingerprint } from './fingerprint.js';
@@ -21,7 +22,7 @@ import type { McpCallInput, McpCallOutcome, McpCatalog, McpLease } from './types
 export interface RemoteMcpBinding {
   serverId: string;
   endpoint: string;
-  transport: 'streamable-http' | 'sse';
+  transport: RemoteMcpTransport;
   headers: Readonly<Record<string, string>>;
   secrets: readonly string[];
   authorizationKey: string;

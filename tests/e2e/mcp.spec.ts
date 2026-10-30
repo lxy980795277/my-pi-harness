@@ -328,7 +328,7 @@ test('MCP 运行集合锁定、unknown保留队列、明确编辑重选后仅执
       ],
       '不应自动继续的回答',
     );
-    await configureTestProvider(page, model.origin);
+    await configureTestProvider(page, model.origin, 32768);
     await page.reload();
     await selectTool(page, 'echo');
     const accepted = page.waitForResponse((reply) => {

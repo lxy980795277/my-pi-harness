@@ -385,34 +385,7 @@ export class SessionRuntime {
           'QUEUE_BRANCH_MISMATCH',
           'Switch to the queued input branch before resuming',
         );
-      const eligible = snapshot.queue
-        .filter(
-          (queued) =>
-            queued.providerId === input.providerId &&
-            queued.modelId === input.modelId &&
-            mcpSelectionKey(queued.mcpTools ?? []) === mcpSelectionKey(input.mcpTools ?? []) &&
-            frozenInputKey(this.capabilityInputs.queued(sessionId, queued.id)) ===
-              frozenInputKey(this.capabilityInputs.queued(sessionId, input.id)) &&
-            this.options.store.getQueueBranch(sessionId, queued.id) ===
-              snapshot.session.activeBranchId,
-        )
-        .map(({ id }) => id);
-      return this.launch(
-        { ...snapshot.session, providerId: input.providerId, modelId: input.modelId },
-        {
-          text: input.text,
-          mode: 'send',
-          requestId: `queue:${input.id}`,
-          mcpTools: input.mcpTools ?? [],
-          skills: input.skills ?? [],
-          ...(input.attachmentIds ? { attachmentIds: input.attachmentIds } : {}),
-        },
-        signal,
-        input.id,
-        [],
-        undefined,
-        eligible,
-      );
+      return this.launchQueued(snapshot.session, input, snapshot.queue, signal);
     });
   }
 
@@ -782,6 +755,41 @@ export class SessionRuntime {
     }
   }
 
+  private launchQueued(
+    session: SessionSummary,
+    input: QueueInput,
+    candidates: readonly QueueInput[],
+    signal: AbortSignal,
+  ): Promise<InputAcceptance> {
+    const eligible = candidates
+      .filter(
+        (queued) =>
+          queued.providerId === input.providerId &&
+          queued.modelId === input.modelId &&
+          mcpSelectionKey(queued.mcpTools ?? []) === mcpSelectionKey(input.mcpTools ?? []) &&
+          frozenInputKey(this.capabilityInputs.queued(session.id, queued.id)) ===
+            frozenInputKey(this.capabilityInputs.queued(session.id, input.id)) &&
+          this.options.store.getQueueBranch(session.id, queued.id) === session.activeBranchId,
+      )
+      .map(({ id }) => id);
+    return this.launch(
+      { ...session, providerId: input.providerId, modelId: input.modelId },
+      {
+        text: input.text,
+        mode: 'send',
+        requestId: `queue:${input.id}`,
+        mcpTools: input.mcpTools ?? [],
+        skills: input.skills ?? [],
+        ...(input.attachmentIds ? { attachmentIds: input.attachmentIds } : {}),
+      },
+      signal,
+      input.id,
+      [],
+      undefined,
+      eligible,
+    );
+  }
+
   private async startRemaining(sessionId: string, inputIds: readonly string[]): Promise<void> {
     if (inputIds.length === 0) return;
     try {
@@ -795,34 +803,7 @@ export class SessionRuntime {
           this.options.store.getQueueBranch(sessionId, input.id) !== snapshot.session.activeBranchId
         )
           return;
-        const eligible = available
-          .filter(
-            (queued) =>
-              queued.providerId === input.providerId &&
-              queued.modelId === input.modelId &&
-              mcpSelectionKey(queued.mcpTools ?? []) === mcpSelectionKey(input.mcpTools ?? []) &&
-              frozenInputKey(this.capabilityInputs.queued(sessionId, queued.id)) ===
-                frozenInputKey(this.capabilityInputs.queued(sessionId, input.id)) &&
-              this.options.store.getQueueBranch(sessionId, queued.id) ===
-                snapshot.session.activeBranchId,
-          )
-          .map(({ id }) => id);
-        await this.launch(
-          { ...snapshot.session, providerId: input.providerId, modelId: input.modelId },
-          {
-            text: input.text,
-            mode: 'send',
-            requestId: `queue:${input.id}`,
-            mcpTools: input.mcpTools ?? [],
-            skills: input.skills ?? [],
-            ...(input.attachmentIds ? { attachmentIds: input.attachmentIds } : {}),
-          },
-          signal,
-          input.id,
-          [],
-          undefined,
-          eligible,
-        );
+        await this.launchQueued(snapshot.session, input, available, signal);
       });
     } catch (error) {
       this.options.onError(error);

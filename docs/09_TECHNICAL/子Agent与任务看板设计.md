@@ -4,7 +4,7 @@
 
 **模块**：agent-runtime的agents/runs/context/work/tools、storage的Task投影、daemon任务API及Web tasks。
 
-**实现锚点**：[AgentRuntime](../../packages/agent-runtime/src/agents/runtime.ts)、[launchAgentRun](../../packages/agent-runtime/src/agents/launch.ts)、[AgentRunHooks](../../packages/agent-runtime/src/agents/run-hooks.ts)、[AgentBudget](../../packages/agent-runtime/src/agents/budget.ts)、[AgentTaskQuery](../../packages/storage/src/sessions/agent-tasks.ts)。
+**实现锚点**：[AgentRuntime](../../packages/agent-runtime/src/agents/runtime.ts)、[launchAgentRun](../../packages/agent-runtime/src/agents/launch.ts)、[AgentRunHooks](../../packages/agent-runtime/src/agents/run-hooks.ts)、[AgentRequestScheduler](../../packages/agent-runtime/src/agents/request-scheduler.ts)、[AgentTaskQuery](../../packages/storage/src/sessions/agent-tasks.ts)。
 
 **状态**：2026-10-30用户确认M5开发与本机验收完成；已补验DeepSeek与macOS Electron应用目录。Windows、正式安装器、签名/公证、真实服务账号及后续统一产品验收的边界由[M5验证记录](../04_FEATURES/202610281702_feature_m5-subagents-board/verify.md)拥有。
 
@@ -16,16 +16,16 @@
 
 ## 组件职责与委派流程
 
-| 入口                                                                                                                                         | 拥有的职责                                                                                |
-| -------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| [SessionRuntime](../../packages/agent-runtime/src/sessions/runtime.ts)                                                                       | 接受根输入、维持Session的唯一活跃根Run，装配树级Hooks，根执行结算后释放树资源             |
-| [AgentRuntime](../../packages/agent-runtime/src/agents/runtime.ts)                                                                           | 创建任务、维护活跃父子节点、同树通信与停止、写入拥有权、等待后代及关闭Task                |
-| [launchAgentRun](../../packages/agent-runtime/src/agents/launch.ts)                                                                          | 解析子模型、收窄工具、准备独立Task上下文，同批接受子Run与初始输入，再启动共享RunExecution |
-| [AgentRunHooks](../../packages/agent-runtime/src/agents/run-hooks.ts) / [AgentBudget](../../packages/agent-runtime/src/agents/budget.ts)     | 委派工具路由、等待与通信消费、请求并发/token准入、实际Usage结算与资源释放                 |
-| [RunExecution](../../packages/agent-runtime/src/runs/execution.ts) / [ToolRuntime](../../packages/agent-runtime/src/tools/runtime.ts)        | 原Pi模型/工具循环、流式消息、人工等待、逐次工具策略及终态；根子执行共用实现               |
-| [Task投影](../../packages/storage/src/sessions/projections/agents.ts) / [AgentTaskQuery](../../packages/storage/src/sessions/agent-tasks.ts) | 校验持久关系，派生父子归属/状态/用量，提供分支可见摘要、有界看板与分页详情                |
-| [daemon任务路由](../../apps/daemon/src/agents/routes.ts) / [摘要SSE](../../apps/daemon/src/agents/change-stream.ts)                          | 统一鉴权与输入校验，调用运行层命令或查询，推送查询失效通知                                |
-| [Web任务Hooks](../../apps/web/src/features/tasks/hooks/use-task-detail.ts) / [展示Store](../../apps/web/src/features/tasks/stores/tasks.ts)  | Query读取执行事实，Store仅保存选择、筛选及非持久输入；不另建可修改的任务状态              |
+| 入口                                                                                                                                                          | 拥有的职责                                                                                |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| [SessionRuntime](../../packages/agent-runtime/src/sessions/runtime.ts)                                                                                        | 接受根输入、维持Session的唯一活跃根Run，装配树级Hooks，根执行结算后释放树资源             |
+| [AgentRuntime](../../packages/agent-runtime/src/agents/runtime.ts)                                                                                            | 创建任务、维护活跃父子节点、同树通信与停止、写入拥有权、等待后代及关闭Task                |
+| [launchAgentRun](../../packages/agent-runtime/src/agents/launch.ts)                                                                                           | 解析子模型、收窄工具、准备独立Task上下文，同批接受子Run与初始输入，再启动共享RunExecution |
+| [AgentRunHooks](../../packages/agent-runtime/src/agents/run-hooks.ts) / [AgentRequestScheduler](../../packages/agent-runtime/src/agents/request-scheduler.ts) | 委派工具路由、等待与通信消费、请求并发准入和名额释放；用量由消息事实拥有                  |
+| [RunExecution](../../packages/agent-runtime/src/runs/execution.ts) / [ToolRuntime](../../packages/agent-runtime/src/tools/runtime.ts)                         | 原Pi模型/工具循环、流式消息、人工等待、逐次工具策略及终态；根子执行共用实现               |
+| [Task投影](../../packages/storage/src/sessions/projections/agents.ts) / [AgentTaskQuery](../../packages/storage/src/sessions/agent-tasks.ts)                  | 校验持久关系，派生父子归属/状态/用量，提供分支可见摘要、有界看板与分页详情                |
+| [daemon任务路由](../../apps/daemon/src/agents/routes.ts) / [摘要SSE](../../apps/daemon/src/agents/change-stream.ts)                                           | 统一鉴权与输入校验，调用运行层命令或查询，推送查询失效通知                                |
+| [Web任务Hooks](../../apps/web/src/features/tasks/hooks/use-task-detail.ts) / [展示Store](../../apps/web/src/features/tasks/stores/tasks.ts)                   | Query读取执行事实，Store仅保存选择、筛选及非持久输入；不另建可修改的任务状态              |
 
 下图表示正常委派、等待和汇总；有工具调用时子Pi继续同一循环，每次模型请求都经过相同Hooks。spawn返回Task ID，不等待子结果；wait_agents可能超时返回当前状态，父模型应继续等待或处理真实失败。
 
@@ -35,7 +35,7 @@ sequenceDiagram
     participant Tasks as AgentRuntime
     participant Store as JSONL / SQLite投影
     participant Child as 子 RunExecution / Pi
-    participant Budget as AgentBudget
+    participant Scheduler as AgentRequestScheduler
     Parent->>Tasks: spawn_agent(task, roleId)
     Tasks->>Store: task.created，冻结角色和限制
     Tasks->>Child: 异步准备模型、工具及Task上下文
@@ -44,10 +44,10 @@ sequenceDiagram
         Child->>Store: 同批run.accepted与初始message.started
         loop 每次模型请求
             Child->>Store: context.prepared，记录本次输入
-            Child->>Budget: 模型名额与根/祖先token预留
-            Budget-->>Child: 获准后使用原Provider streamFn
+            Child->>Scheduler: 全局及祖先请求并发名额
+            Scheduler-->>Child: 获准后使用原Provider streamFn
             Note over Child,Store: 沿用Pi循环，完整消息和工具结果持久化
-            Child->>Budget: 流结束后按Usage结算并释放名额
+            Child->>Scheduler: 流结束后释放名额
         end
         Child->>Tasks: 等待自己的后代结算
         Child->>Store: 子run.finished
@@ -73,7 +73,7 @@ wait_agents固定调用时的执行节点，不追随以后续作；结果从对
 
 ## 角色、能力与写入
 
-新Task读取当前启用角色并冻结说明、模型/推理强度及限制；已有Task不热换角色。根树保持接受时的预算上限，新Task限制取父范围、当前配置及请求限额的较小值。显式模型失效报错，省略模型才继承父选择；不能静默扩大工作区、工具或MCP/Skill授权。
+新Task读取当前启用角色并冻结说明、模型/推理强度及限制；已有Task不热换角色。根树保持接受时的执行限制，新Task限制取父范围、当前配置及请求限额的较小值。显式模型失效报错，省略模型才继承父选择；不能静默扩大工作区、工具或MCP/Skill授权。
 
 [工具收窄](../../packages/agent-runtime/src/tools/task-toolset.ts)同时覆盖当前工具、动态候选和实际派发。只读角色不提供Shell或未知副作用工具，MCP候选要求有效只读授权，实际参数和实时撤销仍由原授权入口检查；加载Skill、嵌套委派及续作不能恢复被排除的权限。
 
@@ -83,13 +83,13 @@ wait_agents固定调用时的执行节点，不追随以后续作；结果从对
 
 同树只有一个写入拥有者。父写操作已结算且拥有写权时才能向后代转交，转交期间父任务和其他任务不能执行写操作；子执行实际结算后归还仍有效的上级，收束时撤销。该机制协调本树文件、Shell和外部写操作，不隔离树外程序，也不提供外部系统的事务或回滚。
 
-## 调度、预算与结果
+## 请求调度、用量与结果
 
-AgentBudget限制模型请求而非Task数量，等待后代或人工回答不占模型名额。准入同时检查根与各祖先Task，队列选择最早可运行请求，某个受限子树不阻塞仍有额度的其他分支；任务数、深度、Run请求轮数、时限和单请求输出另由宿主检查。委派出现前的根请求保持普通会话轮数/输出策略，已发生的计量仍参与后续共享预算；出现委派后根与子请求执行树级限额。
+AgentRequestScheduler只控制正在进行的模型请求并发。全局和各祖先Task的名额同时满足才准入，等待后代或人工回答不占模型名额；队列选择最早可运行请求，受限子树不能阻塞仍可运行的分支。名额由实际流完成/失败或取消路径幂等释放，收束仍等待全部在途请求。
 
-根预算只有一份共享余额，子Task限额不是再次分配额度。请求前原子预留输入估算及输出额度，流结束后按实际Usage结算并释放名额，同一请求只记账一次，祖先计量派生。系统提示和工具声明已进入规范化TranscriptContext的system消息，估算复用messageTokens，不再加一份工具目录；根/子主请求、自动摘要与独立AI审批均使用同一模型Hooks。
+主/子累计token不设硬上限，也不提供预算开关。任务数、深度、Run请求轮数、时限及单请求输出仍由宿主限制，单次上下文容量/压缩由context模块负责。委派出现前后的普通根轮数/输出策略保持原定义；不会再因首次委派追溯扣除之前的token消耗。
 
-缺少供应商Usage时保守保留预留估算，界面不宣称精确用量或账单；SDK合成失败终止消息不构成一笔有Usage的供应商请求。取消和终态持久化不受剩余额度阻断，费用估算与完整主子Trace仍属M7。
+用量独立于并发调度，完整助手消息保留供应商Usage，按子树聚合不重复；缺少Usage只表示计量不完整，不保留估算额度或阻止后续请求。摘要/复核请求复用并发调度，沿用既有不并入主对话用量的口径，不补造计量。SDK合成空失败消息不代表供应商实际用量，费用估算及完整Trace仍属M7。
 
 父模型应通过wait_agents收集结果再汇总。若提前输出最终答案，宿主关闭新委派、通信和续作入口，等待已有后代结算后才写父终态；原人工等待仍可由用户回答。界面保留未汇总的子结果，不伪造汇总或自动新增收费父调用。普通子失败返回真实结果供父判断，外部unknown停止所属树，不自动重试。
 

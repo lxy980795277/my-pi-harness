@@ -29,7 +29,7 @@ import type { AgentRunHooks, AgentStore } from './ports.js';
 import type { AgentNode, AgentTaskNode, AgentTree } from './types.js';
 import type { SpawnAgentInput } from './definitions.js';
 import { RuntimeError } from '../errors.js';
-import { AgentBudget } from './budget.js';
+import { AgentRequestScheduler } from './request-scheduler.js';
 import { createAgentHooks } from './run-hooks.js';
 import { launchAgentRun } from './launch.js';
 import { agentMessageId } from './message-key.js';
@@ -106,7 +106,7 @@ export class AgentRuntime {
     const tree: AgentTree = {
       rootRunId: run.id,
       settings: structuredClone(settings),
-      budget: new AgentBudget(settings.limits),
+      scheduler: new AgentRequestScheduler(settings.limits.maxConcurrentRequests),
       nodes: new Set(),
       writer: run.id,
       writes: new Map(),

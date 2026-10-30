@@ -144,6 +144,16 @@ export async function startM5Model(options: M5ModelOptions = {}): Promise<TestMo
             tool('wait_agents', { taskIds: [first['id']], timeoutMs: 60_000 });
           }
         } else answer('M5 fixture ready.');
+        response.write(
+          `data: ${JSON.stringify({
+            id: `m5-${requests.length}`,
+            object: 'chat.completion.chunk',
+            created: 1,
+            model: body['model'],
+            choices: [],
+            usage: { prompt_tokens: 1000, completion_tokens: 100, total_tokens: 1100 },
+          })}\n\n`,
+        );
         response.end('data: [DONE]\n\n');
       } catch {
         response.destroy();

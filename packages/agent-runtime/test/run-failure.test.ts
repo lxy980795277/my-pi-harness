@@ -24,9 +24,9 @@ describe('public model failure messages', () => {
     expect(
       runFailureMessage({
         kind: 'owned',
-        cause: new RuntimeError('AGENT_BUDGET', '任务树的剩余 token 预算不足以发起下一次请求。'),
+        cause: new RuntimeError('AGENT_TURN_LIMIT', '任务已达到模型请求轮数上限。'),
       }),
-    ).toBe('任务树的剩余 token 预算不足以发起下一次请求。');
+    ).toBe('任务已达到模型请求轮数上限。');
     expect(
       runFailureMessage({ kind: 'owned', cause: new Error('401 private-test-key-error') }),
     ).toBe('模型请求失败，请稍后重试。');

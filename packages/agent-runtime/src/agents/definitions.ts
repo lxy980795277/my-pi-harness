@@ -3,8 +3,6 @@ import { AgentLimitsSchema } from '@my-pi-harness/protocol';
 import type { RunToolDefinition } from '../tools/toolset.js';
 
 export type SpawnAgentInput = Static<typeof SpawnAgentInputSchema>;
-export type WaitAgentsInput = Static<typeof WaitAgentsInputSchema>;
-export type SendAgentInput = Static<typeof SendAgentInputSchema>;
 
 const id = Type.String({ minLength: 1, maxLength: 160 });
 const object = { additionalProperties: false } as const;
@@ -15,7 +13,7 @@ export const SpawnAgentInputSchema = Type.Object(
     task: Type.String({ minLength: 1, maxLength: 32_000 }),
     roleId: id,
     attachmentIds: Type.Optional(Type.Array(id, { maxItems: 8, uniqueItems: true })),
-    limits: Type.Optional(Type.Partial(AgentLimitsSchema)),
+    limits: Type.Optional(Type.Partial(AgentLimitsSchema, object)),
   },
   object,
 );

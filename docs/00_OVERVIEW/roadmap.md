@@ -2,7 +2,9 @@
 
 本页管理功能范围与里程碑顺序，详细验收由各里程碑 Spec 承担。`规划` 不表示能力已经可用；只有实现与必要验证都完成后才能调整状态。
 
-用户于2026-10-30确认[M5子Agent与任务看板](../04_FEATURES/202610281702_feature_m5-subagents-board/spec.md)开发完成。M5.1–M5.5工程实现、macOS自动化及DeepSeek V4.1 Flash实际Electron窗口、未签名.app应用目录包、在途重启的本机验收已完成，见[验证记录](../04_FEATURES/202610281702_feature_m5-subagents-board/verify.md)；委派机制由[技术方案](../09_TECHNICAL/子Agent与任务看板设计.md)维护。M6尚未开始。M5开发收口不表示全平台或正式发布通过，后续统一验收清单见[任务](../04_FEATURES/202610281702_feature_m5-subagents-board/tasks.md#后续统一验收边界)；M4真实账户、Office视觉和Windows适配缺口保持原归属。
+用户于2026-10-30确认[M5子Agent与任务看板](../04_FEATURES/202610281702_feature_m5-subagents-board/spec.md)开发完成。M5.1–M5.5工程实现、macOS自动化及DeepSeek V4.1 Flash实际Electron窗口、未签名.app应用目录包、在途重启的本机验收已完成，见[验证记录](../04_FEATURES/202610281702_feature_m5-subagents-board/verify.md)；委派机制由[技术方案](../09_TECHNICAL/子Agent与任务看板设计.md)维护。M6已形成[记忆与搜索规划](../04_FEATURES/202610301722_feature_m6-memory-search/spec.md)，尚未进入实现。M5开发收口不表示全平台或正式发布通过，后续统一验收清单见[任务](../04_FEATURES/202610281702_feature_m5-subagents-board/tasks.md#后续统一验收边界)；M4真实账户、Office视觉和Windows适配缺口保持原归属。
+
+2026-10-30按用户要求[移除M5累计token限制](../04_FEATURES/202610281702_feature_m5-subagents-board/spec.md#移除累计token预算2026-10-30)，请求调度独立于用量统计；任务数、深度、并发、轮数、时限、单请求输出与上下文容量继续生效。公开协议22、SQLite9，属于M5维护；移除额度后的[治理](../04_FEATURES/202610300028_refactor_m5-code-governance/spec.md#累计token限制移除后的治理与提交2026-10-30)统一队列启动、MCP环境与共享定义，按用户授权整理为产品0.14.0。本机检查分别由M5及治理验证记录维护，不进入M6。
 
 2026-10-30的模型菜单品牌与文案、[移除focus-visible样式](../04_FEATURES/202610281140_refactor_composer-model-controls/spec.md#移除focus-visible样式2026-10-30)、空对话提示属于既有UI维护，见[模型菜单](../04_FEATURES/202610281140_refactor_composer-model-controls/spec.md#模型品牌与触发器精简2026-10-30)和[导航维护](../04_FEATURES/202610151400_refactor_workspace-navigation/spec.md#空对话提示调整2026-10-30)，不进入M6。
 
@@ -54,8 +56,8 @@ Spec目录采用北京时间 `YYYYMMDDHHmm_category_name/`；历史补齐分钟�
 | M4.7 外部服务连接                                                                           | 五个服务族、Plugin OAuth、受限REST gateway及共享MCP凭据                                                                       | 实现与macOS定向验证完成；外部环境证据见本轮验证                       |
 | M4.8 办公文档工作流                                                                         | 文档读取/PDF页图、四类办公任务、独立资源、依赖检测及文件交付                                                                  | 实现及结构/PDF页图验证完成；Office必要视觉检查待完成                  |
 | M4.9 联调与交付                                                                             | Web/Electron、真实SDK/Pi、恢复/取消、M1–M3回归与平台/账号证据                                                                 | 本机源码/浏览器/桌面通过；平台、账号与正式发布待验收                  |
-| [M5 子 Agent 与看板](../04_FEATURES/202610281702_feature_m5-subagents-board/spec.md)        | 角色与预算、执行树、嵌套委派/等待/通信/停止、独立上下文、任务看板、进度/待处理/人工确认                                       | 开发与本机验收完成，用户确认收口；后续平台及完整产品验收单列          |
-| M6 记忆与搜索                                                                               | user / workspace 长期记忆、学习与增改删、画像、FTS与本地embedding混合召回、Session搜索、工具目录检索                          | 规划                                                                  |
+| [M5 子 Agent 与看板](../04_FEATURES/202610281702_feature_m5-subagents-board/spec.md)        | 角色与执行限制、执行树、嵌套委派/等待/通信/停止、独立上下文、任务看板、进度/待处理/人工确认                                   | 开发与本机验收完成，用户确认收口；后续平台及完整产品验收单列          |
+| [M6 记忆与搜索](../04_FEATURES/202610301722_feature_m6-memory-search/spec.md)               | user / workspace 长期记忆、学习与增改删、画像、FTS与本地embedding混合召回、Session搜索、工具目录检索                          | 已形成方案与分阶段任务；尚未实现                                      |
 | M7 完整对齐验收                                                                             | 主/子Trace、请求快照、用量和费用估算、文件撤销重做、长会话恢复与JSONL导入导出、全功能回归、安装包与平台验收                   | 规划                                                                  |
 | 后续 Computer Use 专项                                                                      | 原生观察、语义树、窗口截图、输入、应用授权、受限脚本与AI光标                                                                  | 当前版本排除，不纳入 M0–M7 完成标准                                   |
 | 第二阶段                                                                                    | 根据独立产品需求新增或调整能力                                                                                                | 待规划                                                                |
