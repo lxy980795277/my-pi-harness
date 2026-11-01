@@ -25,93 +25,61 @@ AC写可观察结果，不用「完善」「支持全部」代替具体条件。
 
 不提前创建成功记录，不将用户尚未执行的体验检查写成已通过，不用静态检查冒充安装包或真实Provider验证。
 
-## 当前Spec
+## 功能索引
 
-- [Pi 1.4运行时升级](202611011954_refactor_pi-1-4-upgrade/spec.md)
-- [Agent执行职责拆分与去重](202611011848_refactor_agent-execution-ownership/spec.md)
-- [M1–M5真实任务与可用性验收](202610302000_feature_m1-m5-product-acceptance/spec.md)
-- [验收执行与证据方案](202610302000_feature_m1-m5-product-acceptance/execution.md)
-- [验收阶段与任务清单](202610302000_feature_m1-m5-product-acceptance/tasks.md)
-- [真实任务验收结论与证据](202610302000_feature_m1-m5-product-acceptance/verify.md)
+按目录时间倒序排列；日期时间沿用目录值。验证列链接已有记录，结果与未验证项以记录正文为准。M6仍为规划，详见[路线图](../00_OVERVIEW/roadmap.md)。
 
-- [M6记忆与搜索规划](202610301722_feature_m6-memory-search/spec.md)
-- [M6数据、检索与请求设计](202610301722_feature_m6-memory-search/design.md)
-- [M6实施顺序与完成门槛](202610301722_feature_m6-memory-search/tasks.md)
+| 目录时间（北京时间） | 功能Spec                                                                              | 验证与补充文档                                                                                                                                                                                                                     |
+| -------------------- | ------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-11-01 19:54     | [Pi 1.4运行时升级](202611011954_refactor_pi-1-4-upgrade/spec.md)                      | [验证记录](202611011954_refactor_pi-1-4-upgrade/verify.md)                                                                                                                                                                         |
+| 2026-11-01 18:48     | [Agent执行职责拆分与去重](202611011848_refactor_agent-execution-ownership/spec.md)    | [验证记录](202611011848_refactor_agent-execution-ownership/verify.md)                                                                                                                                                              |
+| 2026-10-30 20:00     | [M1–M5真实任务与可用性验收](202610302000_feature_m1-m5-product-acceptance/spec.md)    | [验证记录](202610302000_feature_m1-m5-product-acceptance/verify.md) · [执行与证据方案](202610302000_feature_m1-m5-product-acceptance/execution.md) · [实施任务](202610302000_feature_m1-m5-product-acceptance/tasks.md)            |
+| 2026-10-30 17:22     | [M6 记忆与搜索（规划）](202610301722_feature_m6-memory-search/spec.md)                | [详细设计](202610301722_feature_m6-memory-search/design.md) · [实施任务](202610301722_feature_m6-memory-search/tasks.md)                                                                                                           |
+| 2026-10-30 00:28     | [M5实现后的代码治理](202610300028_refactor_m5-code-governance/spec.md)                | [验证记录](202610300028_refactor_m5-code-governance/verify.md)                                                                                                                                                                     |
+| 2026-10-29 20:30     | [会话消息持久粒度整理](202610292030_refactor_session-persistence-granularity/spec.md) | [验证记录](202610292030_refactor_session-persistence-granularity/verify.md)                                                                                                                                                        |
+| 2026-10-28 17:02     | [M5 子 Agent 与任务看板](202610281702_feature_m5-subagents-board/spec.md)             | [验证记录](202610281702_feature_m5-subagents-board/verify.md) · [执行设计](202610281702_feature_m5-subagents-board/execution.md) · [实施任务](202610281702_feature_m5-subagents-board/tasks.md)                                    |
+| 2026-10-28 12:45     | [会话日志去版本与持久读取整理](202610281245_refactor_session-journal-reading/spec.md) | [验证记录](202610281245_refactor_session-journal-reading/verify.md)                                                                                                                                                                |
+| 2026-10-28 11:40     | [输入栏模式清理与统一模型菜单](202610281140_refactor_composer-model-controls/spec.md) | [验证记录](202610281140_refactor_composer-model-controls/verify.md)                                                                                                                                                                |
+| 2026-10-28 01:23     | [回答过程自动折叠](202610280123_feature_answer-process-disclosure/spec.md)            | [验证记录](202610280123_feature_answer-process-disclosure/verify.md)                                                                                                                                                               |
+| 2026-10-28 01:08     | [GitHub授权的IPv4映射地址误判](202610280108_fix_mapped-ipv4-oauth/spec.md)            | [验证记录](202610280108_fix_mapped-ipv4-oauth/verify.md)                                                                                                                                                                           |
+| 2026-10-28 00:40     | [技术专题拆分与全仓治理](202610280040_refactor_technical-docs-governance/spec.md)     | [验证记录](202610280040_refactor_technical-docs-governance/verify.md)                                                                                                                                                              |
+| 2026-10-27 19:53     | [会话日志数据精简](202610271953_refactor_session-journal-compaction/spec.md)          | [验证记录](202610271953_refactor_session-journal-compaction/verify.md)                                                                                                                                                             |
+| 2026-10-27 17:43     | [后端模块组织与职责治理](202610271743_refactor_backend-module-governance/spec.md)     | [验证记录](202610271743_refactor_backend-module-governance/verify.md)                                                                                                                                                              |
+| 2026-10-22 16:10     | [应用初始化与统一加载](202610221610_feature_application-initialization/spec.md)       | [验证记录](202610221610_feature_application-initialization/verify.md)                                                                                                                                                              |
+| 2026-10-20 19:32     | [M4 MCP、Skills与插件](202610201932_feature_m4-capabilities/spec.md)                  | [实施任务](202610201932_feature_m4-capabilities/tasks.md) · [本地MCP验证](202610201932_feature_m4-capabilities/verify.md) · [工程联调验证](202610201932_feature_m4-capabilities/m4-completion-verify.md) · [分项文档](#m4分项文档) |
+| 2026-10-20 17:07     | [前端状态职责整理](202610201707_refactor_frontend-state/spec.md)                      | [验证记录](202610201707_refactor_frontend-state/verify.md)                                                                                                                                                                         |
+| 2026-10-20 14:50     | [M4前代码治理](202610201450_refactor_m4-readiness-governance/spec.md)                 | [验证记录](202610201450_refactor_m4-readiness-governance/verify.md)                                                                                                                                                                |
+| 2026-10-19 16:47     | [对话渲染与交互](202610191647_feature_conversation-rendering/spec.md)                 | [验证记录](202610191647_feature_conversation-rendering/verify.md)                                                                                                                                                                  |
+| 2026-10-19 15:06     | [M3复核与M4前代码治理](202610191506_refactor_m3-readiness-governance/spec.md)         | [验证记录](202610191506_refactor_m3-readiness-governance/verify.md)                                                                                                                                                                |
+| 2026-10-16 15:00     | [用户身份与应用登录](202610161500_feature_application-login/spec.md)                  | [验证记录](202610161500_feature_application-login/verify.md)                                                                                                                                                                       |
+| 2026-10-16 12:59     | [M3收尾复核与核心技术文档](202610161259_refactor_m3-review-technical-docs/spec.md)    | [验证记录](202610161259_refactor_m3-review-technical-docs/verify.md)                                                                                                                                                               |
+| 2026-10-16 12:44     | [代码治理与可读性](202610161244_refactor_code-governance/spec.md)                     | [验证记录](202610161244_refactor_code-governance/verify.md)                                                                                                                                                                        |
+| 2026-10-15 18:00     | [审批模式与会话JSONL镜像](202610151800_feature_approval-session-jsonl/spec.md)        | [验证记录](202610151800_feature_approval-session-jsonl/verify.md)                                                                                                                                                                  |
+| 2026-10-15 16:55     | [M3 上下文与交互](202610151655_feature_m3-context-interaction/spec.md)                | [验证记录](202610151655_feature_m3-context-interaction/verify.md)                                                                                                                                                                  |
+| 2026-10-15 16:21     | [输入框回车发送](202610151621_fix_composer-enter-send/spec.md)                        | [验证记录](202610151621_fix_composer-enter-send/verify.md)                                                                                                                                                                         |
+| 2026-10-15 15:55     | [M2 最终检查与提交](202610151555_refactor_m2-finalization/spec.md)                    | [验证记录](202610151555_refactor_m2-finalization/verify.md)                                                                                                                                                                        |
+| 2026-10-15 15:34     | [工作区选择与自定义图标](202610151534_feature_workspace-creation/spec.md)             | [验证记录](202610151534_feature_workspace-creation/verify.md)                                                                                                                                                                      |
+| 2026-10-15 15:15     | [M2 剩余功能与执行收尾](202610151515_feature_m2-completion/spec.md)                   | [验证记录](202610151515_feature_m2-completion/verify.md)                                                                                                                                                                           |
+| 2026-10-15 15:11     | [功能文档分钟目录迁移](202610151511_refactor_feature-document-timestamps/spec.md)     | [验证记录](202610151511_refactor_feature-document-timestamps/verify.md)                                                                                                                                                            |
+| 2026-10-15 14:00     | [工作区导航密度与图标](202610151400_refactor_workspace-navigation/spec.md)            | [验证记录](202610151400_refactor_workspace-navigation/verify.md)                                                                                                                                                                   |
+| 2026-10-15 13:00     | [设置加载态与滚动条修复](202610151300_fix_settings-loading-scroll/spec.md)            | [验证记录](202610151300_fix_settings-loading-scroll/verify.md)                                                                                                                                                                     |
+| 2026-10-15 09:30     | [M2 工作区、交互基线与工具执行](202610150930_feature_workspace-execution/spec.md)     | [验证记录](202610150930_feature_workspace-execution/verify.md)                                                                                                                                                                     |
+| 2026-10-15 09:00     | [Provider与侧栏精简](202610150900_refactor_provider-navigation/spec.md)               | [验证记录](202610150900_refactor_provider-navigation/verify.md)                                                                                                                                                                    |
+| 2026-10-14 09:00     | [M1.6 模型设置与代码规范](202610140900_feature_model-settings/spec.md)                | [验证记录](202610140900_feature_model-settings/verify.md)                                                                                                                                                                          |
+| 2026-10-13 11:00     | [M1模型与会话](202610131100_feature_model-session/spec.md)                            | [验证记录](202610131100_feature_model-session/verify.md)                                                                                                                                                                           |
+| 2026-10-13 10:00     | [M0规范与架构审计](202610131000_refactor_m0-standards-audit/spec.md)                  | [验证记录](202610131000_refactor_m0-standards-audit/verify.md)                                                                                                                                                                     |
+| 2026-10-13 09:00     | [M0工程底座](202610130900_feature_project-foundation/spec.md)                         | [验证记录](202610130900_feature_project-foundation/verify.md)                                                                                                                                                                      |
 
-- [M5实现后的代码治理](202610300028_refactor_m5-code-governance/spec.md)
-- [M5代码治理验证](202610300028_refactor_m5-code-governance/verify.md)
+## M4分项文档
 
-- [会话消息持久粒度整理](202610292030_refactor_session-persistence-granularity/spec.md)
-- [会话消息持久粒度验证](202610292030_refactor_session-persistence-granularity/verify.md)
+以下文档属于同一[M4专题](202610201932_feature_m4-capabilities/spec.md)，按能力分组。外部连接初版记录保留其历史标识，当前插件和MCP机制见[技术文档总览](../09_TECHNICAL/技术文档总览.md)。
 
-- [M5子Agent与任务看板](202610281702_feature_m5-subagents-board/spec.md)
-- [M5执行与数据设计](202610281702_feature_m5-subagents-board/execution.md)
-- [M5实施任务与完成门槛](202610281702_feature_m5-subagents-board/tasks.md)
-- [M5实现与验证](202610281702_feature_m5-subagents-board/verify.md)
-
-- [会话日志去版本与持久读取整理](202610281245_refactor_session-journal-reading/spec.md)
-
-- [输入栏模式清理与统一模型菜单](202610281140_refactor_composer-model-controls/spec.md)
-
-- [回答过程自动折叠](202610280123_feature_answer-process-disclosure/spec.md)
-
-- [GitHub授权的IPv4映射地址误判](202610280108_fix_mapped-ipv4-oauth/spec.md)
-
-- [技术专题拆分与全仓治理](202610280040_refactor_technical-docs-governance/spec.md)
-
-- [会话日志数据精简](202610271953_refactor_session-journal-compaction/spec.md)
-
-- [后端模块组织与职责治理](202610271743_refactor_backend-module-governance/spec.md)
-
-- [应用初始化与统一加载](202610221610_feature_application-initialization/spec.md)
-
-- [前端状态职责整理](202610201707_refactor_frontend-state/spec.md)
-
-- [M4前代码治理](202610201450_refactor_m4-readiness-governance/spec.md)
-
-- [对话渲染与交互](202610191647_feature_conversation-rendering/spec.md)
-
-- [M0 工程底座](202610130900_feature_project-foundation/spec.md)
-- [M0 验证证据与平台限制](202610130900_feature_project-foundation/verify.md)
-- [M0 规范与架构审计](202610131000_refactor_m0-standards-audit/spec.md)
-- [M0 规范审计验证](202610131000_refactor_m0-standards-audit/verify.md)
-- [M1 模型与会话](202610131100_feature_model-session/spec.md)
-- [M1 验证证据与平台限制](202610131100_feature_model-session/verify.md)
-- [M1.6 模型设置与代码规范](202610140900_feature_model-settings/spec.md)
-- [M1.6 验证证据与平台限制](202610140900_feature_model-settings/verify.md)
-- [Provider与侧栏精简](202610150900_refactor_provider-navigation/spec.md)
-- [Provider与侧栏验证](202610150900_refactor_provider-navigation/verify.md)
-- [M2 工作区、交互基线与工具执行](202610150930_feature_workspace-execution/spec.md)
-- [M2 验证证据与平台限制](202610150930_feature_workspace-execution/verify.md)
-- [设置加载态与滚动条修复](202610151300_fix_settings-loading-scroll/spec.md)
-- [设置界面修复验证](202610151300_fix_settings-loading-scroll/verify.md)
-- [工作区导航密度与图标](202610151400_refactor_workspace-navigation/spec.md)
-- [工作区导航验证](202610151400_refactor_workspace-navigation/verify.md)
-- [功能文档分钟目录迁移](202610151511_refactor_feature-document-timestamps/spec.md)
-- [功能文档目录迁移验证](202610151511_refactor_feature-document-timestamps/verify.md)
-- [M2 剩余功能与执行收尾](202610151515_feature_m2-completion/spec.md)
-- [M2分步收尾验证](202610151515_feature_m2-completion/verify.md)
-- [工作区选择与自定义图标](202610151534_feature_workspace-creation/spec.md)
-- [工作区选择与图标验证](202610151534_feature_workspace-creation/verify.md)
-- [M2最终检查与提交](202610151555_refactor_m2-finalization/spec.md)
-- [M2最终验证与暂缓项](202610151555_refactor_m2-finalization/verify.md)
-- [输入框回车发送](202610151621_fix_composer-enter-send/spec.md)
-- [输入框回车发送验证](202610151621_fix_composer-enter-send/verify.md)
-- [M3 上下文与交互](202610151655_feature_m3-context-interaction/spec.md)
-- [M3统一验证与平台限制](202610151655_feature_m3-context-interaction/verify.md)
-- [审批模式与会话JSONL镜像](202610151800_feature_approval-session-jsonl/spec.md)
-- [审批与JSONL验证](202610151800_feature_approval-session-jsonl/verify.md)
-
-- [代码治理与可读性](202610161244_refactor_code-governance/spec.md)
-- [M3收尾复核与核心技术文档](202610161259_refactor_m3-review-technical-docs/spec.md)
-- [M4 MCP、Skills与插件任务拆分](202610201932_feature_m4-capabilities/spec.md)
-- [M4实施任务、模块归属与完成门槛](202610201932_feature_m4-capabilities/tasks.md)
-- [M4.1本地MCP验证](202610201932_feature_m4-capabilities/verify.md)
-- [M4工程实现与本机联调验证](202610201932_feature_m4-capabilities/m4-completion-verify.md)
-- [M4插件连接与任务工作流补齐验证](202610201932_feature_m4-capabilities/plugin-completion-verify.md)
-- [M4前置：用户身份与应用登录](202610161500_feature_application-login/spec.md)
-
-- [应用登录验证与真实账号review](202610161500_feature_application-login/verify.md)
-
-- [M3复核与M4前代码治理](202610191506_refactor_m3-readiness-governance/spec.md)
-- [M3复核、治理修复与M4准备结论](202610191506_refactor_m3-readiness-governance/verify.md)
+| 分项                 | 设计与核对                                                                                                                                    | 验证记录                                                                                                                                         |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 能力基线与运行时扩展 | [能力核对](202610201932_feature_m4-capabilities/baseline.md) · [运行时扩展](202610201932_feature_m4-capabilities/runtime-extensions.md)       | —                                                                                                                                                |
+| 本地MCP              | [详细设计](202610201932_feature_m4-capabilities/local-mcp.md) · [协议与生命周期](202610201932_feature_m4-capabilities/local-mcp-contracts.md) | [RunToolset验证](202610201932_feature_m4-capabilities/local-mcp-verify.md)                                                                       |
+| MCP目录与远程连接    | [目录、远程连接与服务授权](202610201932_feature_m4-capabilities/mcp-expansion.md)                                                             | [扩展验证](202610201932_feature_m4-capabilities/mcp-expansion-verify.md)                                                                         |
+| Skills与插件         | [Skills与内置插件](202610201932_feature_m4-capabilities/skills-plugins.md)                                                                    | [Skills与插件验证](202610201932_feature_m4-capabilities/skills-plugins-verify.md)                                                                |
+| 外部服务连接         | [连接设计（初版记录）](202610201932_feature_m4-capabilities/connections.md)                                                                   | [连接验证](202610201932_feature_m4-capabilities/connections-verify.md)                                                                           |
+| 本地办公             | [文档工作流](202610201932_feature_m4-capabilities/office.md)                                                                                  | [本地办公验证](202610201932_feature_m4-capabilities/office-verify.md) · [下载界面验证](202610201932_feature_m4-capabilities/office-ui-verify.md) |
+| 插件连接与任务工作流 | [补齐方案](202610201932_feature_m4-capabilities/plugin-completion.md)                                                                         | [插件补齐验证](202610201932_feature_m4-capabilities/plugin-completion-verify.md)                                                                 |
