@@ -100,6 +100,99 @@ function writeCall() {
 }
 
 describe('durable Pi tool execution', () => {
+  it('returns bounded parser errors before approval or effects and keeps later calls independent', async () => {
+    const f = await workFixture(true);
+    const execute = vi.spyOn(execution, 'executeTool');
+    const reset = vi.spyOn(f.work, 'resetWorkingState');
+    const raw = 'Invalid JSON. Received arguments: {"path":"blocked.txt"';
+    const longError = `second parser error ${'x'.repeat(10_000)} discarded tail`;
+    const requests: TranscriptContext[] = [];
+    try {
+      await writeFile(join(f.root, 'source.txt'), 'Read after malformed calls.');
+      f.faux.setResponses([
+        fauxAssistantMessage(
+          [
+            {
+              type: 'toolCall',
+              id: 'reused-call',
+              name: 'write_file',
+              arguments: {},
+              argumentsError: raw,
+            },
+            {
+              type: 'toolCall',
+              id: 'empty-schema',
+              name: 'reset_working_state',
+              arguments: {},
+              argumentsError: longError,
+            },
+          ],
+          { stopReason: 'toolUse' },
+        ),
+        (context) => {
+          requests.push(context);
+          return fauxAssistantMessage(
+            [
+              {
+                type: 'toolCall',
+                id: 'reused-call',
+                name: 'read_file',
+                arguments: { path: 'source.txt' },
+              },
+            ],
+            { stopReason: 'toolUse' },
+          );
+        },
+        fauxAssistantMessage('Continued after rejecting malformed JSON.'),
+      ]);
+      await f.runtime.send(f.session.id, {
+        text: 'Reject malformed JSON without approval or effects.',
+        mode: 'send',
+        requestId: 'parser-errors',
+      });
+      await until(() => f.runtime.getSnapshot(f.session.id).session.activeRunId === null);
+      const snapshot = f.runtime.getSnapshot(f.session.id);
+      expect(snapshot.runs[0]?.status).toBe('completed');
+      expect(snapshot.tools.map(({ status }) => status)).toEqual(['failed', 'failed', 'completed']);
+      expect(snapshot.tools[0]?.result).toContain(raw);
+      expect(snapshot.tools[1]?.result).toContain('second parser error');
+      expect(snapshot.tools[1]?.result).not.toContain('discarded tail');
+      expect(snapshot.tools[1]?.result).toHaveLength(4000);
+      expect(snapshot.tools.slice(0, 2).every(({ binding }) => binding.kind === 'rejected')).toBe(
+        true,
+      );
+      expect(execute).toHaveBeenCalledTimes(1);
+      expect(execute.mock.calls[0]?.[0]).toBe('read_file');
+      expect(reset).not.toHaveBeenCalled();
+      await expect(readFile(join(f.root, 'blocked.txt'))).rejects.toMatchObject({ code: 'ENOENT' });
+      const nextResults = requests[0]?.messages.filter((message) => message.role === 'toolResult');
+      expect(nextResults).toHaveLength(2);
+      const nextResultText = nextResults?.[0]?.content
+        .filter((part) => part.type === 'text')
+        .map((part) => part.text)
+        .join('\n');
+      expect(nextResultText).toContain(raw);
+      const history = f.store
+        .getModelContext(f.session.id, snapshot.session.activeBranchId)
+        .map(decodeContextMessage);
+      expect(completeToolHistory(history)).toEqual(history);
+      expect(
+        history.flatMap((message) =>
+          message.role === 'assistant'
+            ? message.content
+                .filter((part) => part.type === 'toolCall')
+                .map(({ argumentsError }) => argumentsError)
+            : [],
+        ),
+      ).toEqual([raw, longError, undefined]);
+      expect(f.errors).toEqual([]);
+    } finally {
+      reset.mockRestore();
+      execute.mockRestore();
+      await f.close();
+    }
+  });
+
   it('retains the work-family result limit failure instead of silently truncating its public fact', async () => {
     const f = await workFixture(true);
     const search = vi.spyOn(f.work, 'searchHistory').mockReturnValue('x'.repeat(128_001));

@@ -7,7 +7,7 @@ import { checked } from '../../shared/validation.js';
 
 const AssistantCallsSchema = Type.Object({
   codecVersion: Type.Literal(1),
-  sdkVersion: Type.Literal('1.1.0'),
+  sdkVersion: Type.String({ minLength: 1 }),
   message: Type.Object({
     role: Type.Literal('assistant'),
     content: Type.Array(Type.Unknown(), { maxItems: 1024 }),

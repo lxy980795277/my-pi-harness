@@ -2,9 +2,17 @@ import { createServer, type ServerResponse } from 'node:http';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createProvider, envApiKeyAuth, type Model, type Provider } from '@earendil-works/pi-ai';
+import { Agent } from '@earendil-works/pi-agent-core';
+import {
+  createProvider,
+  envApiKeyAuth,
+  PI_AI_VERSION,
+  type Model,
+  type Provider,
+} from '@earendil-works/pi-ai';
 import { openAICompletionsApi } from '@earendil-works/pi-ai/api/openai-completions.lazy';
 import type { CustomProtocol, ProviderInput } from '@my-pi-harness/protocol';
+import { APP_VERSION } from '@my-pi-harness/protocol';
 import { createMemoryCredentialStore, openProfileStore } from '@my-pi-harness/storage';
 import { describe, expect, it } from 'vitest';
 import { ModelGateway } from '../src/models/gateway.js';
@@ -117,6 +125,7 @@ async function httpFixture(api: CustomProtocol) {
     authorization: string | undefined;
     apiKey: string | undefined;
     client: string | undefined;
+    userAgent: string | undefined;
     body: unknown;
   }[] = [];
   const server = createServer((request, response) => {
@@ -135,6 +144,7 @@ async function httpFixture(api: CustomProtocol) {
             : undefined,
         client:
           typeof request.headers['x-client'] === 'string' ? request.headers['x-client'] : undefined,
+        userAgent: request.headers['user-agent'],
         body,
       });
       respond(response, api);
@@ -192,6 +202,55 @@ async function until(predicate: () => boolean): Promise<void> {
 }
 
 describe('ModelGateway protocol and credentials', () => {
+  it.each([true, false])(
+    'uses the application identity for probes and Agent requests with requiresApiKey=%s',
+    async (requiresApiKey) => {
+      const directory = await mkdtemp(join(tmpdir(), 'my-pi-identity-'));
+      const store = await openProfileStore(directory);
+      const gateway = new ModelGateway({ store, secrets: createMemoryCredentialStore() });
+      const http = await httpFixture('openai-completions');
+      try {
+        const config = await gateway.saveProvider({
+          ...custom('openai-completions', `${http.baseUrl}/v1`, 'identity'),
+          requiresApiKey,
+        });
+        if (requiresApiKey) await gateway.setApiKey(config.id, 'identity-fixture-key');
+        expect(await gateway.testConnection(config.id, 'requested-model')).toMatchObject({
+          ok: true,
+        });
+        const lease = await gateway.resolve(config.id, 'requested-model');
+        try {
+          const agent = new Agent({
+            initialState: { model: lease.model, tools: [] },
+            streamFn: lease.streamFn,
+          });
+          await agent.prompt('Reply with a short answer.');
+          expect(agent.state.messages.at(-1)).toMatchObject({ stopReason: 'stop' });
+        } finally {
+          lease.release();
+        }
+        expect(http.requests.map(({ userAgent }) => userAgent)).toEqual([
+          `my-pi-harness/${APP_VERSION} pi/${PI_AI_VERSION}`,
+          `my-pi-harness/${APP_VERSION} pi/${PI_AI_VERSION}`,
+        ]);
+        expect(http.requests.map(({ client }) => client)).toEqual([
+          'fixture-client',
+          'fixture-client',
+        ]);
+        expect(http.requests.map(({ authorization }) => authorization)).toEqual(
+          requiresApiKey
+            ? ['Bearer identity-fixture-key', 'Bearer identity-fixture-key']
+            : [undefined, undefined],
+        );
+      } finally {
+        await gateway.close();
+        store.close();
+        await http.close();
+        await rm(directory, { recursive: true, force: true });
+      }
+    },
+  );
+
   it('continues a legacy native proxy session without moving its key to the new official slot', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'my-pi-legacy-proxy-'));
     const store = await openProfileStore(directory);

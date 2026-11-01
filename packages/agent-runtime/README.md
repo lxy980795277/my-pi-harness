@@ -1,6 +1,6 @@
 # Agent Runtime
 
-Node端的模型接入与持久会话运行层，使用固定的Pi core/ai 1.1.0公开接口。HTTP、SQLite、OS凭据和页面由宿主提供；本包不导入Fastify、Electron、React或SQL驱动。源码测试通过paths消费protocol/storage，生产仅导出dist。
+Node端的模型接入与持久会话运行层，使用精确固定的Pi core/ai 1.4.0公开接口。HTTP、SQLite、OS凭据和页面由宿主提供；本包不导入Fastify、Electron、React或SQL驱动。源码测试通过paths消费protocol/storage，生产仅导出dist。
 
 ## 源码职责
 
@@ -29,6 +29,8 @@ Node端的模型接入与持久会话运行层，使用固定的Pi core/ai 1.1.0
 
 `resolve()`返回Model、绑定的streamFn及必须调用的`release()`。该lease从认证检查前开始，阻止运行期间修改Provider和凭据；调用者在失败或SDK真正结算后释放。本包的SessionRuntime与连接探测负责这些释放，外部调用者须遵守相同规则。
 
+模型lease的streamFn统一设置应用身份，User-Agent包含根产品版本和实际Pi版本，关闭Pi默认厂商归属头。主/子Run、摘要、审批及连接探测经过同一入口，keyless继续剥除认证头，显式模型headers继续由Pi按其优先级处理。该策略不启用遥测，也不为产品编造归属URL。原生Provider的baseUrl覆写同时用于模型请求和目录刷新，自定义协议与地址仍按显式配置执行。
+
 宿主须在独占daemon启动时清理OpenAI/Anthropic SDK的环境认证、租户、Base URL、custom headers和console日志覆盖项；本包不在每个Gateway或请求内修改进程全局环境。Pi的AuthContext隔离不能代替底层SDK的环境策略。keyless最终fetch另外移除认证与OpenAI租户头，显式非秘密模型headers继续传递。应用启动清理的确切变量由daemon的model-environment模块拥有。
 
 认证通过真正的`Models.login/logout`执行。AuthFlow暴露URL、device code、secret/code/select prompt及终态，输入只交给当前prompt，不存入公开DTO。宿主提供稳定profile deviceId。凭据适配将版本化Pi认证对象保存在宿主SecretStore，整段异步refresh在串行modify内进行；已开始的OAuth刷新在调用者取消后仍保存旋转Token。Gateway关闭会中止连接探测与登录，并等待在途凭据操作，不提前宣布退出。
@@ -51,7 +53,7 @@ Run失败沿用error字段记录安全原因，主/子执行共用同一入口�
 
 `RunToolset`在接受Run前由实际`ToolRuntime`能力与工作区选择一次，深拷贝并冻结定义，同时保留TypeBox元数据。接受审计的`tools`、Pi声明、上下文预算及运行时路由共用该集合；来源与稳定定义指纹单独保存为私有`toolSources`，不进入模型工具schema。`ToolRuntime`仅在已接受集合内查找来源和定义，重名与未接受的路由明确拒绝；底层execution及会话执行器对固定内置目录的参数复核继续生效。MCP来源从宿主ExternalTools端口获得有界、可执行的冻结定义与非秘密授权，Run接受审计同时保存工具选择及授权绑定。配置、信任、凭据和SDK连接由daemon/integrations拥有，runtime不直接访问SDK或SQL。
 
-统一工具适配器通过Pi公开`prepareArguments`在SDK参数转换前按冻结schema严格校验原始模型JSON，execute入口复用同一校验。fractional整数参数、数字字符串或非nullable位置的null不能静默转换；拒绝结果保留原始调用参数，执行和审计继续与持久assistant intent精确一致。
+统一工具适配器通过Pi公开`prepareArguments`在SDK参数转换前按冻结schema严格校验原始模型JSON，execute入口复用同一校验。当前assistant工具批次的完整调用提供Pi参数解析错误；畸形最终JSON先以有界原始错误反馈模型，不进入审批或执行。fractional整数参数、数字字符串或非nullable位置的null不能静默转换；拒绝结果保留原始调用参数，执行和审计继续与持久assistant intent精确一致。
 
 `ToolRuntime`按接受Run时冻结的approvalMode执行：ask逐次询问，auto调用`ModelApprovalReviewer`，full-access自动批准并显式选择macOS无沙箱Shell；旧read-only继续阻止变更。文件工具仍以工作区为根。独立复核使用当前Run的Provider/model、用户请求与冻结规则，没有执行工具、共享主会话或多轮重试；只接受allow/deny/ask结构化结果，模型/认证失败、超预算、无效结果或30秒超时均转人工。停止中止复核并等待SDK结算后释放模型lease。审计请求和决定先持久化，存储失败直接传播，不当成模型失败转人工；公开事件只有工具/模型ID及决定/理由，完整复核请求仅保存在privateData。工具卡最终来源区分user/ai/full-access，先前AI转人工记录仍保留在事件历史。
 
@@ -59,7 +61,7 @@ Run失败沿用error字段记录安全原因，主/子执行共用同一入口�
 
 输入接受后若Agent初始化或首次队列读取失败，运行层清理订阅与临时所有权、释放模型lease并停用Session；不会遗留可继续工作的假Agent，也不补写假完成。下一次启动将已接受但未结算的事实恢复为interrupted。
 
-RuntimeStore拥有会话日志与投影。公开MessageView与宿主模型codec分离，成功消息保留Provider签名、responseId、system工具声明及工具结果；普通模型消息使用version1 codec；工具结果使用protocol拥有的中立StoredToolResult，runtime再组装Pi消息。不兼容旧开发格式。工具结果按assistant消息锚点进入分支前缀；工具终态和中立结果同批写入，SDK回调不产生第二份结果。已持久完整assistant中未进入执行的call结算为宿主interrupted。MCP调用首次写入前先持久化may_have_started屏障；无法确认结果记unknown、停止Run并保留队列，不自动重试或继续模型请求。恢复只配对日志，不重新连接或执行；未知结果在模型/本地摘要中保留可能已生效的阻塞，不能成为Todo成功证据。工具记录ID按Run、assistant消息ID与SDK调用ID派生，允许网关在不同assistant轮次复用调用ID。持久化失败中止并停用Session，不广播假完成或继续使用未提交状态。
+RuntimeStore拥有会话日志与投影。公开MessageView与宿主模型codec分离，成功消息保留Provider签名、responseId、system工具声明及工具结果；普通模型消息使用version1 codec，sdkVersion记录实际Pi版本且只作来源信息，读取按同一消息schema校验、不按SDK版本转换；工具结果使用protocol拥有的中立StoredToolResult，runtime再组装Pi消息。不兼容旧开发格式。工具结果按assistant消息锚点进入分支前缀；工具终态和中立结果同批写入，SDK回调不产生第二份结果。已持久完整assistant中未进入执行的call结算为宿主interrupted。MCP调用首次写入前先持久化may_have_started屏障；无法确认结果记unknown、停止Run并保留队列，不自动重试或继续模型请求。恢复只配对日志，不重新连接或执行；未知结果在模型/本地摘要中保留可能已生效的阻塞，不能成为Todo成功证据。工具记录ID按Run、assistant消息ID与SDK调用ID派生，允许网关在不同assistant轮次复用调用ID。持久化失败中止并停用Session，不广播假完成或继续使用未提交状态。
 
 主对话每个助手模型步骤在完成事实中保留供应商token用量与宿主完成时间，字段与缺失语义见[会话协议](../../docs/03_API/model-session.md#事件快照与断线)。工具轮与最终正文使用同一记录入口，独立审批复核和上下文压缩请求不并入这组主对话用量；不从正文估算或从私有codec补造历史统计。
 

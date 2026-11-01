@@ -18,6 +18,7 @@ import {
 import type { ToolExecutionResult, ToolRunContext, ToolRuntimeOptions } from './types.js';
 
 const toolArguments = Type.Record(Type.String(), Type.Unknown());
+const MAX_TOOL_ERROR_CHARACTERS = 4000;
 
 /** Check original model JSON before Pi coercion, and executable input before any dispatch. */
 function validateToolInput(definition: RunToolDefinition, input: unknown): Record<string, unknown> {
@@ -88,7 +89,18 @@ export class ToolRuntime {
         label: definition.name,
         replay: 'never',
         executionMode: 'sequential',
-        prepareArguments: (input: unknown) => validateToolInput(definition, input),
+        prepareArguments: (input: unknown) => {
+          const error = context.argumentsError?.(input);
+          if (error)
+            throw new RuntimeError(
+              'TOOL_ARGUMENTS_INVALID',
+              `工具 ${definition.name} 的JSON参数无法解析：${error}`.slice(
+                0,
+                MAX_TOOL_ERROR_CHARACTERS,
+              ),
+            );
+          return validateToolInput(definition, input);
+        },
         execute: async (providerCallId, input: unknown, signal) =>
           this.execute(
             context,
@@ -171,7 +183,7 @@ export class ToolRuntime {
       }
       if (signal.aborted) tool.status = 'cancelled';
       else if (tool.status !== 'denied') tool.status = 'failed';
-      tool.result = message.slice(0, 4000);
+      tool.result = message.slice(0, MAX_TOOL_ERROR_CHARACTERS);
       return ledger.finish(
         {
           content: [{ type: 'text', text: tool.result }],

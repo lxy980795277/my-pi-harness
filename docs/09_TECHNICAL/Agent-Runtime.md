@@ -80,6 +80,8 @@ flowchart TD
 
 应用额外负责账户实例 ID、非秘密配置、宿主凭据适配、启用状态、显式模型能力和地址校验。它没有维护第二套模型 SSE 解析器，也没有把 OpenAI 兼容端点当作所有 Provider 的共同协议。
 
+Pi依赖精确固定到正式发布版本，不使用参考源码仓库未发布的实现。当前版本、请求身份、Provider端点和私有codec策略由[运行时模块说明](../../packages/agent-runtime/README.md#模型与会话运行)维护；coding-agent、durable和codemode的高层机制不随core/ai升级自动引入。
+
 `resolve()` 返回 `model`、`streamFn` 和必须调用的 `release()`。lease 在认证检查前取得，直到失败清理或 SDK 真正结算后释放；期间阻止修改正在使用的 Provider 和凭据。
 
 ### 2.3 应用运行时：长期会话与副作用所有权
@@ -192,6 +194,8 @@ sequenceDiagram
 
 每次调用校验参数 schema、对象大小与调用数量，工具公开记录 ID 由 Run ID、assistant 消息 ID 和 Provider 调用 ID 派生。Provider 在不同 assistant 轮次复用调用 ID，不会混淆两次执行。
 
+Pi流解析保留的最终JSON错误经当前assistant完整调用传给工具适配器，在严格schema转换前反馈给模型；没有进入执行的调用仍复用宿主工具终态入口。错误关联使用该批次原始参数对象，不以可能复用的Provider调用ID缓存，避免影响后续合法调用。
+
 MCP输入在接受或排队时冻结配置revision、profile身份、访问/凭据epoch、授权ID和scope。消费队列前同步检查原授权，每次模型请求和执行前复核真实工作根与启动指纹；失效输入保留并拒绝，不重绑当前选择。运行中steer/follow-up与队列合组必须保持原显式选择及授权一致；本Run内从冻结候选加载工具和Skill，按[MCP连接设计](MCP连接设计.md)先持久化新的可见版本，再用于下一模型请求，Skill指令与资源生命周期见[插件体系设计](插件体系设计.md)。
 
 外部调用在首次tools/call写入前提交派发屏障；终态与中立私有结果同批持久化后才交回Pi。适配器区分已知结果、可证明未派发和unknown，runtime不依据SDK错误名或signal状态猜测副作用。unknown停止当前Run和后续工具，保留队列，不自动重试或用作Todo完成证据。具体事实与恢复机制见[会话存储设计](会话存储与恢复设计.md)。
@@ -253,18 +257,20 @@ daemon关闭先封禁新的MCP管理操作，终止WorkRuntime生命周期，再
 
 ## 八、关键实现与验证入口
 
-| 实现                                                                                   | 负责的机制                                  |
-| -------------------------------------------------------------------------------------- | ------------------------------------------- |
-| [`session-runtime.ts`](../../packages/agent-runtime/src/sessions/runtime.ts)           | 串行命令、接受幂等、队列、分支、取消和发布  |
-| [`run-execution.ts`](../../packages/agent-runtime/src/runs/execution.ts)               | Agent配置、SDK事件映射、Run终态、请求前投影 |
-| [`model-gateway.ts`](../../packages/agent-runtime/src/models/gateway.ts)               | 模型选择、Provider与认证lease               |
-| [`provider-instance.ts`](../../packages/agent-runtime/src/models/provider-instance.ts) | Pi公开Provider工厂与自定义API装配           |
-| [`tool-runtime.ts`](../../packages/agent-runtime/src/tools/runtime.ts)                 | 单次工具记录、策略、审批和执行              |
-| [`work-interactions.ts`](../../packages/agent-runtime/src/work/interactions.ts)        | 同Run提问、计划审核与取消等待               |
-| [`session-tools.ts`](../../packages/agent-runtime/src/work/tools.ts)                   | 模型工具参数及Plan/Todos操作                |
-| [`external-tools.ts`](../../packages/agent-runtime/src/tools/external.ts)              | 冻结外部定义/授权、恢复与执行端口           |
-| [`tool-history.ts`](../../packages/agent-runtime/src/context/tool-history.ts)          | 工具调用/结果配对检查                       |
-| [`services.ts`](../../apps/daemon/src/application/services.ts)                         | daemon资源装配和关闭顺序                    |
+| 实现                                                                                   | 负责的机制                                 |
+| -------------------------------------------------------------------------------------- | ------------------------------------------ |
+| [`session-runtime.ts`](../../packages/agent-runtime/src/sessions/runtime.ts)           | 串行命令、接受幂等、队列、分支、取消和发布 |
+| [`execution.ts`](../../packages/agent-runtime/src/runs/execution.ts)                   | Run生命周期、终态与资源结算                |
+| [`agent.ts`](../../packages/agent-runtime/src/runs/agent.ts)                           | Pi装配、请求钩子、完整调用错误关联         |
+| [`messages.ts`](../../packages/agent-runtime/src/runs/messages.ts)                     | SDK消息事件与持久事实                      |
+| [`model-gateway.ts`](../../packages/agent-runtime/src/models/gateway.ts)               | 模型选择、Provider与认证lease              |
+| [`provider-instance.ts`](../../packages/agent-runtime/src/models/provider-instance.ts) | Pi公开Provider工厂与自定义API装配          |
+| [`tool-runtime.ts`](../../packages/agent-runtime/src/tools/runtime.ts)                 | 单次工具记录、策略、审批和执行             |
+| [`work-interactions.ts`](../../packages/agent-runtime/src/work/interactions.ts)        | 同Run提问、计划审核与取消等待              |
+| [`session-tools.ts`](../../packages/agent-runtime/src/work/tools.ts)                   | 模型工具参数及Plan/Todos操作               |
+| [`external-tools.ts`](../../packages/agent-runtime/src/tools/external.ts)              | 冻结外部定义/授权、恢复与执行端口          |
+| [`tool-history.ts`](../../packages/agent-runtime/src/context/tool-history.ts)          | 工具调用/结果配对检查                      |
+| [`services.ts`](../../apps/daemon/src/application/services.ts)                         | daemon资源装配和关闭顺序                   |
 
 验收重点是状态所有权和可观察结果：
 

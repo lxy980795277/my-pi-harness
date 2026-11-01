@@ -38,6 +38,17 @@ export function createRunAgent(options: RunExecutionOptions, host: RunAgentHost)
       supportsImages: options.resolved.model.input.includes('image'),
       recorded: host.recorded,
       assistantMessageId: () => host.assistantMessageId(),
+      argumentsError: (input) => {
+        for (let index = agent.state.messages.length - 1; index >= 0; index -= 1) {
+          const message = agent.state.messages[index];
+          if (message?.role !== 'assistant') continue;
+          const call = message.content.find(
+            (part) => part.type === 'toolCall' && part.arguments === input,
+          );
+          return call?.type === 'toolCall' ? call.argumentsError : undefined;
+        }
+        return undefined;
+      },
       commit: (events) => host.commit(events),
       persistenceFailure: (error): never => host.failPersistence(error),
       stopAfterTool: (reason) => host.cancel(reason),
@@ -53,7 +64,7 @@ export function createRunAgent(options: RunExecutionOptions, host: RunAgentHost)
     };
     tools = options.tools.createTools(toolContext, options.toolset);
   }
-  return new Agent({
+  const agent = new Agent({
     initialState: {
       messages: options.history,
       model: options.resolved.model,
@@ -190,4 +201,5 @@ export function createRunAgent(options: RunExecutionOptions, host: RunAgentHost)
       return undefined;
     },
   });
+  return agent;
 }

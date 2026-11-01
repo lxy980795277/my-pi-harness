@@ -38,7 +38,7 @@ function validateEndpoint(raw: string): void {
   }
 }
 
-/** Instantiate validated configuration through Pi public provider factories. */
+/** Instantiate account-scoped providers; configured endpoints govern both requests and catalog refresh. */
 export async function createProviderInstance(
   config: ProviderConfig,
   loader: (id: string) => Promise<Provider>,
@@ -85,6 +85,7 @@ export async function createProviderInstance(
       ...original,
       id: config.id,
       name: config.name,
+      ...(config.baseUrl ? { baseUrl: config.baseUrl } : {}),
       getModels: () => original.getModels().map(mapModel),
       getAllModels: () => original.getModels().map(mapModel),
       stream: (model, context, options) => original.stream(restore(model), context, options),

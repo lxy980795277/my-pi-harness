@@ -30,6 +30,7 @@ import { BUILTIN_PROVIDER_IDS, loadBuiltinProvider } from './providers.js';
 import type { ProviderStore } from './ports.js';
 import { createProviderInstance } from './provider-instance.js';
 import { keylessStream } from './keyless-transport.js';
+import { applicationStream } from './identity.js';
 
 export interface ResolvedModel {
   model: Model<Api>;
@@ -409,7 +410,9 @@ export class ModelGateway {
       signal?.throwIfAborted();
       return {
         model: structuredClone(model),
-        streamFn: keyless ? keylessStream(provider) : this.models.streamSimple.bind(this.models),
+        streamFn: applicationStream(
+          keyless ? keylessStream(provider) : this.models.streamSimple.bind(this.models),
+        ),
         release,
       };
     } catch (error) {

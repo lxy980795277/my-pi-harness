@@ -126,7 +126,8 @@ test('新对话与已有对话回车发送，换行和输入法确认不误发',
     await draft.press('Enter');
     await expect(draft).toHaveValue('尚未选择模型');
     expect(inputRequests).toHaveLength(0);
-    await configureTestProvider(page, model.origin);
+    // Keep four shortcut-driven turns within context so automatic summaries do not add requests.
+    await configureTestProvider(page, model.origin, 32768);
     await page.reload();
     await chooseConversationModel(page, 'Queue Model', 'Chat');
     await draft.fill('   ');

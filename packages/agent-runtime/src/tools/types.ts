@@ -31,6 +31,8 @@ export interface ToolRunContext {
   supportsImages: boolean;
   recorded: Set<string>;
   assistantMessageId(): string;
+  /** Read parser diagnostics for the exact original arguments object of the current assistant. */
+  argumentsError?(input: unknown): string | undefined;
   commit(events: readonly EventInput[]): void;
   persistenceFailure(error: unknown): never;
   outcomeUnknown(message: string): void;

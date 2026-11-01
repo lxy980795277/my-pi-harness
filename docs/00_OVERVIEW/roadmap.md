@@ -2,6 +2,8 @@
 
 本页管理功能范围与里程碑顺序，详细验收由各里程碑 Spec 承担。`规划` 不表示能力已经可用；只有实现与必要验证都完成后才能调整状态。
 
+2026-11-01完成[Pi 1.4运行时升级](../04_FEATURES/202611011954_refactor_pi-1-4-upgrade/spec.md)的工程实现、本机自动化及DeepSeek Flash真实对话补测，按用户提交授权整理为[0.15.0](../06_RELEASES/0.15.0.md)，属于M0及M1–M5维护；正式core/ai依赖、Provider协议与目录、私有codec和工具错误、统一请求身份及构建/桌面smoke证据见[验证记录](../04_FEATURES/202611011954_refactor_pi-1-4-upgrade/verify.md)。其他供应商/推理档位、真实插件账号、Windows与正式安装验收未据此完成。M6继续仅规划，工具目录默认/按需加载重构维持暂缓，未发布Pi能力不在本次范围。
+
 2026-11-01完成[Agent执行职责拆分与去重](../04_FEATURES/202611011848_refactor_agent-execution-ownership/spec.md)及源码回归，按用户提交授权整理为[0.14.2](../06_RELEASES/0.14.2.md)。只整理执行准备、生命周期、工具与共享安全读取；消息类型、消息格式、前端、协议22及SQLite9保持现状。属于M0及M1–M5维护，M6继续仅规划，未替代真实API、Office或平台验收。
 
 2026-10-30按用户确认启动[M1–M5真实任务与可用性验收](../04_FEATURES/202610302000_feature_m1-m5-product-acceptance/spec.md)，属于M7既有能力统一验收的先行专题；八项任务及横向停止/恢复/压缩已实际执行，复制权限、长结果读取和原始工具参数校验已修复并重包复测；Office交付质量、复杂委派轮数与外部TLS仍有缺口，详见[验收记录](../04_FEATURES/202610302000_feature_m1-m5-product-acceptance/verify.md)。M1–M5原开发状态保持，M6继续仅规划，正式安装器、Windows及其他未选能力不据此标完成。

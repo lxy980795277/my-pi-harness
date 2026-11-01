@@ -21,6 +21,11 @@ import { chooseConversationModel, chooseOption } from './ui-controls.js';
 import { selectTestSessionBranch } from './session-fixtures.js';
 import { expandCompletedProcesses } from './process-controls.js';
 
+interface ModelFixtureOptions {
+  image?: boolean;
+  contextWindow?: number;
+}
+
 const readSession = async (page: Page, origin: string, id: string): Promise<SessionSnapshot> => {
   const response = await page.request.get(`${origin}/api/sessions/${encodeURIComponent(id)}`);
   const value: unknown = await response.json();
@@ -61,12 +66,12 @@ const setupModel = async (
   page: Page,
   origin: string,
   modelOrigin: string,
-  image = false,
+  options: ModelFixtureOptions = {},
 ): Promise<ProviderConfig> => {
   await page.goto(origin);
-  const contextWindow = image ? 32768 : 8192;
+  const contextWindow = options.contextWindow ?? (options.image ? 32768 : 8192);
   const configured = await configureTestProvider(page, modelOrigin, contextWindow);
-  if (image) {
+  if (options.image) {
     const status: unknown = await (await page.request.get(`${origin}/api/auth/status`)).json();
     const current: unknown = await (
       await page.request.get(`${origin}/api/providers/${encodeURIComponent(configured.id)}`)
@@ -278,7 +283,7 @@ test('M3 宿主文件引用冻结规则和片段，并在界面显示上下文�
 test('M3 计划反馈与批准保持同一次运行，快照恢复和两类重置保留历史', async ({ page, daemon }) => {
   const model = await startM3Model();
   try {
-    await setupModel(page, daemon.origin, model.origin);
+    await setupModel(page, daemon.origin, model.origin, { contextWindow: 32768 });
     await expect(page.getByRole('combobox', { name: '输入栏工作模式', exact: true })).toHaveCount(
       0,
     );
@@ -500,7 +505,7 @@ test('M3 无工作区时 Agent 可等待用户回答，并支持取消后继续'
 test('M3 图片可上传预览，并以真实Pi多模态请求发送给支持图片的模型', async ({ page, daemon }) => {
   const model = await startM3Model();
   try {
-    await setupModel(page, daemon.origin, model.origin, true);
+    await setupModel(page, daemon.origin, model.origin, { image: true });
     const png = Buffer.from(
       'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC',
       'base64',
@@ -583,7 +588,7 @@ test('M3 图片可上传预览，并以真实Pi多模态请求发送给支持图
 test('M3 上下文摘要版本可比较与选择，历史快照独立保留', async ({ page, daemon }) => {
   const model = await startM3Model();
   try {
-    await setupModel(page, daemon.origin, model.origin);
+    await setupModel(page, daemon.origin, model.origin, { contextWindow: 32768 });
     const id = await firstSend(page, '上下文版本验收第1轮');
     const sendRound = async (round: number): Promise<void> => {
       await expect

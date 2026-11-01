@@ -1,4 +1,4 @@
-import type { Message } from '@earendil-works/pi-ai';
+import { PI_AI_VERSION, type Message } from '@earendil-works/pi-ai';
 import { Type } from 'typebox';
 import { Value } from 'typebox/value';
 import { RuntimeError } from '../errors.js';
@@ -26,6 +26,7 @@ const toolCall = Type.Object({
   id: Type.String(),
   name: Type.String(),
   arguments: Type.Record(Type.String(), Type.Unknown()),
+  argumentsError: Type.Optional(Type.String()),
   thoughtSignature: Type.Optional(Type.String()),
   namespace: Type.Optional(Type.String()),
 });
@@ -100,7 +101,7 @@ const toolResult = Type.Object({
 });
 const envelope = Type.Object({
   codecVersion: Type.Literal(1),
-  sdkVersion: Type.Literal('1.1.0'),
+  sdkVersion: Type.String({ minLength: 1 }),
   message: Type.Union([message, toolResult]),
 });
 
@@ -114,7 +115,11 @@ export function snapshotPrivateData(input: Record<string, unknown>): Record<stri
 
 /** Preserve final provider-native fields privately; this is not a client DTO. */
 export function encodeContextMessage(input: Message): Record<string, unknown> {
-  const snapshot = snapshotPrivateData({ codecVersion: 1, sdkVersion: '1.1.0', message: input });
+  const snapshot = snapshotPrivateData({
+    codecVersion: 1,
+    sdkVersion: PI_AI_VERSION,
+    message: input,
+  });
   if (!Value.Check(envelope, snapshot))
     throw new RuntimeError('CONTEXT_CORRUPT', 'Stored model context has an unsupported format');
   return snapshot;

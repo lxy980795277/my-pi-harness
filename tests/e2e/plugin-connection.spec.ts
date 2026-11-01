@@ -177,7 +177,7 @@ test('GitHub 授权与应用目录跨重启恢复，未手动选工具也可搜�
     '已读取 GitHub 账号 browser-github-user。',
   );
   try {
-    await configureTestProvider(page, model.origin);
+    await configureTestProvider(page, model.origin, 32768);
     await page.getByRole('button', { name: '关闭设置', exact: true }).click();
     await daemon.restart();
     await page.reload();

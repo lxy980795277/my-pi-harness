@@ -9,7 +9,10 @@ import {
 } from '@my-pi-harness/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
 import { openProfileStore, type EventInput, type ProfileStore } from '../src/index.js';
-import { storedToolCallId } from '../src/sessions/projections/tool-intents.js';
+import {
+  assistantToolIntents,
+  storedToolCallId,
+} from '../src/sessions/projections/tool-intents.js';
 import { checked } from '../src/shared/validation.js';
 
 const owned: { directory: string; store: ProfileStore }[] = [];
@@ -113,10 +116,10 @@ function terminal(
 ): EventInput[] {
   return [event('tool.updated', { tool: record }), result(record, providerCallId, anchor, origin)];
 }
-function codec(ids: readonly string[]): Record<string, unknown> {
+function codec(ids: readonly string[], sdkVersion = '1.4.0'): Record<string, unknown> {
   return {
     codecVersion: 1,
-    sdkVersion: '1.1.0',
+    sdkVersion,
     message: {
       role: 'assistant',
       content: ids.map((id) => ({
@@ -180,6 +183,17 @@ async function reopen(value: Awaited<ReturnType<typeof fixture>>) {
 }
 
 describe('durable tool outcomes and private result atomicity', () => {
+  it('projects call intents by codec fields rather than a particular SDK release', () => {
+    for (const sdkVersion of ['1.4.0', 'different-sdk-source'])
+      expect(assistantToolIntents(codec(['call'], sdkVersion)).map(({ id }) => id)).toEqual([
+        'call',
+      ]);
+    const encoded = codec(['call']);
+    for (const sdkVersion of ['', 7])
+      expect(() => assistantToolIntents({ ...encoded, sdkVersion })).toThrow();
+    expect(() => assistantToolIntents({ ...encoded, codecVersion: 99 })).toThrow();
+  });
+
   it('preserves tied request order and assistant anchors through branches and reopening', async () => {
     const value = await fixture(['first', 'second']);
     const first = tool('first');

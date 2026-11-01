@@ -2,6 +2,7 @@ import {
   createModels,
   fauxAssistantMessage,
   fauxProvider,
+  PI_AI_VERSION,
   type OAuthCredential,
 } from '@earendil-works/pi-ai';
 import { createMemoryCredentialStore } from '@my-pi-harness/storage';
@@ -22,6 +23,32 @@ function gate(): { promise: Promise<void>; release(): void } {
 }
 
 describe('private SDK persistence', () => {
+  it('records SDK provenance without using it as a codec switch and validates parser errors', () => {
+    const call = {
+      type: 'toolCall' as const,
+      id: 'malformed',
+      name: 'write_file',
+      arguments: {},
+      argumentsError: 'Invalid JSON. Received arguments: {"path":',
+    };
+    const message = fauxAssistantMessage([call], { stopReason: 'toolUse' });
+    const encoded = encodeContextMessage(message);
+    expect(encoded['sdkVersion']).toBe(PI_AI_VERSION);
+    expect(decodeContextMessage(encoded)).toEqual(message);
+    expect(decodeContextMessage({ ...encoded, sdkVersion: 'different-sdk-source' })).toEqual(
+      message,
+    );
+    expect(() => decodeContextMessage({ ...encoded, sdkVersion: '' })).toThrow(
+      'unsupported format',
+    );
+    expect(() =>
+      decodeContextMessage({
+        ...encoded,
+        message: { ...message, content: [{ ...call, argumentsError: 7 }] },
+      }),
+    ).toThrow('unsupported format');
+  });
+
   it('preserves provider response IDs and signatures while refusing unknown codec generations and damaged data', () => {
     const message = fauxAssistantMessage(
       [
