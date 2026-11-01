@@ -5,13 +5,13 @@ import { dirname, resolve, extname } from 'node:path';
 import { createPatch } from 'diff';
 import { stringArgument } from '../core/catalog.js';
 import { ExecutionError, checkCancelled, isMissing } from '../core/errors.js';
+import { readStableFile } from './read-file.js';
 import { extractPdf } from '../documents/extract-pdf.js';
 import { extractDocument } from '../documents/extract-document.js';
 import type { ExecutionContext, ExecutionResult, FileMutationToolName } from '../core/types.js';
 import {
   isPortableFileName,
   isSensitiveName,
-  openRegular,
   toWorkspaceRelativePath,
   workspacePath,
 } from './workspace-path.js';
@@ -43,35 +43,6 @@ function decodeText(data: Uint8Array): string {
   }
 }
 
-async function readBytes(
-  path: string,
-  signal: AbortSignal,
-  maximum = MAXIMUM_FILE_BYTES,
-): Promise<Buffer> {
-  checkCancelled(signal);
-  const handle = await openRegular(path, maximum);
-  try {
-    const before = await handle.stat();
-    const buffer = Buffer.alloc(maximum + 1);
-    let length = 0;
-    while (length < buffer.length) {
-      checkCancelled(signal);
-      const chunk = await handle.read(buffer, length, buffer.length - length, length);
-      if (chunk.bytesRead === 0) break;
-      length += chunk.bytesRead;
-    }
-    const data = buffer.subarray(0, length);
-    const after = await handle.stat();
-    if (data.length > maximum)
-      throw new ExecutionError('FILE_TOO_LARGE', 'File grew beyond its size limit');
-    if (before.size !== after.size || before.mtimeMs !== after.mtimeMs)
-      throw new ExecutionError('FILE_CHANGED', 'File changed while reading');
-    return data;
-  } finally {
-    await handle.close();
-  }
-}
-
 function imageMime(data: Buffer): string | undefined {
   if (data.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])))
     return 'image/png';
@@ -90,7 +61,7 @@ export async function readFileTool(
 ): Promise<ExecutionResult> {
   const input = stringArgument(args, 'path');
   const path = await workspacePath(root, input);
-  const data = await readBytes(path, context.signal);
+  const data = await readStableFile(path, context.signal, MAXIMUM_FILE_BYTES);
   const mimeType = imageMime(data);
   if (mimeType)
     return {
@@ -215,7 +186,7 @@ export async function searchFilesTool(
     if ((await stat(target)).size > MAXIMUM_TEXT_BYTES) continue;
     let content: string;
     try {
-      const bytes = await readBytes(target, context.signal, MAXIMUM_TEXT_BYTES);
+      const bytes = await readStableFile(target, context.signal, MAXIMUM_TEXT_BYTES);
       bytesRead += bytes.length;
       if (bytesRead > 10_000_000) {
         truncated = true;
@@ -245,7 +216,7 @@ export async function searchFilesTool(
 
 async function currentContent(path: string, signal: AbortSignal): Promise<Buffer | null> {
   try {
-    return await readBytes(path, signal, MAXIMUM_TEXT_BYTES);
+    return await readStableFile(path, signal, MAXIMUM_TEXT_BYTES);
   } catch (error) {
     if (isMissing(error)) return null;
     throw error;

@@ -27,6 +27,7 @@ AC写可观察结果，不用「完善」「支持全部」代替具体条件。
 
 ## 当前Spec
 
+- [Agent执行职责拆分与去重](202611011848_refactor_agent-execution-ownership/spec.md)
 - [M1–M5真实任务与可用性验收](202610302000_feature_m1-m5-product-acceptance/spec.md)
 - [验收执行与证据方案](202610302000_feature_m1-m5-product-acceptance/execution.md)
 - [验收阶段与任务清单](202610302000_feature_m1-m5-product-acceptance/tasks.md)

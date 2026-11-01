@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, realpath, rm, stat } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { SessionSummary } from '@my-pi-harness/protocol';
@@ -7,7 +7,12 @@ import { describe, expect, it, vi } from 'vitest';
 import * as execution from '@my-pi-harness/execution';
 import { RuntimeError } from '../src/errors.js';
 import type { EventInput } from '../src/sessions/ports.js';
-import { ToolRuntime, toolCallRecordId } from '../src/tools/runtime.js';
+import { ToolRuntime } from '../src/tools/runtime.js';
+import { recordHostToolOutcome, toolCallRecordId } from '../src/tools/ledger.js';
+import { RunToolset } from '../src/tools/toolset.js';
+import { SESSION_TOOL_DEFINITIONS } from '../src/work/tools.js';
+import { AGENT_TOOL_DEFINITIONS } from '../src/agents/definitions.js';
+import { DISCOVERY_TOOL_DEFINITIONS, SKILL_TOOL_DEFINITIONS } from '../src/capabilities/run.js';
 import type { ToolRunContext } from '../src/tools/types.js';
 
 async function fixture() {
@@ -116,7 +121,9 @@ describe('task tool ownership', () => {
         expect(f.events.filter((event) => event.type === 'tool.updated')).toMatchObject([
           { data: { tool: { status: 'denied', result: '当前运行仅允许只读操作。' } } },
         ]);
-        const records = f.events.map((event) => event.data['tool']);
+        const records = f.events.flatMap((event) =>
+          event.type === 'tool.requested' || event.type === 'tool.updated' ? [event.data.tool] : [],
+        );
         expect(records).not.toContainEqual(
           expect.objectContaining({ status: 'awaiting_approval' }),
         );
@@ -223,4 +230,206 @@ describe('task tool ownership', () => {
       await f.close();
     }
   });
+
+  it('preserves all 34 builtin declarations and rejects mismatched or unknown sources', async () => {
+    const f = await fixture();
+    try {
+      const controls = [
+        ...SESSION_TOOL_DEFINITIONS,
+        ...AGENT_TOOL_DEFINITIONS,
+        ...DISCOVERY_TOOL_DEFINITIONS,
+        ...SKILL_TOOL_DEFINITIONS,
+      ];
+      expect(f.runtime.selectToolset(f.context.session, [], controls).definitions).toHaveLength(27);
+      expect(f.runtime.selectToolset({ workspaceId: null }, [], controls).definitions).toHaveLength(
+        21,
+      );
+      const full = f.runtime.selectToolset(
+        f.context.session,
+        [],
+        controls,
+        execution.OFFICE_TOOL_DEFINITIONS,
+      );
+      expect(f.runtime.createTools(f.context, full).map(({ name }) => name)).toEqual(
+        full.definitions.map(({ name }) => name),
+      );
+      expect(new Set(full.definitions.map(({ name }) => name)).size).toBe(34);
+      for (const selection of [
+        {
+          source: { kind: 'session' as const },
+          definition: {
+            name: 'read_file',
+            description: 'Wrong source',
+            parameters: Type.Object({}),
+          },
+        },
+        {
+          source: { kind: 'workspace' as const },
+          definition: {
+            name: 'ask_user',
+            description: 'Wrong source',
+            parameters: Type.Object({}),
+          },
+        },
+        {
+          source: { kind: 'session' as const },
+          definition: {
+            name: 'unknown_control',
+            description: 'No owned handler',
+            parameters: Type.Object({}),
+          },
+        },
+      ]) {
+        const tools = new RunToolset([selection]);
+        const executable = f.runtime.createTools(f.context, tools)[0];
+        if (!executable) throw new Error('Missing accepted definition');
+        expect(executable.name).toBe(selection.definition.name);
+        const result = executable.execute(selection.definition.name, {});
+        if (selection.source.kind === 'workspace') await expect(result).rejects.toThrow();
+        else expect((await result).isError).toBe(true);
+      }
+      expect(f.events.filter(({ type }) => type === 'tool.context')).toHaveLength(2);
+      expect(f.events.filter(({ type }) => type === 'tool.requested')).toMatchObject([
+        { data: { tool: { name: 'read_file', binding: { kind: 'accepted' } } } },
+        { data: { tool: { name: 'unknown_control', binding: { kind: 'accepted' } } } },
+      ]);
+    } finally {
+      await f.close();
+    }
+  });
+
+  it('does not let unrelated controller predicates capture a workspace invocation', async () => {
+    const f = await fixture();
+    const wrongRoute = vi.fn(() => Promise.reject(new Error('Wrong controller family')));
+    try {
+      f.context.agents = { has: () => true, execute: wrongRoute };
+      await writeFile(join(f.directory, 'observed.txt'), 'actual file');
+      const read = f.runtime
+        .createTools(f.context, f.runtime.selectToolset(f.context.session))
+        .find(({ name }) => name === 'read_file');
+      if (!read) throw new Error('Missing read tool');
+      const result = await read.execute('owned-route', { path: 'observed.txt' });
+      expect(result.isError).not.toBe(true);
+      expect(JSON.stringify(result.content)).toContain('actual file');
+      expect(wrongRoute).not.toHaveBeenCalled();
+    } finally {
+      await f.close();
+    }
+  });
+
+  it.each(['failed', 'interrupted'] as const)(
+    'records a host %s outcome and its canonical context once in one batch',
+    async (status) => {
+      const f = await fixture();
+      const commit = vi.spyOn(f.context, 'commit');
+      try {
+        const call = {
+          assistantMessageId: 'assistant',
+          providerCallId: 'host-call',
+          name: 'read_file',
+          arguments: { path: 'input.txt', startLine: 0.5 },
+        };
+        const outcome = {
+          status,
+          reason: 'Not dispatched',
+          content: [{ type: 'text' as const, text: 'Original SDK result' }],
+        };
+        expect(recordHostToolOutcome(f.context, call, outcome)).toBe(true);
+        expect(recordHostToolOutcome(f.context, call, outcome)).toBe(false);
+        expect(commit).toHaveBeenCalledTimes(1);
+        expect(commit.mock.calls[0]?.[0].map(({ type }) => type)).toEqual([
+          'tool.requested',
+          'tool.context',
+        ]);
+        expect(f.events[0]?.data).toMatchObject({
+          tool: {
+            status,
+            arguments: call.arguments,
+            binding: { kind: 'rejected' },
+            dispatch: { state: 'not_applicable' },
+          },
+        });
+        if (status === 'interrupted')
+          expect(f.events[0]?.data).toHaveProperty('afterMessageId', 'assistant');
+        else expect(f.events[0]?.data).not.toHaveProperty('afterMessageId');
+        expect(f.events[1]?.data).toMatchObject({ afterMessageId: 'assistant' });
+        expect(f.events[1]?.privateData).toMatchObject({
+          origin: 'host',
+          outcome: status,
+          isError: true,
+          providerCallId: 'host-call',
+          content: outcome.content,
+        });
+        expect(f.context.recorded.size).toBe(1);
+      } finally {
+        await f.close();
+      }
+    },
+  );
+
+  it('does not mark an SDK-rejected call recorded when its atomic journal commit fails', async () => {
+    const f = await fixture();
+    const commit = vi.spyOn(f.context, 'commit').mockImplementationOnce(() => {
+      throw new Error('Journal unavailable');
+    });
+    try {
+      const call = {
+        assistantMessageId: 'assistant',
+        providerCallId: 'host-call',
+        name: 'read_file',
+        arguments: {},
+      };
+      const outcome = {
+        status: 'failed' as const,
+        reason: 'Rejected',
+        content: [{ type: 'text' as const, text: 'Rejected' }],
+      };
+      expect(() => recordHostToolOutcome(f.context, call, outcome)).toThrow('Journal unavailable');
+      expect(f.context.recorded.size).toBe(0);
+      expect(f.events).toEqual([]);
+      expect(recordHostToolOutcome(f.context, call, outcome)).toBe(true);
+      expect(commit).toHaveBeenCalledTimes(2);
+    } finally {
+      await f.close();
+    }
+  });
+
+  it.each([false, true])(
+    'stops a Skill grant revocation only after its terminal context commits (journal failure=%s)',
+    async (failJournal) => {
+      const f = await fixture();
+      const stop = vi.fn(() => {
+        expect(f.events.at(-1)?.type).toBe('tool.context');
+      });
+      try {
+        const definition = SKILL_TOOL_DEFINITIONS.find(({ name }) => name === 'revoke_skill_tools');
+        if (!definition) throw new Error('Missing Skill revoke declaration');
+        f.context.controls = {
+          has: (name) => name === definition.name,
+          execute: () => Promise.resolve([{ type: 'text', text: 'Grant revoked' }]),
+        };
+        f.context.stopAfterTool = stop;
+        if (failJournal)
+          vi.spyOn(f.context, 'commit').mockImplementation((events) => {
+            if (events.some(({ type }) => type === 'tool.context'))
+              throw new Error('Terminal journal unavailable');
+            f.events.push(...events);
+          });
+        const tool = f.runtime
+          .createTools(f.context, f.runtime.selectToolset(f.context.session, [], [definition]))
+          .find(({ name }) => name === definition.name);
+        if (!tool) throw new Error('Missing Skill revoke tool');
+        const result = tool.execute('revoke', { skillId: 'skill' });
+        if (failJournal) {
+          await expect(result).rejects.toThrow('Terminal journal unavailable');
+          expect(stop).not.toHaveBeenCalled();
+        } else {
+          expect((await result).isError).not.toBe(true);
+          expect(stop).toHaveBeenCalledExactlyOnceWith('本次运行的工具授权已撤销。');
+        }
+      } finally {
+        await f.close();
+      }
+    },
+  );
 });

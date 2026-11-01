@@ -1,18 +1,11 @@
 import type { ExecutionContent, WebFetchGatewayAccess } from '@my-pi-harness/execution';
-import type {
-  RunView,
-  SessionSummary,
-  ToolDecisionInput,
-  Workspace,
-} from '@my-pi-harness/protocol';
+import type { RunView, SessionSummary, Workspace } from '@my-pi-harness/protocol';
 import type { ApprovalReviewer } from './approval-review.js';
 import type { EventInput } from '../sessions/ports.js';
 import type { WorkRuntime } from '../work/runtime.js';
 import type { ExternalTools } from './external.js';
 import type { RunControls } from '../capabilities/ports.js';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
-
-export type ToolEventType = 'tool.requested' | 'tool.updated';
 
 /** Task controller calls retain the durable tool ID that accepted the operation. */
 export interface AgentToolControls {
@@ -42,11 +35,6 @@ export interface ToolRunContext {
   persistenceFailure(error: unknown): never;
   outcomeUnknown(message: string): void;
   stopAfterTool?(reason: string): void;
-}
-
-export interface PendingApproval {
-  sessionId: string;
-  decide(decision: ToolDecisionInput['decision']): void;
 }
 
 export interface ToolRuntimeOptions {

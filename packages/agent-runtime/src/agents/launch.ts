@@ -1,17 +1,14 @@
-import { randomUUID } from 'node:crypto';
-import { getSupportedThinkingLevels, type UserMessage } from '@earendil-works/pi-ai';
 import { OFFICE_TOOL_DEFINITIONS } from '@my-pi-harness/execution';
-import type { InputRequest, MessageView } from '@my-pi-harness/protocol';
+import type { InputRequest } from '@my-pi-harness/protocol';
 import type { AgentRuntime } from './runtime.js';
 import type { AgentNode } from './types.js';
 import type { ResolvedModel } from '../models/gateway.js';
 import { RuntimeError } from '../errors.js';
 import { RunExecution } from '../runs/execution.js';
-import { runAcceptanceEvent } from '../runs/acceptance.js';
-import { decodeContextMessage, encodeContextMessage } from '../context/codec.js';
+import { prepareRun, resolveRunModel } from '../runs/prepare.js';
+import { decodeContextMessage } from '../context/codec.js';
 import { completeToolHistory } from '../context/tool-history.js';
 import { RunCapabilities } from '../capabilities/run.js';
-import { activeSkillContext } from '../capabilities/context.js';
 import {
   filterTaskToolset,
   allowedTaskCandidates,
@@ -20,7 +17,6 @@ import {
 import { createAgentHooks } from './run-hooks.js';
 import { AGENT_TOOL_DEFINITIONS } from './definitions.js';
 import { RunToolset, type RunToolSelection } from '../tools/toolset.js';
-import { communicationMessage } from '../context/agent-message.js';
 
 /** A child uses the same RunExecution and durable acceptance as a root conversation. */
 export async function launchAgentRun(
@@ -46,17 +42,19 @@ export async function launchAgentRun(
   try {
     const signal = node.controller.signal;
     signal.throwIfAborted();
-    resolved = await owner.options.gateway.resolve(node.run.providerId, node.run.modelId, signal);
-    signal.throwIfAborted();
     const thinkingLevel = task.role.thinkingLevel ?? parent.session.thinkingLevel;
-    if (!getSupportedThinkingLevels(resolved.model).includes(thinkingLevel))
-      throw new RuntimeError('MODEL_CAPABILITY', '子任务模型不支持选择的推理强度。');
     const session = {
       ...parent.session,
       providerId: node.run.providerId,
       modelId: node.run.modelId,
       thinkingLevel,
     };
+    resolved = await resolveRunModel(
+      owner.options.gateway,
+      session,
+      signal,
+      '子任务模型不支持选择的推理强度。',
+    );
     node.session = session;
     const source = parent.execution.options;
     const current = source.capabilities?.active ?? source.toolset;
@@ -108,104 +106,65 @@ export async function launchAgentRun(
       mode: 'send',
       ...(attachmentIds ? { attachmentIds: [...attachmentIds] } : {}),
     };
-    const prepared = work
-      ? await work.prepare(
-          session,
-          node.run.branchId,
-          snapshot.messages.map((message) => message.id),
-          input,
-          resolved,
-          basePrompt,
-          signal,
-        )
-      : undefined;
-    signal.throwIfAborted();
-    const at = Date.now();
-    let user: UserMessage = prepared
-      ? { ...prepared.user, timestamp: at }
-      : { role: 'user', content: text, timestamp: at };
-    if (messageId) {
-      const incoming = owner.options.store
-        .listAgentMessages(session.id, { kind: 'task', taskId: task.id })
-        .find((entry) => entry.id === messageId && entry.status === 'queued');
-      if (!incoming) throw new RuntimeError('AGENT_MESSAGE_CONFLICT', '续作通信已失效。');
-      user = communicationMessage(incoming);
-    }
-    const history =
-      prepared?.history ??
-      completeToolHistory(
-        owner.options.store.getTaskModelContext(session.id, task.id).map(decodeContextMessage),
-      );
-    const systemPrompt =
-      prepared?.systemPrompt ??
-      [basePrompt, activeSkillContext(skills)].filter(Boolean).join('\n\n');
-    const view: MessageView = {
-      id: randomUUID(),
-      sessionId: session.id,
-      branchId: node.run.branchId,
-      runId: node.run.id,
-      role: 'user',
-      ...(messageId ? { agentMessageId: messageId } : {}),
-      text,
-      thinking: '',
-      createdAt: at,
-      status: 'complete',
-      stopReason: null,
-      ...(attachmentIds ? { attachmentIds: [...attachmentIds] } : {}),
-    };
-    owner.commit(session.id, [
-      ...(prepared
-        ? [
-            {
-              type: 'work.updated',
-              runId: null,
-              at,
-              data: {
-                taskId: task.id,
-                state: { ...prepared.state, revision: prepared.state.revision + 1 },
-              },
-            },
-          ]
-        : []),
-      runAcceptanceEvent({
-        session,
-        run: node.run,
-        resolved,
-        requestId: input.requestId,
-        systemPrompt,
-        toolset,
-        external,
-        candidates,
-        diagnostics: [],
-        workspaceCandidates,
-        skills,
-      }),
+    const prepared = await prepareRun({
+      session,
+      run: node.run,
+      resolved,
+      input,
+      basePrompt,
+      skills,
+      sourceBranchId: node.run.branchId,
+      messageIds: snapshot.messages.map((message) => message.id),
+      history: () =>
+        completeToolHistory(
+          owner.options.store.getTaskModelContext(session.id, task.id).map(decodeContextMessage),
+        ),
+      signal,
+      ...(work ? { work } : {}),
       ...(messageId
-        ? [
-            {
-              type: 'task.message_consumed',
-              runId: node.run.id,
-              at,
-              data: { messageId, consumedRunId: node.run.id },
+        ? {
+            communication: () => {
+              const incoming = owner.options.store
+                .listAgentMessages(session.id, { kind: 'task', taskId: task.id })
+                .find((entry) => entry.id === messageId && entry.status === 'queued');
+              if (!incoming) throw new RuntimeError('AGENT_MESSAGE_CONFLICT', '续作通信已失效。');
+              return incoming;
             },
-          ]
-        : []),
-      {
-        type: 'message.started',
-        runId: node.run.id,
-        at,
-        data: view,
-        privateData: encodeContextMessage(user),
-      },
-    ]);
+          }
+        : {}),
+    });
+    owner.commit(
+      session.id,
+      prepared.acceptance(
+        {
+          toolset,
+          external,
+          candidates,
+          diagnostics: [],
+          workspaceCandidates,
+          skills,
+        },
+        (at) =>
+          messageId
+            ? [
+                {
+                  type: 'task.message_consumed',
+                  runId: node.run.id,
+                  at,
+                  data: { messageId, consumedRunId: node.run.id },
+                },
+              ]
+            : [],
+      ),
+    );
     accepted = true;
     execution = new RunExecution({
       session,
       run: node.run,
       resolved,
-      history,
-      user,
-      systemPrompt,
+      history: prepared.history,
+      user: prepared.user,
+      systemPrompt: prepared.systemPrompt,
       basePrompt,
       eligibleInputIds: [],
       toolset,

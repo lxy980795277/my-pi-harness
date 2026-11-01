@@ -17,7 +17,7 @@ export interface RunToolSelection {
   readonly external?: FrozenMcpTool;
 }
 
-interface RunToolRecord extends RunToolSelection {
+export interface RunToolRecord extends RunToolSelection {
   readonly fingerprint: string;
 }
 

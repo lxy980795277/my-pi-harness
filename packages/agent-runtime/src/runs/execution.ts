@@ -1,316 +1,73 @@
-import { randomUUID } from 'node:crypto';
-import { Agent, type AgentEvent } from '@earendil-works/pi-agent-core';
-import type { AssistantMessage, Message, UserMessage } from '@earendil-works/pi-ai';
-import type {
-  MessageView,
-  QueueInput,
-  RunView,
-  SessionSummary,
-  ToolCallRecord,
-  AgentMessage,
-  LiveMessageDelta,
-} from '@my-pi-harness/protocol';
-import { encodeContextMessage, encodeToolResult } from '../context/codec.js';
-import { RuntimeError } from '../errors.js';
-import type { ResolvedModel } from '../models/gateway.js';
+import type { Agent } from '@earendil-works/pi-agent-core';
+import type { RunView } from '@my-pi-harness/protocol';
 import type { EventInput } from '../sessions/ports.js';
-import { toolCallRecordId, type ToolRuntime } from '../tools/runtime.js';
-import type { WorkRuntime } from '../work/runtime.js';
-import { userWithAttachments } from '../context/attachments.js';
-import type { RunToolset } from '../tools/toolset.js';
-import { messageUsage } from './message-usage.js';
-import type { ExternalTools } from '../tools/external.js';
-import { StoredToolIntentSchema } from '@my-pi-harness/protocol';
-import { Value } from 'typebox/value';
-import { Type } from 'typebox';
-import type { ToolRunContext } from '../tools/types.js';
-import type { RunCapabilities } from '../capabilities/run.js';
-import type { FrozenInputCapabilities } from '../capabilities/inputs.js';
-import { activeSkillContext } from '../capabilities/context.js';
-import type { AgentRunHooks } from '../agents/ports.js';
-import { communicationMessage } from '../context/agent-message.js';
+import { RuntimeError } from '../errors.js';
+import { createRunAgent } from './agent.js';
+import { RunInputDelivery } from './inputs.js';
+import { RunMessageRecorder } from './messages.js';
 import { runFailureMessage } from './failure.js';
+import type { RunExecutionOptions } from './types.js';
 
-interface RunExecutionOptions {
-  session: SessionSummary;
-  run: RunView;
-  resolved: ResolvedModel;
-  history: Message[];
-  user: UserMessage;
-  systemPrompt: string;
-  basePrompt: string;
-  eligibleInputIds: readonly string[];
-  toolset: RunToolset;
-  capabilities?: RunCapabilities;
-  acceptedCapabilities?: FrozenInputCapabilities;
-  commit(events: readonly EventInput[]): void;
-  publishMessageDelta(delta: LiveMessageDelta): void;
-  queue(): QueueInput[];
-  onError(error: unknown): void;
-  tools?: ToolRuntime;
-  work?: WorkRuntime;
-  externalTools?: ExternalTools;
-  agents?: AgentRunHooks;
-}
-
-function validToolIntents(message: AssistantMessage): boolean {
-  if (message.content.length > 1024) return false;
-  const ids = new Set<string>();
-  for (const part of message.content) {
-    if (part.type !== 'toolCall') continue;
-    if (
-      !Value.Check(StoredToolIntentSchema, part) ||
-      ids.has(part.id) ||
-      !Value.Check(Type.Record(Type.String(), Type.Unknown()), part.arguments)
-    )
-      return false;
-    ids.add(part.id);
-  }
-  return true;
-}
-
-/** Interrupted SDK finals may omit a body that has already reached the live snapshot. */
-function terminalContent(
-  message: AssistantMessage,
-  current: MessageView,
-  partial?: AssistantMessage,
-): AssistantMessage {
-  const content = [...message.content];
-  const text = content
-    .filter((part) => part.type === 'text')
-    .map((part) => part.text)
-    .join('');
-  const thinking = content
-    .filter((part) => part.type === 'thinking')
-    .map((part) => part.thinking)
-    .join('');
-  if (text.length === 0 && current.text.length > 0)
-    content.push({ type: 'text', text: current.text });
-  if (thinking.length === 0 && current.thinking.length > 0) {
-    const observed = partial?.content.filter((part) => part.type === 'thinking') ?? [];
-    if (observed.map((part) => part.thinking).join('') === current.thinking)
-      content.unshift(...observed);
-    else content.unshift({ type: 'thinking', thinking: current.thinking });
-  }
-  return { ...message, content };
-}
-
-/** One SDK run; event subscribers never wait for this owner's idle promise. */
+/** One Pi execution owns cancellation, durable failure and descendant settlement. */
 export class RunExecution {
   public readonly agent: Agent;
   public task: Promise<void> = Promise.resolve();
   public cancelled = false;
   public persistenceFailed = false;
   public outcome: RunView['status'] = 'running';
-  private current: MessageView | undefined;
-  private partial: AssistantMessage | undefined;
-  private final: AssistantMessage | undefined;
   private failure: unknown;
-  private readonly queuedMessages = new WeakMap<UserMessage, QueueInput>();
-  private readonly agentMessages = new WeakMap<UserMessage, AgentMessage>();
-  private readonly unsubscribe: () => void;
-  private readonly eligible: Set<string>;
   private started = false;
-  private readonly toolAbort = new AbortController();
-  private lastAssistantMessageId: string | undefined;
-  private turns = 0;
   private unknownOutcome = false;
-  private discardedAssistantCalls = false;
-  private readonly recordedTools = new Set<string>();
-  private readonly declaredCalls = new Map<
-    string,
-    {
-      assistantId: string;
-      providerCallId: string;
-      name: string;
-      arguments: Record<string, unknown>;
-    }
-  >();
+  private readonly toolAbort = new AbortController();
+  private readonly unsubscribe: () => void;
+  private readonly messages: RunMessageRecorder;
+  private readonly inputs: RunInputDelivery;
 
   public constructor(public readonly options: RunExecutionOptions) {
-    this.eligible = new Set(options.eligibleInputIds);
-    let tools: ReturnType<ToolRuntime['createTools']> = [];
-    let toolContext: ToolRunContext | undefined;
-    if (options.tools) {
-      toolContext = {
-        session: options.session,
-        run: options.run,
-        readOnly: options.session.approvalMode === 'read-only' || options.agents?.readOnly === true,
-        signal: this.toolAbort.signal,
-        supportsImages: options.resolved.model.input.includes('image'),
-        recorded: this.recordedTools,
-        assistantMessageId: () => {
-          if (!this.lastAssistantMessageId)
-            throw new RuntimeError('STREAM_PROTOCOL', 'Tool request has no assistant call');
-          return this.lastAssistantMessageId;
-        },
-        commit: (events) => this.commit(events),
-        persistenceFailure: (error): never => this.failPersistence(error),
-        stopAfterTool: (reason): void => this.cancel(reason),
-        ...(options.capabilities ? { controls: options.capabilities } : {}),
-        ...(options.agents
-          ? {
-              agents: options.agents.controls,
-              beforeTool: options.agents.beforeTool,
-              modelStream: options.agents.stream,
-            }
-          : {}),
-        outcomeUnknown: (message): void => {
-          this.unknownOutcome = true;
-          this.failure ??= new RuntimeError('TOOL_OUTCOME_UNKNOWN', message);
-          options.agents?.fault(this.failure);
-          this.agent.clearAllQueues();
-          this.toolAbort.abort(this.failure);
-          this.agent.abort();
-        },
-      };
-      tools = options.tools.createTools(toolContext, options.toolset);
-    }
-    this.agent = new Agent({
-      initialState: {
-        messages: options.history,
-        model: options.resolved.model,
-        tools,
-        thinkingLevel: options.session.thinkingLevel,
-        systemPrompt: options.systemPrompt,
-      },
-      streamFn: async (model, context, streamOptions) => {
-        if (this.unknownOutcome) throw this.failure;
-        await options.capabilities?.validate(this.toolAbort.signal);
-        const external = this.toolset().records.flatMap((record) =>
-          record.external ? [record.external] : [],
-        );
-        if (external.length > 0) {
-          if (!options.externalTools) throw new RuntimeError('MCP_UNAVAILABLE', 'MCP不可用。');
-          await options.externalTools.validateBindings(external, this.toolAbort.signal);
-        }
-        options.capabilities?.assertCurrent();
-        if (external.length > 0) options.externalTools?.assertBindingsCurrent(external);
-        return await (options.agents?.stream ?? options.resolved.streamFn)(
-          model,
-          context,
-          streamOptions,
-        );
-      },
-      sessionId: options.run.taskId ?? options.session.id,
-      steeringMode: 'one-at-a-time',
-      followUpMode: 'one-at-a-time',
-      toolExecution: 'sequential',
-      prepareRequest: ({ context }) => {
-        if (this.unknownOutcome) throw this.failure;
-        let advanced = false;
-        try {
-          advanced = options.capabilities?.advance() ?? false;
-        } catch (error) {
-          if (error instanceof RuntimeError && error.code === 'CAPABILITY_PERSISTENCE_FAILED')
-            this.failPersistence(error);
-          this.failure ??= error;
-          this.toolAbort.abort(error);
-          this.agent.clearAllQueues();
-          this.agent.abort();
-          throw error;
-        }
-        if (!advanced) return undefined;
-        if (!options.tools || !toolContext)
-          throw new RuntimeError('TOOL_NOT_AVAILABLE', '工具运行时不可用。');
-        tools = options.tools.createTools(toolContext, this.toolset());
-        return {
-          context: {
-            ...context,
-            tools,
-            ...(!options.work
-              ? {
-                  messages: [
-                    {
-                      role: 'system' as const,
-                      content: [
-                        options.basePrompt,
-                        activeSkillContext(options.capabilities?.skills() ?? []),
-                      ]
-                        .filter(Boolean)
-                        .join('\n\n'),
-                      toolsAdded: [...this.toolset().definitions],
-                      timestamp: Date.now(),
-                    },
-                    ...context.messages.filter((message) => message.role !== 'system'),
-                  ],
-                }
-              : {}),
-          },
-        };
-      },
-      ...(options.work
-        ? {
-            transformContext: async (
-              messages: Message[],
-              signal?: AbortSignal,
-            ): Promise<Message[]> => {
-              if (this.unknownOutcome) throw this.failure;
-              const work = options.work;
-              if (!work) return messages;
-              const resolved = options.agents
-                ? {
-                    ...options.resolved,
-                    model: {
-                      ...options.resolved.model,
-                      maxTokens: options.agents.outputTokens(options.resolved.model.maxTokens),
-                    },
-                    streamFn: options.agents.stream,
-                  }
-                : options.resolved;
-              try {
-                return await work.context.project({
-                  session: options.session,
-                  run: options.run,
-                  resolved,
-                  messages,
-                  basePrompt: options.basePrompt,
-                  currentTask:
-                    typeof options.user.content === 'string'
-                      ? options.user.content
-                      : options.user.content
-                          .filter((part) => part.type === 'text')
-                          .slice(0, 1)
-                          .map((part) => part.text)
-                          .join(''),
-                  toolDefinitions: this.toolset().definitions,
-                  capabilityRevision: options.capabilities?.revision ?? 1,
-                  skills: options.capabilities?.skills() ?? [],
-                  signal: signal
-                    ? AbortSignal.any([signal, this.toolAbort.signal])
-                    : this.toolAbort.signal,
-                });
-              } catch (error) {
-                this.failure ??= error;
-                throw error;
-              }
-            },
-          }
-        : {}),
-      finishTurn: ({ message }) => {
-        if (this.unknownOutcome) return { action: 'end' };
-        this.turns += 1;
-        if (
-          this.turns >= (options.agents?.maxTurns ?? 32) &&
-          message.stopReason !== 'stop' &&
-          message.stopReason !== 'length' &&
-          message.stopReason !== 'error' &&
-          message.stopReason !== 'aborted'
-        ) {
-          this.failure ??= new RuntimeError('TURN_LIMIT', '工具循环达到本次运行的轮数上限。');
-          return { action: 'end' };
-        }
-        if (
-          (tools.length === 0 && message.stopReason === 'toolUse') ||
-          message.stopReason === 'deferred'
-        )
-          return { action: 'end' };
-        return undefined;
+    this.messages = new RunMessageRecorder(options, {
+      cancelled: () => this.cancelled,
+      commit: (events) => this.commit(events),
+      fail: (error) => this.fail(this.failure ?? error),
+      responseLimit: (error): never => {
+        this.failure ??= error;
+        this.agent.abort();
+        throw this.failure;
       },
     });
+    this.inputs = new RunInputDelivery(options, {
+      assertKnownOutcome: () => this.assertKnownOutcome(),
+      isOutcomeUnknown: () => this.unknownOutcome,
+      fail: (error) => this.fail(this.failure ?? error),
+      commit: (events) => this.commit(events),
+    });
+    this.agent = createRunAgent(options, {
+      signal: this.toolAbort.signal,
+      recorded: this.messages.recordedTools,
+      assistantMessageId: () => this.messages.assistantMessageId(),
+      commit: (events) => this.commit(events),
+      failPersistence: (error): never => this.failPersistence(error),
+      rememberFailure: (error) => {
+        this.failure ??= error;
+      },
+      fail: (error) => this.fail(error),
+      cancel: (reason) => this.cancel(reason),
+      outcomeUnknown: (message) => {
+        this.unknownOutcome = true;
+        this.failure ??= new RuntimeError('TOOL_OUTCOME_UNKNOWN', message);
+        options.agents?.fault(this.failure);
+        this.agent.clearAllQueues();
+        this.toolAbort.abort(this.failure);
+        this.agent.abort();
+      },
+      assertKnownOutcome: () => this.assertKnownOutcome(),
+      isOutcomeUnknown: () => this.unknownOutcome,
+    });
     this.unsubscribe = this.agent.subscribe((event) => {
+      if (this.persistenceFailed) return;
       try {
-        this.receive(event);
+        if (event.type === 'message_start' && event.message.role === 'user')
+          this.inputs.receive(event.message);
+        else this.messages.receive(event);
       } catch (error) {
         this.failPersistence(error);
       }
@@ -352,38 +109,13 @@ export class RunExecution {
   }
 
   public rebuildQueue(): void {
-    this.agent.clearAllQueues();
-    if (this.unknownOutcome) return;
-    for (const input of this.options.queue()) {
-      if (!this.eligible.has(input.id)) continue;
-      const message: UserMessage = this.options.work
-        ? userWithAttachments(
-            this.options.work.options.store,
-            input,
-            input.createdAt,
-            this.options.resolved.model.input.includes('image'),
-          )
-        : {
-            role: 'user',
-            content: input.text,
-            timestamp: input.createdAt,
-          };
-      this.queuedMessages.set(message, input);
-      if (input.mode === 'steer') this.agent.steer(message);
-      else this.agent.followUp(message);
-    }
-    for (const input of this.options.agents?.incoming() ?? []) {
-      const message = communicationMessage(input);
-      this.agentMessages.set(message, input);
-      this.agent.steer(message);
-    }
+    this.inputs.rebuild(this.agent);
   }
-
   public allowQueue(inputId: string): void {
-    this.eligible.add(inputId);
+    this.inputs.allow(inputId);
   }
   public eligibleQueueIds(): readonly string[] {
-    return [...this.eligible];
+    return this.inputs.eligibleIds();
   }
 
   /** Release an accepted run that failed before its first SDK request. */
@@ -411,7 +143,8 @@ export class RunExecution {
       this.agent.clearAllQueues();
     }
     try {
-      const successful = this.final?.stopReason === 'stop' || this.final?.stopReason === 'length';
+      const successful =
+        this.messages.final?.stopReason === 'stop' || this.messages.final?.stopReason === 'length';
       await this.options.agents?.finish(
         this.cancelled || this.failure !== undefined || !successful,
       );
@@ -423,14 +156,14 @@ export class RunExecution {
       this.options.capabilities?.close();
     }
     if (this.persistenceFailed) return;
-    this.recordUnstartedCalls();
-    const reason = this.final?.stopReason;
+    this.messages.recordUnstartedCalls();
+    const reason = this.messages.final?.stopReason;
     this.outcome = this.cancelled
       ? 'cancelled'
       : !this.failure && (reason === 'stop' || reason === 'length')
         ? 'completed'
         : 'failed';
-    this.finishCurrent(this.outcome === 'cancelled' ? 'cancelled' : 'failed');
+    this.messages.finishCurrent(this.outcome === 'cancelled' ? 'cancelled' : 'failed');
     this.commit([
       {
         type: 'run.finished',
@@ -441,332 +174,6 @@ export class RunExecution {
           finishedAt: Date.now(),
           error: this.outcome === 'failed' ? this.failureMessage() : null,
         },
-      },
-    ]);
-  }
-
-  private receive(event: AgentEvent): void {
-    if (this.persistenceFailed) return;
-    switch (event.type) {
-      case 'message_start': {
-        if (event.message.role === 'user') {
-          const input = this.queuedMessages.get(event.message);
-          if (input) this.consumeInput(input, event.message);
-          const incoming = this.agentMessages.get(event.message);
-          if (incoming) this.consumeAgentInput(incoming, event.message);
-        } else if (event.message.role === 'assistant') {
-          this.discardedAssistantCalls = false;
-          this.finishCurrent(this.cancelled ? 'cancelled' : 'failed');
-          this.partial = event.message;
-          this.current = {
-            id: randomUUID(),
-            sessionId: this.options.session.id,
-            branchId: this.options.run.branchId,
-            runId: this.options.run.id,
-            role: 'assistant',
-            text: '',
-            thinking: '',
-            createdAt: event.message.timestamp,
-            status: 'streaming',
-            stopReason: null,
-          };
-          this.commit([
-            {
-              type: 'message.started',
-              runId: this.options.run.id,
-              at: Date.now(),
-              data: this.current,
-            },
-          ]);
-        }
-        break;
-      }
-      case 'message_update': {
-        if (!this.current)
-          throw new RuntimeError('STREAM_PROTOCOL', 'Model update has no active message');
-        const update = event.assistantMessageEvent;
-        if (event.message.role === 'assistant') this.partial = event.message;
-        if (update.type === 'text_delta' || update.type === 'thinking_delta') {
-          const field = update.type === 'text_delta' ? 'text' : 'thinking';
-          const next = this.current[field] + update.delta;
-          if (next.length > 2_000_000) {
-            this.failure ??= new RuntimeError(
-              'RESPONSE_LIMIT',
-              'Model response exceeded the configured limit',
-            );
-            this.agent.abort();
-            throw this.failure;
-          }
-          this.current[field] = next;
-          this.options.publishMessageDelta({
-            runId: this.options.run.id,
-            messageId: this.current.id,
-            [field]: update.delta,
-          });
-        }
-        break;
-      }
-      case 'message_end': {
-        if (event.message.role === 'toolResult') {
-          if (this.discardedAssistantCalls) break;
-          const resultMessage = event.message;
-          if (!this.lastAssistantMessageId)
-            throw new RuntimeError('STREAM_PROTOCOL', 'Tool result has no assistant call');
-          const toolId = toolCallRecordId(
-            this.options.run.id,
-            this.lastAssistantMessageId,
-            resultMessage.toolCallId,
-          );
-          if (this.recordedTools.has(toolId)) break;
-          const call = this.final?.content.find(
-            (part) => part.type === 'toolCall' && part.id === resultMessage.toolCallId,
-          );
-          let argumentsPreview: Record<string, unknown> = {};
-          if (call?.type === 'toolCall' && JSON.stringify(call.arguments).length <= 256_000)
-            argumentsPreview = call.arguments;
-          const at = Date.now();
-          const tool: ToolCallRecord = {
-            id: toolId,
-            sessionId: this.options.session.id,
-            runId: this.options.run.id,
-            branchId: this.options.run.branchId,
-            name: resultMessage.toolName.slice(0, 100) || 'unknown_tool',
-            arguments: argumentsPreview,
-            status: 'failed',
-            binding: { kind: 'rejected', reason: '工具请求未通过执行前校验' },
-            dispatch: { state: 'not_applicable' },
-            summary: '工具请求未通过执行前校验',
-            result: resultMessage.content
-              .filter((part) => part.type === 'text')
-              .map((part) => part.text)
-              .join('\n')
-              .slice(0, 128_000),
-            diff: null,
-            createdAt: at,
-            updatedAt: at,
-          };
-          this.commit([
-            { type: 'tool.requested', runId: this.options.run.id, at, data: { tool } },
-            {
-              type: 'tool.context',
-              runId: this.options.run.id,
-              at,
-              data: {
-                branchId: this.options.run.branchId,
-                afterMessageId: this.lastAssistantMessageId,
-                toolCallId: toolId,
-              },
-              privateData: encodeToolResult({
-                toolResultVersion: 1,
-                providerCallId: resultMessage.toolCallId,
-                toolName: resultMessage.toolName,
-                content: resultMessage.content,
-                isError: true,
-                at,
-                outcome: 'failed',
-                origin: 'host',
-              }),
-            },
-          ]);
-          this.recordedTools.add(toolId);
-          break;
-        }
-        if (event.message.role !== 'assistant') break;
-        this.final = event.message;
-        if (!this.current)
-          throw new RuntimeError('STREAM_PROTOCOL', 'Final model response has no active message');
-        let status: MessageView['status'] =
-          this.cancelled || event.message.stopReason === 'aborted'
-            ? 'cancelled'
-            : event.message.stopReason === 'stop' ||
-                event.message.stopReason === 'length' ||
-                event.message.stopReason === 'toolUse'
-              ? 'complete'
-              : 'failed';
-        if (status === 'complete' && !validToolIntents(event.message)) {
-          status = 'failed';
-          this.discardedAssistantCalls = true;
-          this.failure ??= new RuntimeError(
-            'MODEL_TOOL_INTENT_INVALID',
-            '模型返回的工具调用标识或参数格式无效。',
-          );
-          this.toolAbort.abort(this.failure);
-          this.agent.clearAllQueues();
-          this.agent.abort();
-        }
-        const terminal =
-          status === 'complete'
-            ? event.message
-            : terminalContent(event.message, this.current, this.partial);
-        const text = terminal.content
-          .filter((part) => part.type === 'text')
-          .map((part) => part.text)
-          .join('');
-        const thinking = terminal.content
-          .filter((part) => part.type === 'thinking')
-          .map((part) => part.thinking)
-          .join('');
-        if (text.length > 2_000_000 || thinking.length > 2_000_000) {
-          this.failure ??= new RuntimeError(
-            'RESPONSE_LIMIT',
-            'Model response exceeded the configured limit',
-          );
-          this.agent.abort();
-          throw this.failure;
-        }
-        const at = Date.now();
-        const usage = messageUsage(terminal.usage);
-        this.current = {
-          ...this.current,
-          text,
-          thinking,
-          status,
-          stopReason: event.message.stopReason,
-          finishedAt: at,
-          ...(usage ? { usage } : {}),
-        };
-        this.commit([
-          {
-            type: 'message.completed',
-            runId: this.options.run.id,
-            at,
-            data: { message: this.current },
-            ...(validToolIntents(terminal) ? { privateData: encodeContextMessage(terminal) } : {}),
-          },
-        ]);
-        this.lastAssistantMessageId = this.current.id;
-        for (const call of event.message.content) {
-          if (
-            status !== 'complete' ||
-            (event.message.stopReason !== 'toolUse' && event.message.stopReason !== 'length')
-          )
-            break;
-          if (call.type !== 'toolCall') continue;
-          const id = toolCallRecordId(this.options.run.id, this.current.id, call.id);
-          this.declaredCalls.set(id, {
-            assistantId: this.current.id,
-            providerCallId: call.id,
-            name: call.name,
-            arguments: call.arguments,
-          });
-        }
-        this.current = undefined;
-        this.partial = undefined;
-        break;
-      }
-      default:
-        break;
-    }
-  }
-
-  /** Pair declared calls that the sequential SDK never entered before termination. */
-  private recordUnstartedCalls(): void {
-    for (const [id, call] of this.declaredCalls) {
-      if (this.recordedTools.has(id)) continue;
-      const at = Date.now();
-      const text = '宿主记录：本次运行结束前未派发此调用。';
-      const args = JSON.stringify(call.arguments).length <= 256_000 ? call.arguments : {};
-      const tool: ToolCallRecord = {
-        id,
-        sessionId: this.options.session.id,
-        runId: this.options.run.id,
-        branchId: this.options.run.branchId,
-        name: call.name.slice(0, 100),
-        arguments: args,
-        status: 'interrupted',
-        binding: { kind: 'rejected', reason: text },
-        dispatch: { state: 'not_applicable' },
-        summary: text,
-        result: text,
-        diff: null,
-        createdAt: at,
-        updatedAt: at,
-      };
-      this.commit([
-        {
-          type: 'tool.requested',
-          runId: this.options.run.id,
-          at,
-          data: { tool, afterMessageId: call.assistantId },
-        },
-        {
-          type: 'tool.context',
-          runId: this.options.run.id,
-          at,
-          data: {
-            toolCallId: id,
-            branchId: this.options.run.branchId,
-            afterMessageId: call.assistantId,
-          },
-          privateData: encodeToolResult({
-            toolResultVersion: 1,
-            providerCallId: call.providerCallId,
-            toolName: call.name,
-            content: [{ type: 'text', text }],
-            isError: true,
-            at,
-            outcome: 'interrupted',
-            origin: 'host',
-          }),
-        },
-      ]);
-      this.recordedTools.add(id);
-    }
-  }
-
-  private consumeInput(input: QueueInput, message: UserMessage): void {
-    if (this.unknownOutcome) throw this.failure;
-    const external = this.toolset().records.flatMap((record) =>
-      record.external ? [record.external] : [],
-    );
-    try {
-      if (external.length > 0) {
-        if (!this.options.externalTools) throw new RuntimeError('MCP_UNAVAILABLE', 'MCP不可用。');
-        this.options.externalTools.assertBindingsCurrent(external);
-      }
-      this.options.capabilities?.assertCurrent();
-    } catch (cause) {
-      this.failure ??= new RuntimeError(
-        'INPUT_AUTHORITY_REVOKED',
-        '排队输入的授权已失效，消息已保留。',
-        { cause },
-      );
-      this.toolAbort.abort(this.failure);
-      this.agent.clearAllQueues();
-      this.agent.abort();
-      return;
-    }
-    const current = this.options.queue().find(({ id }) => id === input.id);
-    if (!current || current.revision !== input.revision)
-      throw new RuntimeError('QUEUE_SELECTED', 'Queued input changed while being selected');
-    const view: MessageView = {
-      id: randomUUID(),
-      sessionId: this.options.session.id,
-      branchId: this.options.run.branchId,
-      runId: this.options.run.id,
-      role: 'user',
-      text: input.text,
-      ...(input.attachmentIds ? { attachmentIds: input.attachmentIds } : {}),
-      mcpTools: input.mcpTools ?? [],
-      skills: input.skills ?? [],
-      thinking: '',
-      createdAt: Date.now(),
-      status: 'complete',
-      stopReason: null,
-    };
-    this.commit([
-      {
-        type: 'queue.consumed',
-        runId: this.options.run.id,
-        at: Date.now(),
-        data: { inputId: input.id },
-      },
-      {
-        type: 'message.started',
-        runId: this.options.run.id,
-        at: Date.now(),
-        data: view,
-        privateData: encodeContextMessage(message),
       },
     ]);
   }
@@ -782,64 +189,16 @@ export class RunExecution {
   private failureMessage(): string {
     if (this.failure !== undefined)
       return runFailureMessage({ kind: 'owned', cause: this.failure });
-    const owned = this.final ? this.options.agents?.failure(this.final) : undefined;
+    const owned = this.messages.final
+      ? this.options.agents?.failure(this.messages.final)
+      : undefined;
     return owned
       ? runFailureMessage({ kind: 'owned', cause: owned })
-      : runFailureMessage({ kind: 'model', message: this.final?.errorMessage });
+      : runFailureMessage({ kind: 'model', message: this.messages.final?.errorMessage });
   }
 
-  private finishCurrent(status: 'failed' | 'cancelled'): void {
-    if (!this.current) return;
-    const at = Date.now();
-    const stopReason = status === 'cancelled' ? 'aborted' : 'error';
-    const terminal = this.partial
-      ? terminalContent({ ...this.partial, stopReason }, this.current)
-      : undefined;
-    this.current = { ...this.current, status, stopReason, finishedAt: at };
-    this.commit([
-      {
-        type: 'message.completed',
-        runId: this.options.run.id,
-        at,
-        data: { message: this.current },
-        ...(terminal && validToolIntents(terminal)
-          ? { privateData: encodeContextMessage(terminal) }
-          : {}),
-      },
-    ]);
-    this.current = undefined;
-    this.partial = undefined;
-  }
-
-  private consumeAgentInput(input: AgentMessage, message: UserMessage): void {
-    const at = Date.now();
-    const view: MessageView = {
-      id: randomUUID(),
-      sessionId: this.options.session.id,
-      branchId: this.options.run.branchId,
-      runId: this.options.run.id,
-      role: 'user',
-      agentMessageId: input.id,
-      text: input.text,
-      thinking: '',
-      createdAt: at,
-      status: 'complete',
-      stopReason: null,
-    };
-    this.commit([
-      ...(this.options.agents?.consume(input, view) ?? []),
-      {
-        type: 'message.started',
-        runId: this.options.run.id,
-        at,
-        data: view,
-        privateData: encodeContextMessage(message),
-      },
-    ]);
-  }
-
-  private toolset(): RunToolset {
-    return this.options.capabilities?.active ?? this.options.toolset;
+  private assertKnownOutcome(): void {
+    if (this.unknownOutcome) throw this.failure;
   }
 
   private failPersistence(error: unknown): never {

@@ -15,7 +15,7 @@ import {
   encodeContextMessage,
   encodeToolResult,
 } from '../src/context/codec.js';
-import { toolCallRecordId } from '../src/tools/runtime.js';
+import { toolCallRecordId } from '../src/tools/ledger.js';
 import { WorkRuntime } from '../src/work/runtime.js';
 
 async function fixture() {

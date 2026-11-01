@@ -1,15 +1,10 @@
 import { OFFICE_TOOL_DEFINITIONS } from '@my-pi-harness/execution';
 import { randomUUID } from 'node:crypto';
-import {
-  getSupportedThinkingLevels,
-  cleanupSessionResources,
-  type UserMessage,
-} from '@earendil-works/pi-ai';
+import { cleanupSessionResources } from '@earendil-works/pi-ai';
 import type {
   EditInput,
   HarnessEvent,
   InputRequest,
-  MessageView,
   QueueInput,
   QueuePatchInput,
   ResolvedSessionCreateInput,
@@ -19,11 +14,7 @@ import type {
   FrozenSkill,
   LiveMessageDelta,
 } from '@my-pi-harness/protocol';
-import {
-  decodeContextMessage,
-  encodeContextMessage,
-  snapshotPrivateData,
-} from '../context/codec.js';
+import { decodeContextMessage, snapshotPrivateData } from '../context/codec.js';
 import { RuntimeError } from '../errors.js';
 import type { ModelGateway } from '../models/gateway.js';
 import { RunExecution } from '../runs/execution.js';
@@ -48,7 +39,7 @@ import {
   SKILL_TOOL_DEFINITIONS,
 } from '../capabilities/run.js';
 import type { SkillsPort, ToolDiscoveryPort } from '../capabilities/ports.js';
-import { capabilityContext, activeSkillContext } from '../capabilities/context.js';
+import { capabilityContext } from '../capabilities/context.js';
 import { ToolCatalogSearch, type ToolSearchEmbedder } from '../capabilities/search.js';
 import { freezeSkillMentions } from '../capabilities/skill-mentions.js';
 import { availableSkillHistory, skillHistoryIds } from '../capabilities/skill-history.js';
@@ -56,7 +47,7 @@ import { AgentRuntime } from '../agents/runtime.js';
 import type { AgentStore } from '../agents/ports.js';
 import { AGENT_TOOL_DEFINITIONS } from '../agents/definitions.js';
 import { agentContext } from '../agents/run-hooks.js';
-import { runAcceptanceEvent } from '../runs/acceptance.js';
+import { prepareRun, resolveRunModel } from '../runs/prepare.js';
 
 export interface SessionRuntimeOptions {
   store: RuntimeStore;
@@ -468,29 +459,16 @@ export class SessionRuntime {
     historyIds?: readonly string[],
     eligibleInputIds: readonly string[] = [],
   ): Promise<InputAcceptance> {
-    const resolved = await this.options.gateway.resolve(
-      session.providerId,
-      session.modelId,
-      signal,
-    );
+    const resolved = await resolveRunModel(this.options.gateway, session, signal);
     let transferred = false;
     let capabilities: RunCapabilities | undefined;
     try {
       signal.throwIfAborted();
-      if (
-        !resolved.model.input.includes('text') ||
-        !getSupportedThinkingLevels(resolved.model).includes(session.thinkingLevel)
-      ) {
-        throw new RuntimeError(
-          'MODEL_CAPABILITY',
-          'Model does not support the selected thinking level',
-        );
-      }
       this.ensureOpen();
       const branchId = session.activeBranchId;
       const priorBranch =
         prefix.length > 0 ? this.requireSession(session.id).activeBranchId : branchId;
-      let history = completeToolHistory(
+      const history = completeToolHistory(
         this.options.store
           .getModelContext(session.id, priorBranch, historyIds)
           .map(decodeContextMessage),
@@ -549,23 +527,7 @@ export class SessionRuntime {
         finishedAt: null,
         error: null,
       };
-      let user: UserMessage = { role: 'user', content: input.text, timestamp: at };
-      const userView: MessageView = {
-        id: randomUUID(),
-        sessionId: session.id,
-        branchId,
-        runId: run.id,
-        role: 'user',
-        text: input.text,
-        mcpTools: structuredClone(input.mcpTools ?? []),
-        skills: structuredClone(input.skills ?? []),
-        ...(input.attachmentIds ? { attachmentIds: input.attachmentIds } : {}),
-        thinking: '',
-        createdAt: at,
-        status: 'complete',
-        stopReason: null,
-      };
-      let systemPrompt =
+      const initialPrompt =
         this.options.systemPrompt ??
         (session.workspaceId === null
           ? ''
@@ -573,8 +535,8 @@ export class SessionRuntime {
       const skillCatalog = this.options.skills
         ? await this.options.skills.list(session.workspaceId, signal)
         : [];
-      systemPrompt = [
-        systemPrompt,
+      const systemPrompt = [
+        initialPrompt,
         capabilityContext({
           discovery: this.options.discovery !== undefined,
           candidates: frozen.candidates,
@@ -587,26 +549,20 @@ export class SessionRuntime {
         .filter(Boolean)
         .join('\n\n');
       const basePrompt = systemPrompt;
-      const prepared = this.options.work
-        ? await this.options.work.prepare(
-            session,
-            priorBranch,
-            historyIds ?? this.getSnapshot(session.id).messages.map(({ id }) => id),
-            input,
-            resolved,
-            systemPrompt,
-            signal,
-          )
-        : undefined;
-      if (prepared) {
-        history = prepared.history;
-        user = { ...prepared.user, timestamp: at };
-        systemPrompt = prepared.systemPrompt;
-      }
-      if (!this.options.work)
-        systemPrompt = [systemPrompt, activeSkillContext(activatedSkills)]
-          .filter(Boolean)
-          .join('\n\n');
+      const prepared = await prepareRun({
+        session,
+        run,
+        resolved,
+        input: { ...input, mcpTools: input.mcpTools ?? [], skills: input.skills ?? [] },
+        basePrompt,
+        skills: activatedSkills,
+        sourceBranchId: priorBranch,
+        messageIds: historyIds ?? this.getSnapshot(session.id).messages.map(({ id }) => id),
+        history: () => history,
+        signal,
+        acceptedAt: at,
+        ...(this.options.work ? { work: this.options.work } : {}),
+      });
       signal.throwIfAborted();
       let toolset: RunToolset;
       if (this.options.tools)
@@ -638,52 +594,37 @@ export class SessionRuntime {
           ...(this.options.skills ? { skillPort: this.options.skills } : {}),
           commit: (records) => this.commit(session.id, records),
         });
-      const events: EventInput[] = [
-        ...prefix,
-        ...(prepared
-          ? [
-              {
-                type: 'work.updated',
-                runId: null,
-                at,
-                data: { state: { ...prepared.state, revision: prepared.state.revision + 1 } },
-              },
-            ]
-          : []),
-        runAcceptanceEvent({
-          run,
-          session,
-          requestId: input.requestId,
-          resolved,
-          systemPrompt,
+      const events = prepared.acceptance(
+        {
           toolset,
           external,
           candidates: frozen.candidates,
           diagnostics: frozen.diagnostics ?? [],
           workspaceCandidates: session.workspaceId === null ? [] : OFFICE_TOOL_DEFINITIONS,
           skills: activatedSkills,
-        }),
-        ...(queuedInputId
-          ? [{ type: 'queue.consumed', runId: run.id, at, data: { inputId: queuedInputId } }]
-          : []),
-        {
-          type: 'message.started',
-          runId: run.id,
-          at,
-          data: userView,
-          privateData: encodeContextMessage(user),
         },
-      ];
-      this.commit(session.id, events);
+        (acceptedAt) =>
+          queuedInputId
+            ? [
+                {
+                  type: 'queue.consumed',
+                  runId: run.id,
+                  at: acceptedAt,
+                  data: { inputId: queuedInputId },
+                },
+              ]
+            : [],
+      );
+      this.commit(session.id, [...prefix, ...events]);
       let execution: RunExecution | undefined;
       try {
         execution = new RunExecution({
           session,
           run,
           resolved,
-          history,
-          user,
-          systemPrompt,
+          history: prepared.history,
+          user: prepared.user,
+          systemPrompt: prepared.systemPrompt,
           basePrompt,
           eligibleInputIds,
           toolset,

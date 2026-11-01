@@ -3,7 +3,7 @@ import { lstat } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import {
   ExecutionError,
-  openRegular,
+  readStableFile,
   parseWorkspaceRelativePath,
   resolveWorkspaceRoot,
   toWorkspaceRelativePath,
@@ -45,41 +45,32 @@ async function readRule(
     throw error;
   }
   checkCancelled(signal);
-  const handle = await openRegular(path, remainingBytes);
+  let bytes: Buffer;
   try {
-    const before = await handle.stat();
-    const buffer = Buffer.alloc(remainingBytes + 1);
-    let length = 0;
-    while (length < buffer.length) {
-      checkCancelled(signal);
-      const chunk = await handle.read(buffer, length, buffer.length - length, length);
-      if (chunk.bytesRead === 0) break;
-      length += chunk.bytesRead;
+    bytes = await readStableFile(path, signal, remainingBytes);
+  } catch (cause) {
+    if (cause instanceof ExecutionError) {
+      if (cause.code === 'CANCELLED') throw abortError();
+      if (cause.code === 'FILE_CHANGED')
+        throw new RuntimeError('RULE_CHANGED', 'AGENTS.md在读取期间发生变化，请重试。', { cause });
     }
-    if (length > remainingBytes)
-      throw new RuntimeError('RULE_LIMIT', '项目规则总量超过64 KiB，请缩短AGENTS.md。');
-    const after = await handle.stat();
-    if (before.size !== after.size || before.mtimeMs !== after.mtimeMs)
-      throw new RuntimeError('RULE_CHANGED', 'AGENTS.md在读取期间发生变化，请重试。');
-    checkCancelled(signal);
-    const bytes = buffer.subarray(0, length);
-    let content: string;
-    try {
-      content = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
-    } catch (cause) {
-      throw new RuntimeError('INVALID_RULE_FILE', 'AGENTS.md必须为UTF-8文本。', { cause });
-    }
-    if (content.includes('\0'))
-      throw new RuntimeError('INVALID_RULE_FILE', 'AGENTS.md必须为不含空字节的UTF-8文本。');
-    return {
-      path: relativePath,
-      hash: createHash('sha256').update(bytes).digest('hex'),
-      content,
-      byteLength: length,
-    };
-  } finally {
-    await handle.close();
+    throw cause;
   }
+  checkCancelled(signal);
+  let content: string;
+  try {
+    content = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch (cause) {
+    throw new RuntimeError('INVALID_RULE_FILE', 'AGENTS.md必须为UTF-8文本。', { cause });
+  }
+  if (content.includes('\0'))
+    throw new RuntimeError('INVALID_RULE_FILE', 'AGENTS.md必须为不含空字节的UTF-8文本。');
+  return {
+    path: relativePath,
+    hash: createHash('sha256').update(bytes).digest('hex'),
+    content,
+    byteLength: bytes.length,
+  };
 }
 
 /**

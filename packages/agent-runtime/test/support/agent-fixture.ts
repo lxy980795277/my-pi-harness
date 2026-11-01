@@ -5,6 +5,8 @@ import {
   createModels,
   createAssistantMessageEventStream,
   fauxProvider,
+  type Api,
+  type Model,
   type AssistantMessage,
   type AssistantMessageEventStream,
   type TranscriptContext,
@@ -21,6 +23,7 @@ import type { SkillsPort, ToolDiscoveryPort } from '../../src/capabilities/ports
 import { WorkRuntime } from '../../src/work/runtime.js';
 
 interface AgentFixtureOptions {
+  model?(original: Model<Api>, modelId: string): Model<Api>;
   response(context: TranscriptContext): AssistantMessage | Promise<AssistantMessage>;
   settings?(settings: AgentSettings): AgentSettings;
   beforeResolve?(index: number, signal: AbortSignal | undefined): Promise<void>;
@@ -161,7 +164,7 @@ export async function agentFixture(options: AgentFixtureOptions): Promise<AgentF
       acquiredLeases += 1;
       let released = false;
       return {
-        model: faux.models[0],
+        model: options.model?.(faux.models[0], _modelId) ?? faux.models[0],
         streamFn,
         release: (): void => {
           if (released) throw new Error('Model lease released twice');

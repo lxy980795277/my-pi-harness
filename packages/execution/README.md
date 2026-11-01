@@ -30,6 +30,8 @@
 
 文件工具使用组件 lstat/realpath、O_NOFOLLOW、打开后的 inode 检查、写前预像与父目录核对；Node 的文件 API 不提供完整 openat 目录句柄操作，这些检查不能消除恶意进程并发替换父目录的竞态。文件工具当前不提供抵抗同用户恶意文件系统并发修改的完整隔离保证。
 
+`filesystem/read-file.ts`的`readStableFile(path, signal, maximum)`供文件工具与Agent规则加载共用：调用者先解析受策略保护的路径并指定字节上限，读取器检查普通文件身份、增长、读取前后size/mtime及取消，所有结果都关闭句柄。它只返回字节；UTF-8、文件格式、规则总预算及领域错误由调用者拥有。
+
 Shell 默认的 Seatbelt 从 deny-default 开始，只开放工作区、独占临时目录与明确的系统/运行时工具链读取，允许写工作区和临时目录；profile、敏感文件及 `.my-pi-harness` 日志目录的读写始终拒绝，网络不开放。系统元数据和根目录枚举是启动系统程序所需的只读例外。此模式使用独立 HOME，隔离启动失败不会退回宿主执行。
 
 显式 `full-access` 在 macOS 直接启动 `/bin/bash --noprofile --norc -c`，以宿主用户权限运行，无 OS 隔离、工作区外文件或网络限制，不进行系统提权。HOME 为当前用户真实目录，cwd 仍须通过已注册工作区核对；文件工具和工作区注册的保护规则保持不变。两种 Shell 策略都使用独占 TMPDIR 和明确的环境白名单，不继承模型凭据、SSH socket、代理、Node options、BASH_ENV 或任意宿主环境变量。Windows/Linux 在两种策略下都直接返回 `SANDBOX_UNAVAILABLE`。

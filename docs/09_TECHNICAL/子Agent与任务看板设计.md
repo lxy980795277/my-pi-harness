@@ -29,6 +29,8 @@
 
 下图表示正常委派、等待和汇总；有工具调用时子Pi继续同一循环，每次模型请求都经过相同Hooks。spawn返回Task ID，不等待子结果；wait_agents可能超时返回当前状态，父模型应继续等待或处理真实失败。
 
+根与子启动入口分别拥有分支输入选择和角色能力收窄，共用`runs/prepare.ts`的模型校验与输入接受准备；执行器、SDK装配、输入消费和工具公共流程的具体分工见[运行层源码职责](../../packages/agent-runtime/README.md#源码职责)。
+
 ```mermaid
 sequenceDiagram
     participant Parent as 根 RunExecution / Pi

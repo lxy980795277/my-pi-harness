@@ -1,3 +1,4 @@
+export { readStableFile } from './filesystem/read-file.js';
 export { OFFICE_TOOL_DEFINITIONS } from './office/catalog.js';
 export { executeOfficeTool } from './office/executor.js';
 export type { OfficeProcessOptions } from './office/process.js';

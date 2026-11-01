@@ -15,6 +15,7 @@ import { ToolRuntime } from '../src/tools/runtime.js';
 import { SessionRuntime } from '../src/sessions/runtime.js';
 import { decodeContextMessage, encodeContextMessage } from '../src/context/codec.js';
 import { completeToolHistory } from '../src/context/tool-history.js';
+import { fixture as workFixture } from './support/work-fixture.js';
 
 async function until(predicate: () => boolean): Promise<void> {
   const deadline = Date.now() + 5000;
@@ -99,6 +100,52 @@ function writeCall() {
 }
 
 describe('durable Pi tool execution', () => {
+  it('retains the work-family result limit failure instead of silently truncating its public fact', async () => {
+    const f = await workFixture(true);
+    const search = vi.spyOn(f.work, 'searchHistory').mockReturnValue('x'.repeat(128_001));
+    let requests = 0;
+    try {
+      f.faux.setResponses([
+        () => {
+          requests += 1;
+          return fauxAssistantMessage(
+            [
+              {
+                type: 'toolCall',
+                id: 'history',
+                name: 'search_session_history',
+                arguments: { query: 'retained' },
+              },
+            ],
+            { stopReason: 'toolUse' },
+          );
+        },
+        () => {
+          requests += 1;
+          return fauxAssistantMessage('Must not continue after the invalid public result');
+        },
+      ]);
+      await f.runtime.send(f.session.id, {
+        text: 'Search retained history',
+        mode: 'send',
+        requestId: 'work-result-limit',
+      });
+      await until(() => f.errors.length > 0);
+      await f.runtime.close();
+      expect(requests).toBe(1);
+      expect(f.store.getSnapshot(f.session.id).tools[0]?.status).not.toBe('completed');
+      expect(
+        f.store.readEvents(f.session.id, 0, 1000).filter(({ type }) => type === 'tool.context'),
+      ).toEqual([]);
+      expect(() => f.runtime.getSnapshot(f.session.id)).toThrow(
+        expect.objectContaining({ code: 'SESSION_UNAVAILABLE' }),
+      );
+    } finally {
+      search.mockRestore();
+      await f.close();
+    }
+  });
+
   it('rejects raw numeric coercions before dispatch, preserves original intents and keeps the session usable', async () => {
     const f = await fixture();
     const execute = vi.spyOn(execution, 'executeTool');
