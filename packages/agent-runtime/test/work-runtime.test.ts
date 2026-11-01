@@ -103,6 +103,7 @@ describe('M3 durable session work through real Pi tools', () => {
             'update_plan_steps',
             'update_todos',
             'search_session_history',
+            'read_tool_result',
             'restore_context_checkpoint',
             'reset_working_state',
           ]);

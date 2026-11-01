@@ -62,6 +62,7 @@ const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
   update_plan_steps: { name: '更新计划', Icon: ListChecks },
   update_todos: { name: '更新任务', Icon: ListTodo },
   search_session_history: { name: '搜索对话', Icon: History, argument: 'query' },
+  read_tool_result: { name: '读取工具结果', Icon: History },
   restore_context_checkpoint: { name: '恢复上下文', Icon: Undo2, argument: 'checkpointId' },
   reset_working_state: { name: '重置工作状态', Icon: RotateCcw },
 };

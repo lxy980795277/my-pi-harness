@@ -16,6 +16,7 @@ const TASK_SESSION_TOOLS = new Set([
   'update_plan_steps',
   'update_todos',
   'search_session_history',
+  'read_tool_result',
   'tool_search',
   'load_tools',
   'skill_search',

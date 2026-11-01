@@ -511,6 +511,8 @@ export class WorkRuntime {
       matches.push({
         id: candidate.id,
         kind: candidate.kind,
+        offset: Math.max(0, index - 300),
+        totalCharacters: source.length,
         excerpt: text.slice(Math.max(0, index - 300), index + 1700),
       });
       if (matches.length >= limit) break;
@@ -521,6 +523,42 @@ export class WorkRuntime {
       scannedCharacters,
       scope: this.scope ? 'current agent task' : 'current session selected branch',
     });
+  }
+
+  /**
+   * Read only retained display text from a terminal tool visible in this branch or task.
+   * @param sessionId Current session owned by this work scope.
+   * @param toolCallId Persisted record ID returned by history search.
+   * @param offset Zero-based character offset validated by the session tool schema.
+   * @param maxCharacters Validated page size, at most 6000 characters.
+   * @returns Bounded text with the original outcome and an explicit next-page call.
+   */
+  public readToolResult(
+    sessionId: string,
+    toolCallId: string,
+    offset: number,
+    maxCharacters: number,
+  ): string {
+    const tool = this.sessionSnapshot(sessionId).tools.find(({ id }) => id === toolCallId);
+    if (
+      tool === undefined ||
+      tool.result === null ||
+      tool.status === 'running' ||
+      tool.status === 'reviewing' ||
+      tool.status === 'awaiting_approval'
+    )
+      throw new RuntimeError(
+        'TOOL_RESULT_UNAVAILABLE',
+        '工具结果不存在、尚未结束或不在当前可见历史中。',
+      );
+    if (offset > tool.result.length)
+      throw new RuntimeError('TOOL_RESULT_OFFSET_INVALID', '读取位置超过已保存的工具文本长度。');
+    const end = Math.min(offset + maxCharacters, tool.result.length);
+    const next =
+      end < tool.result.length
+        ? `Next: read_tool_result({"toolCallId":${JSON.stringify(tool.id)},"offset":${end},"maxCharacters":${maxCharacters}})`
+        : 'Next: none';
+    return `Tool: ${tool.name}\nTool ID: ${tool.id}\nStatus: ${tool.status}\nCharacters: ${offset}-${end} of ${tool.result.length}\nnextOffset: ${end < tool.result.length ? end : 'none'}\n${next}\n\n${tool.result.slice(offset, end)}`;
   }
 
   public validateTodos(sessionId: string, todos: Todo[], runId?: string): void {

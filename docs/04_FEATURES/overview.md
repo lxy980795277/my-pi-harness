@@ -27,6 +27,11 @@ AC写可观察结果，不用「完善」「支持全部」代替具体条件。
 
 ## 当前Spec
 
+- [M1–M5真实任务与可用性验收](202610302000_feature_m1-m5-product-acceptance/spec.md)
+- [验收执行与证据方案](202610302000_feature_m1-m5-product-acceptance/execution.md)
+- [验收阶段与任务清单](202610302000_feature_m1-m5-product-acceptance/tasks.md)
+- [真实任务验收结论与证据](202610302000_feature_m1-m5-product-acceptance/verify.md)
+
 - [M6记忆与搜索规划](202610301722_feature_m6-memory-search/spec.md)
 - [M6数据、检索与请求设计](202610301722_feature_m6-memory-search/design.md)
 - [M6实施顺序与完成门槛](202610301722_feature_m6-memory-search/tasks.md)

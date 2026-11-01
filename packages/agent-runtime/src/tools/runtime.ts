@@ -29,6 +29,17 @@ import type {
   ToolRuntimeOptions,
 } from './types.js';
 
+const toolArguments = Type.Record(Type.String(), Type.Unknown());
+
+/** Check original model JSON before Pi coercion, and executable input before any dispatch. */
+function validateToolInput(definition: RunToolDefinition, input: unknown): Record<string, unknown> {
+  if (!Value.Check(toolArguments, input))
+    throw new RuntimeError('TOOL_ARGUMENTS_INVALID', '工具参数必须是JSON对象。');
+  if (!Value.Check(definition.parameters, input) || JSON.stringify(input).length > 256_000)
+    throw new RuntimeError('TOOL_ARGUMENTS_INVALID', '工具参数无效或超过限制。');
+  return input;
+}
+
 /** Provider call IDs pair within one assistant message, not across every turn of a run. */
 export function toolCallRecordId(
   runId: string,
@@ -101,11 +112,16 @@ export class ToolRuntime {
         label: definition.name,
         replay: 'never',
         executionMode: 'sequential',
-        execute: async (providerCallId, input: unknown, signal) => {
-          if (!Value.Check(Type.Record(Type.String(), Type.Unknown()), input))
-            throw new RuntimeError('TOOL_ARGUMENTS_INVALID', '工具参数必须是JSON对象。');
-          return this.execute(context, toolset, providerCallId, definition.name, input, signal);
-        },
+        prepareArguments: (input: unknown) => validateToolInput(definition, input),
+        execute: async (providerCallId, input: unknown, signal) =>
+          this.execute(
+            context,
+            toolset,
+            providerCallId,
+            definition.name,
+            validateToolInput(definition, input),
+            signal,
+          ),
       }),
     );
   }
@@ -123,9 +139,6 @@ export class ToolRuntime {
     if (context.recorded.size >= 64)
       throw new RuntimeError('TOOL_LIMIT', '本次运行已达到工具调用上限。');
     const selected = toolset.require(name);
-    const { definition } = selected;
-    if (!Value.Check(definition.parameters, args) || JSON.stringify(args).length > 256_000)
-      throw new RuntimeError('TOOL_ARGUMENTS_INVALID', '工具参数无效或超过限制。');
     const external = selected.source.kind === 'mcp';
     let policy = { approvalRequired: false, mutating: false, summary: name };
     if (selected.source.kind === 'workspace' || name === 'web_fetch')

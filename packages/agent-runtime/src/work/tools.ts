@@ -33,6 +33,14 @@ const search = Type.Object(
   },
   { additionalProperties: false },
 );
+const readResult = Type.Object(
+  {
+    toolCallId: Type.String({ minLength: 1, maxLength: 160 }),
+    offset: Type.Optional(Type.Integer({ minimum: 0, maximum: 128_000 })),
+    maxCharacters: Type.Optional(Type.Integer({ minimum: 1, maximum: 6000 })),
+  },
+  { additionalProperties: false },
+);
 const restore = Type.Object(
   {
     checkpointId: Type.Optional(Type.String({ minLength: 1, maxLength: 160 })),
@@ -71,8 +79,14 @@ export const SESSION_TOOL_DEFINITIONS = [
   {
     name: 'search_session_history',
     description:
-      'Search bounded original messages and tool results in this session selected branch, including compacted history. This does not search other sessions or long-term memory.',
+      'Search bounded original messages and retained tool text in this session selected branch, including compacted history. Tool matches provide a record id and offset for read_tool_result. This does not search other sessions or long-term memory.',
     parameters: search,
+  },
+  {
+    name: 'read_tool_result',
+    description:
+      'Read a bounded page of retained text from a finished tool in this selected branch or agent task, including failed results. Use a tool match id and offset from search_session_history, then follow the returned next-page call. This does not repeat the original tool or recover text omitted by its output limit.',
+    parameters: readResult,
   },
   {
     name: 'restore_context_checkpoint',
@@ -147,6 +161,13 @@ export async function executeSessionTool(
   }
   if (name === 'search_session_history' && Value.Check(search, args))
     return work.searchHistory(sessionId, args.query, args.limit ?? 10);
+  if (name === 'read_tool_result' && Value.Check(readResult, args))
+    return work.readToolResult(
+      sessionId,
+      args.toolCallId,
+      args.offset ?? 0,
+      args.maxCharacters ?? 6000,
+    );
   if (name === 'restore_context_checkpoint' && Value.Check(restore, args)) {
     if (args.checkpointId !== undefined && args.stepsBack !== undefined)
       throw new RuntimeError('COMPACTION_SELECTION_INVALID', '请选择检查点ID或回退步数之一。');

@@ -2,23 +2,25 @@ import { APP_VERSION } from '@my-pi-harness/protocol';
 import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { BrowserWindow, type IpcMainInvokeEvent } from 'electron';
+import {
+  BrowserWindow,
+  type IpcMainInvokeEvent,
+  type PermissionRequest,
+  type Session,
+} from 'electron';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { secureWindow } from '../src/main/security.js';
 
 type InfoHandler = (event: IpcMainInvokeEvent, ...arguments_: unknown[]) => unknown;
-type PermissionRequest = (
-  contents: unknown,
-  permission: string,
-  callback: (allowed: boolean) => void,
-) => void;
+type PermissionCheckHandler = NonNullable<Parameters<Session['setPermissionCheckHandler']>[0]>;
+type PermissionRequestHandler = NonNullable<Parameters<Session['setPermissionRequestHandler']>[0]>;
 
 const mocks = vi.hoisted(() => ({
   handle: vi.fn<(channel: string, listener: InfoHandler) => void>(),
   removeHandler: vi.fn<(channel: string) => void>(),
   windowOpen: vi.fn<(handler: () => { action: string }) => void>(),
-  checkPermission: vi.fn<(handler: (() => boolean) | null) => void>(),
-  requestPermission: vi.fn<(handler: PermissionRequest | null) => void>(),
+  checkPermission: vi.fn<(handler: PermissionCheckHandler | null) => void>(),
+  requestPermission: vi.fn<(handler: PermissionRequestHandler | null) => void>(),
   frames: [] as { url: string }[],
   chooseDirectory: vi.fn<() => Promise<{ canceled: boolean; filePaths: string[] }>>(),
   openExternal: vi.fn<(url: string) => Promise<void>>(),
@@ -35,6 +37,7 @@ vi.mock('electron', async () => {
       mocks.frames.push(frame);
       this.webContents = Object.assign(new EventEmitter(), {
         mainFrame: frame,
+        isDestroyed: vi.fn(() => false),
         session: {
           setPermissionCheckHandler: mocks.checkPermission,
           setPermissionRequestHandler: mocks.requestPermission,
@@ -67,6 +70,16 @@ function infoHandler(): InfoHandler {
   const registration = mocks.handle.mock.calls.at(-1);
   if (registration === undefined) throw new Error('Desktop bridge was not registered');
   return registration[1];
+}
+
+function permissionHandlers(): {
+  check: PermissionCheckHandler;
+  request: PermissionRequestHandler;
+} {
+  const check = mocks.checkPermission.mock.calls.at(-1)?.[0];
+  const request = mocks.requestPermission.mock.calls.at(-1)?.[0];
+  if (check == null || request == null) throw new Error('Missing permission policy');
+  return { check, request };
 }
 
 beforeEach(() => {
@@ -142,19 +155,113 @@ describe('desktop window security', () => {
     },
   );
 
-  it('denies new windows and permissions that M0 does not implement', () => {
+  it('denies new windows, clipboard reads and unrelated permissions', () => {
     const window = new BrowserWindow({});
     secureWindow(window, 'http://127.0.0.1:1234');
     const open = mocks.windowOpen.mock.calls.at(-1)?.[0];
-    const check = mocks.checkPermission.mock.calls.at(-1)?.[0];
-    const request = mocks.requestPermission.mock.calls.at(-1)?.[0];
-    if (open === undefined || check == null || request == null)
-      throw new Error('Missing security policy');
+    if (open === undefined) throw new Error('Missing window policy');
+    const { check, request } = permissionHandlers();
+    const origin = 'http://127.0.0.1:1234';
+    const details = { isMainFrame: true, requestingUrl: `${origin}/` };
     expect(open()).toEqual({ action: 'deny' });
-    expect(check()).toBe(false);
+    for (const permission of ['clipboard-read', 'media', 'geolocation'] as const) {
+      expect(check(window.webContents, permission, origin, details)).toBe(false);
+      const callback = vi.fn<(allowed: boolean) => void>();
+      request(window.webContents, permission, callback, details);
+      expect(callback).toHaveBeenCalledExactlyOnceWith(false);
+    }
+    expect(check(window.webContents, 'deprecated-sync-clipboard-read', origin, details)).toBe(
+      false,
+    );
+  });
+
+  it('allows clipboard writes from its trusted main frame in both permission handlers', () => {
+    const window = new BrowserWindow({});
+    const origin = 'http://127.0.0.1:1234';
+    secureWindow(window, origin);
+    const { check, request } = permissionHandlers();
+    const details = { isMainFrame: true, requestingUrl: `${origin}/sessions/accepted` };
+    for (const requestingOrigin of [origin, `${origin}/`]) {
+      expect(
+        check(window.webContents, 'clipboard-sanitized-write', requestingOrigin, details),
+      ).toBe(true);
+    }
     const callback = vi.fn<(allowed: boolean) => void>();
-    request(window.webContents, 'media', callback);
-    expect(callback).toHaveBeenCalledWith(false);
+    request(window.webContents, 'clipboard-sanitized-write', callback, details);
+    expect(callback).toHaveBeenCalledExactlyOnceWith(true);
+  });
+
+  it('denies clipboard writes from other windows, subframes and non-document checks', () => {
+    const window = new BrowserWindow({});
+    const other = new BrowserWindow({});
+    const origin = 'http://127.0.0.1:1234';
+    secureWindow(window, origin);
+    const { check, request } = permissionHandlers();
+    const details = { isMainFrame: true, requestingUrl: `${origin}/` };
+    const subframe = { ...details, isMainFrame: false };
+    expect(check(other.webContents, 'clipboard-sanitized-write', origin, details)).toBe(false);
+    expect(check(window.webContents, 'clipboard-sanitized-write', origin, subframe)).toBe(false);
+    expect(check(null, 'clipboard-sanitized-write', origin, { isMainFrame: false })).toBe(false);
+    expect(
+      check(window.webContents, 'clipboard-sanitized-write', origin, { isMainFrame: true }),
+    ).toBe(false);
+    for (const [requester, requestDetails] of [
+      [other.webContents, details],
+      [window.webContents, subframe],
+    ] as const) {
+      const callback = vi.fn<(allowed: boolean) => void>();
+      request(requester, 'clipboard-sanitized-write', callback, requestDetails);
+      expect(callback).toHaveBeenCalledExactlyOnceWith(false);
+    }
+  });
+
+  it('denies clipboard writes when the requesting URL or check origin is untrusted', () => {
+    const window = new BrowserWindow({});
+    const origin = 'http://127.0.0.1:1234';
+    secureWindow(window, origin);
+    const { check, request } = permissionHandlers();
+    for (const requestingUrl of [
+      'https://example.com/',
+      'http://127.0.0.1:12345/',
+      'http://localhost:1234/',
+      'https://127.0.0.1:1234/',
+      'http://127.0.0.1:1234@example.com/',
+      'blob:http://127.0.0.1:1234/document',
+      'discarded frame URL',
+    ]) {
+      const details: PermissionRequest = { isMainFrame: true, requestingUrl };
+      expect(check(window.webContents, 'clipboard-sanitized-write', origin, details)).toBe(false);
+      expect(
+        check(window.webContents, 'clipboard-sanitized-write', requestingUrl, {
+          isMainFrame: true,
+          requestingUrl: `${origin}/`,
+        }),
+      ).toBe(false);
+      const callback = vi.fn<(allowed: boolean) => void>();
+      request(window.webContents, 'clipboard-sanitized-write', callback, details);
+      expect(callback).toHaveBeenCalledExactlyOnceWith(false);
+    }
+  });
+
+  it('denies clipboard writes after its main frame navigates away or is destroyed', () => {
+    const window = new BrowserWindow({});
+    const origin = 'http://127.0.0.1:1234';
+    secureWindow(window, origin);
+    const { check, request } = permissionHandlers();
+    const details = { isMainFrame: true, requestingUrl: `${origin}/` };
+    const frame = mocks.frames[0];
+    if (!frame) throw new Error('Missing main frame');
+    frame.url = 'https://example.com/';
+    expect(check(window.webContents, 'clipboard-sanitized-write', origin, details)).toBe(false);
+    const navigated = vi.fn<(allowed: boolean) => void>();
+    request(window.webContents, 'clipboard-sanitized-write', navigated, details);
+    expect(navigated).toHaveBeenCalledExactlyOnceWith(false);
+    frame.url = `${origin}/`;
+    vi.spyOn(window.webContents, 'isDestroyed').mockReturnValue(true);
+    expect(check(window.webContents, 'clipboard-sanitized-write', origin, details)).toBe(false);
+    const destroyed = vi.fn<(allowed: boolean) => void>();
+    request(window.webContents, 'clipboard-sanitized-write', destroyed, details);
+    expect(destroyed).toHaveBeenCalledExactlyOnceWith(false);
   });
 
   it('only serves metadata to its main frame without request arguments', () => {

@@ -4,7 +4,7 @@ import {
   parseExternalUrl,
   type DesktopInfo,
 } from '@my-pi-harness/protocol';
-import type { BrowserWindow } from 'electron';
+import type { BrowserWindow, PermissionCheckHandlerHandlerDetails, WebContents } from 'electron';
 import { dialog, ipcMain, shell } from 'electron';
 import { Value } from 'typebox/value';
 import { resolveWorkspaceDirectory } from './workspace-directory.js';
@@ -31,10 +31,25 @@ export function secureWindow(
   revealSkill?: (skillId: string, workspaceId: string | null) => Promise<void>,
 ): void {
   const contents = window.webContents;
+  const canWriteClipboard = (
+    requester: WebContents | null,
+    permission: string,
+    details: Pick<PermissionCheckHandlerHandlerDetails, 'isMainFrame' | 'requestingUrl'>,
+  ): boolean =>
+    permission === 'clipboard-sanitized-write' &&
+    requester === contents &&
+    !contents.isDestroyed() &&
+    details.isMainFrame &&
+    details.requestingUrl !== undefined &&
+    isTrustedUrl(details.requestingUrl, origin) &&
+    isTrustedUrl(contents.mainFrame.url, origin);
   contents.setWindowOpenHandler(() => ({ action: 'deny' }));
-  contents.session.setPermissionCheckHandler(() => false);
-  contents.session.setPermissionRequestHandler((_contents, _permission, callback) =>
-    callback(false),
+  contents.session.setPermissionCheckHandler(
+    (requester, permission, requestingOrigin, details) =>
+      canWriteClipboard(requester, permission, details) && isTrustedUrl(requestingOrigin, origin),
+  );
+  contents.session.setPermissionRequestHandler((requester, permission, callback, details) =>
+    callback(canWriteClipboard(requester, permission, details)),
   );
   contents.on('will-frame-navigate', (event) => {
     if (!isTrustedUrl(event.url, origin)) event.preventDefault();

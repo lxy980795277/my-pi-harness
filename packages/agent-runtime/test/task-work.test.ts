@@ -10,7 +10,11 @@ import {
 } from '@my-pi-harness/protocol';
 import { openProfileStore } from '@my-pi-harness/storage';
 import { describe, expect, it } from 'vitest';
-import { decodeContextMessage, encodeContextMessage } from '../src/context/codec.js';
+import {
+  decodeContextMessage,
+  encodeContextMessage,
+  encodeToolResult,
+} from '../src/context/codec.js';
 import { toolCallRecordId } from '../src/tools/runtime.js';
 import { WorkRuntime } from '../src/work/runtime.js';
 
@@ -243,6 +247,132 @@ describe('task-local context and work', () => {
       expect(() =>
         alpha.createCheckpoint(f.session.id, { expectedBranchId: 'main', label: 'Invalid' }),
       ).toThrow('只允许用于主会话');
+    } finally {
+      await f.close();
+    }
+  });
+
+  it('reads retained results only from its own task or root history', async () => {
+    const f = await fixture();
+    try {
+      const rootView = f.store
+        .getSnapshot(f.session.id)
+        .tools.find(({ id }) => id === toolCallRecordId('root', 'root-assistant', 'alpha'));
+      if (!rootView) throw new Error('Missing root tool');
+      const { afterMessageId, ...rootTool } = rootView;
+      const rootResult = {
+        ...rootTool,
+        status: 'completed' as const,
+        result: 'Root result',
+        updatedAt: 5,
+      };
+      f.store.append(f.session.id, [
+        { type: 'tool.updated', runId: 'root', at: 5, data: { tool: rootResult } },
+        {
+          type: 'tool.context',
+          runId: 'root',
+          at: 5,
+          data: { branchId: 'main', afterMessageId, toolCallId: rootTool.id },
+          privateData: encodeToolResult({
+            toolResultVersion: 1,
+            providerCallId: 'alpha',
+            toolName: rootTool.name,
+            content: [{ type: 'text', text: 'Root result' }],
+            isError: false,
+            at: 5,
+            origin: 'tool',
+            outcome: 'completed',
+          }),
+        },
+      ]);
+      const toolIds: string[] = [];
+      for (const name of ['alpha', 'beta']) {
+        const input = f.store.getTaskSnapshot(f.session.id, name).messages[0];
+        if (!input) throw new Error('Missing task input');
+        const runId = `${name}-run`;
+        const assistant: MessageView = {
+          ...input,
+          id: `${name}-assistant`,
+          role: 'assistant',
+          text: '',
+          createdAt: 5,
+          stopReason: 'toolUse',
+        };
+        const intent = {
+          type: 'toolCall' as const,
+          id: 'read',
+          name: 'web_fetch',
+          arguments: { url: 'https://example.com/' },
+        };
+        const tool: ToolCallRecord = {
+          ...rootTool,
+          id: toolCallRecordId(runId, assistant.id, intent.id),
+          runId,
+          name: intent.name,
+          arguments: intent.arguments,
+          summary: name,
+          createdAt: 5,
+          updatedAt: 6,
+        };
+        const text = `${name} tool result`;
+        f.store.append(f.session.id, [
+          {
+            type: 'message.started',
+            runId,
+            at: 5,
+            data: { ...assistant, status: 'streaming', stopReason: null },
+          },
+          {
+            type: 'message.completed',
+            runId,
+            at: 5,
+            data: { message: assistant },
+            privateData: encodeContextMessage(
+              fauxAssistantMessage([intent], { stopReason: 'toolUse' }),
+            ),
+          },
+          { type: 'tool.requested', runId, at: 5, data: { tool } },
+          {
+            type: 'tool.updated',
+            runId,
+            at: 6,
+            data: { tool: { ...tool, status: 'completed', result: text } },
+          },
+          {
+            type: 'tool.context',
+            runId,
+            at: 6,
+            data: { branchId: 'main', afterMessageId: assistant.id, toolCallId: tool.id },
+            privateData: encodeToolResult({
+              toolResultVersion: 1,
+              providerCallId: intent.id,
+              toolName: intent.name,
+              content: [{ type: 'text', text }],
+              isError: false,
+              at: 6,
+              origin: 'tool',
+              outcome: 'completed',
+            }),
+          },
+        ]);
+        toolIds.push(tool.id);
+      }
+      const [alphaToolId, betaToolId] = toolIds;
+      if (!alphaToolId || !betaToolId) throw new Error('Missing task tools');
+      const alpha = f.work.forTask(f.session.id, 'alpha');
+      const beta = f.work.forTask(f.session.id, 'beta');
+      expect(alpha.readToolResult(f.session.id, alphaToolId, 0, 100)).toContain(
+        'alpha tool result',
+      );
+      expect(beta.readToolResult(f.session.id, betaToolId, 0, 100)).toContain('beta tool result');
+      expect(f.work.readToolResult(f.session.id, rootTool.id, 0, 100)).toContain('Root result');
+      for (const [work, toolId] of [
+        [alpha, betaToolId],
+        [alpha, rootTool.id],
+        [beta, alphaToolId],
+        [f.work, alphaToolId],
+      ] as const)
+        expect(() => work.readToolResult(f.session.id, toolId, 0, 100)).toThrow('不在当前可见历史');
     } finally {
       await f.close();
     }

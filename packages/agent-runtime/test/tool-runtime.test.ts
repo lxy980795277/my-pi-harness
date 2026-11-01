@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, readFile, realpath, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -9,7 +9,8 @@ import {
   type TranscriptContext,
 } from '@earendil-works/pi-ai';
 import { openProfileStore } from '@my-pi-harness/storage';
-import { describe, expect, it } from 'vitest';
+import * as execution from '@my-pi-harness/execution';
+import { describe, expect, it, vi } from 'vitest';
 import { ToolRuntime } from '../src/tools/runtime.js';
 import { SessionRuntime } from '../src/sessions/runtime.js';
 import { decodeContextMessage, encodeContextMessage } from '../src/context/codec.js';
@@ -98,6 +99,76 @@ function writeCall() {
 }
 
 describe('durable Pi tool execution', () => {
+  it('rejects raw numeric coercions before dispatch, preserves original intents and keeps the session usable', async () => {
+    const f = await fixture();
+    const execute = vi.spyOn(execution, 'executeTool');
+    const invalid = [
+      { path: 'source.txt', startLine: 1.5 },
+      { path: 'source.txt', startLine: '1' },
+      { path: 'source.txt', maxLines: null },
+      { path: 'source.txt', unexpected: true },
+    ];
+    const valid = { path: 'source.txt', startLine: 1, maxLines: 1 };
+    try {
+      await writeFile(join(f.root, 'source.txt'), 'First observed line\nSecond line\n');
+      f.faux.setResponses([
+        ...invalid.map((args, index) =>
+          fauxAssistantMessage(
+            [{ type: 'toolCall', id: `raw-invalid-${index}`, name: 'read_file', arguments: args }],
+            { stopReason: 'toolUse' },
+          ),
+        ),
+        fauxAssistantMessage(
+          [{ type: 'toolCall', id: 'raw-valid', name: 'read_file', arguments: valid }],
+          { stopReason: 'toolUse' },
+        ),
+        fauxAssistantMessage('Valid read completed after rejecting the original malformed calls.'),
+      ]);
+      await f.runtime.send(f.session.id, {
+        text: 'Validate exact tool JSON.',
+        mode: 'send',
+        requestId: 'raw-json',
+      });
+      await until(() => f.runtime.getSnapshot(f.session.id).session.activeRunId === null);
+      const snapshot = f.runtime.getSnapshot(f.session.id);
+      expect(snapshot.tools.map(({ arguments: args }) => args)).toEqual([...invalid, valid]);
+      expect(
+        snapshot.tools
+          .slice(0, invalid.length)
+          .every(({ status, binding }) => status === 'failed' && binding.kind === 'rejected'),
+      ).toBe(true);
+      expect(snapshot.tools.at(-1)).toMatchObject({ status: 'completed', arguments: valid });
+      expect(execute).toHaveBeenCalledTimes(1);
+      expect(execute.mock.calls[0]?.slice(0, 2)).toEqual(['read_file', valid]);
+      const storedCalls = f.store
+        .getModelContext(f.session.id, f.session.activeBranchId)
+        .map(decodeContextMessage)
+        .flatMap((message) =>
+          message.role === 'assistant'
+            ? message.content
+                .filter((part) => part.type === 'toolCall')
+                .map(({ arguments: args }) => args)
+            : [],
+        );
+      expect(storedCalls).toEqual([...invalid, valid]);
+      f.faux.setResponses([fauxAssistantMessage('Session remains usable.')]);
+      await f.runtime.send(f.session.id, {
+        text: 'Continue after invalid tools.',
+        mode: 'send',
+        requestId: 'after-raw-json',
+      });
+      await until(() => f.runtime.getSnapshot(f.session.id).session.activeRunId === null);
+      expect(f.runtime.getSnapshot(f.session.id).runs.map(({ status }) => status)).toEqual([
+        'completed',
+        'completed',
+      ]);
+      expect(f.errors).toEqual([]);
+    } finally {
+      execute.mockRestore();
+      await f.close();
+    }
+  });
+
   it('keeps reused provider call IDs independent across assistant turns and branch replay', async () => {
     const f = await fixture();
     const call = (path: string, content: string) =>

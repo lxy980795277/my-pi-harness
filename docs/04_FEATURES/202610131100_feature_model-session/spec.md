@@ -159,3 +159,28 @@ Pi公开接口事实以锁定版本为准：[Agent文档](https://github.com/ear
 ## Issues
 
 已修正运行接受后的初始化残留、暂停队列被新Run消费、旧Run清理新Run、OAuth旋转凭据关闭竞争、存储故障错误状态以及Windows入口默认目录不一致。对应回归与已执行证据见verify。真实供应商账号、Windows实际安装运行及正式签名仍是未验证项，不在本次结果中宣称通过。
+
+## 桌面复制权限维护（2026-10-30）
+
+### 范围与原因
+
+本轮属于M1既有对话交互与桌面安全维护，承接[M1–M5统一验收](../202610302000_feature_m1-m5-product-acceptance/spec.md)的T1，不扩张里程碑范围。初次验收的真实0.14.0 macOS应用目录包在点击“复制回答”后显示`Write permission denied.`；该版本的`secureWindow`权限检查与申请处理均无条件拒绝，阻止共享Web通过`navigator.clipboard.writeText`复制回答和代码。Electron 43.7.9使用`clipboard-sanitized-write`表示剪贴板写入，并分别提供请求frame的URL和主frame标记；文档见[对应版本的Session API](https://github.com/electron/electron/blob/v43.7.9/docs/api/session.md#sessetpermissionrequesthandlerhandler)。
+
+### 验收与用例
+
+- 在所属窗口的可信主frame点击复制回答或代码，写入精确文本并显示成功；真实打包应用不能依赖浏览器测试预授予权限。
+- 两种权限处理共用写入判定，核对所属WebContents、主frame标记、请求URL与当前主frameURL；权限检查另核对请求origin。无文档的检查、同源子frame、其他窗口、其他origin及导航后的旧请求全部拒绝；剪贴板读取和其他权限继续拒绝。
+- 使用现有Web Clipboard API；不增加preload能力或绕过文档焦点要求。复制前不增加异步准备步骤。
+- 单测分别执行允许和拒绝路径；真实macOS复测核对前台按钮复制和粘贴文本，确认实际权限请求可通过`requestingUrl`与`isMainFrame`限定。单测通过不代表真实应用已通过，后台脚本调用与其他平台分别取证。
+
+### 任务与状态
+
+- [x] 限定可信主frame的剪贴板写入权限，共用判定并补充窗口安全反例。
+- [x] 运行定向测试、类型感知lint和desktop类型检查。
+- [x] 重新打包，在隔离应用中点击T1复制回答与复制代码，再实际粘贴到未发送草稿核对文本，保留界面及全量audit证据。
+
+当前状态：源码修复、13项窗口安全测试、类型感知ESLint、desktop类型检查及文档检查已通过，macOS真实重包复制与粘贴复测完成；实际证据由[统一验收记录](../202610302000_feature_m1-m5-product-acceptance/verify.md)维护，不重复创建验证文档，不将此结果扩展为M1全部能力或全平台通过。
+
+### Issues与复测结果
+
+原桌面复制权限拒绝已修复。重建版隔离应用（本地端口59846）中，“复制回答”与“复制代码”均经实际点击后粘贴到未发送草稿，复制内容可见；证据为`output/m1-m5-acceptance-20261030/t1-copy-fixed-pasted.png`、`t1-code-copy-fixed-pasted.png`及全量`t1-copy-fixed.json`。实际成功表明本次写入请求满足可信主frame和请求URL限定；未另行记录权限回调原始字段，后台脚本复制及其他平台不据此宣称已验证。初次失败截图`t1-copy-failure.png`保留在同一证据目录。

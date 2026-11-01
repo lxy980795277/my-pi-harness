@@ -2,6 +2,10 @@
 
 本页管理功能范围与里程碑顺序，详细验收由各里程碑 Spec 承担。`规划` 不表示能力已经可用；只有实现与必要验证都完成后才能调整状态。
 
+2026-10-30按用户确认启动[M1–M5真实任务与可用性验收](../04_FEATURES/202610302000_feature_m1-m5-product-acceptance/spec.md)，属于M7既有能力统一验收的先行专题；八项任务及横向停止/恢复/压缩已实际执行，复制权限、长结果读取和原始工具参数校验已修复并重包复测；Office交付质量、复杂委派轮数与外部TLS仍有缺口，详见[验收记录](../04_FEATURES/202610302000_feature_m1-m5-product-acceptance/verify.md)。M1–M5原开发状态保持，M6继续仅规划，正式安装器、Windows及其他未选能力不据此标完成。
+
+2026-11-01按用户要求将上述验收与三项维护修复整理为[0.14.1](../06_RELEASES/0.14.1.md)本地提交，公开协议22、SQLite9不变。真实应用目录证据仍来自修复后的0.14.0，不重复构建或扩大验收范围；参考仓库评测体系支线忽略，M6继续仅规划。
+
 用户于2026-10-30确认[M5子Agent与任务看板](../04_FEATURES/202610281702_feature_m5-subagents-board/spec.md)开发完成。M5.1–M5.5工程实现、macOS自动化及DeepSeek V4.1 Flash实际Electron窗口、未签名.app应用目录包、在途重启的本机验收已完成，见[验证记录](../04_FEATURES/202610281702_feature_m5-subagents-board/verify.md)；委派机制由[技术方案](../09_TECHNICAL/子Agent与任务看板设计.md)维护。M6已形成[记忆与搜索规划](../04_FEATURES/202610301722_feature_m6-memory-search/spec.md)，尚未进入实现。M5开发收口不表示全平台或正式发布通过，后续统一验收清单见[任务](../04_FEATURES/202610281702_feature_m5-subagents-board/tasks.md#后续统一验收边界)；M4真实账户、Office视觉和Windows适配缺口保持原归属。
 
 2026-10-30按用户要求[移除M5累计token限制](../04_FEATURES/202610281702_feature_m5-subagents-board/spec.md#移除累计token预算2026-10-30)，请求调度独立于用量统计；任务数、深度、并发、轮数、时限、单请求输出与上下文容量继续生效。公开协议22、SQLite9，属于M5维护；移除额度后的[治理](../04_FEATURES/202610300028_refactor_m5-code-governance/spec.md#累计token限制移除后的治理与提交2026-10-30)统一队列启动、MCP环境与共享定义，按用户授权整理为产品0.14.0。本机检查分别由M5及治理验证记录维护，不进入M6。

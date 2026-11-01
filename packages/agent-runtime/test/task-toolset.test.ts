@@ -41,6 +41,7 @@ function parentToolset(candidates: FrozenMcpTool[]): RunToolset {
     ...[
       'spawn_agent',
       'ask_user',
+      'read_tool_result',
       'tool_search',
       'restore_context_checkpoint',
       'unknown_control',
@@ -78,6 +79,7 @@ describe('task role capability selection', () => {
       'read_file',
       'spawn_agent',
       'ask_user',
+      'read_tool_result',
       'tool_search',
       'read_repository',
     ]);
@@ -95,6 +97,7 @@ describe('task role capability selection', () => {
       'shell',
       'spawn_agent',
       'ask_user',
+      'read_tool_result',
       'tool_search',
       'unknown_operation',
     ]);

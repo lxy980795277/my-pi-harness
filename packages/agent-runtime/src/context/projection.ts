@@ -37,7 +37,7 @@ export function pruneContext(
         changed = true;
         return {
           ...part,
-          text: `${part.text.slice(0, 4096)}\n[Tool result shortened in model context; full result is retained in session history.]\n${part.text.slice(-1024)}`,
+          text: `${part.text.slice(0, 4096)}\n[Tool result shortened in model context. Use search_session_history(query) to find retained ${message.toolName} text and its record id/offset, then read_tool_result({toolCallId: id, offset}) for bounded pages. Do not repeat the original tool solely to recover omitted text.]\n${part.text.slice(-1024)}`,
         };
       });
       if (changed) {
