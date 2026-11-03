@@ -2,6 +2,8 @@
 
 本页管理功能范围与里程碑顺序，详细验收由各里程碑 Spec 承担。`规划` 不表示能力已经可用；只有实现与必要验证都完成后才能调整状态。
 
+2026-11-03按用户确认完成[配置装配与条件表达式治理](../04_FEATURES/202611031551_refactor_configuration-readability/spec.md)的本机工程检查，属于M0及既有M1–M5维护：保留配置整体，覆盖七个package，整理真实重复与复杂业务策略；[验证记录](../04_FEATURES/202611031551_refactor_configuration-readability/verify.md)区分各包的修改和保留，包级1258项通过、1项平台条件跳过，全workspace类型检查通过。本轮按用户后续授权收口为[0.17.1](../06_RELEASES/0.17.1.md)本地提交，仅同步产品版本与发布记录；协议23、SQLite9保持。M6与既有验收缺口保持原状态。
+
 2026-11-03按用户确认完成[Agent循环终止与结果回收调整](../04_FEATURES/202611031525_refactor_agent-loop-policy/spec.md)，属于M0及既有M1/M5维护：移除固定请求/工具总数截断，增加精确重复提醒及失败部分输出回收；保留权限、并发、深度、时限与单次输出策略。本轮与子Agent模块整理按用户授权一起记录为[0.17.0](../06_RELEASES/0.17.0.md)本地提交；公开协议23，SQLite9不变；[本机验证](../04_FEATURES/202611031525_refactor_agent-loop-policy/verify.md)覆盖长循环、部分成果、提醒及持久回放和原M5浏览器链路。M6及既有验收缺口保持原状态。
 
 2026-11-03按用户确认完成[子Agent模块与通用执行接口整理](../04_FEATURES/202611031323_refactor_subagent-module/spec.md)，属于M0及既有M5维护：明确subagents拥有者、通用Run扩展接口及适配职责，保持权限、消息和存储语义，不拆独立package或进入M6。本机源码/API、构建与8项M5浏览器结果见[验证记录](../04_FEATURES/202611031323_refactor_subagent-module/verify.md)，未扩大真实账号和平台验收范围。

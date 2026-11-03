@@ -162,6 +162,54 @@ describe('official MCP OAuth', () => {
       await remote.close();
     }
   });
+  it('cancels an outstanding authorization request with its browser flow', async () => {
+    const controller = new AbortController();
+    let requestStarted = (_signal: AbortSignal): void => {
+      throw new Error('Request gate was not initialized');
+    };
+    const started = new Promise<AbortSignal>((resolve) => {
+      requestStarted = resolve;
+    });
+    const session = new RemoteOAuthSession({
+      endpoint: 'https://oauth.example/mcp',
+      redirectUrl: 'http://127.0.0.1/callback',
+      store: {
+        read: () => Promise.resolve(undefined),
+        write: () => Promise.reject(new Error('A cancelled flow cannot save credentials')),
+      },
+      fetch: (_input, init) => {
+        const signal = init?.signal;
+        if (signal === undefined || signal === null)
+          return Promise.reject(new Error('Authorization request lost its cancellation signal'));
+        return new Promise<Response>((_accept, reject) => {
+          signal.throwIfAborted();
+          signal.addEventListener(
+            'abort',
+            () => reject(new DOMException('Fixture authorization was cancelled', 'AbortError')),
+            { once: true },
+          );
+          requestStarted(signal);
+        });
+      },
+    });
+    const operation = session.begin(controller.signal);
+    const rejected = expect(operation).rejects.toThrow();
+    try {
+      const requestSignal = await Promise.race([
+        started,
+        rejected.then(() => {
+          throw new Error('Authorization ended before its request was observed');
+        }),
+      ]);
+      expect(requestSignal.aborted).toBe(false);
+      controller.abort();
+      await rejected;
+      expect(requestSignal.aborted).toBe(true);
+    } finally {
+      controller.abort();
+      await operation.catch(() => undefined);
+    }
+  });
   it('rejects a mismatched state or issuer before redeeming the code', async () => {
     const remote = await fixture();
     let saved: string | undefined;

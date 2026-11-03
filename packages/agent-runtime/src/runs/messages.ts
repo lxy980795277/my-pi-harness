@@ -18,6 +18,17 @@ interface RunMessageHost {
   responseLimit(error: RuntimeError): never;
 }
 
+/** Cancellation takes precedence over a provider's otherwise successful final message. */
+function assistantMessageStatus(
+  cancelled: boolean,
+  stopReason: AssistantMessage['stopReason'],
+): MessageView['status'] {
+  if (cancelled || stopReason === 'aborted') return 'cancelled';
+  if (stopReason === 'stop' || stopReason === 'length' || stopReason === 'toolUse')
+    return 'complete';
+  return 'failed';
+}
+
 function validToolIntents(message: AssistantMessage): boolean {
   if (message.content.length > 1024) return false;
   const ids = new Set<string>();
@@ -171,14 +182,7 @@ export class RunMessageRecorder {
         this.final = event.message;
         if (!this.current)
           throw new RuntimeError('STREAM_PROTOCOL', 'Final model response has no active message');
-        let status: MessageView['status'] =
-          this.host.cancelled() || event.message.stopReason === 'aborted'
-            ? 'cancelled'
-            : event.message.stopReason === 'stop' ||
-                event.message.stopReason === 'length' ||
-                event.message.stopReason === 'toolUse'
-              ? 'complete'
-              : 'failed';
+        let status = assistantMessageStatus(this.host.cancelled(), event.message.stopReason);
         if (status === 'complete' && !validToolIntents(event.message)) {
           status = 'failed';
           this.discardedAssistantCalls = true;

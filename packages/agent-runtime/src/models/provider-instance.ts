@@ -8,9 +8,21 @@ import {
 import { openAICompletionsApi } from '@earendil-works/pi-ai/api/openai-completions.lazy';
 import { openAIResponsesApi } from '@earendil-works/pi-ai/api/openai-responses.lazy';
 import { anthropicMessagesApi } from '@earendil-works/pi-ai/api/anthropic-messages.lazy';
-import type { ProviderConfig } from '@my-pi-harness/protocol';
+import type { CustomProtocol, ProviderConfig } from '@my-pi-harness/protocol';
 import { RuntimeError } from '../errors.js';
 import { isKnownBuiltinProvider } from './providers.js';
+
+/** Select the configured custom protocol after provider validation. */
+function customProviderApi(protocol: CustomProtocol) {
+  switch (protocol) {
+    case 'openai-completions':
+      return openAICompletionsApi();
+    case 'openai-responses':
+      return openAIResponsesApi();
+    case 'anthropic-messages':
+      return anthropicMessagesApi();
+  }
+}
 
 function validateEndpoint(raw: string): void {
   let url: URL;
@@ -125,12 +137,7 @@ export async function createProviderInstance(
     ...(definition.compat ? { compat: definition.compat } : {}),
     ...(definition.headers ? { headers: definition.headers } : {}),
   }));
-  const api =
-    config.api === 'openai-completions'
-      ? openAICompletionsApi()
-      : config.api === 'openai-responses'
-        ? openAIResponsesApi()
-        : anthropicMessagesApi();
+  const api = customProviderApi(configuredApi);
   return createProvider({
     id: config.id,
     name: config.name,

@@ -118,6 +118,26 @@ describe.skipIf(process.platform !== 'darwin')('owned duplex process lifecycle',
     await owned.closed;
     expect(pidAlive(pid)).toBe(false);
   });
+  it('reads current diagnostics while hiding a credential split across writes', async () => {
+    const messages = lines();
+    const input = await launch(
+      "process.stderr.write('before fake-private-',()=>process.stdout.write('partial\\n'));process.stdin.once('data',()=>process.stderr.write('secret after',()=>process.stdout.write('complete\\n')));",
+    );
+    const owned = await startPersistentProcess(
+      await resolvePersistentProcess(input),
+      { stdout: messages.receive, stdoutEnd: () => {}, fault: () => {} },
+      new AbortController().signal,
+      ['fake-private-secret'],
+    );
+    processes.push(owned);
+    expect(await messages.next()).toBe('partial');
+    await expect.poll(() => owned.diagnostics(), { timeout: 3000 }).toBe('before [redacted]');
+    expect(owned.diagnostics()).not.toContain('fake-private-');
+    await owned.write(Buffer.from('complete\n'), { signal: new AbortController().signal });
+    expect(await messages.next()).toBe('complete');
+    await expect.poll(() => owned.diagnostics(), { timeout: 3000 }).toBe('before [redacted] after');
+    expect(owned.diagnostics()).not.toContain('fake-private-secret');
+  });
   it('rechecks cancellation after queued backpressure and never hands the second request to stdin', async () => {
     const messages = lines();
     const input = await launch(

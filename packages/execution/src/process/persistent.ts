@@ -119,6 +119,26 @@ export async function resolvePersistentProcess(
   };
 }
 
+/** Hide complete credentials and boundary fragments in the current diagnostic buffer. */
+function redactProcessDiagnostics(
+  stderr: Buffer,
+  truncated: boolean,
+  secrets: readonly string[],
+): string {
+  let text = stderr.toString('utf8');
+  const longest = Math.max(0, ...secrets.map((secret) => secret.length));
+  if (truncated) text = text.slice(longest);
+  for (const secret of secrets) {
+    if (secret.length > 0) text = text.split(secret).join('[redacted]');
+  }
+  // A still-running child can end the current chunk with a secret prefix.
+  for (const secret of secrets)
+    for (let size = 1; size < secret.length; size += 1) {
+      if (text.endsWith(secret.slice(0, size))) text = text.slice(0, -size) + '[redacted]';
+    }
+  return text;
+}
+
 class ByteBudget {
   #tokens: number;
   #time = performance.now();
@@ -323,20 +343,7 @@ export async function startPersistentProcess(
     owned = {
       closed,
       close,
-      diagnostics: () => {
-        let text = stderr.toString('utf8');
-        const longest = Math.max(0, ...secrets.map((secret) => secret.length));
-        if (truncated) text = text.slice(longest);
-        for (const secret of secrets) {
-          if (secret.length > 0) text = text.split(secret).join('[redacted]');
-        }
-        // A still-running child can end the current chunk with a secret prefix.
-        for (const secret of secrets)
-          for (let size = 1; size < secret.length; size += 1) {
-            if (text.endsWith(secret.slice(0, size))) text = text.slice(0, -size) + '[redacted]';
-          }
-        return text;
-      },
+      diagnostics: () => redactProcessDiagnostics(stderr, truncated, secrets),
       write: async (bytes, options) => {
         if (stopped || options.signal.aborted)
           throw new ExecutionError('CANCELLED', 'Local tool write was cancelled before dispatch');

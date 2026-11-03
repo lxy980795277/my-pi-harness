@@ -111,27 +111,7 @@ export class AgentTaskQuery {
       .get();
     const latest = latestRow ? checked(RunViewSchema, latestRow.data) : undefined;
     const state = this.work(sessionId, taskId);
-    let waiting = row.waiting;
-    if (latest?.status === 'running') {
-      if (
-        state.questions.some((question) => question.status === 'pending') ||
-        state.plan?.review === 'pending'
-      )
-        waiting = 'user';
-      else if (
-        this.db
-          .select({ id: schema.toolCalls.id })
-          .from(schema.toolCalls)
-          .where(
-            and(
-              eq(schema.toolCalls.runId, latest.id),
-              sql`json_extract(${schema.toolCalls.data}, '$.status') = 'awaiting_approval'`,
-            ),
-          )
-          .get()
-      )
-        waiting = 'approval';
-    } else waiting = null;
+    const waiting = this.resolveWaiting(latest, state, row.waiting);
     let status: AgentTaskSummary['status'] = 'queued';
     if (row.closeReason !== null)
       status =
@@ -156,6 +136,32 @@ export class AgentTaskQuery {
       error: row.error ?? latest?.error ?? null,
       usage,
     });
+  }
+
+  /** Pending user input takes priority over approvals and the recorded scheduler wait. */
+  private resolveWaiting(
+    latest: RunView | undefined,
+    state: WorkState,
+    recordedWaiting: string | null,
+  ): string | null {
+    if (latest?.status !== 'running') return null;
+    if (
+      state.questions.some((question) => question.status === 'pending') ||
+      state.plan?.review === 'pending'
+    )
+      return 'user';
+    const approval = this.db
+      .select({ id: schema.toolCalls.id })
+      .from(schema.toolCalls)
+      .where(
+        and(
+          eq(schema.toolCalls.runId, latest.id),
+          sql`json_extract(${schema.toolCalls.data}, '$.status') = 'awaiting_approval'`,
+        ),
+      )
+      .get();
+    if (approval) return 'approval';
+    return recordedWaiting;
   }
 
   public list(sessionId: string, branchId?: string): AgentTaskSummary[] {

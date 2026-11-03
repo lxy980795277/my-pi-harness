@@ -1,7 +1,7 @@
 import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
-import type { MessageView, ToolCallRecord } from '@my-pi-harness/protocol';
+import { initialWorkState, type MessageView, type ToolCallRecord } from '@my-pi-harness/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ProfileStore } from '../src/index.js';
 import { storedToolCallId } from '../src/sessions/projections/tool-intents.js';
@@ -121,6 +121,50 @@ afterEach(async () => {
 });
 
 describe('bounded agent task queries', () => {
+  it('prioritizes user input over approval and recorded scheduling waits', async () => {
+    const { store } = await fixture();
+    spawn(store, 'first');
+    store.append('session', [
+      event('task.waiting', { taskId: 'first', waiting: 'model' }, 'run-first'),
+    ]);
+    expect(store.getAgentTask('session', 'first')).toMatchObject({
+      status: 'waiting',
+      waiting: 'model',
+    });
+    taskTool(store, 'APPROVAL', 'run-first', 'awaiting_approval');
+    expect(store.getAgentTask('session', 'first')).toMatchObject({ waiting: 'approval' });
+    const state = {
+      ...initialWorkState('main'),
+      revision: 1,
+      plan: {
+        id: 'plan',
+        runId: 'run-first',
+        title: 'Review before continuing',
+        content: 'Choose the next research step.',
+        steps: [],
+        status: 'draft',
+        review: 'pending',
+        feedback: null,
+        updatedAt: 2,
+      },
+    };
+    store.append('session', [event('work.updated', { taskId: 'first', state }, 'run-first')]);
+    expect(store.getAgentTask('session', 'first')).toMatchObject({ waiting: 'user' });
+    store.append('session', [
+      event(
+        'work.updated',
+        { taskId: 'first', state: { ...state, revision: 2, plan: null } },
+        'run-first',
+      ),
+    ]);
+    expect(store.getAgentTask('session', 'first')).toMatchObject({ waiting: 'approval' });
+    store.recoverInterrupted();
+    expect(store.getAgentTask('session', 'first')).toMatchObject({
+      status: 'interrupted',
+      waiting: null,
+    });
+  });
+
   it('loads only page bodies and page or pending tools, leaving sibling and off-page bodies undecoded', async () => {
     const { store, directory } = await fixture();
     spawn(store, 'first');

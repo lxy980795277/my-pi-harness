@@ -182,6 +182,17 @@ export class RemoteOAuthSession implements OAuthClientProvider {
       throw new McpError('OAUTH_CREDENTIAL_INVALID', 'MCP OAuth返回了无效凭据。');
     await this.options.store.write(JSON.stringify(this.data));
   }
+  /** Each SDK request remains cancellable by its OAuth flow and its own request signal. */
+  private fetchForFlow(signal: AbortSignal): FetchLike {
+    return (input, init) =>
+      this.fetch(input, {
+        ...init,
+        signal: AbortSignal.any([
+          signal,
+          ...(init?.signal === undefined || init.signal === null ? [] : [init.signal]),
+        ]),
+      });
+  }
   private async authorize(options: AuthOptions): Promise<AuthResult> {
     try {
       return await auth(this, options);
@@ -193,14 +204,7 @@ export class RemoteOAuthSession implements OAuthClientProvider {
   public async begin(signal: AbortSignal): Promise<{ url: string; state: string }> {
     const result = await this.authorize({
       serverUrl: this.options.endpoint,
-      fetchFn: (input, init) =>
-        this.fetch(input, {
-          ...init,
-          signal: AbortSignal.any([
-            signal,
-            ...(init?.signal === undefined || init.signal === null ? [] : [init.signal]),
-          ]),
-        }),
+      fetchFn: this.fetchForFlow(signal),
       forceReauthorization: true,
     });
     if (result !== 'REDIRECT' || this.authorizationUrl === undefined)
@@ -217,14 +221,7 @@ export class RemoteOAuthSession implements OAuthClientProvider {
       serverUrl: this.options.endpoint,
       authorizationCode: code,
       ...(issuer === null ? {} : { iss: issuer }),
-      fetchFn: (input, init) =>
-        this.fetch(input, {
-          ...init,
-          signal: AbortSignal.any([
-            signal,
-            ...(init?.signal === undefined || init.signal === null ? [] : [init.signal]),
-          ]),
-        }),
+      fetchFn: this.fetchForFlow(signal),
     });
     this.verifier = undefined;
     if (result !== 'AUTHORIZED')
@@ -239,14 +236,7 @@ export class RemoteOAuthSession implements OAuthClientProvider {
     ) {
       const result = await this.authorize({
         serverUrl: this.options.endpoint,
-        fetchFn: (input, init) =>
-          this.fetch(input, {
-            ...init,
-            signal: AbortSignal.any([
-              signal,
-              ...(init?.signal === undefined || init.signal === null ? [] : [init.signal]),
-            ]),
-          }),
+        fetchFn: this.fetchForFlow(signal),
       });
       if (result !== 'AUTHORIZED')
         throw new McpError('OAUTH_EXPIRED', 'MCP OAuth授权已失效，请重新连接。');

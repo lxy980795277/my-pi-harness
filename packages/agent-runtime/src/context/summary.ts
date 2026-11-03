@@ -29,7 +29,12 @@ export function summaryRecord(message: Message): string {
             return `Tool call ${part.name} (${part.id}): ${JSON.stringify(part.arguments).slice(0, 4000)}`;
           })
           .join('\n');
-  return `${message.role}${message.role === 'toolResult' ? ` ${message.toolName} ${unknownResult(message) ? 'RESULT UNKNOWN — may have taken effect; verify before a new action' : message.isError ? 'failed' : 'returned'}` : ''}: ${content}`;
+  if (message.role !== 'toolResult') return `${message.role}: ${content}`;
+  let outcome = 'returned';
+  if (unknownResult(message))
+    outcome = 'RESULT UNKNOWN — may have taken effect; verify before a new action';
+  else if (message.isError) outcome = 'failed';
+  return `${message.role} ${message.toolName} ${outcome}: ${content}`;
 }
 
 /** Local fallback records observations conservatively; it never invents tool success or approval. */

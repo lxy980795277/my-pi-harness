@@ -1,11 +1,13 @@
 import { Agent } from '@earendil-works/pi-agent-core';
-import type { Message } from '@earendil-works/pi-ai';
+import type { Message, UserMessage } from '@earendil-works/pi-ai';
 import { activeSkillContext } from '../capabilities/context.js';
 import { RuntimeError } from '../errors.js';
 import type { ToolRuntime } from '../tools/runtime.js';
 import type { ToolRunContext } from '../tools/types.js';
 import type { RunToolset } from '../tools/toolset.js';
 import type { RunAgentHost, RunExecutionOptions } from './types.js';
+import type { RunHooks } from './ports.js';
+import type { ResolvedModel } from '../models/gateway.js';
 
 /** Current definitions advance only through the capability owner's durable visibility barrier. */
 export function currentToolset(options: RunExecutionOptions): RunToolset {
@@ -22,6 +24,28 @@ export function assertQueuedAuthority(options: RunExecutionOptions): void {
     options.externalTools.assertBindingsCurrent(external);
   }
   options.capabilities?.assertCurrent();
+}
+
+/** Context budgeting uses the output policy and stream effective for this request. */
+function resolveProjectionModel(
+  resolved: ResolvedModel,
+  hooks: RunHooks | undefined,
+): ResolvedModel {
+  if (!hooks) return resolved;
+  return {
+    ...resolved,
+    model: {
+      ...resolved.model,
+      maxTokens: hooks.outputTokens(resolved.model.maxTokens),
+    },
+    streamFn: hooks.stream,
+  };
+}
+
+function currentTaskText(user: UserMessage): string {
+  if (typeof user.content === 'string') return user.content;
+  const text = user.content.find((part) => part.type === 'text');
+  return text?.text ?? '';
 }
 
 /** Assemble Pi, tool dispatch and request hooks without owning the Run's terminal outcome. */
@@ -120,16 +144,7 @@ export function createRunAgent(options: RunExecutionOptions, host: RunAgentHost)
       };
       const work = options.work;
       if (work) {
-        const resolved = options.hooks
-          ? {
-              ...options.resolved,
-              model: {
-                ...options.resolved.model,
-                maxTokens: options.hooks.outputTokens(options.resolved.model.maxTokens),
-              },
-              streamFn: options.hooks.stream,
-            }
-          : options.resolved;
+        const resolved = resolveProjectionModel(options.resolved, options.hooks);
         try {
           requestMessages = await work.context.project({
             session: options.session,
@@ -137,14 +152,7 @@ export function createRunAgent(options: RunExecutionOptions, host: RunAgentHost)
             resolved,
             messages: context.messages,
             basePrompt: options.basePrompt,
-            currentTask:
-              typeof options.user.content === 'string'
-                ? options.user.content
-                : options.user.content
-                    .filter((part) => part.type === 'text')
-                    .slice(0, 1)
-                    .map((part) => part.text)
-                    .join(''),
+            currentTask: currentTaskText(options.user),
             toolDefinitions: currentToolset(options).definitions,
             capabilityRevision: options.capabilities?.revision ?? 1,
             skills: options.capabilities?.skills() ?? [],

@@ -1,6 +1,6 @@
 import { fauxAssistantMessage } from '@earendil-works/pi-ai';
 import { describe, expect, it, vi } from 'vitest';
-import { agentFixture, agentsIdle } from './support/agent-fixture.js';
+import { agentFixture, agentsIdle, firstTask } from './support/agent-fixture.js';
 import { delegate, hasResult, waitForResults } from './support/agent-tools.js';
 
 describe('Shared preparation of root and delegated Runs', () => {
@@ -89,6 +89,46 @@ describe('Shared preparation of root and delegated Runs', () => {
       expect(f.errors).toEqual([]);
     } finally {
       append.mockRestore();
+      await f.close();
+    }
+  });
+
+  it('recomputes the root context output allowance after delegation begins', async () => {
+    const f = await agentFixture({
+      model: (model) => ({ ...model, maxTokens: 12_000, contextWindow: 128_000 }),
+      settings: (settings) => ({
+        ...settings,
+        limits: { ...settings.limits, maxOutputTokens: 1024 },
+      }),
+      response: (context) => {
+        if (firstTask(context) === 'CHILD_OUTPUT_POLICY')
+          return fauxAssistantMessage('Child result');
+        if (!hasResult(context, 'spawn_agent'))
+          return delegate('Output policy', 'CHILD_OUTPUT_POLICY');
+        if (!hasResult(context, 'wait_agents')) return waitForResults(context);
+        return fauxAssistantMessage('Parent collected the bounded child');
+      },
+    });
+    const project = vi.spyOn(f.work.context, 'project');
+    try {
+      await f.runtime.send(f.session.id, {
+        text: 'ROOT_OUTPUT_POLICY',
+        mode: 'send',
+        requestId: 'dynamic-output-policy',
+      });
+      await agentsIdle(f);
+      expect(project.mock.calls.map(([input]) => input.resolved.model.maxTokens)).toEqual([
+        12_000, 1024, 1024,
+      ]);
+      expect(f.runtime.getSnapshot(f.session.id).runs[0]?.status).toBe('completed');
+      expect(f.requests.filter((request) => request.task === 'ROOT_OUTPUT_POLICY')).toHaveLength(3);
+      expect(f.requests.filter((request) => request.task === 'CHILD_OUTPUT_POLICY')).toHaveLength(
+        1,
+      );
+      expect(f.leases()).toEqual({ acquired: 2, released: 2 });
+      expect(f.errors).toEqual([]);
+    } finally {
+      project.mockRestore();
       await f.close();
     }
   });
