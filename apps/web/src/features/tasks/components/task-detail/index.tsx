@@ -56,8 +56,6 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
         )}
       </div>
       <dl className="grid grid-cols-2 gap-x-4 gap-y-2 rounded-xl bg-muted/40 p-3 text-xs">
-        <dt className="text-muted-foreground">执行轮数上限</dt>
-        <dd>{task.limits.maxTurns}</dd>
         <dt className="text-muted-foreground">已记录 Token</dt>
         <dd>{task.usage?.totalTokens.toLocaleString() ?? '暂无计量'}</dd>
       </dl>

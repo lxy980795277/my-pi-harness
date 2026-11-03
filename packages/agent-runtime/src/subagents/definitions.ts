@@ -48,13 +48,14 @@ export const AGENT_TOOL_DEFINITIONS: readonly RunToolDefinition[] = [
   },
   {
     name: 'get_agent_status',
-    description: 'Read the status and bounded latest result of a task in this execution tree.',
+    description:
+      'Read a task status and bounded output from its selected Run. Check status, error and partial: partial text may be unfinished or shortened and is not proof of completion.',
     parameters: AgentIdInputSchema,
   },
   {
     name: 'wait_agents',
     description:
-      'Wait for the currently accepted execution of descendant tasks. Waiting releases model request capacity. A timeout does not stop the tasks. Read the returned results before summarizing.',
+      'Wait for the currently accepted execution of descendant tasks. Waiting releases model request capacity. A timeout does not stop the tasks. Check each returned status, error and partial flag before summarizing; unfinished or shortened text is not a completed report.',
     parameters: WaitAgentsInputSchema,
   },
   {
@@ -74,4 +75,13 @@ export const AGENT_TOOL_DEFINITIONS: readonly RunToolDefinition[] = [
 /** Names are selected from the same declarations used for model requests. */
 export function isAgentTool(name: string): boolean {
   return AGENT_TOOL_DEFINITIONS.some((definition) => definition.name === name);
+}
+
+/** Application-owned role descriptions become replayable model input at acceptance. */
+export function agentContext(
+  roles: readonly { id: string; name: string; description: string; enabled: boolean }[],
+): string {
+  const enabled = roles.filter((role) => role.enabled);
+  if (enabled.length === 0) return '';
+  return `Delegate independent, bounded work when useful. Use wait_agents to collect descendant results before your final answer; stop unnecessary tasks. Child contexts contain only explicitly forwarded inputs. Available roles:\n${enabled.map((role) => `${role.id}: ${role.name} — ${role.description}`).join('\n')}\nTask controls: ${AGENT_TOOL_DEFINITIONS.map((tool) => tool.name).join(', ')}.`;
 }

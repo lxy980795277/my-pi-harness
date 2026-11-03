@@ -63,15 +63,15 @@ describe('Agent failure ownership through real Pi and temporary journals', () =>
         });
         await withinDeadline(preparation.promise, 'Child preparation never started');
         await withinDeadline(timedOut.promise, 'Child preparation deadline did not abort');
-        const task = f.runtime.agents.list(f.session.id).tasks[0];
+        const task = f.runtime.subagents.list(f.session.id).tasks[0];
         if (!task) throw new Error('Missing preparing task');
         const stopping = laterStop
-          ? f.runtime.agents.stop(f.session.id, task.id, { expectedRunId: null })
+          ? f.runtime.subagents.stop(f.session.id, task.id, { expectedRunId: null })
           : undefined;
         cleanup.release();
         if (stopping) await withinDeadline(stopping, 'Late stop did not settle preparation');
         await agentsIdle(f);
-        expect(f.runtime.agents.list(f.session.id).tasks[0]).toMatchObject({
+        expect(f.runtime.subagents.list(f.session.id).tasks[0]).toMatchObject({
           status: 'failed',
           closeReason: 'failed',
           error: '子任务已达到执行时限。',
@@ -87,41 +87,12 @@ describe('Agent failure ownership through real Pi and temporary journals', () =>
     },
   );
 
-  it('records the exact turn limit failure on its failed Run', async () => {
-    const reason = '任务已达到模型请求轮数上限。';
-    const f = await agentFixture({
-      settings: (settings) => ({ ...settings, limits: { ...settings.limits, maxTurns: 1 } }),
-      response: (context) => {
-        if (firstTask(context) === 'LIMITED_CHILD') return fauxAssistantMessage('Child result');
-        if (!hasResult(context, 'spawn_agent')) return delegate('Bounded child', 'LIMITED_CHILD');
-        return fauxAssistantMessage('A denied parent request must not reach this provider');
-      },
-    });
-    try {
-      await f.runtime.send(f.session.id, {
-        text: 'ROOT_ADMISSION_FAILURE',
-        mode: 'send',
-        requestId: 'admission-failure',
-      });
-      await agentsIdle(f);
-      expect(f.runtime.getSnapshot(f.session.id).runs[0]).toMatchObject({
-        status: 'failed',
-        error: reason,
-      });
-      expect(
-        f.requests.filter((request) => request.task === 'ROOT_ADMISSION_FAILURE'),
-      ).toHaveLength(1);
-    } finally {
-      await f.close();
-    }
-  });
-
   it.each([false, true])(
-    'preserves the last allowed child turn outcome (timeout=%s)',
+    'preserves a child outcome without masking provider timeout (timeout=%s)',
     async (timeout) => {
       const f = await agentFixture({
         response: (context) => {
-          if (firstTask(context) === 'ONE_TURN_CHILD') {
+          if (firstTask(context) === 'DIRECT_OUTCOME_CHILD') {
             if (timeout)
               return fauxAssistantMessage('', {
                 stopReason: 'error',
@@ -133,12 +104,11 @@ describe('Agent failure ownership through real Pi and temporary journals', () =>
             return call(
               'spawn_agent',
               {
-                title: 'One-turn check',
-                task: 'ONE_TURN_CHILD',
+                title: 'Direct outcome check',
+                task: 'DIRECT_OUTCOME_CHILD',
                 roleId: 'researcher',
-                limits: { maxTurns: 1 },
               },
-              'one-turn',
+              'direct-outcome',
             );
           if (!hasResult(context, 'wait_agents')) return waitForResults(context);
           return fauxAssistantMessage('Parent collected the child outcome');
@@ -146,20 +116,22 @@ describe('Agent failure ownership through real Pi and temporary journals', () =>
       });
       try {
         await f.runtime.send(f.session.id, {
-          text: 'ROOT_ONE_TURN',
+          text: 'ROOT_DIRECT_OUTCOME',
           mode: 'send',
-          requestId: 'one-turn',
+          requestId: 'direct-outcome',
         });
         await agentsIdle(f);
-        const task = f.runtime.agents.list(f.session.id).tasks[0];
-        if (!task) throw new Error('Missing one-turn task');
+        const task = f.runtime.subagents.list(f.session.id).tasks[0];
+        if (!task) throw new Error('Missing direct outcome task');
         const status = timeout ? 'failed' : 'completed';
         expect(task.status).toBe(status);
         expect(f.store.getTaskSnapshot(f.session.id, task.id).runs[0]).toMatchObject({
           status,
           error: timeout ? '模型请求超时，请稍后重试。' : null,
         });
-        expect(f.requests.filter((request) => request.task === 'ONE_TURN_CHILD')).toHaveLength(1);
+        expect(
+          f.requests.filter((request) => request.task === 'DIRECT_OUTCOME_CHILD'),
+        ).toHaveLength(1);
         expect(
           f.runtime.getSnapshot(f.session.id).tools.find((tool) => tool.name === 'wait_agents')
             ?.result,
@@ -215,7 +187,7 @@ describe('Agent failure ownership through real Pi and temporary journals', () =>
           requestId: stage,
         });
         await agentsIdle(f);
-        const task = f.runtime.agents.list(f.session.id).tasks[0];
+        const task = f.runtime.subagents.list(f.session.id).tasks[0];
         if (!task) throw new Error('Missing failed task');
         expect(injected).toBe(true);
         expect(task.status).toBe('failed');
@@ -265,7 +237,7 @@ describe('Agent failure ownership through real Pi and temporary journals', () =>
       });
       await withinDeadline(entered.promise, 'Child never entered its model request');
       await agentsIdle(f);
-      const task = f.runtime.agents.list(f.session.id).tasks[0];
+      const task = f.runtime.subagents.list(f.session.id).tasks[0];
       if (!task) throw new Error('Missing cancelled child');
       expect(f.runtime.getSnapshot(f.session.id).runs[0]?.status).toBe('failed');
       expect(task.status).toBe('cancelled');
@@ -313,10 +285,10 @@ describe('Agent failure ownership through real Pi and temporary journals', () =>
         Promise.all([childEntered.promise, parentEntered.promise]),
         'Role-change barriers were not reached',
       );
-      const accepted = f.runtime.agents.list(f.session.id).tasks[0];
+      const accepted = f.runtime.subagents.list(f.session.id).tasks[0];
       if (!accepted) throw new Error('Missing accepted role task');
-      const settings = f.runtime.agents.settings();
-      f.runtime.agents.updateSettings({
+      const settings = f.runtime.subagents.settings();
+      f.runtime.subagents.updateSettings({
         ...settings,
         roles: settings.roles.map((role) =>
           role.id === 'researcher'
@@ -338,7 +310,7 @@ describe('Agent failure ownership through real Pi and temporary journals', () =>
             ),
         'Disabled role was not rejected',
       );
-      expect(f.runtime.agents.list(f.session.id).tasks).toHaveLength(1);
+      expect(f.runtime.subagents.list(f.session.id).tasks).toHaveLength(1);
       expect(f.store.getAgentTask(f.session.id, accepted.id)?.role.instructions).toBe(
         accepted.role.instructions,
       );
@@ -351,7 +323,7 @@ describe('Agent failure ownership through real Pi and temporary journals', () =>
         'CHANGED_ROLE_INSTRUCTIONS',
       );
       expect(f.requests.some((request) => request.task === 'NEW_DISABLED_ROLE_CHILD')).toBe(false);
-      expect(f.runtime.agents.list(f.session.id).tasks[0]?.status).toBe('completed');
+      expect(f.runtime.subagents.list(f.session.id).tasks[0]?.status).toBe('completed');
     } finally {
       releaseParent.release();
       releaseChild.release();
@@ -450,8 +422,9 @@ describe('Agent failure ownership through real Pi and temporary journals', () =>
         'Both child resources were not prepared',
       );
       faultRunId =
-        f.runtime.agents.list(f.session.id).tasks.find((task) => task.title === 'Journal failure')
-          ?.latestRunId ?? undefined;
+        f.runtime.subagents
+          .list(f.session.id)
+          .tasks.find((task) => task.title === 'Journal failure')?.latestRunId ?? undefined;
       expect(faultRunId).toBeDefined();
       releaseFailure.release();
       await withinDeadline(failed.promise, 'Journal failure was not injected');

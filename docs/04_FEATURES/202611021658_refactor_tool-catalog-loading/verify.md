@@ -66,3 +66,11 @@ pnpm exec playwright test tests/e2e/m3.spec.ts --grep-invert 'M3 计划反馈|M3
 未调用收费模型或真实OAuth账号，未改变4311/5174开发服务。Windows、Office视觉、真实供应商速度/计费、Electron安装器/签名和发布未在本轮验证；不扩大既有里程碑验收结论，不进入M6。
 
 用户确认family/source分类维度与命名优化留待下一迭代，本次提交保留现有分类。
+
+## 后续旧开发会话清理（2026-11-03）
+
+工具治理提交后，用户实际启动在projectCapabilityLoad读取旧接受快照时遇到INVALID_RECORD；Vite随后因daemon退出而被联动终止。只读结构检查确认两份含workspaceCandidates的旧接受快照在工具加载事件处触发校验。临时副本先复现相同错误，再验证隔离两份日志及重建会话投影后可恢复，21张独立配置表摘要不变。
+
+用户随后明确授权“不需要兼容旧数据，可以直接删掉，数据库也可以清理”。已持现有profile互斥锁，直接删除Desktop profile对应的两份阻塞JSONL，并按现有恢复顺序清空17张可重建投影表；正常ProfileStore回放恢复剩余一份会话。数据库完整性结果ok、外键检查无错误；独立配置表摘要保持一致，6个Provider和2个工作区保留。未删除整个数据库、工作区源文件、附件或凭据，也未引入格式兼容。
+
+使用同一实际Desktop profile、构建后的daemon和动态端口完成启动验证：收到daemon.ready，GET /api/health返回200和ready。通过所属IPC断开关闭验证进程，退出码0；4311/5174没有留下验证服务。此次未发起模型请求或真实OAuth流程。上述清理是提交后的用户授权操作，不改变前文实现阶段未处理原数据的历史证据。

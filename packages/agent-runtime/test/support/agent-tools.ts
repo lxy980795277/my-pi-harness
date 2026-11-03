@@ -21,12 +21,11 @@ export function taskResults(context: TranscriptContext): SpawnReceipt[] {
   return context.messages.flatMap((message) => {
     if (message.role !== 'toolResult' || message.toolName !== 'spawn_agent' || message.isError)
       return [];
-    const text = message.content
-      .filter((part) => part.type === 'text')
-      .map((part) => part.text)
-      .join('\n');
-    const parsed: unknown = JSON.parse(text);
-    if (!Value.Check(SpawnReceiptSchema, parsed)) throw new Error(`Delegation failed: ${text}`);
+    const data = message.content.find((part) => part.type === 'text');
+    if (!data) throw new Error('Delegation returned no receipt');
+    const parsed: unknown = JSON.parse(data.text);
+    if (!Value.Check(SpawnReceiptSchema, parsed))
+      throw new Error(`Delegation failed: ${data.text}`);
     return [parsed];
   });
 }

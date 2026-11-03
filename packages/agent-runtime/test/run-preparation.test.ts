@@ -27,7 +27,7 @@ describe('Shared preparation of root and delegated Runs', () => {
       });
       await agentsIdle(f);
       const root = f.runtime.getSnapshot(f.session.id);
-      const task = f.runtime.agents.list(f.session.id).tasks[0];
+      const task = f.runtime.subagents.list(f.session.id).tasks[0];
       if (!task) throw new Error('Missing delegated task');
       const child = f.store.getTaskSnapshot(f.session.id, task.id);
       const rootUser = root.messages.find((message) => message.role === 'user');
@@ -162,7 +162,7 @@ describe('Shared preparation of root and delegated Runs', () => {
           requestId: `child-${capability}`,
         });
         await agentsIdle(f);
-        const task = f.runtime.agents.list(f.session.id).tasks[0];
+        const task = f.runtime.subagents.list(f.session.id).tasks[0];
         if (!task) throw new Error('The parent did not create the child task');
         expect(task).toMatchObject({ status: 'failed', closeReason: 'failed', latestRunId: null });
         expect(f.store.getTaskSnapshot(f.session.id, task.id).runs).toEqual([]);

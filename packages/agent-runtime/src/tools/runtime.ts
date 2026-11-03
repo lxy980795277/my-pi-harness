@@ -1,16 +1,23 @@
 import type { AgentTool } from '@earendil-works/pi-agent-core';
-import type { ToolDecisionInput } from '@my-pi-harness/protocol';
+import {
+  StoredToolResultSchema,
+  type StoredToolResult,
+  type ToolDecisionInput,
+} from '@my-pi-harness/protocol';
 import { Type, type TSchema } from 'typebox';
+import { ArrayOptions } from 'typebox/type';
 import { Value } from 'typebox/value';
 import { RuntimeError } from '../errors.js';
 import { applyFamilyOutcome, executeToolFamily, toolFamily } from './families.js';
 import { ToolCallLedger } from './ledger.js';
 import { invocationPolicy, ToolApprovals } from './policy.js';
+import { RepeatToolReminder } from './repeat-reminder.js';
 import type { RunToolset, RunToolDefinition, RunToolRecord } from './toolset.js';
 import type { ToolExecutionResult, ToolRunContext, ToolRuntimeOptions } from './types.js';
 
 const toolArguments = Type.Record(Type.String(), Type.Unknown());
 const MAX_TOOL_ERROR_CHARACTERS = 4000;
+const MAX_TOOL_RESULT_BLOCKS = ArrayOptions(StoredToolResultSchema.properties.content).maxItems;
 
 /** Check original model JSON before Pi coercion, and executable input before any dispatch. */
 function validateToolInput(definition: RunToolDefinition, input: unknown): Record<string, unknown> {
@@ -24,6 +31,7 @@ function validateToolInput(definition: RunToolDefinition, input: unknown): Recor
 /** Compose frozen selection, family dispatch, approval ownership and canonical tool accounting. */
 export class ToolRuntime {
   private readonly approvals: ToolApprovals;
+  private readonly repetitions = new WeakMap<ToolRunContext, RepeatToolReminder>();
   public constructor(private readonly options: ToolRuntimeOptions) {
     this.approvals = new ToolApprovals(options);
   }
@@ -81,8 +89,6 @@ export class ToolRuntime {
   ): Promise<ToolExecutionResult> {
     const signal = sdkSignal ? AbortSignal.any([sdkSignal, context.signal]) : context.signal;
     signal.throwIfAborted();
-    if (context.recorded.size >= 64)
-      throw new RuntimeError('TOOL_LIMIT', '本次运行已达到工具调用上限。');
     const policy = invocationPolicy(selected, args, this.options);
     const ledger = new ToolCallLedger(
       context,
@@ -97,6 +103,24 @@ export class ToolRuntime {
     );
     const tool = ledger.tool;
     ledger.accept();
+    let repetitions = this.repetitions.get(context);
+    if (!repetitions) {
+      repetitions = new RepeatToolReminder();
+      this.repetitions.set(context, repetitions);
+    }
+    const reminder = repetitions.observe(tool.name, args);
+    const finish = (
+      result: ToolExecutionResult,
+      origin: StoredToolResult['origin'],
+    ): ToolExecutionResult => {
+      const appendReminder =
+        reminder !== undefined &&
+        (MAX_TOOL_RESULT_BLOCKS === undefined || result.content.length < MAX_TOOL_RESULT_BLOCKS);
+      const retained = appendReminder
+        ? { ...result, content: [...result.content, { type: 'text' as const, text: reminder }] }
+        : result;
+      return ledger.finish(retained, origin);
+    };
     let releaseTool = (): void => undefined;
     try {
       if (context.readOnly && policy.mutating) {
@@ -115,7 +139,7 @@ export class ToolRuntime {
         signal,
       );
       applyFamilyOutcome(tool, outcome);
-      const result = ledger.finish(outcome.result, outcome.origin);
+      const result = finish(outcome.result, outcome.origin);
       if (outcome.status === 'unknown') context.outcomeUnknown(tool.result ?? '结果未知。');
       return result;
     } catch (error: unknown) {
@@ -128,7 +152,7 @@ export class ToolRuntime {
       ) {
         tool.status = 'unknown';
         tool.result = '结果未知，操作可能已生效，需要核验。';
-        const result = ledger.finish(
+        const result = finish(
           {
             content: [{ type: 'text', text: tool.result }],
             details: undefined,
@@ -142,7 +166,7 @@ export class ToolRuntime {
       if (signal.aborted) tool.status = 'cancelled';
       else if (tool.status !== 'denied') tool.status = 'failed';
       tool.result = message.slice(0, MAX_TOOL_ERROR_CHARACTERS);
-      return ledger.finish(
+      return finish(
         {
           content: [{ type: 'text', text: tool.result }],
           details: undefined,

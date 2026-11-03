@@ -1,8 +1,7 @@
-import type { AgentRole, FrozenSkill, WorkState } from '@my-pi-harness/protocol';
+import type { FrozenSkill, WorkState } from '@my-pi-harness/protocol';
 import { nativeTools } from './catalog.js';
 import type { FrozenMcpTool } from './external.js';
 import { RunToolset, type RunToolRecord, type RunToolSelection } from './toolset.js';
-import { allowedTaskTool } from './task-toolset.js';
 
 export interface ToolSelectionInput {
   workspaceId: string | null;
@@ -11,8 +10,8 @@ export interface ToolSelectionInput {
   skillDirectory: boolean;
   agents: boolean;
   canSpawn?: boolean;
-  task?: boolean;
-  access?: AgentRole['access'];
+  allows?(tool: RunToolSelection): boolean;
+  required?: readonly string[];
   inherited?: RunToolset;
   external?: readonly FrozenMcpTool[];
   activeSkills?: readonly FrozenSkill[];
@@ -30,7 +29,7 @@ export function workToolRequirements(state: WorkState): string[] {
   return names;
 }
 
-/** Resolve initial declarations and all native candidates using the same capability and role filters. */
+/** Resolve initial declarations and deferred candidates under the caller's accepted scope. */
 export function selectRunTools(input: ToolSelectionInput): {
   initial: RunToolset;
   nativeCandidates: readonly RunToolRecord[];
@@ -46,10 +45,12 @@ export function selectRunTools(input: ToolSelectionInput): {
       !input.skills
     )
       return false;
-    return !input.task || allowedTaskTool(entry, input.access ?? 'read-only');
+    return input.allows?.(entry) ?? true;
   });
-  const required = new Set(input.state ? workToolRequirements(input.state) : []);
-  if (input.task && input.agents) required.add('send_agent_message');
+  const required = new Set([
+    ...(input.required ?? []),
+    ...(input.state ? workToolRequirements(input.state) : []),
+  ]);
   for (const skill of input.activeSkills ?? []) {
     if (skill.resources.length > 0) required.add('read_skill_resource');
     for (const name of skill.allowedTools)
@@ -67,7 +68,7 @@ export function selectRunTools(input: ToolSelectionInput): {
       required.has(entry.definition.name),
   );
   for (const inherited of input.inherited?.records ?? []) {
-    if (!allowedTaskTool(inherited, input.access ?? 'read-only')) continue;
+    if (input.allows && !input.allows(inherited)) continue;
     if (
       inherited.source.kind !== 'mcp' &&
       !candidates.some((entry) => entry.definition.name === inherited.definition.name)

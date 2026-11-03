@@ -1,15 +1,15 @@
 import { randomUUID } from 'node:crypto';
 import type { Agent } from '@earendil-works/pi-agent-core';
 import type { UserMessage } from '@earendil-works/pi-ai';
-import type { AgentMessage, MessageView, QueueInput } from '@my-pi-harness/protocol';
+import type { MessageView, QueueInput } from '@my-pi-harness/protocol';
 import { userWithAttachments } from '../context/attachments.js';
-import { communicationMessage } from '../context/agent-message.js';
 import { encodeContextMessage } from '../context/codec.js';
 import { RuntimeError } from '../errors.js';
 import { combinedSkills } from '../capabilities/inputs.js';
 import type { EventInput } from '../sessions/ports.js';
 import { assertQueuedAuthority } from './agent.js';
 import type { RunExecutionOptions } from './types.js';
+import type { RunInjectedInput } from './ports.js';
 
 interface RunInputHost {
   assertKnownOutcome(): void;
@@ -18,10 +18,10 @@ interface RunInputHost {
   commit(events: readonly EventInput[]): void;
 }
 
-/** Own SDK input identity and atomically consume a queue or communication with its user message. */
+/** Own SDK input identity and atomically commit queue or injected-input records at actual consumption. */
 export class RunInputDelivery {
   private readonly queued = new WeakMap<UserMessage, QueueInput>();
-  private readonly communications = new WeakMap<UserMessage, AgentMessage>();
+  private readonly injected = new WeakMap<UserMessage, RunInjectedInput>();
   private readonly eligible: Set<string>;
 
   public constructor(
@@ -34,8 +34,8 @@ export class RunInputDelivery {
   public receive(message: UserMessage): void {
     const input = this.queued.get(message);
     if (input) this.consumeInput(input, message);
-    const incoming = this.communications.get(message);
-    if (incoming) this.consumeAgentInput(incoming, message);
+    const incoming = this.injected.get(message);
+    if (incoming) this.host.commit(incoming.consume());
   }
 
   public rebuild(agent: Agent): void {
@@ -59,10 +59,9 @@ export class RunInputDelivery {
       if (input.mode === 'steer') agent.steer(message);
       else agent.followUp(message);
     }
-    for (const input of this.options.agents?.incoming() ?? []) {
-      const message = communicationMessage(input);
-      this.communications.set(message, input);
-      agent.steer(message);
+    for (const input of this.options.hooks?.incoming() ?? []) {
+      this.injected.set(input.message, input);
+      agent.steer(input.message);
     }
   }
 
@@ -122,32 +121,5 @@ export class RunInputDelivery {
       },
     ]);
     this.options.capabilities?.stageSkills(skills);
-  }
-
-  private consumeAgentInput(input: AgentMessage, message: UserMessage): void {
-    const at = Date.now();
-    const view: MessageView = {
-      id: randomUUID(),
-      sessionId: this.options.session.id,
-      branchId: this.options.run.branchId,
-      runId: this.options.run.id,
-      role: 'user',
-      agentMessageId: input.id,
-      text: input.text,
-      thinking: '',
-      createdAt: at,
-      status: 'complete',
-      stopReason: null,
-    };
-    this.host.commit([
-      ...(this.options.agents?.consume(input, view) ?? []),
-      {
-        type: 'message.started',
-        runId: this.options.run.id,
-        at,
-        data: view,
-        privateData: encodeContextMessage(message),
-      },
-    ]);
   }
 }

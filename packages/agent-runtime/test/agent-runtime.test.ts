@@ -36,7 +36,7 @@ describe('durable structured Agent execution through real Pi', () => {
         requestId: 'isolation',
       });
       await agentsIdle(f);
-      const tasks = f.runtime.agents.list(f.session.id).tasks;
+      const tasks = f.runtime.subagents.list(f.session.id).tasks;
       expect(tasks).toHaveLength(1);
       const task = tasks[0];
       if (!task) throw new Error('Missing accepted task');
@@ -98,7 +98,7 @@ describe('durable structured Agent execution through real Pi', () => {
       });
       await withinDeadline(entered.promise, 'Child model never started');
       await withinDeadline(f.runtime.cancel(f.session.id), 'Tree cancellation did not settle');
-      const task = f.runtime.agents.list(f.session.id).tasks[0];
+      const task = f.runtime.subagents.list(f.session.id).tasks[0];
       if (!task) throw new Error('Missing cancelled task');
       expect(task.status).toBe('cancelled');
       expect(task.closedAt).not.toBeNull();
@@ -165,12 +165,12 @@ describe('durable structured Agent execution through real Pi', () => {
         requestId: 'stream-cleanup',
       });
       await withinDeadline(firstEntered.promise, 'First returned model stream never opened');
-      const first = f.runtime.agents
+      const first = f.runtime.subagents
         .list(f.session.id)
         .tasks.find((task) => task.title === 'Slow stream cleanup');
       if (!first) throw new Error('Missing first model stream task');
       let stopped = false;
-      const stopping = f.runtime.agents
+      const stopping = f.runtime.subagents
         .stop(f.session.id, first.id, { expectedRunId: first.latestRunId })
         .then(() => {
           stopped = true;
@@ -181,7 +181,7 @@ describe('durable structured Agent execution through real Pi', () => {
       settleFirst.release();
       await withinDeadline(stopping, 'Task stop did not await model stream settlement');
       await agentsIdle(f);
-      const tasks = f.runtime.agents.list(f.session.id).tasks;
+      const tasks = f.runtime.subagents.list(f.session.id).tasks;
       expect(tasks.find((task) => task.id === first.id)?.status).toBe('cancelled');
       expect(tasks.find((task) => task.title === 'Next stream')?.status).toBe('completed');
       expect(secondEntered).toBe(true);
@@ -220,7 +220,7 @@ describe('durable structured Agent execution through real Pi', () => {
         f.runtime.cancel(f.session.id),
         'Preparation cancellation did not settle',
       );
-      const task = f.runtime.agents.list(f.session.id).tasks[0];
+      const task = f.runtime.subagents.list(f.session.id).tasks[0];
       if (!task) throw new Error('Missing preparing task');
       expect(task.status).toBe('cancelled');
       expect(task.latestRunId).toBeNull();
@@ -283,7 +283,7 @@ describe('durable structured Agent execution through real Pi', () => {
         requestId: 'nested',
       });
       await agentsIdle(f);
-      const tasks = f.runtime.agents.list(f.session.id).tasks;
+      const tasks = f.runtime.subagents.list(f.session.id).tasks;
       expect(tasks).toHaveLength(3);
       expect(tasks.every((task) => task.status === 'completed' && task.closedAt !== null)).toBe(
         true,
@@ -349,10 +349,10 @@ describe('durable structured Agent execution through real Pi', () => {
       );
       const rootRunId = f.runtime.getSnapshot(f.session.id).session.activeRunId;
       expect(rootRunId).not.toBeNull();
-      expect(f.runtime.agents.list(f.session.id).tasks[0]?.closedAt).toBeNull();
+      expect(f.runtime.subagents.list(f.session.id).tasks[0]?.closedAt).toBeNull();
       blocked.release();
       await agentsIdle(f);
-      const task = f.runtime.agents.list(f.session.id).tasks[0];
+      const task = f.runtime.subagents.list(f.session.id).tasks[0];
       if (!task) throw new Error('Missing joined task');
       expect(task.status).toBe('completed');
       expect(task.closedAt).not.toBeNull();
@@ -410,7 +410,7 @@ describe('durable structured Agent execution through real Pi', () => {
       await agentChanged(
         f,
         () =>
-          f.runtime.agents
+          f.runtime.subagents
             .list(f.session.id)
             .tasks.some((task) =>
               f.store
@@ -419,7 +419,7 @@ describe('durable structured Agent execution through real Pi', () => {
             ),
         'Child did not ask its question',
       );
-      const task = f.runtime.agents.list(f.session.id).tasks[0];
+      const task = f.runtime.subagents.list(f.session.id).tasks[0];
       if (!task) throw new Error('Missing questioning task');
       const question = f.store.getTaskWorkState(f.session.id, task.id).questions[0];
       if (!question) throw new Error('Missing task question');

@@ -24,9 +24,9 @@ describe('public model failure messages', () => {
     expect(
       runFailureMessage({
         kind: 'owned',
-        cause: new RuntimeError('AGENT_TURN_LIMIT', '任务已达到模型请求轮数上限。'),
+        cause: new RuntimeError('AGENT_TIMEOUT', '任务树已达到执行时限。'),
       }),
-    ).toBe('任务已达到模型请求轮数上限。');
+    ).toBe('任务树已达到执行时限。');
     expect(
       runFailureMessage({ kind: 'owned', cause: new Error('401 private-test-key-error') }),
     ).toBe('模型请求失败，请稍后重试。');

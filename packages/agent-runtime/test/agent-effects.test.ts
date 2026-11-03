@@ -119,7 +119,7 @@ describe('Agent tree effect ownership', () => {
       const root = f.runtime.getSnapshot(f.session.id);
       expect(root.runs[0]?.status).toBe('failed');
       expect(root.runs[0]?.error).toBe('Synthetic mutation outcome unknown');
-      const tasks = f.runtime.agents.list(f.session.id).tasks;
+      const tasks = f.runtime.subagents.list(f.session.id).tasks;
       expect(tasks).toHaveLength(2);
       const writer = tasks.find((task) => task.title === 'Unknown writer');
       const sibling = tasks.find((task) => task.title === 'Sibling');
@@ -192,7 +192,7 @@ describe('Agent tree effect ownership', () => {
       await agentChanged(
         f,
         () => {
-          const parent = f.runtime.agents
+          const parent = f.runtime.subagents
             .list(f.session.id)
             .tasks.find((task) => task.title === 'Intermediate writer');
           return (
@@ -218,7 +218,7 @@ describe('Agent tree effect ownership', () => {
         'root writer restored',
       );
       expect(
-        f.runtime.agents
+        f.runtime.subagents
           .list(f.session.id)
           .tasks.every((task) => task.status === 'completed' && task.closedAt !== null),
       ).toBe(true);

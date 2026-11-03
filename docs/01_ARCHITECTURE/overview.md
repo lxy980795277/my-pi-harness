@@ -41,18 +41,18 @@
 
 源码目录表达实际拥有者，领域内直接引用具体实现。package根`index.ts`只提供公开导出，daemon根`bootstrap.ts`保留进程启动；生成的protocol版本文件和真正包级错误可留在根目录。没有旧路径兼容转发文件，也不以utils收纳未判断归属的代码。
 
-| 源码目录                     | 内部职责                                                                                                                                                                                                                                       |
-| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `apps/daemon/src`            | `application`负责配置、启动准备和服务装配；`http`负责Fastify、访问校验、错误映射、请求/SSE及Web资源；auth、models、sessions、mcp等领域直接位于src                                                                                              |
-| `packages/execution/src`     | `core`负责执行入口与公共定义；`filesystem`负责文件和路径；`process`负责Shell、持久进程、沙箱和回收；`documents`负责内容提取；`web`负责抓取；`office`负责办公生成和编辑                                                                         |
-| `packages/integrations/src`  | `mcp`负责传输、目录、schema与租约；`network`提供受限远端访问；`skills`、`plugins`、`connections`及`search`分别拥有资源、插件声明、手动账户和本地向量适配                                                                                       |
-| `packages/protocol/src`      | `application`、`sessions`、`tools`、`extensions`和`host`按协议领域提供浏览器安全schema/DTO；host命名不授予Node能力                                                                                                                             |
-| `packages/storage/src`       | `profile`负责打开与跨介质提交/恢复；`sqlite`负责表和迁移；`sessions`负责JSONL、附件、查询及派生投影；`repositories`负责独立配置；`credentials`负责凭据；`shared`仅放包级错误与校验                                                             |
-| `packages/agent-runtime/src` | `models`负责Provider及模型认证；`sessions`负责主会话；`agents`负责任务树、角色、请求调度、通信与收束；`runs`复用单次Pi执行；`tools`负责执行与审批；`capabilities`负责发现、绑定和动态加载；`work`负责独立工作状态；`context`负责模型请求上下文 |
+| 源码目录                     | 内部职责                                                                                                                                                                                                                                          |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/daemon/src`            | `application`负责配置、启动准备和服务装配；`http`负责Fastify、访问校验、错误映射、请求/SSE及Web资源；auth、models、sessions、mcp等领域直接位于src                                                                                                 |
+| `packages/execution/src`     | `core`负责执行入口与公共定义；`filesystem`负责文件和路径；`process`负责Shell、持久进程、沙箱和回收；`documents`负责内容提取；`web`负责抓取；`office`负责办公生成和编辑                                                                            |
+| `packages/integrations/src`  | `mcp`负责传输、目录、schema与租约；`network`提供受限远端访问；`skills`、`plugins`、`connections`及`search`分别拥有资源、插件声明、手动账户和本地向量适配                                                                                          |
+| `packages/protocol/src`      | `application`、`sessions`、`tools`、`extensions`和`host`按协议领域提供浏览器安全schema/DTO；host命名不授予Node能力                                                                                                                                |
+| `packages/storage/src`       | `profile`负责打开与跨介质提交/恢复；`sqlite`负责表和迁移；`sessions`负责JSONL、附件、查询及派生投影；`repositories`负责独立配置；`credentials`负责凭据；`shared`仅放包级错误与校验                                                                |
+| `packages/agent-runtime/src` | `models`负责Provider及模型认证；`sessions`负责主会话；`subagents`负责任务树、角色、请求调度、通信与收束；`runs`复用单次Pi执行；`tools`负责执行与审批；`capabilities`负责发现、绑定和动态加载；`work`负责独立工作状态；`context`负责模型请求上下文 |
 
 ProfileStore保留JSONL、SQLite、锁和失败冻结的单一编排，模型配置仓储通过它的事务入口写入。模型Provider认证、应用登录与插件OAuth继续由各自领域拥有；共享网络访问不归入某一个供应商或MCP传输。
 
-Agent执行内部以拥有者拆分：主子Run共用`runs/prepare`准备输入接受事实，`runs/execution`管理生命周期，SDK装配、输入投递和消息事件记录各自独立。`tools/catalog`统一原生定义引用与策略，`tools/selection`选择初始集合和获准候选，`RunCapabilities`拥有请求前激活，`RunSkills`管理正文和资源租约；`tools/runtime`只编排逐次校验、审批与执行，工具族消费同一目录派发。具体文件职责由[agent-runtime](../../packages/agent-runtime/README.md#源码职责)维护，消息和持久格式由既有协议拥有。
+Agent执行内部以拥有者拆分：主子Run共用`runs/prepare`准备输入接受事实，`runs/execution`管理生命周期，SDK装配、输入投递和消息事件记录各自独立。`runs/ports`声明RunHooks和注入输入接口，subagents适配器实现它们，runs不反向导入子任务领域；SubagentCoordinator唯一拥有任务树和资源收束，通信与委派策略各归所属模块。`tools/catalog`统一原生定义引用与策略，`tools/selection`消费调用者的访问约束来选择初始集合和获准候选，`RunCapabilities`拥有请求前激活，`RunSkills`管理正文和资源租约；`tools/runtime`只编排逐次校验、审批与执行，工具族消费同一目录派发。具体文件职责由[agent-runtime](../../packages/agent-runtime/README.md#源码职责)维护，消息和持久格式由既有协议拥有。
 
 集成错误由实际领域拥有：McpError位于mcp，NetworkError位于network，插件自身错误与OAuth阶段错误位于plugins，Skill资源错误位于skills。宿主在明确调用处完成安全诊断映射；共用HTTP授权启动ticket由http拥有，插件和独立MCP路由分别注册，避免用跨域错误继承或路由混放连接模块。
 
@@ -101,7 +101,7 @@ Web开发的 `DAEMON_ORIGIN` 指定同源代理目标，缺省连接上述独立
 
 ## M5任务所有权
 
-M5的AgentRuntime拥有同Session日志内的子任务树，RunExecution继续拥有每次实际Pi执行。主快照与子转录分开查询，WorkRuntime.forTask复用独立上下文与人工交互；daemon任务API和Web看板消费同一事实。角色、请求并发、通信来源、写入拥有者和树级停止机制见[子Agent设计](../09_TECHNICAL/子Agent与任务看板设计.md)，不由MCP或插件拥有。
+M5的SubagentCoordinator拥有同Session日志内的子任务树，RunExecution继续拥有每次实际Pi执行。主快照与子转录分开查询，WorkRuntime.forTask复用独立上下文与人工交互；daemon任务API和Web看板消费同一事实。角色、请求并发、通信来源、写入拥有者和树级停止机制见[子Agent设计](../09_TECHNICAL/子Agent与任务看板设计.md)，不由MCP或插件拥有。
 
 ## M4能力所有权
 

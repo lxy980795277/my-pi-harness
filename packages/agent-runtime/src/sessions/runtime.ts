@@ -39,9 +39,9 @@ import { capabilityContext } from '../capabilities/context.js';
 import { ToolCatalogSearch, type ToolSearchEmbedder } from '../capabilities/search.js';
 import { freezeSkillMentions } from '../capabilities/skill-mentions.js';
 import { availableSkillHistory, skillHistoryIds } from '../capabilities/skill-history.js';
-import { AgentRuntime } from '../agents/runtime.js';
-import type { AgentStore } from '../agents/ports.js';
-import { agentContext } from '../agents/run-hooks.js';
+import { SubagentCoordinator } from '../subagents/coordinator.js';
+import type { SubagentStore } from '../subagents/ports.js';
+import { agentContext } from '../subagents/definitions.js';
 import { prepareRun, resolveRunModel } from '../runs/prepare.js';
 
 export interface SessionRuntimeOptions {
@@ -55,7 +55,7 @@ export interface SessionRuntimeOptions {
   discovery?: ToolDiscoveryPort;
   skills?: SkillsPort;
   toolSearchEmbedder?: ToolSearchEmbedder;
-  agentStore?: AgentStore;
+  subagentStore?: SubagentStore;
 }
 
 /** Session commands are serialized; committed facts remain authoritative across restarts. */
@@ -70,7 +70,7 @@ export class SessionRuntime {
 
   private readonly capabilityInputs: InputCapabilityResolver;
   private readonly toolSearch: ToolCatalogSearch;
-  private readonly agentRuntime: AgentRuntime | undefined;
+  private readonly subagentCoordinator: SubagentCoordinator | undefined;
   public constructor(private readonly options: SessionRuntimeOptions) {
     this.toolSearch = new ToolCatalogSearch(options.toolSearchEmbedder);
     this.capabilityInputs = new InputCapabilityResolver({
@@ -79,9 +79,9 @@ export class SessionRuntime {
       ...(options.discovery ? { discovery: options.discovery } : {}),
       ...(options.skills ? { skills: options.skills } : {}),
     });
-    if (options.agentStore && options.tools)
-      this.agentRuntime = new AgentRuntime({
-        store: options.agentStore,
+    if (options.subagentStore && options.tools)
+      this.subagentCoordinator = new SubagentCoordinator({
+        store: options.subagentStore,
         gateway: options.gateway,
         tools: options.tools,
         search: this.toolSearch,
@@ -94,9 +94,10 @@ export class SessionRuntime {
       });
   }
 
-  public get agents(): AgentRuntime {
-    if (!this.agentRuntime) throw new RuntimeError('AGENTS_UNAVAILABLE', '子 Agent 运行时未配置。');
-    return this.agentRuntime;
+  public get subagents(): SubagentCoordinator {
+    if (!this.subagentCoordinator)
+      throw new RuntimeError('AGENTS_UNAVAILABLE', '子 Agent 运行时未配置。');
+    return this.subagentCoordinator;
   }
 
   public createSession(input: ResolvedSessionCreateInput): SessionSummary {
@@ -505,7 +506,7 @@ export class SessionRuntime {
       }
       const external = frozen.external;
       const activatedSkills = combinedSkills(frozen);
-      const agentSettings = this.agentRuntime?.settings();
+      const agentSettings = this.subagentCoordinator?.settings();
       const selection = this.options.tools
         ? selectRunTools({
             workspaceId: session.workspaceId,
@@ -632,16 +633,16 @@ export class SessionRuntime {
           onError: (error) => this.options.onError(error),
           ...(this.options.tools ? { tools: this.options.tools } : {}),
           ...(this.options.work ? { work: this.options.work } : {}),
-          ...(agentSettings?.enabled && this.agentRuntime
-            ? { agents: this.agentRuntime.rootHooks(session, run, agentSettings) }
+          ...(agentSettings?.enabled && this.subagentCoordinator
+            ? { hooks: this.subagentCoordinator.rootHooks(session, run, agentSettings) }
             : {}),
         });
-        this.agentRuntime?.attach(execution);
+        this.subagentCoordinator?.attach(execution);
         this.active.set(session.id, execution);
         execution.rebuildQueue();
       } catch (error) {
         execution?.disposeUnstarted();
-        this.agentRuntime?.releaseRoot(run.id);
+        this.subagentCoordinator?.releaseRoot(run.id);
         this.active.delete(session.id);
         this.disabled.add(session.id);
         this.options.onError(error);
@@ -662,7 +663,7 @@ export class SessionRuntime {
           if (owned.persistenceFailed) this.disabled.add(session.id);
           const ownsSession = this.active.get(session.id) === owned;
           if (ownsSession) this.active.delete(session.id);
-          this.agentRuntime?.releaseRoot(run.id);
+          this.subagentCoordinator?.releaseRoot(run.id);
           resolved.release();
           if (ownsSession) {
             try {
@@ -858,7 +859,7 @@ export class SessionRuntime {
     this.publish(events);
   }
   private publish(events: readonly HarnessEvent[]): void {
-    this.agentRuntime?.observe(events);
+    this.subagentCoordinator?.observe(events);
     this.notify(events);
   }
   private publishMessageDelta(sessionId: string, delta: LiveMessageDelta): void {
@@ -881,7 +882,7 @@ export class SessionRuntime {
   private async stop(): Promise<void> {
     this.closed = true;
     const failures: unknown[] = [];
-    const agentClosing = this.agentRuntime?.close().catch((error: unknown) => {
+    const agentClosing = this.subagentCoordinator?.close().catch((error: unknown) => {
       failures.push(error);
     });
     for (const sessionId of this.pendingStarts.keys()) this.cancelStarts(sessionId);

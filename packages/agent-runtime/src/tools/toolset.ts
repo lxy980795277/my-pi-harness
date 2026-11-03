@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import type { TSchema } from 'typebox';
 import { Value } from 'typebox/value';
 import { RuntimeError } from '../errors.js';
+import { canonicalToolJson } from './identity.js';
 import type { ToolSource } from '@my-pi-harness/protocol';
 import type { FrozenMcpTool } from './external.js';
 
@@ -31,17 +32,7 @@ function freeze<T>(value: T): T {
 }
 
 function fingerprint(selection: RunToolSelection): string {
-  const json = JSON.stringify(selection, (_key: string, value: unknown): unknown => {
-    if (value === null || typeof value !== 'object' || Array.isArray(value)) return value;
-    const entries = Object.entries(value);
-    entries.sort(([left], [right]) => {
-      if (left < right) return -1;
-      if (left > right) return 1;
-      return 0;
-    });
-    return Object.fromEntries(entries);
-  });
-  return createHash('sha256').update(json).digest('hex');
+  return createHash('sha256').update(canonicalToolJson(selection)).digest('hex');
 }
 
 /** One accepted Run's definitions and executable sources; order is model-visible. */

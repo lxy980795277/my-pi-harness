@@ -5,7 +5,7 @@ import type {
   RunView,
   SessionSummary,
 } from '@my-pi-harness/protocol';
-import type { AgentRunHooks } from '../agents/ports.js';
+import type { RunHooks } from './ports.js';
 import type { RunCapabilities } from '../capabilities/run.js';
 import type { FrozenInputCapabilities } from '../capabilities/inputs.js';
 import type { ResolvedModel } from '../models/gateway.js';
@@ -39,7 +39,7 @@ export interface RunExecutionOptions {
   tools?: ToolRuntime;
   work?: WorkRuntime;
   externalTools?: ExternalTools;
-  agents?: AgentRunHooks;
+  hooks?: RunHooks;
 }
 
 /** Lifecycle decisions stay with the Run rather than SDK or projection helpers. */

@@ -4,7 +4,7 @@
 
 **模块**：`packages/agent-runtime/`、`apps/daemon/src/application/services.ts`
 
-**实现锚点**：`ModelGateway`、`SessionRuntime`、`AgentRuntime`、`RunExecution`、`ToolRuntime`、`WorkInteractions`
+**实现锚点**：`ModelGateway`、`SessionRuntime`、`SubagentCoordinator`、`RunExecution`、`ToolRuntime`、`WorkInteractions`
 
 **状态**：已实现；本机自动化通过，真实供应商与平台验收范围见对应功能验证记录
 
@@ -21,7 +21,7 @@ Pi 提供模型流与工具循环，但 PC 应用还需要长期会话、可靠�
 3. 如何让模型 SDK 的内部事件成为可持久化、可重放的产品事实，同时隔离私有模型上下文。
 4. 断线与重启后如何保留已完成的工作，又避免自动重做可能已经产生副作用的请求。
 
-**核心思路**：daemon 装配运行时；`SessionRuntime` 拥有会话命令和事件发布，`RunExecution` 拥有一次 Pi Agent 生命周期，`ToolRuntime` 拥有每次工具调用，`WorkRuntime` 提供上下文与工作状态。所有可见变化先提交，再通知前端。
+**核心思路**：daemon 装配运行时；`SessionRuntime` 拥有会话命令和事件发布，`SubagentCoordinator` 拥有委派任务树，`RunExecution` 拥有一次 Pi Agent 生命周期，`ToolRuntime` 拥有每次工具调用，`WorkRuntime` 提供上下文与工作状态。所有可见变化先提交，再通知前端。
 
 运行时通过存储和执行端口工作，不导入 React、Electron、Fastify 或 SQL 驱动。进程、传输和模块依赖见[系统架构](系统架构设计.md)，日志提交与重建见[会话存储](会话存储与恢复设计.md)。
 
@@ -33,6 +33,8 @@ flowchart TD
   API --> Session[SessionRuntime]
   Session --> Gateway[ModelGateway]
   Session --> Run[RunExecution]
+  Session --> Tasks[SubagentCoordinator]
+  Tasks --> Run
   Run --> Pi[Pi Agent]
   Pi --> Stream[Pi ai Provider / streamFn]
   Pi --> Tools[ToolRuntime]
@@ -47,20 +49,23 @@ flowchart TD
   Session --> API
 ```
 
-| 所有者             | 拥有的状态                                                     | 生命周期                         |
-| ------------------ | -------------------------------------------------------------- | -------------------------------- |
-| `ModelGateway`     | Provider 实例、认证流程、模型目录、使用中的 lease              | daemon                           |
-| `SessionRuntime`   | 活跃 Run、会话命令尾链、启动取消器、订阅者、停用会话           | daemon                           |
-| `RunExecution`     | Pi Agent、工具取消信号、本 Run 可消费队列、当前 assistant 消息 | 一个 Run                         |
-| `RunToolset`       | 某个已发布可见集合的冻结定义、来源与指纹                       | 当前Run的一个可见版本            |
-| `RunCapabilities`  | 获准候选、暂存与下一请求前的可见集合推进                       | 一个Run                          |
-| `RunSkills`        | Skill候选绑定、活动正文、待加载正文与资源租约                  | 一个Run                          |
-| `ToolRuntime`      | 等待审批的单次工具调用                                         | daemon；等待项按调用/Run结算移除 |
-| `WorkRuntime`      | 分支工作状态操作、手动摘要取消器、上下文与交互协调             | daemon；事实由存储保存           |
-| `WorkInteractions` | 问题与计划审核的 Promise 等待者                                | daemon；等待项属于当前Run        |
-| 存储实现           | 输入接受、消息、工具、队列、分支和工作状态事实                 | 跨 daemon 重启                   |
+| 所有者                | 拥有的状态                                                     | 生命周期                         |
+| --------------------- | -------------------------------------------------------------- | -------------------------------- |
+| `ModelGateway`        | Provider 实例、认证流程、模型目录、使用中的 lease              | daemon                           |
+| `SessionRuntime`      | 活跃 Run、会话命令尾链、启动取消器、订阅者、停用会话           | daemon                           |
+| `SubagentCoordinator` | 子任务节点、父子树、写入拥有者、树级计时器和关闭协调           | daemon；活动树按根Run结算释放    |
+| `RunExecution`        | Pi Agent、工具取消信号、本 Run 可消费队列、当前 assistant 消息 | 一个 Run                         |
+| `RunToolset`          | 某个已发布可见集合的冻结定义、来源与指纹                       | 当前Run的一个可见版本            |
+| `RunCapabilities`     | 获准候选、暂存与下一请求前的可见集合推进                       | 一个Run                          |
+| `RunSkills`           | Skill候选绑定、活动正文、待加载正文与资源租约                  | 一个Run                          |
+| `ToolRuntime`         | 等待审批的单次工具调用                                         | daemon；等待项按调用/Run结算移除 |
+| `WorkRuntime`         | 分支工作状态操作、手动摘要取消器、上下文与交互协调             | daemon；事实由存储保存           |
+| `WorkInteractions`    | 问题与计划审核的 Promise 等待者                                | daemon；等待项属于当前Run        |
+| 存储实现              | 输入接受、消息、工具、队列、分支和工作状态事实                 | 跨 daemon 重启                   |
 
 内存中的 Agent 和等待 Promise 不构成可恢复执行点。持久状态足以重建界面、后续请求和中断结论，不表示可以从任意工具指令中间继续执行。
+
+单次执行通过自己拥有的`RunHooks`接口接入可选调度、工具控制与协同收束，子任务模块提供适配器。任务通信在适配器中转换为通用注入输入，实际消费时由Run同批提交；runs不导入subagents，也不承担任务通信的幂等与范围校验。文件职责由[运行层模块说明](../../packages/agent-runtime/README.md#源码职责)维护。
 
 ## 二、Pi 与应用分别负责什么
 
@@ -257,7 +262,13 @@ daemon关闭先封禁新的MCP管理操作，终止WorkRuntime生命周期，再
 
 持久化失败会设置 `persistenceFailed`、中止工具和 Agent、停用 Session。运行时不会继续广播假完成，也不会将该失败当作普通模型错误自动重试。
 
-单次文本或思考内容超过有界上限、工具轮数超限及模型异常都有明确失败结果。模型返回的内部错误只进入宿主诊断，公开 Run 使用受控错误描述。
+单次文本或思考内容超过有界上限及模型异常都有明确失败结果。根子Run不按模型请求或工具调用总数终止；模型自然结束、取消、已有时限、权限和结果未知规则继续生效。模型返回的内部错误只进入宿主诊断，公开 Run 使用受控错误描述。
+
+### 7.4 精确重复调用提醒
+
+ToolRuntime按ToolRunContext隔离连续调用状态，动态工具集重建继续使用同一Run状态，不在不同Run或任务间累计。JSON对象键排序后比较完整参数，数组保持顺序；不同工具或参数重置计数。同一调用在第3、5、8次完成时附加有界的宿主提示，不包含原参数，不拦截、改写调用或改变审批及执行状态。
+
+提醒作为独立文本块附在原工具内容之后，由原tool.context终态批次持久化，再交给Pi；原返回块、错误标记和公开工具结果保留。原内容已达到落盘块数上限时跳过提醒，不因附加提示令合法结果持久化失败。模型下一次请求及日志回放消费相同内容，不制造用户提问、独立收费请求或新的事件类型。工具声明集合容量与每次输入/输出大小限制仍有效，不能与累计调用次数混为一谈。
 
 ## 八、关键实现与验证入口
 

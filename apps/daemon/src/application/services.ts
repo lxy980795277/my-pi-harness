@@ -267,7 +267,7 @@ export async function createApplicationServices(
     });
     const runtime = new SessionRuntime({
       store,
-      agentStore: store,
+      subagentStore: store,
       gateway,
       onError: options.onError ?? (() => undefined),
       tools,

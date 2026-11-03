@@ -1,5 +1,5 @@
 import { OFFICE_TOOL_DEFINITIONS, TOOL_DEFINITIONS } from '@my-pi-harness/execution';
-import { AGENT_TOOL_DEFINITIONS } from '../agents/definitions.js';
+import { AGENT_TOOL_DEFINITIONS } from '../subagents/definitions.js';
 import { DISCOVERY_TOOL_DEFINITIONS, SKILL_TOOL_DEFINITIONS } from '../capabilities/definitions.js';
 import { SESSION_TOOL_DEFINITIONS } from '../work/tools.js';
 import type { RunToolDefinition } from './toolset.js';

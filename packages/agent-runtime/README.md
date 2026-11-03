@@ -4,22 +4,24 @@ Node端的模型接入与持久会话运行层，使用精确固定的Pi core/ai
 
 ## 源码职责
 
-| 目录            | 职责                                                              |
-| --------------- | ----------------------------------------------------------------- |
-| `models/`       | 模型清单、Provider实例、模型认证与凭据适配；不负责应用或插件OAuth |
-| `sessions/`     | 单会话命令串行、队列、分支、持久事实发布与宿主存储端口            |
-| `runs/`         | 主子Run公共准备、单次Pi生命周期、输入投递与SDK事件记录            |
-| `agents/`       | 子任务树、角色、模型请求并发调度、通信、写入拥有者与后代结算      |
-| `tools/`        | 原生工具目录与选择、冻结集合、工具族路由、审批与canonical结果记录 |
-| `capabilities/` | 冻结候选、发现与请求前激活；Skill候选绑定、正文、资源与租约       |
-| `work/`         | Plan、Todos、用户提问、检查点和相应会话工具                       |
-| `context/`      | 消息codec、附件输入、规则、预算、摘要及每次请求的上下文投影       |
+| 目录            | 职责                                                                 |
+| --------------- | -------------------------------------------------------------------- |
+| `models/`       | 模型清单、Provider实例、模型认证与凭据适配；不负责应用或插件OAuth    |
+| `sessions/`     | 单会话命令串行、队列、分支、持久事实发布与宿主存储端口               |
+| `runs/`         | 主子Run公共准备、单次Pi生命周期、通用执行接口、输入投递与SDK事件记录 |
+| `subagents/`    | 子任务树、角色、模型请求并发调度、通信、写入拥有者与后代结算         |
+| `tools/`        | 原生工具目录与选择、冻结集合、工具族路由、审批与canonical结果记录    |
+| `capabilities/` | 冻结候选、发现与请求前激活；Skill候选绑定、正文、资源与租约          |
+| `work/`         | Plan、Todos、用户提问、检查点和相应会话工具                          |
+| `context/`      | 消息codec、附件输入、规则、预算、摘要及每次请求的上下文投影          |
 
 根`index.ts`是跨包公开入口，`errors.ts`定义包级运行失败。包内直接导入所属模块，不通过根入口或内部转发层回引；`ProviderStore`由`models/ports.ts`声明，`RuntimeStore`与会话接受记录由`sessions/ports.ts`声明。
 
-`runs/execution.ts`拥有单次执行的取消、失败、终态及后代收束；`agent.ts`装配Pi Agent和每次请求的能力/上下文钩子，`inputs.ts`拥有队列与任务通信投递，`messages.ts`拥有SDK事件记录和未执行工具的结算，`prepare.ts`共用主子Run的模型检查与输入接受准备。各模块通过执行器提供的宿主操作协调，持久化失败仍由执行器中止整个Run。
+`runs/execution.ts`拥有单次执行的取消、失败、终态及扩展工作结算；`agent.ts`装配Pi Agent和每次请求的能力/上下文钩子，`inputs.ts`投递队列与`RunInjectedInput`，`messages.ts`拥有SDK事件记录和未执行工具的结算，`prepare.ts`共用主子Run的模型检查与输入接受准备。`runs/ports.ts`声明可选`RunHooks`和注入输入接口，执行器只调用这些接口，不导入subagents，运行中输入投递不负责通信领域校验。注入输入在实际消费时提供整批持久记录，仍由Run统一提交；持久化失败由执行器中止整个Run。输入准备仍使用共享协议中的AgentMessage表达续作来源，不为消除该DTO引用增加新的消息格式或适配框架。
 
-`tools/catalog.ts`引用各领域schema，统一原生来源、执行族、默认策略与只读能力；`selection.ts`按实际执行器能力、工作区及角色选择初始集合和候选。`runtime.ts`编排一次调用的校验、策略、执行和结果，`families.ts`消费同一目录派发工作区、Web、工作状态、能力、任务与MCP工具；`policy.ts`拥有逐次审批，`mcp-dispatch.ts`拥有外部派发屏障和未知结果处理，`ledger.ts`拥有工具记录及canonical结果。SDK拒绝与未派发调用复用ledger的宿主终态入口，不另建工具执行循环。
+`subagents/coordinator.ts`唯一拥有活动节点索引、任务树、计时器、写入拥有者及子树创建/停止/收束；`policy.ts`解析角色、限额、附件范围和工具访问约束，`messaging.ts`拥有通信幂等、路由与续作准入，读取协调器的节点索引并通过回调启动续作。`definitions.ts`声明五个委派工具及角色上下文，`tool-dispatch.ts`适配工具调用与等待，`run-adapter.ts`实现RunHooks，将请求并发、写入仲裁、通信消费及收束接入Run。`launch.ts`准备子模型、工具与上下文并启动共享RunExecution。生命周期继续由协调器拥有，不单独增加另一份任务状态或生命周期服务。
+
+`tools/catalog.ts`引用各领域schema，统一原生来源、执行族、默认策略与只读能力；`selection.ts`按实际执行器能力、工作区和调用者提供的访问约束选择初始集合和候选，不解释子任务角色。`runtime.ts`编排一次调用的校验、策略、执行和结果，`families.ts`消费同一目录派发工作区、Web、工作状态、能力、任务与MCP工具；`policy.ts`拥有逐次审批，`mcp-dispatch.ts`拥有外部派发屏障和未知结果处理，`ledger.ts`拥有工具记录及canonical结果。SDK拒绝与未派发调用复用ledger的宿主终态入口，不另建工具执行循环。
 
 ## 模型与会话运行
 
@@ -37,11 +39,11 @@ Node端的模型接入与持久会话运行层，使用精确固定的Pi core/ai
 
 `resolveSessionInput`解析显式选择或持久化全局默认，创建前检查模型、思考等级、启用与认证；失效默认不会改用其他模型。已有会话仍保留自己的选择。
 
-`SessionRuntime`序列化单会话命令；每个Session只有一个活跃根Run，不同Session可独立运行。子Run通过Task归属并由AgentRuntime管理，仍复用RunExecution和同Session日志。输入、Run配置与模型上下文先提交，再创建真实Agent请求。SDK事件映射为独立公开字段，完整事实先持久化后通知，流式片段通过独立内存入口发布；订阅者不等待SDK idle，真正结算由Run所有者等待。绑定工作区的会话通过ToolRuntime提供受策略与单次审批约束的工具循环；没有工作区不获得本机目录权限，deferred不会被误报为完整成功。
+`SessionRuntime`序列化单会话命令；每个Session只有一个活跃根Run，不同Session可独立运行。子Run通过Task归属并由SubagentCoordinator管理，仍复用RunExecution和同Session日志。输入、Run配置与模型上下文先提交，再创建真实Agent请求。SDK事件映射为独立公开字段，完整事实先持久化后通知，流式片段通过独立内存入口发布；订阅者不等待SDK idle，真正结算由Run所有者等待。绑定工作区的会话通过ToolRuntime提供受策略与单次审批约束的工具循环；没有工作区不获得本机目录权限，deferred不会被误报为完整成功。
 
 ## 子Agent与任务树
 
-宿主通过agentStore启用Task查询和配置，AgentRuntime提供角色、spawn/wait/status/message/stop及树级请求调度。AgentRequestScheduler只管理全局与祖先子树的并发名额，流真正结算后才释放，不以累计用量限制请求。Task保留sourceToolCallId，子Run保留taskId，祖先关系由原工具事实推导；根快照排除子转录，WorkRuntime.forTask复用独立上下文与人工交互。任务通信有agentMessageId来源，模型正文编码和持久来源匹配由context拥有。
+宿主通过agentStore提供SubagentStore以启用Task查询和配置，SubagentCoordinator协调任务树，SubagentMessaging处理同树通信，模型通过五个委派工具调用对应能力。AgentRequestScheduler只管理全局与祖先子树的并发名额，流真正结算后才释放，不以累计用量限制请求。Task保留sourceToolCallId，子Run保留taskId，祖先关系由原工具事实推导；根快照排除子转录，WorkRuntime.forTask复用独立上下文与人工交互。任务通信有agentMessageId来源，模型正文编码和持久来源匹配由context拥有。
 
 子Run继承父审批策略，角色只读作为独立能力限制进入统一工具执行上下文；允许的读取不因角色只读变成人工批准，副作用仍在审批和派发前拒绝。冻结、嵌套及续作语义见[子Agent设计](../../docs/09_TECHNICAL/子Agent与任务看板设计.md#角色能力与写入)，不添加公开协议或重复持久字段。
 
@@ -102,3 +104,9 @@ pnpm --filter @my-pi-harness/agent-runtime test
 后续Run从当前分支有效消息所对应的已提交接受/加载事实继承最近16个Skill冻结正文，自动压缩不清除该来源；编辑分支、上下文重置和检查点选择只使用保留范围。正文不会因picker空选择、模型历史裁剪或磁盘更新而丢失或换成新版。继承前逐项重验当前启停、版本及插件授权；失效项排除，并在已记录system上下文的`unavailablePreviousSkills`中说明，普通聊天继续，显式新选择仍严格校验。队列私有`inheritedSkillBindings`保留原版本，恢复可排除已失效的继承；正文继承不自动继承MCP可执行集合。动态Skill依赖只从已获准工作区候选选择，附加资源索引非空时同时激活resource reader；没有工作区不提供Office文件工具，任意MCP名字不随Skill声明加载。
 
 Skill没有额外的工具grant状态，真实执行继续使用统一策略与逐次审批。服务插件通过冻结Skill中的`gatewayUrl`提供只读HTTP入口，模型使用会话级`web_fetch`访问允许路径，不要求工作区或授予文件/Shell能力；公网与网关访问继续执行现有网络校验、只读限制和审批。网关地址随接受输入与`context.prepared`保存，私有访问能力只在宿主执行请求时添加，不进入模型或会话日志。MCP写操作继续使用实际加载工具、独立信任与当前审批策略，接口见[运行时能力协议](../../docs/03_API/capability-runtime.md)。
+
+## 执行循环与部分结果
+
+主、子Run不设置累计请求轮数或工具调用次数上限；权限、任务数/深度、请求并发、已有时限和单次输入输出界限保持独立。ToolRuntime在同Run的工具和参数连续重复第3、5、8次时附加宿主提醒，随tool.context持久化后进入模型，不阻止执行。动态工具集合更新不重置提醒计数，新Run独立计数。
+
+子任务状态查询和等待只回收目标Run的输出，成功优先最终回答，失败或取消保留最近已有正文并标记partial；模型length或返回文字截短也标记partial，无文字返回空。状态和错误独立返回，不将部分成果当成功或自动请求总结。职责与数据流见[Agent Runtime](../../docs/09_TECHNICAL/Agent-Runtime.md)及[子Agent设计](../../docs/09_TECHNICAL/子Agent与任务看板设计.md)。

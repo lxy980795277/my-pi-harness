@@ -1,7 +1,7 @@
 export { ModelGateway, type ModelGatewayOptions, type ResolvedModel } from './models/gateway.js';
 export { SessionRuntime, type SessionRuntimeOptions } from './sessions/runtime.js';
-export { AgentRuntime, type AgentRuntimeOptions } from './agents/runtime.js';
-export type { AgentStore } from './agents/ports.js';
+export { SubagentCoordinator, type SubagentCoordinatorOptions } from './subagents/coordinator.js';
+export type { SubagentStore } from './subagents/ports.js';
 export { RuntimeError } from './errors.js';
 export {
   createPiCredentialStore,

@@ -1,6 +1,6 @@
 import type { InputRequest } from '@my-pi-harness/protocol';
-import type { AgentRuntime } from './runtime.js';
-import type { AgentNode } from './types.js';
+import type { SubagentCoordinator } from './coordinator.js';
+import type { SubagentNode } from './types.js';
 import type { ResolvedModel } from '../models/gateway.js';
 import { RuntimeError } from '../errors.js';
 import { RunExecution } from '../runs/execution.js';
@@ -8,15 +8,16 @@ import { prepareRun, resolveRunModel } from '../runs/prepare.js';
 import { decodeContextMessage } from '../context/codec.js';
 import { completeToolHistory } from '../context/tool-history.js';
 import { RunCapabilities } from '../capabilities/run.js';
-import { allowedTaskCandidates } from '../tools/task-toolset.js';
+import { allowedTaskCandidates, allowedTaskTool } from './policy.js';
 import { selectRunTools } from '../tools/selection.js';
 import { capabilityContext } from '../capabilities/context.js';
-import { agentContext, createAgentHooks } from './run-hooks.js';
+import { agentContext } from './definitions.js';
+import { createSubagentRunAdapter } from './run-adapter.js';
 
 /** A child uses the same RunExecution and durable acceptance as a root conversation. */
 export async function launchAgentRun(
-  owner: AgentRuntime,
-  node: AgentNode,
+  owner: SubagentCoordinator,
+  node: SubagentNode,
   text: string,
   attachmentIds?: readonly string[],
   messageId?: string,
@@ -70,8 +71,8 @@ export async function launchAgentRun(
       skillDirectory: skillCandidates.length > 0 || skills.length > 0,
       agents: true,
       canSpawn,
-      task: true,
-      access: task.role.access,
+      allows: (tool) => allowedTaskTool(tool, task.role.access),
+      required: ['send_agent_message'],
       inherited: current,
       activeSkills: skills,
       ...(work ? { state: work.snapshot(session.id).state } : {}),
@@ -187,7 +188,7 @@ export async function launchAgentRun(
       tools: owner.options.tools,
       ...(work ? { work } : {}),
       ...(owner.options.externalTools ? { externalTools: owner.options.externalTools } : {}),
-      agents: createAgentHooks(owner, node),
+      hooks: createSubagentRunAdapter(owner, node),
       queue: () => [],
       commit: (events) => owner.commit(session.id, events),
       publishMessageDelta: (delta) => owner.options.publishMessageDelta(session.id, delta),

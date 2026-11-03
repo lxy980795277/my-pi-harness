@@ -2,7 +2,11 @@
 
 本页管理功能范围与里程碑顺序，详细验收由各里程碑 Spec 承担。`规划` 不表示能力已经可用；只有实现与必要验证都完成后才能调整状态。
 
-2026-11-03按用户确认的[工具治理设计](../04_FEATURES/202611021658_refactor_tool-catalog-loading/spec.md)完成既有M3/M4/M5工具入口、按需声明、Skill及主子Run职责整理，属于M0和既有能力维护。本机源码、构建和隔离浏览器证据见[验证记录](../04_FEATURES/202611021658_refactor_tool-catalog-loading/verify.md)。原开发会话未清理，旧接受快照不兼容新校验；M6及既有平台/账号缺口保持原状态。
+2026-11-03按用户确认完成[Agent循环终止与结果回收调整](../04_FEATURES/202611031525_refactor_agent-loop-policy/spec.md)，属于M0及既有M1/M5维护：移除固定请求/工具总数截断，增加精确重复提醒及失败部分输出回收；保留权限、并发、深度、时限与单次输出策略。本轮与子Agent模块整理按用户授权一起记录为[0.17.0](../06_RELEASES/0.17.0.md)本地提交；公开协议23，SQLite9不变；[本机验证](../04_FEATURES/202611031525_refactor_agent-loop-policy/verify.md)覆盖长循环、部分成果、提醒及持久回放和原M5浏览器链路。M6及既有验收缺口保持原状态。
+
+2026-11-03按用户确认完成[子Agent模块与通用执行接口整理](../04_FEATURES/202611031323_refactor_subagent-module/spec.md)，属于M0及既有M5维护：明确subagents拥有者、通用Run扩展接口及适配职责，保持权限、消息和存储语义，不拆独立package或进入M6。本机源码/API、构建与8项M5浏览器结果见[验证记录](../04_FEATURES/202611031323_refactor_subagent-module/verify.md)，未扩大真实账号和平台验收范围。
+
+2026-11-03按用户确认的[工具治理设计](../04_FEATURES/202611021658_refactor_tool-catalog-loading/spec.md)完成既有M3/M4/M5工具入口、按需声明、Skill及主子Run职责整理，属于M0和既有能力维护。本机源码、构建和隔离浏览器证据见[验证记录](../04_FEATURES/202611021658_refactor_tool-catalog-loading/verify.md)。旧接受快照不兼容新校验；用户后续授权直接删除两份阻塞会话及重建投影，实际profile恢复和daemon健康检查通过，独立配置及授权保留。M6及既有平台/账号缺口保持原状态。
 
 2026-11-01完成[Pi 1.4运行时升级](../04_FEATURES/202611011954_refactor_pi-1-4-upgrade/spec.md)的工程实现、本机自动化及DeepSeek Flash真实对话补测，按用户提交授权整理为[0.15.0](../06_RELEASES/0.15.0.md)，属于M0及M1–M5维护；正式core/ai依赖、Provider协议与目录、私有codec和工具错误、统一请求身份及构建/桌面smoke证据见[验证记录](../04_FEATURES/202611011954_refactor_pi-1-4-upgrade/verify.md)。其他供应商/推理档位、真实插件账号、Windows与正式安装验收未据此完成。M6继续仅规划，工具目录默认/按需加载重构维持暂缓，未发布Pi能力不在本次范围。
 

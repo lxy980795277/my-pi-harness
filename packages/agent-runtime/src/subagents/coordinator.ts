@@ -2,9 +2,6 @@ import { randomUUID } from 'node:crypto';
 import type {
   AgentBoard,
   AgentBoardQuery,
-  AgentMessage,
-  AgentMessageInput,
-  AgentMessageTarget,
   AgentSettings,
   AgentSettingsInput,
   AgentTask,
@@ -25,17 +22,19 @@ import type { SkillsPort } from '../capabilities/ports.js';
 import type { ToolCatalogSearch } from '../capabilities/search.js';
 import type { RunExecution } from '../runs/execution.js';
 import type { EventInput } from '../sessions/ports.js';
-import type { AgentRunHooks, AgentStore } from './ports.js';
-import type { AgentNode, AgentTaskNode, AgentTree } from './types.js';
+import type { SubagentStore } from './ports.js';
+import type { SubagentNode, SubagentTaskNode, SubagentTree } from './types.js';
 import type { SpawnAgentInput } from './definitions.js';
 import { RuntimeError } from '../errors.js';
 import { AgentRequestScheduler } from './request-scheduler.js';
-import { createAgentHooks } from './run-hooks.js';
+import { createSubagentRunAdapter } from './run-adapter.js';
 import { launchAgentRun } from './launch.js';
-import { agentMessageId } from './message-key.js';
+import { SubagentMessaging } from './messaging.js';
+import { assertDelegatedAttachments, isDescendant, resolveDelegationPolicy } from './policy.js';
+import type { RunHooks } from '../runs/ports.js';
 
-export interface AgentRuntimeOptions {
-  store: AgentStore;
+export interface SubagentCoordinatorOptions {
+  store: SubagentStore;
   gateway: Pick<ModelGateway, 'resolve'>;
   tools: ToolRuntime;
   work?: WorkRuntime;
@@ -47,14 +46,35 @@ export interface AgentRuntimeOptions {
   onError(error: unknown): void;
 }
 
+const AGENT_RESULT_MAX_CHARACTERS = 16_000;
+
 /** Owns one daemon's structured task trees; the journal owns every recoverable fact. */
-export class AgentRuntime {
-  private readonly nodes = new Map<string, AgentNode>();
-  private readonly tasks = new Map<string, AgentTaskNode>();
+export class SubagentCoordinator {
+  private readonly nodes = new Map<string, SubagentNode>();
+  private readonly tasks = new Map<string, SubagentTaskNode>();
   private readonly listeners = new Set<() => void>();
   private closed = false;
 
-  public constructor(public readonly options: AgentRuntimeOptions) {}
+  public readonly messaging: SubagentMessaging;
+
+  public constructor(public readonly options: SubagentCoordinatorOptions) {
+    this.messaging = new SubagentMessaging({
+      store: options.store,
+      nodes: this.nodes,
+      tasks: this.tasks,
+      requireTask: (sessionId, taskId) => this.requireTask(sessionId, taskId),
+      detail: (sessionId, taskId) => this.detail(sessionId, taskId),
+      accepting: (node) => this.accepting(node),
+      inTree: (caller, taskId) => this.inTree(caller, taskId),
+      checkDeadline: (node) => this.checkDeadline(node),
+      commit: (sessionId, events) => this.commit(sessionId, events),
+      resume: (parent, task, text, messageId) => {
+        if (task.role.access === 'write') parent.tree.writer = task.id;
+        const node = this.createChild(parent, task);
+        this.start(node, text, undefined, messageId);
+      },
+    });
+  }
 
   public settings(): AgentSettings {
     return this.options.store.getAgentSettings();
@@ -101,9 +121,9 @@ export class AgentRuntime {
     if (changed) this.notify();
   }
 
-  public rootHooks(session: SessionSummary, run: RunView, settings: AgentSettings): AgentRunHooks {
+  public rootHooks(session: SessionSummary, run: RunView, settings: AgentSettings): RunHooks {
     this.ensureOpen();
-    const tree: AgentTree = {
+    const tree: SubagentTree = {
       rootRunId: run.id,
       settings: structuredClone(settings),
       scheduler: new AgentRequestScheduler(settings.limits.maxConcurrentRequests),
@@ -115,7 +135,7 @@ export class AgentRuntime {
     const node = this.node(session, run, tree, undefined, undefined);
     tree.nodes.add(node);
     this.nodes.set(run.id, node);
-    return createAgentHooks(this, node);
+    return createSubagentRunAdapter(this, node);
   }
   public attach(execution: RunExecution): void {
     const node = this.nodes.get(execution.options.run.id);
@@ -135,7 +155,7 @@ export class AgentRuntime {
   }
 
   public spawn(
-    parent: AgentNode,
+    parent: SubagentNode,
     sourceToolCallId: string,
     input: SpawnAgentInput,
   ): AgentTaskSummary {
@@ -143,49 +163,11 @@ export class AgentRuntime {
     const existing = this.options.store.findTaskBySource(parent.session.id, sourceToolCallId);
     if (existing) return existing;
     const tree = parent.tree;
-    const currentSettings = this.settings();
-    if (!currentSettings.enabled)
-      throw new RuntimeError('AGENTS_DISABLED', '子 Agent 已停用，不能再创建任务。');
-    const role = currentSettings.roles.find((entry) => entry.id === input.roleId && entry.enabled);
-    if (!role) throw new RuntimeError('AGENT_ROLE_UNAVAILABLE', '选择的子 Agent 角色未启用。');
-    if (
-      (parent.task?.role.access === 'read-only' || parent.session.approvalMode === 'read-only') &&
-      role.access === 'write'
-    )
-      throw new RuntimeError('AGENT_PERMISSION', '只读任务不能创建写入角色。');
-    const count = [...tree.nodes].filter((entry) => entry.task).length;
-    if (
-      count >= Math.min(tree.settings.limits.maxTasks, currentSettings.limits.maxTasks) ||
-      parent.depth >= Math.min(parent.limits.maxDepth, currentSettings.limits.maxDepth)
-    )
-      throw new RuntimeError('AGENT_LIMIT', '任务数量或嵌套深度已达到上限。');
-    const limits = { ...parent.limits };
-    for (const key of Object.keys(limits) as (keyof typeof limits)[]) {
-      limits[key] = Math.min(limits[key], currentSettings.limits[key]);
-      const requested = input.limits?.[key];
-      if (requested !== undefined) limits[key] = Math.min(limits[key], requested);
-    }
-    for (let scope: AgentNode | undefined = parent; scope; scope = scope.parent) {
-      const ancestor = scope;
-      const descendants = [...tree.nodes].filter(
-        (entry) => entry.task && this.isDescendant(entry, ancestor),
-      );
-      if (descendants.length >= scope.limits.maxTasks)
-        throw new RuntimeError('AGENT_LIMIT', '当前任务或祖先的后代数量已达到上限。');
-    }
-    const owner = parent.task?.id ?? tree.rootRunId;
-    if (role.access === 'write' && (tree.writer !== owner || (tree.writes.get(owner) ?? 0) !== 0))
-      throw new RuntimeError('AGENT_WRITE_CONFLICT', '请等待现有写操作结算后再转交写入任务。');
+    const { role, limits } = resolveDelegationPolicy(parent, this.settings(), input);
     const available = parent.task
       ? this.options.store.getTaskSnapshot(parent.session.id, parent.task.id)
       : this.options.store.getSnapshot(parent.session.id);
-    const attachments = new Set(
-      available.messages
-        .filter((message) => message.runId === parent.run.id)
-        .flatMap((message) => message.attachmentIds ?? []),
-    );
-    if (input.attachmentIds?.some((id) => !attachments.has(id)))
-      throw new RuntimeError('AGENT_ATTACHMENT_SCOPE', '只能转交当前执行已接收的附件。');
+    assertDelegatedAttachments(parent, available, input.attachmentIds);
     const task: AgentTask = {
       id: randomUUID(),
       sourceToolCallId,
@@ -212,8 +194,9 @@ export class AgentRuntime {
     return this.requireTask(parent.session.id, task.id);
   }
 
+  /** Read the selected Run only; partial marks unfinished, model-truncated or return-truncated output. */
   public result(
-    caller: AgentNode,
+    caller: SubagentNode,
     taskId: string,
     expectedRunId?: string,
   ): Record<string, unknown> {
@@ -227,22 +210,35 @@ export class AgentRuntime {
       task.closeReason !== run?.status
     )
       run = undefined;
-    const answer = [...snapshot.messages]
+    const messages = [...snapshot.messages]
       .reverse()
-      .find(
+      .filter(
         (message) =>
           message.role === 'assistant' &&
-          message.status === 'complete' &&
           message.runId === run?.id &&
-          (message.stopReason === 'stop' || message.stopReason === 'length'),
+          message.text.trim().length > 0,
       );
+    const final =
+      run?.status === 'completed'
+        ? messages.find(
+            (message) =>
+              message.status === 'complete' &&
+              (message.stopReason === 'stop' || message.stopReason === 'length'),
+          )
+        : undefined;
+    const answer = final ?? messages[0];
     return {
       taskId,
       runId: run?.id ?? null,
       status: run?.status ?? task.status,
       waiting: run?.id === task.latestRunId ? task.waiting : null,
       error: run ? run.error : task.error,
-      result: answer?.text.slice(0, 16_000) ?? '',
+      result: answer?.text.slice(0, AGENT_RESULT_MAX_CHARACTERS) ?? '',
+      partial:
+        answer !== undefined &&
+        (answer !== final ||
+          answer.stopReason !== 'stop' ||
+          answer.text.length > AGENT_RESULT_MAX_CHARACTERS),
       resultMessageId: answer?.id ?? null,
       closed: task.closedAt !== null,
       pendingMessages: this.options.store
@@ -269,118 +265,11 @@ export class AgentRuntime {
     return this.detail(sessionId, taskId);
   }
 
-  public message(
-    sessionId: string,
-    taskId: string,
-    input: AgentMessageInput,
-  ): Promise<AgentTaskDetail> {
-    const task = this.requireTask(sessionId, taskId);
-    const id = agentMessageId(task.parentRunId, { kind: 'task', taskId }, input.requestId);
-    const previous = this.options.store
-      .listAgentMessages(sessionId, { kind: 'task', taskId })
-      .find((entry) => entry.id === id);
-    if (previous) {
-      if (previous.text !== input.text)
-        throw new RuntimeError('AGENT_MESSAGE_CONFLICT', '相同请求不能替换通信内容。');
-      return Promise.resolve(this.detail(sessionId, taskId));
-    }
-    if (task.latestRunId !== input.expectedRunId)
-      throw new RuntimeError('AGENT_CONFLICT', '任务执行已变化，请刷新后重试。');
-    const parent = this.nodes.get(task.parentRunId);
-    if (!parent)
-      throw new RuntimeError('AGENT_PARENT_ENDED', '直接父任务已经结束，不能续作旧任务。');
-    this.send(parent, { kind: 'task', taskId }, input.text, input.requestId, input.continue);
-    return Promise.resolve(this.detail(sessionId, taskId));
-  }
-
-  public send(
-    sender: AgentNode,
-    target: AgentMessageTarget,
-    text: string,
-    requestId: string,
-    continueRun: boolean,
-  ): AgentMessage {
-    this.accepting(sender);
-    if (!text.trim()) throw new RuntimeError('AGENT_MESSAGE_EMPTY', '通信内容不能为空。');
-    const id = agentMessageId(sender.run.id, target, requestId);
-    const previous = this.options.store
-      .listAgentMessages(sender.session.id)
-      .find((message) => message.id === id);
-    if (previous) {
-      if (previous.text !== text)
-        throw new RuntimeError('AGENT_MESSAGE_CONFLICT', '相同请求不能替换通信内容。');
-      return previous;
-    }
-    let node: AgentNode | undefined;
-    if (target.kind === 'run') node = this.nodes.get(target.runId);
-    else {
-      const task = this.inTree(sender, target.taskId);
-      const parent = this.nodes.get(task.parentRunId);
-      if (!parent) throw new RuntimeError('AGENT_PARENT_ENDED', '直接父执行已经结束。');
-      this.accepting(parent);
-      node = this.tasks.get(target.taskId);
-      if (
-        task.closedAt !== null ||
-        (task.status !== 'completed' && !['queued', 'running', 'waiting'].includes(task.status))
-      )
-        throw new RuntimeError('AGENT_CLOSED', '目标任务已关闭，不能继续。');
-    }
-    const idle = node?.execution !== undefined && node.execution.outcome !== 'running';
-    if (!node || node.tree !== sender.tree || (node.closing && !(target.kind === 'task' && idle)))
-      throw new RuntimeError('AGENT_CLOSED', '目标执行已经结束或不属于当前任务树。');
-    this.checkDeadline(node);
-    if (idle && continueRun && node.task?.role.access === 'write') {
-      const parent = node.parent;
-      const parentOwner = parent?.task?.id ?? node.tree.rootRunId;
-      if (
-        !parent ||
-        node.tree.writer !== parentOwner ||
-        (node.tree.writes.get(parentOwner) ?? 0) !== 0
-      )
-        throw new RuntimeError('AGENT_WRITE_CONFLICT', '父任务尚不能转交写入拥有权。');
-    }
-    const record = { id, sourceRunId: sender.run.id, target, text, createdAt: Date.now() };
-    this.commit(sender.session.id, [
-      {
-        type: 'task.message_queued',
-        runId: sender.run.id,
-        at: record.createdAt,
-        data: { message: record },
-      },
-    ]);
-    if (idle && continueRun && node.task && node.parent) {
-      if (node.task.role.access === 'write') node.tree.writer = node.task.id;
-      const next = this.createChild(node.parent, node.task);
-      this.start(next, text, undefined, id);
-    } else if (!idle) node.execution?.rebuildQueue();
-    return (
-      this.options.store
-        .listAgentMessages(sender.session.id)
-        .find((message) => message.id === id) ?? {
-        ...record,
-        status: 'queued',
-        consumedRunId: null,
-        finishedAt: null,
-        reason: null,
-      }
-    );
-  }
-
-  public incoming(node: AgentNode): AgentMessage[] {
-    if (node.closing) return [];
-    const target: AgentMessageTarget = node.task
-      ? { kind: 'task', taskId: node.task.id }
-      : { kind: 'run', runId: node.run.id };
-    return this.options.store
-      .listAgentMessages(node.session.id, target)
-      .filter((message) => message.status === 'queued');
-  }
-
-  public async finish(node: AgentNode, cancel: boolean): Promise<void> {
+  public async finish(node: SubagentNode, cancel: boolean): Promise<void> {
     node.closing = true;
     const failures: unknown[] = [];
     try {
-      this.undelivered(node);
+      this.messaging.undelivered(node);
     } catch (error) {
       failures.push(error);
     }
@@ -414,7 +303,7 @@ export class AgentRuntime {
       throw new AggregateError(failures, 'Task subtree did not settle safely');
   }
 
-  public waiting(node: AgentNode, waiting: AgentTaskSummary['waiting']): void {
+  public waiting(node: SubagentNode, waiting: AgentTaskSummary['waiting']): void {
     if (!node.task || node.closing) return;
     const task = this.requireTask(node.session.id, node.task.id);
     if (task.closedAt !== null || task.waiting === waiting) return;
@@ -428,7 +317,7 @@ export class AgentRuntime {
     ]);
   }
 
-  public checkDeadline(node: AgentNode): void {
+  public checkDeadline(node: SubagentNode): void {
     const root = this.nodes.get(node.tree.rootRunId);
     const now = Date.now();
     if (
@@ -439,36 +328,36 @@ export class AgentRuntime {
       throw new RuntimeError('AGENT_TIMEOUT', '任务已达到执行时限，不能继续派发。');
   }
 
-  public descendants(caller: AgentNode, ids: readonly string[]): AgentTaskNode[] {
+  public descendants(caller: SubagentNode, ids: readonly string[]): SubagentTaskNode[] {
     this.accepting(caller);
     return ids.map((id) => {
       this.inTree(caller, id);
       const node = this.tasks.get(id);
-      if (!node || !this.isDescendant(node, caller))
+      if (!node || !isDescendant(node, caller))
         throw new RuntimeError('AGENT_WAIT_SCOPE', '只能等待或停止自己的后代任务。');
       return node;
     });
   }
 
-  public failTree(node: AgentNode, error: unknown): void {
+  public failTree(node: SubagentNode, error: unknown): void {
     for (const entry of node.tree.nodes) {
       entry.error = error;
       entry.controller.abort(error);
       entry.execution?.fail(error);
     }
   }
-  public failSubtree(node: AgentNode, error: unknown): void {
+  public failSubtree(node: SubagentNode, error: unknown): void {
     for (const entry of node.tree.nodes)
-      if (entry === node || this.isDescendant(entry, node)) {
+      if (entry === node || isDescendant(entry, node)) {
         entry.error = error;
         entry.controller.abort(error);
         entry.execution?.fail(error);
       }
   }
-  public cancelSubtree(node: AgentNode, reason: string): void {
+  public cancelSubtree(node: SubagentNode, reason: string): void {
     this.cancelNode(node, reason);
   }
-  public returnWriter(node: AgentNode): void {
+  public returnWriter(node: SubagentNode): void {
     if (!node.task || node.tree.writer !== node.task.id) return;
     let parent = node.parent;
     while (parent && (parent.closing || parent.controller.signal.aborted)) parent = parent.parent;
@@ -508,7 +397,7 @@ export class AgentRuntime {
   }
 
   private start(
-    node: AgentNode,
+    node: SubagentNode,
     text: string,
     attachmentIds?: readonly string[],
     messageId?: string,
@@ -521,7 +410,7 @@ export class AgentRuntime {
       },
     );
   }
-  private createChild(parent: AgentNode, task: AgentTask): AgentTaskNode {
+  private createChild(parent: SubagentNode, task: AgentTask): SubagentTaskNode {
     const previous = this.tasks.get(task.id);
     if (previous) {
       parent.tree.nodes.delete(previous);
@@ -539,7 +428,7 @@ export class AgentRuntime {
       finishedAt: null,
       error: null,
     };
-    const node: AgentTaskNode = {
+    const node: SubagentTaskNode = {
       ...this.node(parent.session, run, parent.tree, parent, task),
       parent,
       task,
@@ -552,10 +441,10 @@ export class AgentRuntime {
   private node(
     session: SessionSummary,
     run: RunView,
-    tree: AgentTree,
-    parent: AgentNode | undefined,
+    tree: SubagentTree,
+    parent: SubagentNode | undefined,
     task: AgentTask | undefined,
-  ): AgentNode {
+  ): SubagentNode {
     return {
       session,
       run,
@@ -568,12 +457,11 @@ export class AgentRuntime {
       execution: undefined,
       promise: Promise.resolve(),
       requests: new Set(),
-      requestCount: 0,
       closing: false,
       error: undefined,
     };
   }
-  private closeTask(node: AgentNode, reason: 'completed' | 'cancelled' | 'failed'): void {
+  private closeTask(node: SubagentNode, reason: 'completed' | 'cancelled' | 'failed'): void {
     if (!node.task || this.requireTask(node.session.id, node.task.id).closedAt !== null) return;
     const signal = node.controller.signal;
     if (signal.aborted) {
@@ -584,7 +472,7 @@ export class AgentRuntime {
         node.error = cause;
       }
     }
-    this.undelivered(node);
+    this.messaging.undelivered(node);
     this.commit(node.session.id, [
       {
         type: 'task.closed',
@@ -607,27 +495,9 @@ export class AgentRuntime {
     ]);
     this.returnWriter(node);
   }
-  private undelivered(node: AgentNode): void {
-    const target: AgentMessageTarget = node.task
-      ? { kind: 'task', taskId: node.task.id }
-      : { kind: 'run', runId: node.run.id };
-    const pending = this.options.store
-      .listAgentMessages(node.session.id, target)
-      .filter((message) => message.status === 'queued');
-    if (pending.length > 0)
-      this.commit(
-        node.session.id,
-        pending.map((message) => ({
-          type: 'task.message_undelivered',
-          runId: node.execution ? node.run.id : (node.parent?.run.id ?? null),
-          at: Date.now(),
-          data: { messageId: message.id, reason: '目标执行已结束，消息未被消费。' },
-        })),
-      );
-  }
-  private cancelNode(node: AgentNode, reason: string): void {
+  private cancelNode(node: SubagentNode, reason: string): void {
     const targets = [...node.tree.nodes].filter(
-      (entry) => entry === node || this.isDescendant(entry, node),
+      (entry) => entry === node || isDescendant(entry, node),
     );
     const failures: unknown[] = [];
     for (const target of targets) {
@@ -642,12 +512,7 @@ export class AgentRuntime {
     }
     if (failures.length > 0) throw new AggregateError(failures, 'Task cancellation failed');
   }
-  private isDescendant(candidate: AgentNode, parent: AgentNode): boolean {
-    for (let current = candidate.parent; current; current = current.parent)
-      if (current === parent) return true;
-    return false;
-  }
-  private inTree(caller: AgentNode, taskId: string): AgentTaskSummary {
+  private inTree(caller: SubagentNode, taskId: string): AgentTaskSummary {
     const task = this.requireTask(caller.session.id, taskId);
     if (task.rootRunId !== caller.tree.rootRunId)
       throw new RuntimeError('AGENT_SCOPE', '目标不属于当前任务树。');
@@ -658,7 +523,7 @@ export class AgentRuntime {
     if (!task) throw new RuntimeError('AGENT_NOT_FOUND', '任务不存在。');
     return task;
   }
-  private accepting(node: AgentNode): void {
+  private accepting(node: SubagentNode): void {
     this.ensureOpen();
     const root = this.nodes.get(node.tree.rootRunId);
     if (node.closing || node.controller.signal.aborted || !root || root.closing)

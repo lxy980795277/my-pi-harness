@@ -2,7 +2,7 @@ import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
 import type { FrozenMcpTool } from '../src/tools/external.js';
 import { RunToolset } from '../src/tools/toolset.js';
-import { allowedTaskCandidates } from '../src/tools/task-toolset.js';
+import { allowedTaskCandidates, allowedTaskTool } from '../src/subagents/policy.js';
 import { selectRunTools } from '../src/tools/selection.js';
 
 function childTools(parent: RunToolset, access: 'read-only' | 'write'): RunToolset {
@@ -12,8 +12,8 @@ function childTools(parent: RunToolset, access: 'read-only' | 'write'): RunTools
     skills: false,
     skillDirectory: false,
     agents: true,
-    task: true,
-    access,
+    allows: (tool) => allowedTaskTool(tool, access),
+    required: ['send_agent_message'],
     inherited: parent,
   }).initial;
 }

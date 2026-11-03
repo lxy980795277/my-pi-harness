@@ -197,7 +197,7 @@ export async function agentFixture(options: AgentFixtureOptions): Promise<AgentF
   if (options.settings) store.putAgentSettings(options.settings(store.getAgentSettings()));
   const runtime: SessionRuntime = new SessionRuntime({
     store,
-    agentStore: store,
+    subagentStore: store,
     gateway,
     tools,
     work,

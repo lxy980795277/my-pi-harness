@@ -68,21 +68,21 @@ export function registerAgentRoutes(server: FastifyInstance, services: Applicati
     { schema: { querystring: boardQuery, response: { 200: AgentBoardSchema } } },
     (request) => {
       const { cursor: _cursor, limit: _limit, ...filters } = request.query;
-      return runtime.agents.board({ ...filters, ...page(request.query) });
+      return runtime.subagents.board({ ...filters, ...page(request.query) });
     },
   );
   server.get('/api/agent-settings', { schema: { response: { 200: AgentSettingsSchema } } }, () =>
-    runtime.agents.settings(),
+    runtime.subagents.settings(),
   );
   server.put<{ Body: AgentSettingsInput }>(
     '/api/agent-settings',
     { schema: { body: AgentSettingsInputSchema, response: { 200: AgentSettingsSchema } } },
-    (request) => runtime.agents.updateSettings(request.body),
+    (request) => runtime.subagents.updateSettings(request.body),
   );
   server.get<{ Params: SessionParams }>(
     '/api/sessions/:sessionId/agents',
     { schema: { params: sessionParams, response: { 200: AgentTaskListSchema } } },
-    (request) => runtime.agents.list(request.params.sessionId),
+    (request) => runtime.subagents.list(request.params.sessionId),
   );
   server.get<{ Params: TaskParams; Querystring: PageQuery }>(
     '/api/sessions/:sessionId/agents/:taskId',
@@ -95,7 +95,7 @@ export function registerAgentRoutes(server: FastifyInstance, services: Applicati
     },
     (request) => {
       const query = page(request.query);
-      return runtime.agents.detail(
+      return runtime.subagents.detail(
         request.params.sessionId,
         request.params.taskId,
         query.cursor,
@@ -112,7 +112,8 @@ export function registerAgentRoutes(server: FastifyInstance, services: Applicati
         response: { 200: AgentTaskDetailSchema },
       },
     },
-    (request) => runtime.agents.stop(request.params.sessionId, request.params.taskId, request.body),
+    (request) =>
+      runtime.subagents.stop(request.params.sessionId, request.params.taskId, request.body),
   );
   server.post<{ Params: TaskParams; Body: AgentMessageInput }>(
     '/api/sessions/:sessionId/agents/:taskId/messages',
@@ -124,13 +125,17 @@ export function registerAgentRoutes(server: FastifyInstance, services: Applicati
       },
     },
     (request) =>
-      runtime.agents.message(request.params.sessionId, request.params.taskId, request.body),
+      runtime.subagents.messaging.message(
+        request.params.sessionId,
+        request.params.taskId,
+        request.body,
+      ),
   );
   server.get<{ Params: TaskParams }>(
     '/api/sessions/:sessionId/agents/:taskId/work',
     { schema: { params: taskParams, response: { 200: WorkSnapshotSchema } } },
     (request) => {
-      runtime.agents.detail(request.params.sessionId, request.params.taskId, 0, 1);
+      runtime.subagents.detail(request.params.sessionId, request.params.taskId, 0, 1);
       return work.snapshot(request.params.sessionId, undefined, request.params.taskId);
     },
   );
@@ -144,7 +149,7 @@ export function registerAgentRoutes(server: FastifyInstance, services: Applicati
       },
     },
     (request) => {
-      runtime.agents.detail(request.params.sessionId, request.params.taskId, 0, 1);
+      runtime.subagents.detail(request.params.sessionId, request.params.taskId, 0, 1);
       return work.answer(
         request.params.sessionId,
         request.params.questionId,
@@ -163,7 +168,7 @@ export function registerAgentRoutes(server: FastifyInstance, services: Applicati
       },
     },
     (request) => {
-      runtime.agents.detail(request.params.sessionId, request.params.taskId, 0, 1);
+      runtime.subagents.detail(request.params.sessionId, request.params.taskId, 0, 1);
       return work.answer(
         request.params.sessionId,
         request.params.questionId,
@@ -185,7 +190,7 @@ export function registerAgentRoutes(server: FastifyInstance, services: Applicati
       },
     },
     (request) => {
-      runtime.agents.detail(request.params.sessionId, request.params.taskId, 0, 1);
+      runtime.subagents.detail(request.params.sessionId, request.params.taskId, 0, 1);
       return work.reviewPlan(
         request.params.sessionId,
         request.params.planId,
@@ -206,7 +211,7 @@ export function registerAgentRoutes(server: FastifyInstance, services: Applicati
       schema: { querystring: Type.Object({}, { additionalProperties: false }) },
     },
     (request, reply) => {
-      const agents = runtime.agents;
+      const agents = runtime.subagents;
       reply.hijack();
       const response = reply.raw;
       response.writeHead(200, {

@@ -74,7 +74,7 @@ describe('persisted agent limit fields', () => {
     const saved = value.store.putAgentSettings(value.store.getAgentSettings());
     const previous = {
       ...saved,
-      limits: { ...saved.limits, tokenBudget: 200_000 },
+      limits: { ...saved.limits, tokenBudget: 200_000, maxTurns: 16 },
     };
     const data = replaceSettings(value, previous);
     value.store = await openProfileStore(value.directory);
@@ -90,6 +90,9 @@ describe('persisted agent limit fields', () => {
     expect(() => value.store.putAgentSettings(previous)).toThrow('failed validation');
     const updated = value.store.putAgentSettings(value.store.getAgentSettings());
     expect(updated).not.toHaveProperty('limits.tokenBudget');
+    expect(updated).not.toHaveProperty('limits.maxTurns');
+    const removedLimit = { ...updated, limits: { ...updated.limits, maxTurns: 16 } };
+    expect(() => value.store.putAgentSettings(removedLimit)).toThrow('failed validation');
     value.store.close();
     value.store = await openProfileStore(value.directory);
     expect(value.store.getAgentSettings()).toEqual(updated);
@@ -103,7 +106,7 @@ describe('persisted agent limit fields', () => {
       const limits: Record<string, unknown> = { ...saved.limits, tokenBudget: 200_000 };
       if (kind === 'missing') delete limits['maxOutputTokens'];
       if (kind === 'type') limits['maxConcurrentRequests'] = '4';
-      if (kind === 'range') limits['maxTurns'] = 0;
+      if (kind === 'range') limits['maxDepth'] = 0;
       replaceSettings(value, { ...saved, limits });
       value.store = await openProfileStore(value.directory);
       expect(() => value.store.getAgentSettings()).toThrow(
@@ -117,6 +120,7 @@ describe('persisted agent limit fields', () => {
     const task = spawn(value.store, 'first');
     const journal = await editTaskLimits(value, (limits) => {
       limits['tokenBudget'] = 1024;
+      limits['maxTurns'] = 16;
     });
     value.store = await openProfileStore(value.directory);
     expect(value.store.getAgentTask('session', 'first')?.limits).toEqual(task.limits);
@@ -124,6 +128,7 @@ describe('persisted agent limit fields', () => {
       .readEvents('session')
       .find((entry) => entry.type === 'task.created');
     expect(created?.data['task']).not.toHaveProperty('limits.tokenBudget');
+    expect(created?.data['task']).not.toHaveProperty('limits.maxTurns');
     expect(await readFile(journal.path, 'utf8')).toBe(journal.source);
   });
 

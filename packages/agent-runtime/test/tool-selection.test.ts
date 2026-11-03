@@ -3,6 +3,7 @@ import { Value } from 'typebox/value';
 import { nativeTool, nativeTools } from '../src/tools/catalog.js';
 import { selectRunTools } from '../src/tools/selection.js';
 import { RunToolset } from '../src/tools/toolset.js';
+import { allowedTaskTool } from '../src/subagents/policy.js';
 import { estimateContextUsage } from '../src/context/budget.js';
 
 describe('default declarations and accepted deferred capabilities', () => {
@@ -95,8 +96,8 @@ describe('default declarations and accepted deferred capabilities', () => {
       skillDirectory: false,
       agents: true,
       canSpawn: false,
-      task: true,
-      access: 'read-only',
+      allows: (tool) => allowedTaskTool(tool, 'read-only'),
+      required: ['send_agent_message'],
       inherited: parent,
     });
     const initial = child.initial.definitions.map(({ name }) => name);

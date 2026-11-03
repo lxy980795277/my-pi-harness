@@ -57,7 +57,7 @@ describe('task read-only capabilities and inherited approval policy', () => {
         await agentChanged(
           f,
           () => {
-            const task = f.runtime.agents.list(f.session.id).tasks[0];
+            const task = f.runtime.subagents.list(f.session.id).tasks[0];
             if (!task) return false;
             return f.store
               .getTaskSnapshot(f.session.id, task.id)
@@ -65,7 +65,7 @@ describe('task read-only capabilities and inherited approval policy', () => {
           },
           'Child did not request weather',
         );
-        const task = f.runtime.agents.list(f.session.id).tasks[0];
+        const task = f.runtime.subagents.list(f.session.id).tasks[0];
         if (!task) throw new Error('Missing weather task');
         if (approvalMode === 'ask') {
           await agentChanged(
@@ -227,7 +227,7 @@ describe('task read-only capabilities and inherited approval policy', () => {
         requestId: 'dynamic',
       });
       await agentsIdle(f);
-      const task = f.runtime.agents.list(f.session.id).tasks[0];
+      const task = f.runtime.subagents.list(f.session.id).tasks[0];
       if (!task) throw new Error('Missing dynamic task');
       const child = f.store.getTaskSnapshot(f.session.id, task.id);
       expect(child.runs[0]?.status).toBe('completed');

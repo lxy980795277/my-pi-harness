@@ -8,7 +8,7 @@ import { RunMessageRecorder } from './messages.js';
 import { runFailureMessage } from './failure.js';
 import type { RunExecutionOptions } from './types.js';
 
-/** One Pi execution owns cancellation, durable failure and descendant settlement. */
+/** One Pi execution owns cancellation, durable failure and coordinated settlement. */
 export class RunExecution {
   public readonly agent: Agent;
   public task: Promise<void> = Promise.resolve();
@@ -53,7 +53,7 @@ export class RunExecution {
       outcomeUnknown: (message) => {
         this.unknownOutcome = true;
         this.failure ??= new RuntimeError('TOOL_OUTCOME_UNKNOWN', message);
-        options.agents?.fault(this.failure);
+        options.hooks?.fault(this.failure);
         this.agent.clearAllQueues();
         this.toolAbort.abort(this.failure);
         this.agent.abort();
@@ -96,7 +96,7 @@ export class RunExecution {
         data: { reason },
       },
     ]);
-    this.options.agents?.cancel(reason);
+    this.options.hooks?.cancel(reason);
   }
 
   /** Tree failures stop actual SDK work without disguising failure as user cancellation. */
@@ -144,12 +144,10 @@ export class RunExecution {
     try {
       const successful =
         this.messages.final?.stopReason === 'stop' || this.messages.final?.stopReason === 'length';
-      await this.options.agents?.finish(
-        this.cancelled || this.failure !== undefined || !successful,
-      );
+      await this.options.hooks?.finish(this.cancelled || this.failure !== undefined || !successful);
     } catch (error) {
       this.failure ??= error;
-      this.options.agents?.fault(error);
+      this.options.hooks?.fault(error);
       this.options.onError(error);
     } finally {
       this.options.capabilities?.close();
@@ -189,7 +187,7 @@ export class RunExecution {
     if (this.failure !== undefined)
       return runFailureMessage({ kind: 'owned', cause: this.failure });
     const owned = this.messages.final
-      ? this.options.agents?.failure(this.messages.final)
+      ? this.options.hooks?.failure(this.messages.final)
       : undefined;
     return owned
       ? runFailureMessage({ kind: 'owned', cause: owned })
@@ -203,7 +201,7 @@ export class RunExecution {
   private failPersistence(error: unknown): never {
     if (!this.persistenceFailed) {
       this.persistenceFailed = true;
-      this.options.agents?.fault(error);
+      this.options.hooks?.fault(error);
       this.toolAbort.abort(error);
       this.failure = error;
       this.agent.clearAllQueues();

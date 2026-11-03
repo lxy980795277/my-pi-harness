@@ -29,12 +29,11 @@ export function createRunAgent(options: RunExecutionOptions, host: RunAgentHost)
   let tools: ReturnType<ToolRuntime['createTools']> = [];
   let toolContext: ToolRunContext | undefined;
   let requestMessages: Message[] | undefined;
-  let turns = 0;
   if (options.tools) {
     toolContext = {
       session: options.session,
       run: options.run,
-      readOnly: options.session.approvalMode === 'read-only' || options.agents?.readOnly === true,
+      readOnly: options.session.approvalMode === 'read-only' || options.hooks?.readOnly === true,
       signal: host.signal,
       supportsImages: options.resolved.model.input.includes('image'),
       recorded: host.recorded,
@@ -54,11 +53,11 @@ export function createRunAgent(options: RunExecutionOptions, host: RunAgentHost)
       persistenceFailure: (error): never => host.failPersistence(error),
       outcomeUnknown: (message) => host.outcomeUnknown(message),
       ...(options.capabilities ? { controls: options.capabilities } : {}),
-      ...(options.agents
+      ...(options.hooks
         ? {
-            agents: options.agents.controls,
-            beforeTool: options.agents.beforeTool,
-            modelStream: options.agents.stream,
+            agents: options.hooks.controls,
+            beforeTool: options.hooks.beforeTool,
+            modelStream: options.hooks.stream,
           }
         : {}),
     };
@@ -84,7 +83,7 @@ export function createRunAgent(options: RunExecutionOptions, host: RunAgentHost)
       }
       options.capabilities?.assertCurrent();
       if (external.length > 0) options.externalTools?.assertBindingsCurrent(external);
-      return await (options.agents?.stream ?? options.resolved.streamFn)(
+      return await (options.hooks?.stream ?? options.resolved.streamFn)(
         model,
         context,
         streamOptions,
@@ -121,14 +120,14 @@ export function createRunAgent(options: RunExecutionOptions, host: RunAgentHost)
       };
       const work = options.work;
       if (work) {
-        const resolved = options.agents
+        const resolved = options.hooks
           ? {
               ...options.resolved,
               model: {
                 ...options.resolved.model,
-                maxTokens: options.agents.outputTokens(options.resolved.model.maxTokens),
+                maxTokens: options.hooks.outputTokens(options.resolved.model.maxTokens),
               },
-              streamFn: options.agents.stream,
+              streamFn: options.hooks.stream,
             }
           : options.resolved;
         try {
@@ -190,17 +189,6 @@ export function createRunAgent(options: RunExecutionOptions, host: RunAgentHost)
       : {}),
     finishTurn: ({ message }) => {
       if (host.isOutcomeUnknown()) return { action: 'end' };
-      turns += 1;
-      if (
-        turns >= (options.agents?.maxTurns ?? 32) &&
-        message.stopReason !== 'stop' &&
-        message.stopReason !== 'length' &&
-        message.stopReason !== 'error' &&
-        message.stopReason !== 'aborted'
-      ) {
-        host.rememberFailure(new RuntimeError('TURN_LIMIT', '工具循环达到本次运行的轮数上限。'));
-        return { action: 'end' };
-      }
       if (
         (tools.length === 0 && message.stopReason === 'toolUse') ||
         message.stopReason === 'deferred'

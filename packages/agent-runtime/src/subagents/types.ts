@@ -8,21 +8,21 @@ import type {
 import type { RunExecution } from '../runs/execution.js';
 import type { AgentRequestScheduler } from './request-scheduler.js';
 
-export interface AgentTree {
+export interface SubagentTree {
   rootRunId: string;
   settings: AgentSettings;
   scheduler: AgentRequestScheduler;
-  nodes: Set<AgentNode>;
+  nodes: Set<SubagentNode>;
   writer: string | null;
   writes: Map<string, number>;
   timer: ReturnType<typeof setTimeout> | undefined;
 }
 
-export interface AgentNode {
+export interface SubagentNode {
   run: RunView;
   session: SessionSummary;
-  tree: AgentTree;
-  parent: AgentNode | undefined;
+  tree: SubagentTree;
+  parent: SubagentNode | undefined;
   task: AgentTask | undefined;
   depth: number;
   limits: AgentLimits;
@@ -30,12 +30,11 @@ export interface AgentNode {
   execution: RunExecution | undefined;
   promise: Promise<void>;
   requests: Set<Promise<void>>;
-  requestCount: number;
   closing: boolean;
   error: unknown;
 }
 
-export interface AgentTaskNode extends AgentNode {
+export interface SubagentTaskNode extends SubagentNode {
   task: AgentTask;
-  parent: AgentNode;
+  parent: SubagentNode;
 }

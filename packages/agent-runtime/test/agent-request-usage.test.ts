@@ -23,46 +23,49 @@ const unavailable: Usage = {
 };
 
 describe('Agent usage facts through real Pi and temporary journals', () => {
-  it('rejects a retired token budget in delegation arguments without creating a task', async () => {
-    let rejected = false;
-    const f = await agentFixture({
-      response: (context) => {
-        const result = context.messages.find(
-          (message) => message.role === 'toolResult' && message.toolName === 'spawn_agent',
-        );
-        if (result?.role === 'toolResult') {
-          rejected = result.isError;
-          return fauxAssistantMessage('Delegation arguments were rejected; no task was started');
-        }
-        return call(
-          'spawn_agent',
-          {
-            title: 'Rejected budget',
-            task: 'This task must not start',
-            roleId: 'researcher',
-            limits: { tokenBudget: 200_000 },
-          },
-          'retired-budget',
-        );
-      },
-    });
-    try {
-      await f.runtime.send(f.session.id, {
-        text: 'ROOT_RETIRED_LIMIT',
-        mode: 'send',
-        requestId: 'retired-limit',
+  it.each(['tokenBudget', 'maxTurns'])(
+    'rejects retired %s delegation limits without creating a task',
+    async (field) => {
+      let rejected = false;
+      const f = await agentFixture({
+        response: (context) => {
+          const result = context.messages.find(
+            (message) => message.role === 'toolResult' && message.toolName === 'spawn_agent',
+          );
+          if (result?.role === 'toolResult') {
+            rejected = result.isError;
+            return fauxAssistantMessage('Delegation arguments were rejected; no task was started');
+          }
+          return call(
+            'spawn_agent',
+            {
+              title: 'Rejected budget',
+              task: 'This task must not start',
+              roleId: 'researcher',
+              limits: { [field]: 200_000 },
+            },
+            'retired-budget',
+          );
+        },
       });
-      await agentsIdle(f);
-      expect(rejected).toBe(true);
-      expect(f.runtime.agents.list(f.session.id).tasks).toEqual([]);
-      expect(f.runtime.getSnapshot(f.session.id).runs[0]?.status).toBe('completed');
-      expect(f.requests).toHaveLength(2);
-      expect(f.leases()).toEqual({ acquired: 1, released: 1 });
-      expect(f.errors).toEqual([]);
-    } finally {
-      await f.close();
-    }
-  });
+      try {
+        await f.runtime.send(f.session.id, {
+          text: 'ROOT_RETIRED_LIMIT',
+          mode: 'send',
+          requestId: 'retired-limit',
+        });
+        await agentsIdle(f);
+        expect(rejected).toBe(true);
+        expect(f.runtime.subagents.list(f.session.id).tasks).toEqual([]);
+        expect(f.runtime.getSnapshot(f.session.id).runs[0]?.status).toBe('completed');
+        expect(f.requests).toHaveLength(2);
+        expect(f.leases()).toEqual({ acquired: 1, released: 1 });
+        expect(f.errors).toEqual([]);
+      } finally {
+        await f.close();
+      }
+    },
+  );
 
   it.each([
     { kind: 'reported', preDelegationRequests: 9, usage: reported },
@@ -73,7 +76,7 @@ describe('Agent usage facts through real Pi and temporary journals', () => {
       const f = await agentFixture({
         settings: (settings) => ({
           ...settings,
-          limits: { ...settings.limits, maxConcurrentRequests: 1, maxTurns: 32 },
+          limits: { ...settings.limits, maxConcurrentRequests: 1 },
         }),
         reportedUsage: () => usage,
         response: (context) => {
@@ -100,7 +103,7 @@ describe('Agent usage facts through real Pi and temporary journals', () => {
         });
         await agentsIdle(f);
         const root = f.runtime.getSnapshot(f.session.id);
-        const tasks = f.runtime.agents.list(f.session.id).tasks;
+        const tasks = f.runtime.subagents.list(f.session.id).tasks;
         expect(root.runs[0]).toMatchObject({ status: 'completed', error: null });
         expect(root.messages.at(-1)?.text).toBe('Root summarized the complete task tree');
         expect(root.tools.find((tool) => tool.name === 'wait_agents')?.result).toContain(

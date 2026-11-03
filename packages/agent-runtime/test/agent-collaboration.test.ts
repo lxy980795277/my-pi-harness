@@ -40,6 +40,7 @@ describe('Agent task collaboration through real Pi', () => {
         return fauxAssistantMessage('Parent received progress and final result');
       },
     });
+    const append = vi.spyOn(f.store, 'append');
     try {
       await f.runtime.send(f.session.id, {
         text: 'ROOT_REPORT',
@@ -63,6 +64,24 @@ describe('Agent task collaboration through real Pi', () => {
       expect(
         f.store.readEvents(f.session.id).filter((event) => event.type === 'task.message_consumed'),
       ).toHaveLength(1);
+      const consumption = append.mock.calls
+        .map(([, events]) => events)
+        .find((events) =>
+          events.some(
+            (event) =>
+              event.type === 'task.message_consumed' && event.data['messageId'] === incoming.id,
+          ),
+        );
+      expect(consumption?.map((event) => event.type)).toEqual([
+        'task.message_consumed',
+        'message.started',
+      ]);
+      expect(consumption?.[1]?.data).toMatchObject({
+        text: incoming.text,
+        agentMessageId: incoming.id,
+        role: 'user',
+      });
+      expect(consumption?.[0]?.at).toBe(consumption?.[1]?.at);
       expect(
         f.requests
           .filter((request) => request.task === 'ROOT_REPORT')
@@ -80,6 +99,7 @@ describe('Agent task collaboration through real Pi', () => {
       );
       expect(f.errors).toEqual([]);
     } finally {
+      append.mockRestore();
       await f.close();
     }
   });
@@ -106,8 +126,8 @@ describe('Agent task collaboration through real Pi', () => {
         if (!hasResult(context, 'send_agent_message')) {
           const task = taskResults(context)[0];
           if (!task) throw new Error('Missing continuation target');
-          const settings = f.runtime.agents.settings();
-          f.runtime.agents.updateSettings({
+          const settings = f.runtime.subagents.settings();
+          f.runtime.subagents.updateSettings({
             ...settings,
             roles: settings.roles.map((role) =>
               role.id === 'researcher' ? { ...role, access: 'write' } : role,
@@ -132,13 +152,13 @@ describe('Agent task collaboration through real Pi', () => {
         requestId: 'continue',
       });
       await agentsIdle(f);
-      const tasks = f.runtime.agents.list(f.session.id).tasks;
+      const tasks = f.runtime.subagents.list(f.session.id).tasks;
       expect(tasks).toHaveLength(1);
       const task = tasks[0];
       if (!task) throw new Error('Missing continued task');
       expect(task.role.access).toBe('read-only');
       expect(
-        f.runtime.agents.settings().roles.find((role) => role.id === 'researcher')?.access,
+        f.runtime.subagents.settings().roles.find((role) => role.id === 'researcher')?.access,
       ).toBe('write');
       const childContexts = createTools.mock.calls
         .map(([context]) => context)
@@ -225,7 +245,7 @@ describe('Agent task collaboration through real Pi', () => {
         requestId: 'api-root',
       });
       await withinDeadline(rootReady.promise, 'Root did not reach the continuation boundary');
-      const task = f.runtime.agents.list(f.session.id).tasks[0];
+      const task = f.runtime.subagents.list(f.session.id).tasks[0];
       if (!task || task.latestRunId === null) throw new Error('Missing completed child Run');
       const input = {
         requestId: 'api-continue',
@@ -233,17 +253,17 @@ describe('Agent task collaboration through real Pi', () => {
         continue: true,
         expectedRunId: task.latestRunId,
       };
-      await f.runtime.agents.message(f.session.id, task.id, input);
+      await f.runtime.subagents.messaging.message(f.session.id, task.id, input);
       await withinDeadline(childReady.promise, 'Continuation Run was not accepted');
-      const resumed = f.runtime.agents.detail(f.session.id, task.id);
+      const resumed = f.runtime.subagents.detail(f.session.id, task.id);
       expect(resumed.task.latestRunId).not.toBe(task.latestRunId);
-      const repeated = await f.runtime.agents.message(f.session.id, task.id, input);
+      const repeated = await f.runtime.subagents.messaging.message(f.session.id, task.id, input);
       expect(repeated.task.latestRunId).toBe(resumed.task.latestRunId);
       expect(f.store.getTaskSnapshot(f.session.id, task.id).runs).toHaveLength(2);
       expect(f.store.listAgentMessages(f.session.id)).toHaveLength(1);
       await expect(
         Promise.resolve().then(() =>
-          f.runtime.agents.message(f.session.id, task.id, {
+          f.runtime.subagents.messaging.message(f.session.id, task.id, {
             ...input,
             text: 'Different request text',
           }),
@@ -252,7 +272,11 @@ describe('Agent task collaboration through real Pi', () => {
       childBlocked.release();
       rootBlocked.release();
       await agentsIdle(f);
-      const afterCompletion = await f.runtime.agents.message(f.session.id, task.id, input);
+      const afterCompletion = await f.runtime.subagents.messaging.message(
+        f.session.id,
+        task.id,
+        input,
+      );
       expect(afterCompletion.task.latestRunId).toBe(resumed.task.latestRunId);
       expect(f.store.getTaskSnapshot(f.session.id, task.id).runs).toHaveLength(2);
       expect(f.leases()).toEqual({ acquired: 3, released: 3 });
@@ -316,22 +340,23 @@ describe('Agent task collaboration through real Pi', () => {
         Promise.all([enteredStopped.promise, enteredSurvivor.promise]),
         'Both children did not enter the model',
       );
-      const target = f.runtime.agents
+      const target = f.runtime.subagents
         .list(f.session.id)
         .tasks.find((task) => task.title === 'Stop target');
       if (!target) throw new Error('Missing stop target');
       await withinDeadline(
-        f.runtime.agents.stop(f.session.id, target.id, { expectedRunId: target.latestRunId }),
+        f.runtime.subagents.stop(f.session.id, target.id, { expectedRunId: target.latestRunId }),
         'Selected subtree did not stop',
       );
-      const current = f.runtime.agents.list(f.session.id).tasks;
+      const current = f.runtime.subagents.list(f.session.id).tasks;
       expect(current.find((task) => task.title === 'Stop target')?.status).toBe('cancelled');
       expect(current.find((task) => task.title === 'Survivor')?.closedAt).toBeNull();
       expect(f.runtime.getSnapshot(f.session.id).session.activeRunId).not.toBeNull();
       survivor.release();
       await agentsIdle(f);
       expect(
-        f.runtime.agents.list(f.session.id).tasks.find((task) => task.title === 'Survivor')?.status,
+        f.runtime.subagents.list(f.session.id).tasks.find((task) => task.title === 'Survivor')
+          ?.status,
       ).toBe('completed');
       expect(f.runtime.getSnapshot(f.session.id).runs[0]?.status).toBe('completed');
       expect(f.leases()).toEqual({ acquired: 3, released: 3 });
@@ -401,7 +426,7 @@ describe('Agent task collaboration through real Pi', () => {
             ),
         'Root did not attempt the competing write',
       );
-      expect(f.runtime.agents.list(f.session.id).tasks).toHaveLength(1);
+      expect(f.runtime.subagents.list(f.session.id).tasks).toHaveLength(1);
       await expect(stat(join(f.directory, 'workspace', 'root-before.txt'))).rejects.toMatchObject({
         code: 'ENOENT',
       });
@@ -420,7 +445,7 @@ describe('Agent task collaboration through real Pi', () => {
           .tools.filter((tool) => tool.name === 'spawn_agent')
           .map((tool) => tool.status),
       ).toEqual(['completed', 'failed']);
-      expect(f.runtime.agents.list(f.session.id).tasks[0]?.status).toBe('completed');
+      expect(f.runtime.subagents.list(f.session.id).tasks[0]?.status).toBe('completed');
       expect(f.errors).toEqual([]);
     } finally {
       child.release();
