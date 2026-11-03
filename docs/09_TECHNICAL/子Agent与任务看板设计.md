@@ -79,7 +79,9 @@ wait_agents固定调用时的执行节点，不追随以后续作；结果从对
 
 [工具收窄](../../packages/agent-runtime/src/tools/task-toolset.ts)同时覆盖当前工具、动态候选和实际派发。只读角色不提供Shell或未知副作用工具，MCP候选要求有效只读授权，实际参数和实时撤销仍由原授权入口检查；加载Skill、嵌套委派及续作不能恢复被排除的权限。
 
-角色能力与审批方式分开：Task冻结的role.access决定是否只读，子Run继承父Run接受时的approvalMode。RunExecution将角色与原会话的只读限制合并为内部ToolRunContext.readOnly；ToolRuntime在审批、写入仲裁和派发前拒绝受限副作用，底层文件/Web执行使用同一限制。允许的GET沿用ask人工、auto独立复核及full-access自动批准；完全访问不授予写能力，request_skill_tools的显式人工授权仍独立生效。
+主子Run使用同一工具目录与选择策略。子Run继承父当前集合中可继承的绑定，再按角色收窄可见项及未加载候选，初始提供向父通信；不无条件补齐全部Agent控制工具。子新增工具只修改自己的集合，不传播到父或兄弟；深度限制仅关闭继续spawn，不关闭等待已有后代。续作重新装配当前有效绑定，不复用旧Run闭包或已释放租约。
+
+角色能力与审批方式分开：Task冻结的role.access决定是否只读，子Run继承父Run接受时的approvalMode。RunExecution将角色与原会话的只读限制合并为内部ToolRunContext.readOnly；ToolRuntime在审批、写入仲裁和派发前拒绝受限副作用，底层文件/Web执行使用同一限制。允许的GET沿用ask人工、auto独立复核及full-access自动批准；完全访问不授予写能力，Skill加载也不额外授予工具权限。
 
 审批方式由run.accepted私有快照记录，角色由task.created保存，不新增重复的公开有效权限字段。只读父任务不能创建写角色；Task续作复用冻结角色并继承仍存活的直接父审批快照。
 

@@ -11,10 +11,8 @@ import {
   ListTodo,
   MessageCircleQuestion,
   Plug,
-  RotateCcw,
   Search,
   Terminal,
-  Undo2,
   Wrench,
   GitBranch,
   Send,
@@ -37,12 +35,8 @@ const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
   send_agent_message: { name: '发送任务消息', Icon: Send, argument: 'text' },
   stop_agent: { name: '停止子任务', Icon: Square },
   tool_search: { name: '检索工具', Icon: Search, argument: 'query' },
-  load_tools: { name: '加载工具', Icon: Plug },
-  skill_search: { name: '检索 Skill', Icon: Search, argument: 'query' },
   load_skill: { name: '加载 Skill', Icon: FileText },
   read_skill_resource: { name: '读取 Skill 资源', Icon: FileText, argument: 'path' },
-  request_skill_tools: { name: '申请 Skill 工具授权', Icon: Plug },
-  revoke_skill_tools: { name: '撤销 Skill 工具授权', Icon: Undo2 },
   office_docx: { name: 'Word 文档', Icon: FileText, argument: 'output' },
   office_pdf: { name: 'PDF 文档', Icon: FileText, argument: 'output' },
   office_xlsx: { name: '工作簿', Icon: FileText, argument: 'output' },
@@ -63,8 +57,6 @@ const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
   update_todos: { name: '更新任务', Icon: ListTodo },
   search_session_history: { name: '搜索对话', Icon: History, argument: 'query' },
   read_tool_result: { name: '读取工具结果', Icon: History },
-  restore_context_checkpoint: { name: '恢复上下文', Icon: Undo2, argument: 'checkpointId' },
-  reset_working_state: { name: '重置工作状态', Icon: RotateCcw },
 };
 
 const TOOL_STATUS_LABELS: Record<ToolCallView['status'], string> = {
@@ -123,15 +115,6 @@ const toolSummary = (tool: ToolCallView, definition: ToolDefinition): string => 
       }
       break;
     }
-    case 'restore_context_checkpoint': {
-      const steps = tool.arguments['stepsBack'];
-      if (typeof steps === 'number') {
-        return `回退 ${steps} 个检查点`;
-      }
-      return '上一个检查点';
-    }
-    case 'reset_working_state':
-      return '计划与任务';
   }
   if (tool.summary === tool.name) {
     return '';

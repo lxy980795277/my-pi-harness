@@ -31,12 +31,10 @@ export function invocationPolicy(
     policy = { approvalRequired: true, mutating: true, summary: selected.source.remoteToolName };
   if (selected.external && options.externalTools?.isReadOnlyAuthorized?.(selected.external, args))
     policy = { ...policy, approvalRequired: false, mutating: false };
-  if (name === 'request_skill_tools')
-    policy = { approvalRequired: true, mutating: false, summary: '授予本次运行的Skill工具权限' };
   return policy;
 }
 
-/** Per-invocation decisions expire or cancel with their owning Run; Skill grants always ask a user. */
+/** Per-invocation decisions expire or cancel with their owning Run. */
 export class ToolApprovals {
   private readonly pending = new Map<string, PendingApproval>();
   public constructor(private readonly options: ToolRuntimeOptions) {}
@@ -55,12 +53,7 @@ export class ToolApprovals {
   ): Promise<void> {
     const tool = ledger.tool;
     let decision: ApprovalReviewResult['decision'] = 'ask';
-    if (tool.name === 'request_skill_tools') {
-      tool.status = 'awaiting_approval';
-      ledger.update();
-      decision = await this.wait(context.session.id, tool.id, signal);
-      tool.approval = { source: 'user', decision, reason: null };
-    } else if (context.session.approvalMode === 'full-access') {
+    if (context.session.approvalMode === 'full-access') {
       decision = 'allow';
       tool.approval = { source: 'full-access', decision, reason: null };
     } else if (context.session.approvalMode === 'auto') {

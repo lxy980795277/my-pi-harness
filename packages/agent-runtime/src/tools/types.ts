@@ -36,7 +36,6 @@ export interface ToolRunContext {
   commit(events: readonly EventInput[]): void;
   persistenceFailure(error: unknown): never;
   outcomeUnknown(message: string): void;
-  stopAfterTool?(reason: string): void;
 }
 
 export interface ToolRuntimeOptions {

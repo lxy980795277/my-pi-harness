@@ -103,15 +103,8 @@ describe('compact tool presentation', () => {
     ).toMatchObject({ name: '更新计划', summary: '1 个步骤' });
   });
 
-  it('provides meaningful targets when directory and checkpoint arguments are omitted', () => {
+  it('uses the workspace root when a directory target is omitted', () => {
     expect(toolPresentation(tool({ name: 'list_files', arguments: {} })).summary).toBe('.');
-    expect(
-      toolPresentation(tool({ name: 'restore_context_checkpoint', arguments: {} })).summary,
-    ).toBe('上一个检查点');
-    expect(
-      toolPresentation(tool({ name: 'restore_context_checkpoint', arguments: { stepsBack: 2 } }))
-        .summary,
-    ).toBe('回退 2 个检查点');
   });
 
   it('keeps an unrecognized recorded tool readable without duplicating its name as a summary', () => {

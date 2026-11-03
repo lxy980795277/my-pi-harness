@@ -2,7 +2,21 @@ import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
 import type { FrozenMcpTool } from '../src/tools/external.js';
 import { RunToolset } from '../src/tools/toolset.js';
-import { allowedTaskCandidates, filterTaskToolset } from '../src/tools/task-toolset.js';
+import { allowedTaskCandidates } from '../src/tools/task-toolset.js';
+import { selectRunTools } from '../src/tools/selection.js';
+
+function childTools(parent: RunToolset, access: 'read-only' | 'write'): RunToolset {
+  return selectRunTools({
+    workspaceId: 'workspace',
+    work: true,
+    skills: false,
+    skillDirectory: false,
+    agents: true,
+    task: true,
+    access,
+    inherited: parent,
+  }).initial;
+}
 
 function candidate(name: string, readOnly: boolean): FrozenMcpTool {
   return {
@@ -65,24 +79,37 @@ function parentToolset(candidates: FrozenMcpTool[]): RunToolset {
 describe('task role capability selection', () => {
   it('keeps accepted fingerprints stable when a filtered toolset is rebuilt for a later request', () => {
     const parent = parentToolset([candidate('read_repository', true)]);
-    const child = filterTaskToolset(parent, 'read-only');
+    const child = childTools(parent, 'read-only');
     const copied = new RunToolset(child.records);
     expect(copied.records).toEqual(child.records);
-    expect(filterTaskToolset(child, 'read-only').records).toEqual(child.records);
+    expect(childTools(child, 'read-only').records).toEqual(child.records);
+    expect(child.require('read_file').fingerprint).toBe(parent.require('read_file').fingerprint);
   });
 
   it('keeps read-only delegation and work interactions without exposing ungranted writes', () => {
     const candidates = [candidate('read_repository', true), candidate('unknown_operation', false)];
     const parent = parentToolset(candidates);
-    const child = filterTaskToolset(parent, 'read-only');
-    expect(child.definitions.map(({ name }) => name)).toEqual([
-      'read_file',
-      'spawn_agent',
-      'ask_user',
-      'read_tool_result',
-      'tool_search',
-      'read_repository',
-    ]);
+    const child = childTools(parent, 'read-only');
+    expect(child.definitions.map(({ name }) => name)).toEqual(
+      expect.arrayContaining([
+        'read_file',
+        'spawn_agent',
+        'ask_user',
+        'read_tool_result',
+        'tool_search',
+        'read_repository',
+        'wait_agents',
+        'send_agent_message',
+      ]),
+    );
+    for (const name of [
+      'write_file',
+      'shell',
+      'unknown_control',
+      'restore_context_checkpoint',
+      'unknown_operation',
+    ])
+      expect(child.definitions.map((tool) => tool.name)).not.toContain(name);
     expect(allowedTaskCandidates(candidates, 'read-only')).toEqual([candidates[0]]);
     expect(parent.definitions.some(({ name }) => name === 'shell')).toBe(true);
     expect(parent.definitions.some(({ name }) => name === 'unknown_operation')).toBe(true);
@@ -90,17 +117,21 @@ describe('task role capability selection', () => {
 
   it('retains parent write capabilities while denying root history commands and unknown controls', () => {
     const candidates = [candidate('unknown_operation', false)];
-    const child = filterTaskToolset(parentToolset(candidates), 'write');
-    expect(child.definitions.map(({ name }) => name)).toEqual([
-      'read_file',
-      'write_file',
-      'shell',
-      'spawn_agent',
-      'ask_user',
-      'read_tool_result',
-      'tool_search',
-      'unknown_operation',
-    ]);
+    const child = childTools(parentToolset(candidates), 'write');
+    expect(child.definitions.map(({ name }) => name)).toEqual(
+      expect.arrayContaining([
+        'read_file',
+        'write_file',
+        'shell',
+        'spawn_agent',
+        'ask_user',
+        'read_tool_result',
+        'tool_search',
+        'unknown_operation',
+      ]),
+    );
+    expect(child.definitions.map(({ name }) => name)).not.toContain('unknown_control');
+    expect(child.definitions.map(({ name }) => name)).not.toContain('restore_context_checkpoint');
     expect(allowedTaskCandidates(candidates, 'write')).toEqual(candidates);
   });
 });

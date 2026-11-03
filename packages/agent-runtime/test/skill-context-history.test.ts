@@ -3,6 +3,7 @@ import type { FrozenSkill } from '@my-pi-harness/protocol';
 import { expect, it } from 'vitest';
 import type { SkillsPort } from '../src/capabilities/ports.js';
 import { fixture, idle, summary } from './support/work-fixture.js';
+import { skillCandidate } from './support/skill-candidate.js';
 
 it('does not revive instructions discarded before the source context reset when selecting a later summary', async () => {
   const skill: FrozenSkill = {
@@ -17,6 +18,8 @@ it('does not revive instructions discarded before the source context reset when 
     allowedTools: [],
   };
   const skills: SkillsPort = {
+    freezeCandidates: () => Promise.resolve([skillCandidate(skill)]),
+    loadCandidate: () => Promise.resolve(skill),
     list: () => Promise.resolve([]),
     freezeSelections: () => Promise.resolve([skill]),
     validateBindings: () => Promise.resolve(),

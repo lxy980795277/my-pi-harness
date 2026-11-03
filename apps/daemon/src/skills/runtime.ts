@@ -5,6 +5,9 @@ import type { SkillsService } from './service.js';
 export function createSkillsPort(skills: SkillsService): SkillsPort {
   return {
     list: (workspaceId, signal) => skills.list(workspaceId, signal),
+    freezeCandidates: (workspaceId, signal) => skills.freezeCandidates(workspaceId, signal),
+    loadCandidate: (workspaceId, candidate, signal) =>
+      skills.loadCandidate(workspaceId, candidate, signal),
     freezeSelections: (workspaceId, selections, signal) =>
       skills.freezeSelections(workspaceId, selections, signal),
     validateBindings: (frozen, signal) => skills.validateBindings(frozen, signal),

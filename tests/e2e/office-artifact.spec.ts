@@ -17,7 +17,7 @@ test('按需加载办公工具、审批创建 DOCX 并从详情下载原始产�
   const directory = await mkdtemp(join(tmpdir(), 'my-pi-office-browser-'));
   const model = await startToolSequenceModel(
     [
-      { name: 'load_tools', arguments: { names: ['office_docx'] } },
+      { name: 'tool_search', arguments: { query: 'office_docx', limit: 1 } },
       {
         name: 'office_docx',
         arguments: {

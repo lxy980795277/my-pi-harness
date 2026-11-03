@@ -18,6 +18,36 @@ import {
 } from './support/work-fixture.js';
 
 describe('M3 durable session work through real Pi tools', () => {
+  it.each(['restore_context_checkpoint', 'reset_working_state'])(
+    'rejects the removed %s model entry without changing user-managed work',
+    async (name) => {
+      const f = await fixture();
+      try {
+        const before = f.work.snapshot(f.session.id).state;
+        f.work.save(f.session.id, {
+          ...before,
+          todos: [todo('retained', 'Keep this user task', 'pending')],
+        });
+        const saved = f.work.snapshot(f.session.id).state;
+        f.faux.setResponses([call(name, {}), fauxAssistantMessage('Work remains unchanged')]);
+        await f.runtime.send(f.session.id, {
+          text: 'Preserve the user work state',
+          mode: 'send',
+          requestId: `removed-${name}`,
+        });
+        await idle(f);
+        expect(f.runtime.getSnapshot(f.session.id).tools).toMatchObject([
+          { name, status: 'failed', binding: { kind: 'rejected' } },
+        ]);
+        expect(f.work.snapshot(f.session.id).state.todos).toEqual(saved.todos);
+        expect(f.work.snapshot(f.session.id).state.compaction).toEqual(saved.compaction);
+        expect(f.errors).toEqual([]);
+      } finally {
+        await f.close();
+      }
+    },
+  );
+
   it('rejects stale branch work commands even when both branches have the same revision', async () => {
     const f = await fixture();
     try {
@@ -93,20 +123,12 @@ describe('M3 durable session work through real Pi tools', () => {
       f.faux.setResponses([
         (context) => {
           expect(
-            context.messages.flatMap((message) =>
-              message.role === 'system' ? (message.toolsAdded ?? []).map(({ name }) => name) : [],
+            new Set(
+              context.messages.flatMap((message) =>
+                message.role === 'system' ? (message.toolsAdded ?? []).map(({ name }) => name) : [],
+              ),
             ),
-          ).toEqual([
-            'web_fetch',
-            'ask_user',
-            'update_plan',
-            'update_plan_steps',
-            'update_todos',
-            'search_session_history',
-            'read_tool_result',
-            'restore_context_checkpoint',
-            'reset_working_state',
-          ]);
+          ).toEqual(new Set(['web_fetch', 'ask_user', 'tool_search']));
           return call('ask_user', questionArgs('Which format?', ['Markdown', 'Text']));
         },
         (context) => {
@@ -206,12 +228,14 @@ describe('M3 durable session work through real Pi tools', () => {
     try {
       const steps = [{ id: 'analysis', title: 'Analyze inputs', status: 'pending' }];
       f.faux.setResponses([
+        call('tool_search', { query: 'update_plan' }),
         call('update_plan', { title: 'Report', content: 'Analyze input', steps }),
         call('update_plan', {
           title: 'Revised report',
           content: 'Analyze input and explain assumptions',
           steps,
         }),
+        call('tool_search', { query: 'update_todos' }),
         call('update_todos', {
           todos: [
             {
@@ -602,6 +626,8 @@ describe('M3 durable session work through real Pi tools', () => {
           before,
         );
         expect(f.runtime.getSnapshot(f.session.id).runs.at(-1)?.status).toBe('completed');
+        const firstCompaction = f.work.snapshot(f.session.id).state.compaction;
+        if (!firstCompaction) throw new Error('Missing first automatic summary');
         f.faux.setResponses([
           fauxAssistantMessage(
             summary('The first two tasks are complete; preserve the remaining work.'),
@@ -611,8 +637,10 @@ describe('M3 durable session work through real Pi tools', () => {
             return fauxAssistantMessage('Fifth response');
           },
         ]);
+        const inputBudget = f.faux.models[0].contextWindow - f.faux.models[0].maxTokens;
+        // Trigger another summary even with the reduced default tool declarations.
         await f.runtime.send(f.session.id, {
-          text: `Input 5: ${'w'.repeat(8000)}`,
+          text: `Input 5: ${'w'.repeat(inputBudget * 2)}`,
           mode: 'send',
           requestId: 'second-auto-summary',
         });
@@ -620,6 +648,7 @@ describe('M3 durable session work through real Pi tools', () => {
         expect(f.work.snapshot(f.session.id).state.compaction).toMatchObject({
           reason: 'automatic',
           strategy: 'model',
+          parentId: firstCompaction.id,
         });
         expect(contexts.at(-1)?.messages.find(({ role }) => role === 'system')?.content).toContain(
           'The first two tasks are complete; preserve the remaining work.',

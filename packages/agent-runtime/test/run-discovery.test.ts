@@ -73,25 +73,27 @@ function text(content: readonly ExecutionContent[]): string {
 }
 
 describe('automatic progressive tool discovery', () => {
-  it('loads eight by default, excludes staged names on repeated searches, and persists before visibility changes', async () => {
+  it('loads eight by default and reports repeat matches without implicitly paging or writing another revision', async () => {
     const { capabilities, events } = fixture();
     const first = await capabilities.execute('tool_search', { query: 'GitHub' }, signal());
-    expect(text(first)).toContain('"availableFrom":"next-model-request"');
+    expect(text(first)).toContain('"availability":"next-model-request"');
     expect(capabilities.active.records).toHaveLength(1);
     expect(events).toEqual([]);
-    await capabilities.execute('tool_search', { query: 'GitHub', limit: 10 }, signal());
+    expect(await capabilities.execute('tool_search', { query: 'GitHub' }, signal())).toEqual(first);
     expect(capabilities.advance()).toBe(true);
-    expect(capabilities.active.records).toHaveLength(19);
-    expect(new Set(capabilities.active.definitions.map(({ name }) => name)).size).toBe(19);
+    expect(capabilities.active.records).toHaveLength(9);
+    expect(new Set(capabilities.active.definitions.map(({ name }) => name)).size).toBe(9);
     expect(events).toHaveLength(1);
     expect(events[0]).toMatchObject({ type: 'run.tools_loaded', data: { revision: 2 } });
-    await capabilities.execute('tool_search', { query: 'GitHub' }, signal());
-    capabilities.advance();
-    expect(capabilities.active.records).toHaveLength(21);
-    expect(capabilities.revision).toBe(3);
-    const none = await capabilities.execute('tool_search', { query: 'GitHub' }, signal());
-    expect(text(none)).toContain('"loaded":[]');
+    const existing = await capabilities.execute('tool_search', { query: 'GitHub' }, signal());
+    expect(text(existing)).toContain('"availability":"already-available"');
     expect(capabilities.advance()).toBe(false);
+    expect(capabilities.revision).toBe(2);
+    expect(events).toHaveLength(1);
+    await capabilities.execute('tool_search', { query: 'mcp_19', limit: 1 }, signal());
+    expect(capabilities.advance()).toBe(true);
+    expect(capabilities.active.records).toHaveLength(10);
+    expect(capabilities.revision).toBe(3);
     capabilities.close();
   });
 
@@ -100,12 +102,11 @@ describe('automatic progressive tool discovery', () => {
     await capabilities.execute('tool_search', { query: 'GitHub', limit: 10 }, signal());
     capabilities.advance();
     expect(capabilities.active.records).toHaveLength(64);
-    await expect(
-      capabilities.execute('tool_search', { query: 'GitHub' }, signal()),
-    ).rejects.toMatchObject({ code: 'TOOL_LIMIT' });
-    await expect(
-      capabilities.execute('load_tools', { names: ['mcp_19'] }, signal()),
-    ).rejects.toMatchObject({ code: 'TOOL_LIMIT' });
+    const existing = await capabilities.execute('tool_search', { query: 'GitHub' }, signal());
+    expect(text(existing)).toContain('"availability":"already-available"');
+    expect(() => capabilities.ensure(['mcp_19'])).toThrow(
+      expect.objectContaining({ code: 'TOOL_LIMIT' }),
+    );
     capabilities.close();
   });
 
@@ -161,6 +162,40 @@ describe('automatic progressive tool discovery', () => {
     capabilities.close();
     release?.([[1, 0]]);
     await expect(operation).rejects.toMatchObject({ code: 'RUN_CLOSED' });
-    expect(capabilities.advance()).toBe(false);
+    expect(() => capabilities.advance()).toThrow(expect.objectContaining({ code: 'RUN_CLOSED' }));
+  });
+
+  it('discovers an accepted session tool without any MCP candidate and retains its actual source', async () => {
+    const events: EventInput[] = [];
+    const nativeCandidates = new RunToolset([
+      {
+        definition: {
+          name: 'search_session_history',
+          description: 'Search retained session history',
+          parameters: Type.Object({ query: Type.String() }),
+        },
+        source: { kind: 'session' },
+      },
+    ]).records;
+    const capabilities = new RunCapabilities({
+      runId: 'native-run',
+      workspaceId: null,
+      initial: new RunToolset([]),
+      candidates: [],
+      nativeCandidates,
+      skills: [],
+      commit: (batch) => events.push(...batch),
+    });
+    try {
+      await capabilities.execute('tool_search', { query: 'search_session_history' }, signal());
+      expect(capabilities.active.records).toEqual([]);
+      capabilities.advance();
+      expect(capabilities.active.require('search_session_history').source).toEqual({
+        kind: 'session',
+      });
+      expect(events[0]?.data['names']).toEqual(['search_session_history']);
+    } finally {
+      capabilities.close();
+    }
   });
 });

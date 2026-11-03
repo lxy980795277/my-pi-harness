@@ -85,7 +85,11 @@ async function fixture() {
   });
   return entry;
 }
-function accept(skills: readonly FrozenSkill[], runId = 'run'): EventInput {
+function accept(
+  skills: readonly FrozenSkill[],
+  runId = 'run',
+  candidates: readonly FrozenSkill[] = [],
+): EventInput {
   const run: RunView = {
     id: runId,
     sessionId: 'session',
@@ -100,7 +104,22 @@ function accept(skills: readonly FrozenSkill[], runId = 'run'): EventInput {
   return event(
     'run.accepted',
     { run, requestId: `request-${runId}` },
-    { tools: [], toolSources: [], skills },
+    {
+      tools: [],
+      toolSources: [],
+      nativeCandidates: [],
+      skillCandidates: candidates.map(
+        ({ selection, authorization, name, description, scope, source }) => ({
+          selection,
+          authorization,
+          name,
+          description,
+          scope,
+          source,
+        }),
+      ),
+      skills,
+    },
     runId,
   );
 }
@@ -111,7 +130,7 @@ it('reads accepted and loaded frozen instructions only at visible branch-prefix 
   const second = skill('documents', 'FROZEN_DOCUMENT_BODY');
   const hidden = skill('pdf', 'EXCLUDED_LATE_BODY');
   entry.store.append('session', [
-    accept([first]),
+    accept([first], 'run', [second, hidden]),
     message('user-1', 'user'),
     message('assistant-1', 'assistant'),
     load(2, [first, second]),

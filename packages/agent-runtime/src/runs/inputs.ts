@@ -6,6 +6,7 @@ import { userWithAttachments } from '../context/attachments.js';
 import { communicationMessage } from '../context/agent-message.js';
 import { encodeContextMessage } from '../context/codec.js';
 import { RuntimeError } from '../errors.js';
+import { combinedSkills } from '../capabilities/inputs.js';
 import type { EventInput } from '../sessions/ports.js';
 import { assertQueuedAuthority } from './agent.js';
 import type { RunExecutionOptions } from './types.js';
@@ -74,8 +75,11 @@ export class RunInputDelivery {
 
   private consumeInput(input: QueueInput, message: UserMessage): void {
     this.host.assertKnownOutcome();
+    const frozen = this.options.queuedCapabilities?.(input.id);
+    const skills = frozen ? combinedSkills(frozen) : [];
     try {
       assertQueuedAuthority(this.options);
+      this.options.capabilities?.assertSkillAdditions(skills);
     } catch (cause) {
       this.host.fail(
         new RuntimeError('INPUT_AUTHORITY_REVOKED', '排队输入的授权已失效，消息已保留。', {
@@ -117,6 +121,7 @@ export class RunInputDelivery {
         privateData: encodeContextMessage(message),
       },
     ]);
+    this.options.capabilities?.stageSkills(skills);
   }
 
   private consumeAgentInput(input: AgentMessage, message: UserMessage): void {

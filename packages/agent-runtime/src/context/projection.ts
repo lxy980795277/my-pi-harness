@@ -8,6 +8,11 @@ import {
   type ContextToolDefinition,
 } from './budget.js';
 
+export interface RetainedToolText {
+  id: string;
+  text: string;
+}
+
 const TOOL_TEXT_LIMIT = 8192;
 const ATTACHMENT_TEXT_LIMIT = 16_000;
 
@@ -15,16 +20,22 @@ const ATTACHMENT_TEXT_LIMIT = 16_000;
 export function pruneContext(
   messages: readonly Message[],
   supportsImages: boolean,
+  retainedTools: ReadonlyMap<Message, RetainedToolText> = new Map(),
 ): {
   messages: Message[];
   prunedMessages: number;
+  requiredTools: string[];
 } {
   let prunedMessages = 0;
+  const requiredTools = new Set<string>();
   let lastUser = -1;
   for (const [index, message] of messages.entries()) if (message.role === 'user') lastUser = index;
   const projected = messages.map((message, index): Message => {
     if (message.role === 'toolResult') {
       let changed = false;
+      let textOffset = 0;
+      let textParts = 0;
+      const retained = retainedTools.get(message);
       const content = message.content.map((part) => {
         if (part.type === 'image' && !supportsImages) {
           changed = true;
@@ -33,11 +44,27 @@ export function pruneContext(
             text: '[Tool image retained in session data; the selected model does not support images.]',
           };
         }
-        if (part.type !== 'text' || part.text.length <= TOOL_TEXT_LIMIT) return part;
+        if (part.type !== 'text') return part;
+        const partOffset = textOffset + (textParts > 0 ? 1 : 0);
+        textOffset = partOffset + part.text.length;
+        textParts += 1;
+        if (part.text.length <= TOOL_TEXT_LIMIT) return part;
         changed = true;
+        const offset = partOffset + 4096;
+        const retainedEnd = Math.min(textOffset, retained?.text.length ?? 0);
+        const recoverable =
+          retained !== undefined &&
+          offset < retainedEnd &&
+          retained.text.slice(partOffset, retainedEnd) ===
+            part.text.slice(0, retainedEnd - partOffset);
+        let recovery = 'The omitted text has no retained reader reference.';
+        if (recoverable) {
+          requiredTools.add('read_tool_result');
+          recovery = `Read retained text with read_tool_result(${JSON.stringify({ toolCallId: retained.id, offset, maxCharacters: 6000 })}).`;
+        }
         return {
           ...part,
-          text: `${part.text.slice(0, 4096)}\n[Tool result shortened in model context. Use search_session_history(query) to find retained ${message.toolName} text and its record id/offset, then read_tool_result({toolCallId: id, offset}) for bounded pages. Do not repeat the original tool solely to recover omitted text.]\n${part.text.slice(-1024)}`,
+          text: `${part.text.slice(0, 4096)}\n[Tool result shortened in model context. ${recovery} Do not repeat the original tool solely to recover omitted text.]\n${part.text.slice(-1024)}`,
         };
       });
       if (changed) {
@@ -71,7 +98,7 @@ export function pruneContext(
     }
     return message;
   });
-  return { messages: projected, prunedMessages };
+  return { messages: projected, prunedMessages, requiredTools: [...requiredTools] };
 }
 
 /** Select an old prefix at a complete assistant/tool group, including within a single user task. */

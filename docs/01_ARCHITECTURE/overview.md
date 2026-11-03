@@ -52,7 +52,7 @@
 
 ProfileStore保留JSONL、SQLite、锁和失败冻结的单一编排，模型配置仓储通过它的事务入口写入。模型Provider认证、应用登录与插件OAuth继续由各自领域拥有；共享网络访问不归入某一个供应商或MCP传输。
 
-Agent执行内部以拥有者拆分：主子Run共用`runs/prepare`准备输入接受事实，`runs/execution`管理生命周期，SDK装配、输入投递和消息事件记录各自独立；`tools/runtime`通过工具族派发，共用策略/审批、MCP派发和工具结果记录。具体文件职责由[agent-runtime](../../packages/agent-runtime/README.md#源码职责)维护，消息和持久格式由既有协议拥有。
+Agent执行内部以拥有者拆分：主子Run共用`runs/prepare`准备输入接受事实，`runs/execution`管理生命周期，SDK装配、输入投递和消息事件记录各自独立。`tools/catalog`统一原生定义引用与策略，`tools/selection`选择初始集合和获准候选，`RunCapabilities`拥有请求前激活，`RunSkills`管理正文和资源租约；`tools/runtime`只编排逐次校验、审批与执行，工具族消费同一目录派发。具体文件职责由[agent-runtime](../../packages/agent-runtime/README.md#源码职责)维护，消息和持久格式由既有协议拥有。
 
 集成错误由实际领域拥有：McpError位于mcp，NetworkError位于network，插件自身错误与OAuth阶段错误位于plugins，Skill资源错误位于skills。宿主在明确调用处完成安全诊断映射；共用HTTP授权启动ticket由http拥有，插件和独立MCP路由分别注册，避免用跨域错误继承或路由混放连接模块。
 
@@ -109,6 +109,6 @@ M5的AgentRuntime拥有同Session日志内的子任务树，RunExecution继续�
 
 MCP目录由宿主按当前身份、配置、凭据epoch和信任指纹保存至SQLite；启动恢复有效快照并后台预热远程服务，输入接受等待有界单飞准备。各服务失败保留独立诊断，不阻塞其他目录；GET不进行发现，关闭和撤销取消所属工作并阻止迟到发布。
 
-`RunCapabilities`冻结候选与当前定义，搜索自动暂存命中，`run.tools_loaded`持久化后推进模型请求。启用Skill摘要、显式提及及目录发现状态纳入模型可见且可回放的上下文，具体限额见[运行时能力协议](../03_API/capability-runtime.md)。daemon拥有懒加载的本地CPU向量Worker，缓存固定版本模型至profile的models目录；Worker不继承供应商凭据环境，关闭时终止推理与下载。语义不可用时保留BM25搜索。插件只读API通过web_fetch访问允许网关，写入通过明确开启的MCP App和原有工具审批；没有固定REST操作或逐Run服务grant工具。高级手动`ConnectionService`只管理独立账户与MCP凭据，不再参与插件默认授权。Office工具由激活Skill或动态加载提供。
+`RunCapabilities`管理真实session/workspace/MCP来源的候选与当前集合，搜索自动暂存命中，`run.tools_loaded`持久化后推进下一请求，结束释放且新Run重新选择。Skill候选元数据、显式正文及目录诊断进入可回放接受事实，模型按ID加载，由宿主解析预期内容与插件授权代次；正文继承独立于可执行工具集合。默认/按需策略及限额见[运行时能力协议](../03_API/capability-runtime.md)。daemon拥有懒加载的本地CPU向量Worker，缓存固定版本模型至profile的models目录，不继承供应商凭据环境；关闭时终止推理与下载，语义不可用时保留词法检索。插件只读API通过web_fetch访问允许网关，写入通过明确开启的MCP App和原有审批；不另建Skill工具grant。高级手动`ConnectionService`保持独立用途，Office工具由有效Skill依赖或动态发现提供。
 
 生产package包含`integrations/resources/plugins`与`execution/resources/office`；Python/LibreOffice等可选办公依赖按明确配置检测，不在Agent任务中静默安装。资源、Skills及账号授权见[插件体系设计](../09_TECHNICAL/插件体系设计.md)，协议传输、目录与调用见[MCP连接设计](../09_TECHNICAL/MCP连接设计.md)。

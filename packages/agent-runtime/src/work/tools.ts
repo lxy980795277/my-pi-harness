@@ -41,14 +41,6 @@ const readResult = Type.Object(
   },
   { additionalProperties: false },
 );
-const restore = Type.Object(
-  {
-    checkpointId: Type.Optional(Type.String({ minLength: 1, maxLength: 160 })),
-    stepsBack: Type.Optional(Type.Integer({ minimum: 1, maximum: 10 })),
-  },
-  { additionalProperties: false },
-);
-const empty = Type.Object({}, { additionalProperties: false });
 
 /** Session tools manage context and interaction without granting workspace access or skipping approvals. */
 export const SESSION_TOOL_DEFINITIONS = [
@@ -85,20 +77,8 @@ export const SESSION_TOOL_DEFINITIONS = [
   {
     name: 'read_tool_result',
     description:
-      'Read a bounded page of retained text from a finished tool in this selected branch or agent task, including failed results. Use a tool match id and offset from search_session_history, then follow the returned next-page call. This does not repeat the original tool or recover text omitted by its output limit.',
+      'Read a bounded page of retained text from a finished tool in this selected branch or agent task, including failed results. Use the retained record id from a context reference or search_session_history, then follow the returned next-page call. This does not repeat the original tool or recover text omitted by its output limit.',
     parameters: readResult,
-  },
-  {
-    name: 'restore_context_checkpoint',
-    description:
-      'Select an earlier semantic context checkpoint by ID or by 1–10 parent steps. Old model-context tail is abandoned; persisted messages and external side effects remain unchanged.',
-    parameters: restore,
-  },
-  {
-    name: 'reset_working_state',
-    description:
-      'Clear only the current plan and task list. Preserve messages, context summary, rule snapshots, attachments and tool results.',
-    parameters: empty,
   },
 ] satisfies readonly { name: string; description: string; parameters: TSchema }[];
 
@@ -113,11 +93,6 @@ export async function executeSessionTool(
   signal: AbortSignal,
 ): Promise<string> {
   signal.throwIfAborted();
-  if (
-    work.taskId !== undefined &&
-    (name === 'restore_context_checkpoint' || name === 'reset_working_state')
-  )
-    throw new RuntimeError('TASK_SCOPE_CONFLICT', '子任务不能重置或恢复主会话工作状态。');
   if (name === 'ask_user' && Value.Check(ask, args))
     return await work.ask(sessionId, runId, toolCallId, args.questions, signal);
   if (name === 'update_plan' && Value.Check(plan, args))
@@ -168,34 +143,5 @@ export async function executeSessionTool(
       args.offset ?? 0,
       args.maxCharacters ?? 6000,
     );
-  if (name === 'restore_context_checkpoint' && Value.Check(restore, args)) {
-    if (args.checkpointId !== undefined && args.stepsBack !== undefined)
-      throw new RuntimeError('COMPACTION_SELECTION_INVALID', '请选择检查点ID或回退步数之一。');
-    let id = args.checkpointId;
-    if (id === undefined) {
-      let checkpoint = state.compaction;
-      const history = work.snapshot(sessionId).compactions;
-      const stepsBack = args.stepsBack ?? 1;
-      for (let step = 0; step < stepsBack; step += 1) {
-        if (checkpoint === null) break;
-        const parentId = checkpoint.parentId;
-        const parent = history.find((entry) => entry.id === parentId);
-        if (parent === undefined) {
-          checkpoint = null;
-          break;
-        }
-        checkpoint = parent;
-      }
-      id = checkpoint?.id;
-    }
-    if (id === undefined)
-      throw new RuntimeError('COMPACTION_NOT_FOUND', '没有可恢复的较早上下文检查点。');
-    work.restoreCompaction(sessionId, id, runId);
-    return '上下文检查点已选择；此前上下文尾部不再进入模型请求。文件和外部副作用未回滚。';
-  }
-  if (name === 'reset_working_state' && Value.Check(empty, args)) {
-    work.resetWorkingState(sessionId, runId);
-    return '计划和任务已清空，消息与上下文摘要保留。';
-  }
   throw new RuntimeError('TOOL_ARGUMENTS_INVALID', '会话工具参数无效。');
 }

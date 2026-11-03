@@ -22,7 +22,7 @@ function pageText(page: string): string {
 }
 
 describe('retained tool text reading', () => {
-  it('recovers six omitted middle facts through real HTTP, history search and a bounded Pi tool read without refetching', async () => {
+  it('recovers six omitted middle facts through real HTTP and direct retained-result pages without refetching', async () => {
     const facts = Array.from(
       { length: 6 },
       (_, index) => `Middle fact ${index + 1}: observed-value-${index + 1}`,
@@ -44,40 +44,49 @@ describe('retained tool text reading', () => {
     try {
       f = await fixture(false, { skillGateway: { origin, token } });
       await f.runtime.updateSession(f.session.id, { approvalMode: 'full-access' });
+      f.faux.models[0].contextWindow = 32_768;
+      f.faux.models[0].maxTokens = 512;
       const contexts: TranscriptContext[] = [];
-      f.faux.setResponses([
-        (context) => {
-          contexts.push(context);
+      const observed = new Set<string>();
+      const runtime = f.runtime;
+      const sessionId = f.session.id;
+      let requests = 0;
+      let pages = 0;
+      const response = (context: TranscriptContext) => {
+        contexts.push(context);
+        requests += 1;
+        if (requests === 1)
           return call('web_fetch', { url: `${origin}/api/skill-gateway/test/document` });
-        },
-        (context) => {
-          contexts.push(context);
+        let next: string | undefined;
+        if (requests === 2) {
           const projected = resultText(context, 'web_fetch');
           expect(projected).not.toContain(facts[0]);
-          expect(projected).toContain('search_session_history');
+          expect(projected).not.toContain('search_session_history');
           expect(projected).toContain('read_tool_result');
-          return call('search_session_history', { query: 'MIDDLE-EVIDENCE', limit: 2 });
-        },
-        (context) => {
-          contexts.push(context);
-          const search = JSON.parse(resultText(context, 'search_session_history')) as {
-            matches: { id: string; kind: string; offset: number; totalCharacters: number }[];
-          };
-          const match = search.matches.find(({ kind }) => kind === 'tool:web_fetch');
-          if (!match) throw new Error('Missing retained web match');
-          expect(match.offset).toBeGreaterThan(4096);
-          return call('read_tool_result', { toolCallId: match.id, offset: match.offset });
-        },
-        (context) => {
-          contexts.push(context);
+          next = projected.match(/read_tool_result\((\{[^\n]*?\})\)/)?.[1];
+        } else {
           const page = resultText(context, 'read_tool_result');
-          for (const fact of facts) expect(page).toContain(fact);
-          expect(page).toContain('Next: read_tool_result(');
+          for (const fact of facts) if (page.includes(fact)) observed.add(fact);
           expect(page.length).toBeLessThan(8192);
           expect(page).not.toContain('Tool result shortened');
-          return fauxAssistantMessage(facts.join('\n'));
-        },
-      ]);
+          if (observed.size === facts.length) return fauxAssistantMessage(facts.join('\n'));
+          next = page.match(/Next: read_tool_result\((\{[^\n]*?\})\)/)?.[1];
+        }
+        if (next === undefined) throw new Error('Missing direct retained-text continuation');
+        const args = JSON.parse(next) as {
+          toolCallId: string;
+          offset: number;
+          maxCharacters: number;
+        };
+        const retained = runtime
+          .getSnapshot(sessionId)
+          .tools.find(({ name }) => name === 'web_fetch');
+        expect(args.toolCallId).toBe(retained?.id);
+        expect(args.offset).toBeGreaterThanOrEqual(4096);
+        pages += 1;
+        return call('read_tool_result', args, `retained-page-${pages}`);
+      };
+      f.faux.setResponses(Array.from({ length: 12 }, () => response));
       await f.runtime.send(f.session.id, {
         text: 'Read the six facts in the middle of the supplied public document.',
         mode: 'send',
@@ -87,9 +96,10 @@ describe('retained tool text reading', () => {
       const snapshot = f.runtime.getSnapshot(f.session.id);
       expect(snapshot.tools.map(({ name, status }) => ({ name, status }))).toEqual([
         { name: 'web_fetch', status: 'completed' },
-        { name: 'search_session_history', status: 'completed' },
-        { name: 'read_tool_result', status: 'completed' },
+        ...Array.from({ length: pages }, () => ({ name: 'read_tool_result', status: 'completed' })),
       ]);
+      expect(pages).toBeGreaterThan(1);
+      expect(observed.size).toBe(6);
       expect(snapshot.messages.at(-1)?.text).toBe(facts.join('\n'));
       expect(headers).toEqual([token]);
       expect(JSON.stringify(contexts)).not.toContain(token);
@@ -229,6 +239,7 @@ describe('retained tool text reading', () => {
     try {
       let failures = 0;
       f.faux.setResponses([
+        call('tool_search', { query: 'read_tool_result', limit: 1 }),
         ...invalid.map((args, index) => (context: TranscriptContext) => {
           failures = context.messages.filter(
             (message) => message.role === 'toolResult' && message.isError,
@@ -249,6 +260,15 @@ describe('retained tool text reading', () => {
       });
       await idle(f);
       expect(failures).toBe(invalid.length);
+      const rejected = f.runtime
+        .getSnapshot(f.session.id)
+        .tools.filter(({ name }) => name === 'read_tool_result');
+      expect(rejected).toHaveLength(invalid.length);
+      expect(
+        rejected.every(
+          ({ status, result }) => status === 'failed' && !result?.includes('not found'),
+        ),
+      ).toBe(true);
       expect(read).not.toHaveBeenCalled();
       expect(f.errors).toEqual([]);
     } finally {

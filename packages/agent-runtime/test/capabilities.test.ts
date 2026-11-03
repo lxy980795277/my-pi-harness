@@ -1,14 +1,18 @@
 import { text as streamText } from 'node:stream/consumers';
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { fauxAssistantMessage, type TranscriptContext } from '@earendil-works/pi-ai';
-import type { FrozenSkill } from '@my-pi-harness/protocol';
+import {
+  fauxAssistantMessage,
+  getCurrentTools,
+  type TranscriptContext,
+} from '@earendil-works/pi-ai';
+import type { FrozenSkill, SkillCandidate, SkillView } from '@my-pi-harness/protocol';
 import type { SessionBatch } from '@my-pi-harness/storage';
 import { Type } from 'typebox';
 import { describe, expect, it, vi } from 'vitest';
 import type { SkillsPort, ToolDiscoveryPort } from '../src/capabilities/ports.js';
 import type { ExternalTools, FrozenMcpTool } from '../src/tools/external.js';
-import { call, fixture, gate, idle, observe, summary } from './support/work-fixture.js';
+import { call, fixture, gate, idle, summary } from './support/work-fixture.js';
 import { acceptedTools, loadedTools } from './support/session-audit.js';
 
 function catalog() {
@@ -57,6 +61,28 @@ function catalog() {
   return { tool, external, discovery, invoke };
 }
 
+function skillCandidate(skill: FrozenSkill): SkillCandidate {
+  const { selection, authorization, name, description, scope, source } = skill;
+  return { selection, authorization, name, description, scope, source };
+}
+
+function skillView(skill: FrozenSkill): SkillView {
+  return {
+    id: skill.selection.id,
+    name: skill.name,
+    description: skill.description,
+    contentHash: skill.selection.contentHash,
+    scope: skill.scope,
+    pluginId: skill.authorization.pluginId,
+    workspaceId: null,
+    enabled: true,
+    shadowed: false,
+    managed: true,
+    resourceCount: skill.resources.length,
+    source: skill.source,
+  };
+}
+
 function skills() {
   let enabled = true;
   let leases = 0;
@@ -76,6 +102,11 @@ function skills() {
   };
   const port: SkillsPort = {
     list: () => Promise.resolve([]),
+    freezeCandidates: () => Promise.resolve(enabled ? [skillCandidate(frozen)] : []),
+    loadCandidate: () => {
+      current();
+      return Promise.resolve(frozen);
+    },
     freezeSelections: (_workspace, selected) => {
       current();
       return Promise.resolve(selected.length ? [frozen] : []);
@@ -113,12 +144,164 @@ async function records(f: Awaited<ReturnType<typeof fixture>>) {
 }
 function names(context: TranscriptContext | undefined): string[] {
   if (!context) throw new Error('Missing actual model request');
-  return context.messages.flatMap((message) =>
-    message.role === 'system' ? (message.toolsAdded ?? []).map((tool) => tool.name) : [],
-  );
+  return getCurrentTools(context.messages).map((tool) => tool.name);
 }
 
 describe('progressive Run capabilities through real Pi requests and SQLite/JSONL', () => {
+  it('discovers and executes session history without an MCP service or a workspace', async () => {
+    const f = await fixture(false);
+    let initial: TranscriptContext | undefined;
+    let loaded: TranscriptContext | undefined;
+    try {
+      f.faux.setResponses([
+        (context) => {
+          initial = context;
+          return call('tool_search', { query: 'search_session_history', limit: 1 });
+        },
+        (context) => {
+          loaded = context;
+          return call('search_session_history', { query: 'HISTORY_WITNESS' });
+        },
+        fauxAssistantMessage('Read the original session evidence'),
+      ]);
+      await f.runtime.send(f.session.id, {
+        text: 'HISTORY_WITNESS: locate this original statement',
+        mode: 'send',
+        requestId: 'native-history-discovery',
+      });
+      await idle(f);
+      expect(names(initial)).not.toContain('search_session_history');
+      expect(names(loaded)).toContain('search_session_history');
+      const result = f.runtime
+        .getSnapshot(f.session.id)
+        .tools.find((tool) => tool.name === 'search_session_history');
+      expect(result?.binding).toMatchObject({ kind: 'accepted', source: { kind: 'session' } });
+      expect(result?.result).toContain('HISTORY_WITNESS');
+      expect(f.errors).toEqual([]);
+    } finally {
+      await f.close();
+    }
+  });
+
+  it('reads a newly installed Skill resource after an explicit invocation during a Run that began without Skills', async () => {
+    const s = skills();
+    s.frozen.name = 'late-skill';
+    s.frozen.resources = [
+      { path: 'evidence.txt', hash: 'd'.repeat(64), size: 1, mediaType: 'text/plain' },
+    ];
+    s.port.freezeCandidates = () => Promise.resolve([]);
+    const f = await fixture(false, { skills: s.port });
+    const entered = gate();
+    const finish = gate();
+    let initial: TranscriptContext | undefined;
+    let afterInvocation: TranscriptContext | undefined;
+    try {
+      f.faux.setResponses([
+        async (context) => {
+          initial = context;
+          entered.release();
+          await finish.promise;
+          return fauxAssistantMessage('Initial work');
+        },
+        (context) => {
+          afterInvocation = context;
+          return call('read_skill_resource', {
+            skillId: s.frozen.selection.id,
+            path: 'evidence.txt',
+          });
+        },
+        fauxAssistantMessage('Read the supporting evidence'),
+      ]);
+      await f.runtime.send(f.session.id, {
+        text: 'Begin ordinary work',
+        mode: 'send',
+        requestId: 'before-skill-installation',
+      });
+      await entered.promise;
+      s.port.list = () => Promise.resolve([skillView(s.frozen)]);
+      await f.runtime.send(f.session.id, {
+        text: '$late-skill Read its supporting resource',
+        mode: 'steer',
+        requestId: 'after-skill-installation',
+      });
+      finish.release();
+      await idle(f);
+      expect(names(initial)).not.toContain('load_skill');
+      expect(names(initial)).not.toContain('read_skill_resource');
+      expect(names(afterInvocation)).toContain('read_skill_resource');
+      expect(JSON.stringify(afterInvocation)).toContain('FROZEN_SKILL_BODY');
+      expect(
+        f.runtime
+          .getSnapshot(f.session.id)
+          .tools.find((tool) => tool.name === 'read_skill_resource'),
+      ).toMatchObject({ status: 'completed', result: 'Frozen resource evidence' });
+      expect(s.leases()).toBe(0);
+      expect(f.errors).toEqual([]);
+    } finally {
+      finish.release();
+      await f.close();
+    }
+  });
+
+  it.each(['delete', 'edit'] as const)(
+    'does not activate a pending explicit Skill after the user chooses to %s its queued invocation',
+    async (operation) => {
+      const s = skills();
+      s.frozen.name = 'late-skill';
+      s.port.freezeCandidates = () => Promise.resolve([]);
+      const f = await fixture(false, { skills: s.port });
+      const entered = gate();
+      const finish = gate();
+      let continuation: TranscriptContext | undefined;
+      try {
+        f.faux.setResponses([
+          async () => {
+            entered.release();
+            await finish.promise;
+            return call('tool_search', { query: 'ask_user', limit: 1 });
+          },
+          (context) => {
+            continuation = context;
+            return fauxAssistantMessage('Continued without the removed instructions');
+          },
+        ]);
+        await f.runtime.send(f.session.id, {
+          text: 'Ordinary work',
+          mode: 'send',
+          requestId: `pending-skill-${operation}`,
+        });
+        await entered.promise;
+        s.port.list = () => Promise.resolve([skillView(s.frozen)]);
+        const input = await f.runtime.send(f.session.id, {
+          text: '$late-skill Apply these instructions',
+          mode: 'steer',
+          requestId: `queued-skill-${operation}`,
+        });
+        if (!input.inputId) throw new Error('Missing queued invocation');
+        if (operation === 'delete') await f.runtime.deleteQueue(f.session.id, input.inputId);
+        else
+          await f.runtime.updateQueue(f.session.id, input.inputId, {
+            revision: 1,
+            text: 'Continue ordinary work',
+          });
+        finish.release();
+        await idle(f);
+        expect(continuation).toBeDefined();
+        expect(JSON.stringify(continuation)).not.toContain('FROZEN_SKILL_BODY');
+        for (const record of (await records(f)).filter(
+          ({ event }) => event.type === 'run.tools_loaded',
+        ))
+          expect(record.event.data).toMatchObject({ skills: [] });
+        expect(f.runtime.getSnapshot(f.session.id).runs[0]?.status).toBe('completed');
+        expect(s.leases()).toBe(0);
+        expect(f.errors).toEqual([]);
+      } finally {
+        finish.release();
+        await f.close();
+      }
+    },
+  );
+
   it.each([true, false])(
     'loads only declared local Office candidates alongside dynamic Skill instructions, workspace=%s',
     async (withWorkspace) => {
@@ -137,7 +320,7 @@ describe('progressive Run capabilities through real Pi requests and SQLite/JSONL
           'This file deliberately has an unsupported Office extension.',
         );
         f.faux.setResponses([
-          call('load_skill', s.frozen.selection),
+          call('load_skill', { id: s.frozen.selection.id }),
           (context) => {
             afterLoad = context;
             return withWorkspace
@@ -175,20 +358,7 @@ describe('progressive Run capabilities through real Pi requests and SQLite/JSONL
     'lists enabled Skill summaries before selection and loads their frozen instructions on the next actual request, context=%s',
     async (withContext) => {
       const s = skills();
-      const view = {
-        id: s.frozen.selection.id,
-        name: s.frozen.name,
-        description: s.frozen.description,
-        contentHash: s.frozen.selection.contentHash,
-        scope: s.frozen.scope,
-        pluginId: null,
-        workspaceId: null,
-        enabled: true,
-        shadowed: false,
-        managed: true,
-        resourceCount: 0,
-        source: s.frozen.source,
-      };
+      const view = skillView(s.frozen);
       s.port.list = () =>
         Promise.resolve([
           view,
@@ -201,7 +371,7 @@ describe('progressive Run capabilities through real Pi requests and SQLite/JSONL
         f.faux.setResponses([
           (context) => {
             contexts.push(context);
-            return call('load_skill', s.frozen.selection);
+            return call('load_skill', { id: s.frozen.selection.id });
           },
           (context) => {
             contexts.push(context);
@@ -217,7 +387,7 @@ describe('progressive Run capabilities through real Pi requests and SQLite/JSONL
         const first = JSON.stringify(contexts[0]);
         expect(first).toContain('availableSkills');
         expect(first).toContain(s.frozen.selection.id);
-        expect(first).toContain(s.frozen.selection.contentHash);
+        expect(first).not.toContain(s.frozen.selection.contentHash);
         expect(first).not.toContain('HIDDEN_DISABLED_SKILL');
         expect(first).not.toContain('HIDDEN_SHADOWED_SKILL');
         expect(first).not.toContain('FROZEN_SKILL_BODY');
@@ -345,7 +515,7 @@ describe('progressive Run capabilities through real Pi requests and SQLite/JSONL
       await f.close();
     }
   });
-  it('searches and automatically loads for the next request while keeping prior tool fingerprints stable', async () => {
+  it('loads for the next request, keeps repeat searches stable and rebuilds the next Run without old MCP declarations', async () => {
     const c = catalog();
     const diagnostics = vi.fn<NonNullable<ToolDiscoveryPort['diagnostics']>>(() => []);
     c.discovery.diagnostics = diagnostics;
@@ -354,6 +524,10 @@ describe('progressive Run capabilities through real Pi requests and SQLite/JSONL
     try {
       await f.runtime.updateSession(f.session.id, { approvalMode: 'full-access' });
       f.faux.setResponses([
+        (ctx) => {
+          contexts.push(ctx);
+          return call('tool_search', { query: 'evidence' });
+        },
         (ctx) => {
           contexts.push(ctx);
           return call('tool_search', { query: 'evidence' });
@@ -375,11 +549,12 @@ describe('progressive Run capabilities through real Pi requests and SQLite/JSONL
       await idle(f);
       expect(diagnostics).toHaveBeenCalledWith(null, 'full-access');
       expect(c.invoke).toHaveBeenCalledTimes(1);
-      expect(contexts).toHaveLength(3);
+      expect(contexts).toHaveLength(4);
       expect(names(contexts[0])).not.toContain('mcp_echo');
       expect(names(contexts[1])).toContain('mcp_echo');
       const logged = await records(f);
       const loaded = logged.find(({ event }) => event.type === 'run.tools_loaded');
+      expect(logged.filter(({ event }) => event.type === 'run.tools_loaded')).toHaveLength(1);
       expect(loaded?.event.data).toMatchObject({ revision: 2 });
       const accepted = logged.find(({ event }) => event.type === 'run.accepted');
       if (!accepted?.privateData || !loaded?.privateData)
@@ -394,61 +569,75 @@ describe('progressive Run capabilities through real Pi requests and SQLite/JSONL
         logged
           .filter(({ event }) => event.type === 'context.prepared')
           .map(({ event }) => event.data['capabilityRevision']),
-      ).toEqual([1, 2, 2]);
+      ).toEqual([1, 2, 2, 2]);
       expect(f.runtime.getSnapshot(f.session.id).tools.map((tool) => tool.status)).toEqual([
         'completed',
         'completed',
+        'completed',
       ]);
+      expect(f.errors).toEqual([]);
+      let nextRun: TranscriptContext | undefined;
+      f.faux.setResponses([
+        (context) => {
+          nextRun = context;
+          return fauxAssistantMessage('A new task starts with a fresh tool selection');
+        },
+      ]);
+      await f.runtime.send(f.session.id, {
+        text: 'Begin another task',
+        mode: 'send',
+        requestId: 'fresh-tool-selection',
+      });
+      await idle(f);
+      expect(names(nextRun)).not.toContain('mcp_echo');
+      expect(c.invoke).toHaveBeenCalledOnce();
       expect(f.errors).toEqual([]);
     } finally {
       await f.close();
     }
   });
 
-  it.each(['tool_search', 'load_tools'])(
-    'cannot call a newly staged tool in the assistant that requested %s',
-    async (loadTool) => {
-      const c = catalog();
-      const f = await fixture(false, { externalTools: c.external, discovery: c.discovery });
-      try {
-        await f.runtime.updateSession(f.session.id, { approvalMode: 'full-access' });
-        f.faux.setResponses([
-          fauxAssistantMessage(
-            [
-              {
-                type: 'toolCall',
-                id: 'load',
-                name: loadTool,
-                arguments: loadTool === 'tool_search' ? { query: 'echo' } : { names: ['mcp_echo'] },
-              },
-              {
-                type: 'toolCall',
-                id: 'early',
-                name: 'mcp_echo',
-                arguments: { text: 'not offered yet' },
-              },
-            ],
-            { stopReason: 'toolUse' },
-          ),
-          fauxAssistantMessage('Wait for the new declaration'),
-        ]);
-        await f.runtime.send(f.session.id, {
-          text: 'Stage a tool',
-          mode: 'send',
-          requestId: 'early',
-        });
-        await idle(f);
-        expect(c.invoke).not.toHaveBeenCalled();
-        expect(
-          f.runtime.getSnapshot(f.session.id).tools.find((tool) => tool.name === 'mcp_echo')
-            ?.binding.kind,
-        ).toBe('rejected');
-        expect(f.errors).toEqual([]);
-      } finally {
-        await f.close();
-      }
-    },
-  );
+  it('cannot call a newly staged tool in the assistant that searched for it', async () => {
+    const c = catalog();
+    const f = await fixture(false, { externalTools: c.external, discovery: c.discovery });
+    try {
+      await f.runtime.updateSession(f.session.id, { approvalMode: 'full-access' });
+      f.faux.setResponses([
+        fauxAssistantMessage(
+          [
+            {
+              type: 'toolCall',
+              id: 'load',
+              name: 'tool_search',
+              arguments: { query: 'echo' },
+            },
+            {
+              type: 'toolCall',
+              id: 'early',
+              name: 'mcp_echo',
+              arguments: { text: 'not offered yet' },
+            },
+          ],
+          { stopReason: 'toolUse' },
+        ),
+        fauxAssistantMessage('Wait for the new declaration'),
+      ]);
+      await f.runtime.send(f.session.id, {
+        text: 'Stage a tool',
+        mode: 'send',
+        requestId: 'early',
+      });
+      await idle(f);
+      expect(c.invoke).not.toHaveBeenCalled();
+      expect(
+        f.runtime.getSnapshot(f.session.id).tools.find((tool) => tool.name === 'mcp_echo')?.binding
+          .kind,
+      ).toBe('rejected');
+      expect(f.errors).toEqual([]);
+    } finally {
+      await f.close();
+    }
+  });
 
   it('stops before the next model request if its tool visibility audit cannot be committed', async () => {
     const c = catalog();
@@ -464,7 +653,7 @@ describe('progressive Run capabilities through real Pi requests and SQLite/JSONL
       f.faux.setResponses([
         () => {
           requests += 1;
-          return call('load_tools', { names: ['mcp_echo'] });
+          return call('tool_search', { query: 'mcp_echo' });
         },
         () => {
           requests += 1;
@@ -570,23 +759,25 @@ describe('progressive Run capabilities through real Pi requests and SQLite/JSONL
     }
   });
 
-  it('stops a revoked dynamic Skill load without committing visibility or freezing the Session', async () => {
+  it('rejects a revoked dynamic Skill before staging and lets the Session continue without its instructions', async () => {
     const s = skills();
-    s.port.freezeSelections = () => {
+    s.port.loadCandidate = () => {
       s.disable();
-      return Promise.resolve([s.frozen]);
+      return Promise.resolve(s.frozen);
     };
     const f = await fixture(false, { skills: s.port });
     let requests = 0;
+    let next: TranscriptContext | undefined;
     try {
       f.faux.setResponses([
         () => {
           requests += 1;
-          return call('load_skill', s.frozen.selection);
+          return call('load_skill', { id: s.frozen.selection.id });
         },
-        () => {
+        (context) => {
           requests += 1;
-          return fauxAssistantMessage('Must not see a revoked Skill');
+          next = context;
+          return fauxAssistantMessage('The unavailable instructions were not loaded');
         },
       ]);
       await f.runtime.send(f.session.id, {
@@ -595,10 +786,14 @@ describe('progressive Run capabilities through real Pi requests and SQLite/JSONL
         requestId: 'dynamic-revoked',
       });
       await idle(f);
-      expect(requests).toBe(1);
+      expect(requests).toBe(2);
+      expect(next).toBeDefined();
+      expect(JSON.stringify(next)).not.toContain('FROZEN_SKILL_BODY');
       expect(s.leases()).toBe(0);
       expect((await records(f)).some(({ event }) => event.type === 'run.tools_loaded')).toBe(false);
-      expect(f.runtime.getSnapshot(f.session.id).runs[0]?.status).toBe('failed');
+      expect(f.runtime.getSnapshot(f.session.id).tools[0]?.status).toBe('failed');
+      expect(f.runtime.getSnapshot(f.session.id).runs[0]?.status).toBe('completed');
+      expect(f.errors).toEqual([]);
       f.faux.setResponses([fauxAssistantMessage('Session still works')]);
       await f.runtime.send(f.session.id, {
         text: 'Continue without Skill',
@@ -615,6 +810,9 @@ describe('progressive Run capabilities through real Pi requests and SQLite/JSONL
 
   it('keeps frozen Skill instructions in every real model request after automatic compaction', async () => {
     const s = skills();
+    s.frozen.resources = [
+      { path: 'evidence.txt', hash: 'd'.repeat(64), size: 1, mediaType: 'text/plain' },
+    ];
     s.port.loadResource = () =>
       Promise.resolve([
         {
@@ -662,12 +860,18 @@ describe('progressive Run capabilities through real Pi requests and SQLite/JSONL
       expect(compactions).toBeGreaterThan(0);
       expect(f.work.snapshot(f.session.id).state.compaction).not.toBeNull();
       let continuation: TranscriptContext | undefined;
-      f.faux.setResponses([
-        (context) => {
+      f.faux.setResponses(
+        Array.from({ length: 8 }, () => (context: TranscriptContext) => {
+          if (
+            JSON.stringify(context.messages[0]).includes(
+              'Produce a JSON object with exactly objective',
+            )
+          )
+            return fauxAssistantMessage(summary('Continue the Skill resource task'));
           continuation = context;
           return fauxAssistantMessage('Continued the compacted task');
-        },
-      ]);
+        }),
+      );
       await f.runtime.send(f.session.id, {
         text: 'Continue after compaction',
         mode: 'send',
@@ -682,53 +886,47 @@ describe('progressive Run capabilities through real Pi requests and SQLite/JSONL
     }
   }, 15000);
 
-  it.each(['allow', 'deny'] as const)(
-    'requires explicit Skill tool grant approval even in full access: %s',
-    async (decision) => {
-      const s = skills();
-      const c = catalog();
-      const f = await fixture(false, {
-        skills: s.port,
-        discovery: c.discovery,
-        externalTools: c.external,
+  it('uses discovered MCP tools under the normal full-access policy without a separate Skill grant', async () => {
+    const s = skills();
+    const c = catalog();
+    const f = await fixture(false, {
+      skills: s.port,
+      discovery: c.discovery,
+      externalTools: c.external,
+    });
+    let first: TranscriptContext | undefined;
+    try {
+      await f.runtime.updateSession(f.session.id, { approvalMode: 'full-access' });
+      f.faux.setResponses([
+        (context) => {
+          first = context;
+          return call('tool_search', { query: 'mcp_echo' });
+        },
+        call('mcp_echo', { text: 'Used the configured execution policy' }),
+        fauxAssistantMessage('Observed the result'),
+      ]);
+      await f.runtime.send(f.session.id, {
+        text: 'Use the service with this Skill',
+        mode: 'send',
+        requestId: 'skill-normal-policy',
+        skills: [s.frozen.selection],
       });
-      let next: TranscriptContext | undefined;
-      try {
-        await f.runtime.updateSession(f.session.id, { approvalMode: 'full-access' });
-        f.faux.setResponses([
-          call('request_skill_tools', { skillId: s.frozen.selection.id, names: ['mcp_echo'] }),
-          (ctx) => {
-            next = ctx;
-            return fauxAssistantMessage('Grant observed');
-          },
-        ]);
-        await f.runtime.send(f.session.id, {
-          text: 'Request tools',
-          mode: 'send',
-          requestId: decision,
-          skills: [s.frozen.selection],
-        });
-        await observe(
-          f.runtime,
-          f.session.id,
-          (snapshot) => snapshot.tools[0]?.status === 'awaiting_approval',
-        );
-        const tool = f.runtime.getSnapshot(f.session.id).tools[0];
-        if (!tool || !f.tools) throw new Error('Missing approval');
-        f.tools.decide(f.session.id, tool.id, { decision });
-        await idle(f);
-        expect(names(next).includes('mcp_echo')).toBe(decision === 'allow');
-        const grants = (await records(f)).filter(
-          ({ event }) => event.type === 'run.skill_tools_granted',
-        );
-        expect(grants).toHaveLength(decision === 'allow' ? 1 : 0);
-        expect(c.invoke).not.toHaveBeenCalled();
-        expect(f.errors).toEqual([]);
-      } finally {
-        await f.close();
-      }
-    },
-  );
+      await idle(f);
+      expect(names(first)).not.toContain('request_skill_tools');
+      expect(names(first)).not.toContain('revoke_skill_tools');
+      expect(c.invoke).toHaveBeenCalledOnce();
+      expect(f.runtime.getSnapshot(f.session.id).tools.map((tool) => tool.status)).toEqual([
+        'completed',
+        'completed',
+      ]);
+      expect(
+        (await records(f)).some(({ event }) => event.type.startsWith('run.skill_tools_')),
+      ).toBe(false);
+      expect(f.errors).toEqual([]);
+    } finally {
+      await f.close();
+    }
+  });
 
   it('retains queued input when Skill authorization is revoked before the next request', async () => {
     const s = skills();

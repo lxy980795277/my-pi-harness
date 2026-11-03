@@ -50,7 +50,6 @@ export class RunExecution {
         this.failure ??= error;
       },
       fail: (error) => this.fail(error),
-      cancel: (reason) => this.cancel(reason),
       outcomeUnknown: (message) => {
         this.unknownOutcome = true;
         this.failure ??= new RuntimeError('TOOL_OUTCOME_UNKNOWN', message);

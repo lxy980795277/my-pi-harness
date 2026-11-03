@@ -33,7 +33,13 @@ interface RunPreparationInput {
 }
 type AcceptanceMetadata = Pick<
   Parameters<typeof runAcceptanceEvent>[0],
-  'toolset' | 'external' | 'candidates' | 'diagnostics' | 'workspaceCandidates' | 'skills'
+  | 'toolset'
+  | 'external'
+  | 'candidates'
+  | 'diagnostics'
+  | 'nativeCandidates'
+  | 'skillCandidates'
+  | 'skills'
 >;
 interface PreparedRun {
   history: Message[];

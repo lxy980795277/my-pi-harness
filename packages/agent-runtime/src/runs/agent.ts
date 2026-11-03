@@ -28,6 +28,7 @@ export function assertQueuedAuthority(options: RunExecutionOptions): void {
 export function createRunAgent(options: RunExecutionOptions, host: RunAgentHost): Agent {
   let tools: ReturnType<ToolRuntime['createTools']> = [];
   let toolContext: ToolRunContext | undefined;
+  let requestMessages: Message[] | undefined;
   let turns = 0;
   if (options.tools) {
     toolContext = {
@@ -51,7 +52,6 @@ export function createRunAgent(options: RunExecutionOptions, host: RunAgentHost)
       },
       commit: (events) => host.commit(events),
       persistenceFailure: (error): never => host.failPersistence(error),
-      stopAfterTool: (reason) => host.cancel(reason),
       outcomeUnknown: (message) => host.outcomeUnknown(message),
       ...(options.capabilities ? { controls: options.capabilities } : {}),
       ...(options.agents
@@ -94,91 +94,99 @@ export function createRunAgent(options: RunExecutionOptions, host: RunAgentHost)
     steeringMode: 'one-at-a-time',
     followUpMode: 'one-at-a-time',
     toolExecution: 'sequential',
-    prepareRequest: ({ context }) => {
+    prepareRequest: async ({ context }, signal) => {
       host.assertKnownOutcome();
       let advanced = false;
-      try {
-        advanced = options.capabilities?.advance() ?? false;
-      } catch (error) {
-        if (error instanceof RuntimeError && error.code === 'CAPABILITY_PERSISTENCE_FAILED')
-          host.failPersistence(error);
-        host.fail(error);
-        throw error;
+      const resolveTools = (requirements: readonly string[]) => {
+        try {
+          options.capabilities?.ensure(requirements);
+          if (options.capabilities?.advance()) {
+            advanced = true;
+            if (!options.tools || !toolContext)
+              throw new RuntimeError('TOOL_NOT_AVAILABLE', '工具运行时不可用。');
+            tools = options.tools.createTools(toolContext, currentToolset(options));
+            agent.state.tools = tools;
+          }
+        } catch (error) {
+          if (error instanceof RuntimeError && error.code === 'CAPABILITY_PERSISTENCE_FAILED')
+            host.failPersistence(error);
+          host.fail(error);
+          throw error;
+        }
+        return {
+          toolDefinitions: currentToolset(options).definitions,
+          capabilityRevision: options.capabilities?.revision ?? 1,
+          skills: options.capabilities?.skills() ?? [],
+        };
+      };
+      const work = options.work;
+      if (work) {
+        const resolved = options.agents
+          ? {
+              ...options.resolved,
+              model: {
+                ...options.resolved.model,
+                maxTokens: options.agents.outputTokens(options.resolved.model.maxTokens),
+              },
+              streamFn: options.agents.stream,
+            }
+          : options.resolved;
+        try {
+          requestMessages = await work.context.project({
+            session: options.session,
+            run: options.run,
+            resolved,
+            messages: context.messages,
+            basePrompt: options.basePrompt,
+            currentTask:
+              typeof options.user.content === 'string'
+                ? options.user.content
+                : options.user.content
+                    .filter((part) => part.type === 'text')
+                    .slice(0, 1)
+                    .map((part) => part.text)
+                    .join(''),
+            toolDefinitions: currentToolset(options).definitions,
+            capabilityRevision: options.capabilities?.revision ?? 1,
+            skills: options.capabilities?.skills() ?? [],
+            canUseTool: (name) =>
+              options.capabilities?.canProvide(name) ??
+              currentToolset(options).definitions.some((definition) => definition.name === name),
+            resolveTools,
+            signal: signal ? AbortSignal.any([signal, host.signal]) : host.signal,
+          });
+        } catch (error) {
+          host.rememberFailure(error);
+          throw error;
+        }
+        return { context: { ...context, tools } };
       }
+      resolveTools([]);
       if (!advanced) return undefined;
-      if (!options.tools || !toolContext)
-        throw new RuntimeError('TOOL_NOT_AVAILABLE', '工具运行时不可用。');
-      tools = options.tools.createTools(toolContext, currentToolset(options));
       return {
         context: {
           ...context,
           tools,
-          ...(!options.work
-            ? {
-                messages: [
-                  {
-                    role: 'system' as const,
-                    content: [
-                      options.basePrompt,
-                      activeSkillContext(options.capabilities?.skills() ?? []),
-                    ]
-                      .filter(Boolean)
-                      .join('\n\n'),
-                    toolsAdded: [...currentToolset(options).definitions],
-                    timestamp: Date.now(),
-                  },
-                  ...context.messages.filter((message) => message.role !== 'system'),
-                ],
-              }
-            : {}),
+          messages: [
+            {
+              role: 'system' as const,
+              content: [
+                options.basePrompt,
+                activeSkillContext(options.capabilities?.skills() ?? []),
+              ]
+                .filter(Boolean)
+                .join('\n\n'),
+              toolsAdded: [...currentToolset(options).definitions],
+              timestamp: Date.now(),
+            },
+            ...context.messages.filter((message) => message.role !== 'system'),
+          ],
         },
       };
     },
+    // Pi retains the original transcript; only the provider input uses the prepared projection.
     ...(options.work
-      ? {
-          transformContext: async (
-            messages: Message[],
-            signal?: AbortSignal,
-          ): Promise<Message[]> => {
-            host.assertKnownOutcome();
-            const work = options.work;
-            if (!work) return messages;
-            const resolved = options.agents
-              ? {
-                  ...options.resolved,
-                  model: {
-                    ...options.resolved.model,
-                    maxTokens: options.agents.outputTokens(options.resolved.model.maxTokens),
-                  },
-                  streamFn: options.agents.stream,
-                }
-              : options.resolved;
-            try {
-              return await work.context.project({
-                session: options.session,
-                run: options.run,
-                resolved,
-                messages,
-                basePrompt: options.basePrompt,
-                currentTask:
-                  typeof options.user.content === 'string'
-                    ? options.user.content
-                    : options.user.content
-                        .filter((part) => part.type === 'text')
-                        .slice(0, 1)
-                        .map((part) => part.text)
-                        .join(''),
-                toolDefinitions: currentToolset(options).definitions,
-                capabilityRevision: options.capabilities?.revision ?? 1,
-                skills: options.capabilities?.skills() ?? [],
-                signal: signal ? AbortSignal.any([signal, host.signal]) : host.signal,
-              });
-            } catch (error) {
-              host.rememberFailure(error);
-              throw error;
-            }
-          },
-        }
+      ? { transformContext: (messages: Message[]) => Promise.resolve(requestMessages ?? messages) }
       : {}),
     finishTurn: ({ message }) => {
       if (host.isOutcomeUnknown()) return { action: 'end' };

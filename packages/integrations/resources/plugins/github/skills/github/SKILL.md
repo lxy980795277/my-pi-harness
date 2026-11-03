@@ -6,7 +6,7 @@ allowed-tools: 'web_fetch'
 
 识别仓库链接或 owner/repo、目标 Issue/PR 和实际连接账户。需要本地源码时确认工作区与远端对应，不能把相同目录名当作仓库身份。
 
-用 skill_search 查找任务技能：审查意见用 github-reviews，CI 失败用 github-actions，提交或发布用 github-publish；以返回的真实 id/contentHash 调用 load_skill，下一轮再使用新指令。普通查询继续本技能。
+从已提供的Skill目录中选择任务技能：审查意见用github-reviews，CI失败用github-actions，提交或发布用github-publish；使用目录中的真实ID调用load_skill({id})，下一轮再使用新指令。普通查询继续本技能。
 
 通过 read_skill_resource 读取 references/access.md，按其中的API路径读取GitHub数据。写入及网关范围外的能力通过tool_search查询已启用的GitHub MCP，不能编造工具名称。
 

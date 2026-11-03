@@ -104,34 +104,45 @@ export async function startM3Model(): Promise<TestModelServer> {
           });
           send({}, 'stop');
         } else if (text.includes('[plan:review]') && planRequests < 4) {
-          const stage = planRequests++;
-          if (stage < 2) {
-            let content = '先读取资料，再整理结果。';
-            let title = '第一份计划';
-            if (stage === 1) {
-              content = '先核对来源，再整理结果，并记录依据。';
-              title = '修订后的计划';
-            }
-            callTool('update_plan', {
-              title,
-              content,
-              steps: [{ id: 'organize', title: '整理资料', status: 'pending' }],
-            });
-          } else if (stage === 2) {
-            callTool('update_todos', {
-              todos: [
-                {
-                  id: 'summary-task',
-                  title: '整理资料',
-                  status: 'completed',
-                  planStepId: 'organize',
-                  evidenceToolCallIds: [],
-                  completionNote: '已根据本次对话完成纯文本资料整理。',
-                },
-              ],
-            });
+          let operation = 'update_plan';
+          if (planRequests === 2) operation = 'update_todos';
+          if (planRequests === 3) operation = 'update_plan_steps';
+          const declared = input['tools'].some(
+            (tool: unknown) =>
+              record(tool) && record(tool['function']) && tool['function']['name'] === operation,
+          );
+          if (!declared) {
+            callTool('tool_search', { query: operation, limit: 1 });
           } else {
-            callTool('update_plan_steps', { steps: [{ id: 'organize', status: 'completed' }] });
+            const stage = planRequests++;
+            if (stage < 2) {
+              let content = '先读取资料，再整理结果。';
+              let title = '第一份计划';
+              if (stage === 1) {
+                content = '先核对来源，再整理结果，并记录依据。';
+                title = '修订后的计划';
+              }
+              callTool('update_plan', {
+                title,
+                content,
+                steps: [{ id: 'organize', title: '整理资料', status: 'pending' }],
+              });
+            } else if (stage === 2) {
+              callTool('update_todos', {
+                todos: [
+                  {
+                    id: 'summary-task',
+                    title: '整理资料',
+                    status: 'completed',
+                    planStepId: 'organize',
+                    evidenceToolCallIds: [],
+                    completionNote: '已根据本次对话完成纯文本资料整理。',
+                  },
+                ],
+              });
+            } else {
+              callTool('update_plan_steps', { steps: [{ id: 'organize', status: 'completed' }] });
+            }
           }
         } else if (text.includes('[ask:') && toolResults.length === 0) {
           send({

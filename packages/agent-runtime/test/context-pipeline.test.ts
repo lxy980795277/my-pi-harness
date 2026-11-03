@@ -277,8 +277,9 @@ describe('model-visible M3 context lifecycle', () => {
       f.faux.setResponses([
         (context) => {
           contexts.push(context);
-          return call('search_session_history', { query: 'Record 1', limit: 2 });
+          return call('tool_search', { query: 'search_session_history', limit: 1 });
         },
+        call('search_session_history', { query: 'Record 1', limit: 2 }),
         fauxAssistantMessage('Found the original'),
       ]);
       await f.runtime.send(f.session.id, {

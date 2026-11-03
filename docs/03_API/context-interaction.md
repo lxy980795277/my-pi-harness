@@ -53,7 +53,7 @@ Plan有稳定id、runId、title/content、结构化steps、status、review、fee
 
 Todo有id/title/status、planStepId、evidenceToolCallIds和completionNote。状态为pending/in_progress/completed/blocked/cancelled；引用步骤必须存在，新计划遗漏现有Todo引用的步骤时，在保存和创建审核等待前返回TODO_PLAN_STEP_INVALID，原工作状态与revision不变，需先更新或清理任务关联。工具证据必须是实际成功的相关工具记录。完成也可填写明确文本结论，人工确认通过completionNote记录，纯分析任务不要求虚构工具。
 
-会话工具包括ask_user、update_plan、update_plan_steps、update_todos、search_session_history、restore_context_checkpoint和reset_working_state；均不授予工作区权限。历史搜索仅限当前会话、有限匹配和有界片段，不实现M6跨会话索引。
+会话模型工具包括ask_user、update_plan、update_plan_steps、update_todos、search_session_history和read_tool_result，均不授予工作区权限。非必备入口按需声明，当前工作状态或可恢复裁剪结果所需入口由宿主直接提供，规则见[运行时能力](capability-runtime.md)。摘要选择和工作状态重置由上述用户命令/API拥有，不提供对应模型工具。历史搜索仅限当前会话、有限匹配和有界片段，不实现M6跨会话索引。
 
 ## 每请求上下文与摘要
 

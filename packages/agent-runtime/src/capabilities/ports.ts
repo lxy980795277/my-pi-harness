@@ -1,6 +1,7 @@
 import type {
   ApprovalMode,
   FrozenSkill,
+  SkillCandidate,
   SkillSelection,
   SkillView,
   ToolDiscoveryDiagnostic,
@@ -25,6 +26,15 @@ export interface ToolDiscoveryPort {
 /** Skill bodies are frozen input data; resource and installation ownership remain in the host. */
 export interface SkillsPort {
   list(workspaceId: string | null, signal: AbortSignal): Promise<SkillView[]>;
+  freezeCandidates(
+    workspaceId: string | null,
+    signal: AbortSignal,
+  ): Promise<readonly SkillCandidate[]>;
+  loadCandidate(
+    workspaceId: string | null,
+    candidate: SkillCandidate,
+    signal: AbortSignal,
+  ): Promise<FrozenSkill>;
   freezeSelections(
     workspaceId: string | null,
     selections: readonly SkillSelection[],

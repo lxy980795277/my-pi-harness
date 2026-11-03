@@ -1,20 +1,14 @@
-import {
-  OFFICE_TOOL_DEFINITIONS,
-  TOOL_DEFINITIONS,
-  executeTool,
-  executeWebFetch,
-} from '@my-pi-harness/execution';
+import { executeTool, executeWebFetch } from '@my-pi-harness/execution';
 import type { StoredToolResult, ToolCallRecord } from '@my-pi-harness/protocol';
-import { AGENT_TOOL_DEFINITIONS } from '../agents/definitions.js';
-import { DISCOVERY_TOOL_DEFINITIONS, SKILL_TOOL_DEFINITIONS } from '../capabilities/run.js';
 import { RuntimeError } from '../errors.js';
-import { SESSION_TOOL_DEFINITIONS, executeSessionTool } from '../work/tools.js';
+import { executeSessionTool } from '../work/tools.js';
+import { nativeTool, type NativeToolFamily } from './catalog.js';
 import { dispatchMcpTool } from './mcp-dispatch.js';
 import { toolResultText, type ToolCallLedger } from './ledger.js';
 import type { RunToolRecord } from './toolset.js';
 import type { ToolExecutionResult, ToolRunContext, ToolRuntimeOptions } from './types.js';
 
-export type ToolFamily = 'workspace' | 'web' | 'work' | 'capability' | 'agent' | 'mcp';
+export type ToolFamily = NativeToolFamily | 'mcp';
 
 export interface FamilyOutcome {
   status: Extract<ToolCallRecord['status'], 'completed' | 'failed' | 'cancelled' | 'unknown'>;
@@ -23,32 +17,13 @@ export interface FamilyOutcome {
   recordedText?: string;
   summary?: string;
   diff?: string;
-  stopAfterTool?: string;
 }
-
-const workspace = new Set(
-  [...TOOL_DEFINITIONS.filter(({ name }) => name !== 'web_fetch'), ...OFFICE_TOOL_DEFINITIONS].map(
-    ({ name }) => name,
-  ),
-);
-const sessions = new Map<string, ToolFamily>([
-  ['web_fetch', 'web'],
-  ...SESSION_TOOL_DEFINITIONS.map(({ name }): [string, ToolFamily] => [name, 'work']),
-  ...[...DISCOVERY_TOOL_DEFINITIONS, ...SKILL_TOOL_DEFINITIONS].map(
-    ({ name }): [string, ToolFamily] => [name, 'capability'],
-  ),
-  ...AGENT_TOOL_DEFINITIONS.map(({ name }): [string, ToolFamily] => [name, 'agent']),
-]);
 
 /** Only declarations owned by a family can be exposed under that family's accepted source. */
 export function toolFamily(selected: RunToolRecord): ToolFamily {
   if (selected.source.kind === 'mcp') return 'mcp';
-  if (selected.source.kind === 'workspace') {
-    if (workspace.has(selected.definition.name)) return 'workspace';
-  } else {
-    const family = sessions.get(selected.definition.name);
-    if (family) return family;
-  }
+  const descriptor = nativeTool(selected.definition.name);
+  if (descriptor?.source.kind === selected.source.kind) return descriptor.family;
   throw new RuntimeError(
     'TOOL_NOT_AVAILABLE',
     `工具没有匹配的执行入口：${selected.definition.name}`,
@@ -102,9 +77,6 @@ export async function executeToolFamily(
         status: 'completed',
         origin: 'tool',
         result: { content, details: undefined },
-        ...(tool.name === 'revoke_skill_tools'
-          ? { stopAfterTool: '本次运行的工具授权已撤销。' }
-          : {}),
       };
     }
     case 'mcp':

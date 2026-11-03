@@ -7,6 +7,7 @@ import type { FrozenMcpTool } from '../src/tools/external.js';
 import { agentChanged, agentFixture, agentsIdle, firstTask } from './support/agent-fixture.js';
 import { delegate, hasResult, resultCount, waitForResults } from './support/agent-tools.js';
 import { call } from './support/work-fixture.js';
+import { skillCandidate } from './support/skill-candidate.js';
 
 describe('task read-only capabilities and inherited approval policy', () => {
   it.each(['full-access', 'ask', 'auto'] as const)(
@@ -107,7 +108,7 @@ describe('task read-only capabilities and inherited approval policy', () => {
     },
   );
 
-  it('keeps dynamic Skill grants inside frozen read-only candidates and rechecks each MCP invocation', async () => {
+  it('keeps discovered tools inside the child role and rechecks each MCP invocation without a Skill grant', async () => {
     const read: FrozenMcpTool = {
       selection: {
         serverId: 'service',
@@ -182,6 +183,8 @@ describe('task read-only capabilities and inherited approval policy', () => {
         },
       },
       skills: {
+        freezeCandidates: () => Promise.resolve([skillCandidate(skill)]),
+        loadCandidate: () => Promise.resolve(skill),
         list: () => Promise.resolve([]),
         freezeSelections: () => Promise.resolve([skill]),
         validateBindings: () => Promise.resolve(),
@@ -201,17 +204,12 @@ describe('task read-only capabilities and inherited approval policy', () => {
         );
         for (const name of ['write_file', 'shell', 'office_create', 'mcp_write'])
           expect(visible).not.toContain(name);
-        if (!hasResult(context, 'load_skill')) return call('load_skill', skill.selection, 'skill');
-        if (resultCount(context, 'load_tools') === 0)
-          return call('load_tools', { names: ['mcp_write'] }, 'unavailable');
-        if (!hasResult(context, 'request_skill_tools'))
-          return call(
-            'request_skill_tools',
-            { skillId: skill.selection.id, names: ['write_file'] },
-            'grant',
-          );
-        if (resultCount(context, 'load_tools') === 1)
-          return call('load_tools', { names: ['mcp_read'] }, 'available');
+        if (!hasResult(context, 'load_skill'))
+          return call('load_skill', { id: skill.selection.id }, 'skill');
+        if (resultCount(context, 'tool_search') === 0)
+          return call('tool_search', { query: 'mcp_write', limit: 1 }, 'unavailable');
+        if (resultCount(context, 'tool_search') === 1)
+          return call('tool_search', { query: 'mcp_read', limit: 1 }, 'available');
         const reads = resultCount(context, 'mcp_read');
         if (reads === 0) return call('mcp_read', { mode: 'read' }, 'read');
         if (reads === 1) return call('mcp_read', { mode: 'write' }, 'changed-arguments');
@@ -228,33 +226,12 @@ describe('task read-only capabilities and inherited approval policy', () => {
         mode: 'send',
         requestId: 'dynamic',
       });
-      await agentChanged(
-        f,
-        () => {
-          const task = f.runtime.agents.list(f.session.id).tasks[0];
-          return (
-            task !== undefined &&
-            f.store
-              .getTaskSnapshot(f.session.id, task.id)
-              .tools.some(
-                (tool) =>
-                  tool.name === 'request_skill_tools' && tool.status === 'awaiting_approval',
-              )
-          );
-        },
-        'Missing explicit Skill tool grant',
-      );
+      await agentsIdle(f);
       const task = f.runtime.agents.list(f.session.id).tasks[0];
       if (!task) throw new Error('Missing dynamic task');
-      const grant = f.store
-        .getTaskSnapshot(f.session.id, task.id)
-        .tools.find((tool) => tool.name === 'request_skill_tools');
-      if (!grant) throw new Error('Missing Skill grant request');
-      f.tools.decide(f.session.id, grant.id, { decision: 'allow' });
-      await agentsIdle(f);
       const child = f.store.getTaskSnapshot(f.session.id, task.id);
       expect(child.runs[0]?.status).toBe('completed');
-      expect(child.tools.find((tool) => tool.id === grant.id)).toMatchObject({ status: 'failed' });
+      expect(child.tools.some((tool) => tool.status === 'awaiting_approval')).toBe(false);
       expect(child.tools.filter((tool) => tool.name === 'mcp_read')).toMatchObject([
         { status: 'completed' },
         { status: 'denied', dispatch: { state: 'not_started' } },

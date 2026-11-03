@@ -5,6 +5,7 @@ export type SkillSelection = Static<typeof SkillSelectionSchema>;
 export type SkillView = Static<typeof SkillViewSchema>;
 export type SkillResource = Static<typeof SkillResourceSchema>;
 export type FrozenSkill = Static<typeof FrozenSkillSchema>;
+export type SkillCandidate = Static<typeof SkillCandidateSchema>;
 export type SkillDetail = Static<typeof SkillDetailSchema>;
 export type SkillCreateInput = Static<typeof SkillCreateInputSchema>;
 export type SkillInstallInput = Static<typeof SkillInstallInputSchema>;
@@ -72,6 +73,18 @@ export const FrozenSkillSchema = Type.Object(
   },
   object,
 );
+
+/** Accepted metadata binds an unloaded Skill without retaining its body or resources. */
+export const SkillCandidateSchema = Type.Pick(FrozenSkillSchema, [
+  'selection',
+  'authorization',
+  'name',
+  'description',
+  'scope',
+  'source',
+]);
+
+export const SkillCandidatesSchema = Type.Array(SkillCandidateSchema, { maxItems: 512 });
 
 export const SkillDetailSchema = Type.Object(
   {

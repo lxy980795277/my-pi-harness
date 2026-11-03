@@ -131,6 +131,7 @@ function queueMetadata(requestId: string): Record<string, unknown> {
     mcpBindings: [],
     candidateBindings: [],
     skillBindings: [],
+    skillCandidates: [],
     mentionedSkillBindings: [],
     inheritedSkillBindings: [],
     discoveryDiagnostics: [],

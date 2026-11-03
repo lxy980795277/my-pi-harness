@@ -1,12 +1,13 @@
 import type {
   FrozenSkill,
+  SkillCandidate,
   RunView,
   SessionSummary,
   ToolDiscoveryDiagnostic,
 } from '@my-pi-harness/protocol';
 import type { ResolvedModel } from '../models/gateway.js';
 import type { EventInput } from '../sessions/ports.js';
-import type { RunToolDefinition, RunToolset } from '../tools/toolset.js';
+import type { RunToolRecord, RunToolset } from '../tools/toolset.js';
 import type { FrozenMcpTool } from '../tools/external.js';
 import { snapshotPrivateData } from '../context/codec.js';
 
@@ -20,7 +21,8 @@ interface RunAcceptance {
   external: readonly FrozenMcpTool[];
   candidates: readonly FrozenMcpTool[];
   diagnostics: readonly ToolDiscoveryDiagnostic[];
-  workspaceCandidates: readonly RunToolDefinition[];
+  nativeCandidates: readonly RunToolRecord[];
+  skillCandidates: readonly SkillCandidate[];
   skills: readonly FrozenSkill[];
 }
 
@@ -42,7 +44,8 @@ export function runAcceptanceEvent(input: RunAcceptance): EventInput {
       mcpBindings: input.external,
       mcpCandidates: input.candidates,
       discoveryDiagnostics: input.diagnostics,
-      workspaceCandidates: input.workspaceCandidates,
+      nativeCandidates: input.nativeCandidates,
+      skillCandidates: input.skillCandidates,
       skills: input.skills,
       capabilityRevision: 1,
       toolSources: input.toolset.records.map(({ source, fingerprint, definition }) => ({

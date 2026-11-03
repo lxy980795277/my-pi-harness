@@ -2,12 +2,14 @@ import { Type, type Static } from 'typebox';
 import { Value } from 'typebox/value';
 import {
   FrozenSkillSchema,
+  SkillCandidatesSchema,
   FrozenMcpToolsSchema,
   ToolDiscoveryDiagnosticSchema,
   type FrozenSkill,
   type InputRequest,
   type SessionSummary,
   type SkillSelection,
+  type SkillCandidate,
   type ToolDiscoveryDiagnostic,
 } from '@my-pi-harness/protocol';
 import { externalBindingKey, type ExternalTools, type FrozenMcpTool } from '../tools/external.js';
@@ -21,6 +23,7 @@ export interface FrozenInputCapabilities {
   external: readonly FrozenMcpTool[];
   candidates: readonly FrozenMcpTool[];
   skills: readonly FrozenSkill[];
+  skillCandidates: readonly SkillCandidate[];
   diagnostics?: readonly ToolDiscoveryDiagnostic[];
   mentionedSkills?: readonly FrozenSkill[];
   inheritedSkills?: readonly FrozenSkill[];
@@ -31,6 +34,7 @@ interface InputCapabilityData {
   mcpBindings: readonly FrozenMcpTool[];
   candidateBindings: readonly FrozenMcpTool[];
   skillBindings: readonly FrozenSkill[];
+  skillCandidates: readonly SkillCandidate[];
   discoveryDiagnostics: readonly ToolDiscoveryDiagnostic[];
   mentionedSkillBindings: readonly FrozenSkill[];
   inheritedSkillBindings: readonly FrozenSkill[];
@@ -45,6 +49,7 @@ const QueueCapabilityMetadataSchema = Type.Object(
     mcpBindings: FrozenMcpToolsSchema,
     candidateBindings: FrozenMcpToolsSchema,
     skillBindings: frozenSkillsSchema,
+    skillCandidates: SkillCandidatesSchema,
     discoveryDiagnostics: diagnosticsSchema,
     mentionedSkillBindings: frozenSkillsSchema,
     inheritedSkillBindings: frozenSkillsSchema,
@@ -63,6 +68,7 @@ export function frozenInputKey(input: FrozenInputCapabilities): string {
   return JSON.stringify([
     externalBindingKey(input.external),
     externalBindingKey(input.candidates),
+    input.skillCandidates,
     JSON.stringify(
       combinedSkills(input)
         .map((skill) => [skill.selection.id, skill.selection.contentHash, skill.authorization])
@@ -99,6 +105,7 @@ export function encodeInputCapabilities(input: FrozenInputCapabilities): InputCa
     mcpBindings: input.external,
     candidateBindings: input.candidates,
     skillBindings: input.skills,
+    skillCandidates: input.skillCandidates,
     discoveryDiagnostics: input.diagnostics ?? [],
     mentionedSkillBindings: input.mentionedSkills ?? [],
     inheritedSkillBindings: input.inheritedSkills ?? [],
@@ -133,6 +140,7 @@ export class InputCapabilityResolver {
       external: metadata.mcpBindings,
       candidates: metadata.candidateBindings,
       skills: metadata.skillBindings,
+      skillCandidates: metadata.skillCandidates,
       diagnostics: metadata.discoveryDiagnostics,
       mentionedSkills: metadata.mentionedSkillBindings,
       inheritedSkills: metadata.inheritedSkillBindings,
@@ -144,6 +152,9 @@ export class InputCapabilityResolver {
     input: Pick<InputRequest, 'mcpTools' | 'skills'> & { text?: string },
     signal: AbortSignal,
   ): Promise<FrozenInputCapabilities> {
+    const skillCandidates = this.options.skills
+      ? await this.options.skills.freezeCandidates(session.workspaceId, signal)
+      : [];
     let external: readonly FrozenMcpTool[] = [];
     if ((input.mcpTools?.length ?? 0) > 0) {
       if (!this.options.external) throw new RuntimeError('MCP_UNAVAILABLE', 'MCP不可用。');
@@ -179,7 +190,14 @@ export class InputCapabilityResolver {
       input.text ?? '',
       signal,
     );
-    const frozen = Value.Clone({ external, candidates, skills, diagnostics, mentionedSkills });
+    const frozen = Value.Clone({
+      external,
+      candidates,
+      skills,
+      skillCandidates,
+      diagnostics,
+      mentionedSkills,
+    });
     combinedSkills(frozen);
     return frozen;
   }
@@ -213,6 +231,7 @@ export class InputCapabilityResolver {
       external,
       candidates,
       skills: input.skills,
+      skillCandidates: input.skillCandidates,
       diagnostics: input.diagnostics ?? [],
       mentionedSkills: input.mentionedSkills ?? [],
       inheritedSkills: inherited.skills,

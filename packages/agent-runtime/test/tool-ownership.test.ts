@@ -10,9 +10,7 @@ import type { EventInput } from '../src/sessions/ports.js';
 import { ToolRuntime } from '../src/tools/runtime.js';
 import { recordHostToolOutcome, toolCallRecordId } from '../src/tools/ledger.js';
 import { RunToolset } from '../src/tools/toolset.js';
-import { SESSION_TOOL_DEFINITIONS } from '../src/work/tools.js';
-import { AGENT_TOOL_DEFINITIONS } from '../src/agents/definitions.js';
-import { DISCOVERY_TOOL_DEFINITIONS, SKILL_TOOL_DEFINITIONS } from '../src/capabilities/run.js';
+import { nativeTools } from '../src/tools/catalog.js';
 import type { ToolRunContext } from '../src/tools/types.js';
 
 async function fixture() {
@@ -78,6 +76,7 @@ async function fixture() {
     directory,
     context,
     runtime,
+    toolset: new RunToolset(nativeTools()),
     events,
     close: async () => await rm(temporary, { recursive: true, force: true }),
   };
@@ -108,9 +107,7 @@ describe('task tool ownership', () => {
         },
       };
       try {
-        const tool = f.runtime
-          .createTools(context, f.runtime.selectToolset(context.session))
-          .find((item) => item.name === name);
+        const tool = f.runtime.createTools(context, f.toolset).find((item) => item.name === name);
         if (!tool) throw new Error('Missing forbidden tool fixture');
         expect((await tool.execute('forbidden-call', args)).isError).toBe(true);
         expect(admissions).toBe(0);
@@ -144,7 +141,7 @@ describe('task tool ownership', () => {
         return Promise.reject(new RuntimeError('TASK_WRITE_CONFLICT', 'Another task owns writes'));
       };
       const write = f.runtime
-        .createTools(f.context, f.runtime.selectToolset(f.context.session))
+        .createTools(f.context, f.toolset)
         .find((tool) => tool.name === 'write_file');
       if (!write) throw new Error('Missing write tool');
       const result = await write.execute('write-call', {
@@ -175,7 +172,7 @@ describe('task tool ownership', () => {
         });
       };
       const write = f.runtime
-        .createTools(f.context, f.runtime.selectToolset(f.context.session))
+        .createTools(f.context, f.toolset)
         .find((tool) => tool.name === 'write_file');
       if (!write) throw new Error('Missing write tool');
       const result = await write.execute('write-call', {
@@ -216,7 +213,7 @@ describe('task tool ownership', () => {
         parameters: Type.Object({}, { additionalProperties: false }),
       };
       const tool = f.runtime
-        .createTools(f.context, f.runtime.selectToolset(f.context.session, [], [definition]))
+        .createTools(f.context, new RunToolset([{ definition, source: { kind: 'session' } }]))
         .find((entry) => entry.name === 'spawn_agent');
       if (!tool) throw new Error('Missing agent control');
       const result = await tool.execute('provider-call', {});
@@ -231,29 +228,14 @@ describe('task tool ownership', () => {
     }
   });
 
-  it('preserves all 34 builtin declarations and rejects mismatched or unknown sources', async () => {
+  it('routes the 28 catalog declarations and rejects mismatched or unknown sources', async () => {
     const f = await fixture();
     try {
-      const controls = [
-        ...SESSION_TOOL_DEFINITIONS,
-        ...AGENT_TOOL_DEFINITIONS,
-        ...DISCOVERY_TOOL_DEFINITIONS,
-        ...SKILL_TOOL_DEFINITIONS,
-      ];
-      expect(f.runtime.selectToolset(f.context.session, [], controls).definitions).toHaveLength(27);
-      expect(f.runtime.selectToolset({ workspaceId: null }, [], controls).definitions).toHaveLength(
-        21,
-      );
-      const full = f.runtime.selectToolset(
-        f.context.session,
-        [],
-        controls,
-        execution.OFFICE_TOOL_DEFINITIONS,
-      );
+      const full = f.toolset;
       expect(f.runtime.createTools(f.context, full).map(({ name }) => name)).toEqual(
         full.definitions.map(({ name }) => name),
       );
-      expect(new Set(full.definitions.map(({ name }) => name)).size).toBe(34);
+      expect(new Set(full.definitions.map(({ name }) => name)).size).toBe(28);
       for (const selection of [
         {
           source: { kind: 'session' as const },
@@ -305,7 +287,7 @@ describe('task tool ownership', () => {
       f.context.agents = { has: () => true, execute: wrongRoute };
       await writeFile(join(f.directory, 'observed.txt'), 'actual file');
       const read = f.runtime
-        .createTools(f.context, f.runtime.selectToolset(f.context.session))
+        .createTools(f.context, f.toolset)
         .find(({ name }) => name === 'read_file');
       if (!read) throw new Error('Missing read tool');
       const result = await read.execute('owned-route', { path: 'observed.txt' });
@@ -394,39 +376,35 @@ describe('task tool ownership', () => {
     }
   });
 
-  it.each([false, true])(
-    'stops a Skill grant revocation only after its terminal context commits (journal failure=%s)',
-    async (failJournal) => {
+  it.each([
+    'load_tools',
+    'skill_search',
+    'request_skill_tools',
+    'revoke_skill_tools',
+    'restore_context_checkpoint',
+    'reset_working_state',
+  ])(
+    'rejects the removed %s entry instead of dispatching an unrelated controller',
+    async (name) => {
       const f = await fixture();
-      const stop = vi.fn(() => {
-        expect(f.events.at(-1)?.type).toBe('tool.context');
-      });
+      const execute = vi.fn(() => Promise.resolve([{ type: 'text' as const, text: 'Unexpected' }]));
       try {
-        const definition = SKILL_TOOL_DEFINITIONS.find(({ name }) => name === 'revoke_skill_tools');
-        if (!definition) throw new Error('Missing Skill revoke declaration');
-        f.context.controls = {
-          has: (name) => name === definition.name,
-          execute: () => Promise.resolve([{ type: 'text', text: 'Grant revoked' }]),
+        const definition = {
+          name,
+          description: 'No longer registered',
+          parameters: Type.Object({}, { additionalProperties: false }),
         };
-        f.context.stopAfterTool = stop;
-        if (failJournal)
-          vi.spyOn(f.context, 'commit').mockImplementation((events) => {
-            if (events.some(({ type }) => type === 'tool.context'))
-              throw new Error('Terminal journal unavailable');
-            f.events.push(...events);
-          });
-        const tool = f.runtime
-          .createTools(f.context, f.runtime.selectToolset(f.context.session, [], [definition]))
-          .find(({ name }) => name === definition.name);
-        if (!tool) throw new Error('Missing Skill revoke tool');
-        const result = tool.execute('revoke', { skillId: 'skill' });
-        if (failJournal) {
-          await expect(result).rejects.toThrow('Terminal journal unavailable');
-          expect(stop).not.toHaveBeenCalled();
-        } else {
-          expect((await result).isError).not.toBe(true);
-          expect(stop).toHaveBeenCalledExactlyOnceWith('本次运行的工具授权已撤销。');
-        }
+        f.context.controls = { has: () => true, execute };
+        const tool = f.runtime.createTools(
+          f.context,
+          new RunToolset([{ definition, source: { kind: 'session' } }]),
+        )[0];
+        if (!tool) throw new Error('Missing supplied tool declaration');
+        expect((await tool.execute('removed-entry', {})).isError).toBe(true);
+        expect(execute).not.toHaveBeenCalled();
+        expect(f.events.filter(({ type }) => type === 'tool.updated')).toMatchObject([
+          { data: { tool: { name, status: 'failed' } } },
+        ]);
       } finally {
         await f.close();
       }

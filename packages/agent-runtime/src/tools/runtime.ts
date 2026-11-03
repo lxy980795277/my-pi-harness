@@ -1,20 +1,12 @@
 import type { AgentTool } from '@earendil-works/pi-agent-core';
-import { TOOL_DEFINITIONS } from '@my-pi-harness/execution';
-import type { SessionSummary, ToolDecisionInput } from '@my-pi-harness/protocol';
+import type { ToolDecisionInput } from '@my-pi-harness/protocol';
 import { Type, type TSchema } from 'typebox';
 import { Value } from 'typebox/value';
 import { RuntimeError } from '../errors.js';
-import { SESSION_TOOL_DEFINITIONS } from '../work/tools.js';
-import type { FrozenMcpTool } from './external.js';
 import { applyFamilyOutcome, executeToolFamily, toolFamily } from './families.js';
 import { ToolCallLedger } from './ledger.js';
 import { invocationPolicy, ToolApprovals } from './policy.js';
-import {
-  RunToolset,
-  type RunToolSelection,
-  type RunToolDefinition,
-  type RunToolRecord,
-} from './toolset.js';
+import type { RunToolset, RunToolDefinition, RunToolRecord } from './toolset.js';
 import type { ToolExecutionResult, ToolRunContext, ToolRuntimeOptions } from './types.js';
 
 const toolArguments = Type.Record(Type.String(), Type.Unknown());
@@ -36,46 +28,13 @@ export class ToolRuntime {
     this.approvals = new ToolApprovals(options);
   }
 
-  public decide(sessionId: string, id: string, input: ToolDecisionInput): void {
-    this.approvals.decide(sessionId, id, input);
+  /** Selection advertises work tools only when their actual executor is installed. */
+  public get supportsWorkTools(): boolean {
+    return this.options.work !== undefined;
   }
 
-  /** Select once before acceptance, using this executor's actual session capabilities. */
-  public selectToolset(
-    session: Pick<SessionSummary, 'workspaceId'>,
-    external: readonly FrozenMcpTool[] = [],
-    controls: readonly RunToolDefinition[] = [],
-    extraWorkspace: readonly RunToolDefinition[] = [],
-  ): RunToolset {
-    const selections: RunToolSelection[] = [];
-    for (const definition of TOOL_DEFINITIONS.filter((tool) => tool.name === 'web_fetch'))
-      selections.push({ source: { kind: 'session' }, definition });
-    for (const definition of controls) selections.push({ source: { kind: 'session' }, definition });
-    if (this.options.work) {
-      for (const definition of SESSION_TOOL_DEFINITIONS)
-        selections.push({ source: { kind: 'session' }, definition });
-    }
-    if (session.workspaceId !== null) {
-      for (const definition of [
-        ...TOOL_DEFINITIONS.filter((tool) => tool.name !== 'web_fetch'),
-        ...extraWorkspace,
-      ])
-        selections.push({ source: { kind: 'workspace' }, definition });
-    }
-    if (external.length > 0 && !this.options.externalTools)
-      throw new RuntimeError('MCP_UNAVAILABLE', '外部工具运行时不可用。');
-    for (const tool of external)
-      selections.push({
-        definition: tool.definition,
-        source: {
-          kind: 'mcp',
-          serverId: tool.selection.serverId,
-          serverRevision: tool.selection.serverRevision,
-          remoteToolName: tool.selection.remoteToolName,
-        },
-        external: tool,
-      });
-    return new RunToolset(selections);
+  public decide(sessionId: string, id: string, input: ToolDecisionInput): void {
+    this.approvals.decide(sessionId, id, input);
   }
 
   public createTools(
@@ -157,7 +116,6 @@ export class ToolRuntime {
       );
       applyFamilyOutcome(tool, outcome);
       const result = ledger.finish(outcome.result, outcome.origin);
-      if (outcome.stopAfterTool) context.stopAfterTool?.(outcome.stopAfterTool);
       if (outcome.status === 'unknown') context.outcomeUnknown(tool.result ?? '结果未知。');
       return result;
     } catch (error: unknown) {

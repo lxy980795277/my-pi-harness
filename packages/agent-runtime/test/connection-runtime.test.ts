@@ -5,6 +5,7 @@ import type { FrozenSkill } from '@my-pi-harness/protocol';
 import { describe, expect, it, vi } from 'vitest';
 import type { SkillsPort } from '../src/capabilities/ports.js';
 import { call, fixture, idle } from './support/work-fixture.js';
+import { skillCandidate } from './support/skill-candidate.js';
 
 const skill: FrozenSkill = {
   selection: { id: 'plugin:github', contentHash: 'a'.repeat(64) },
@@ -25,6 +26,8 @@ const skill: FrozenSkill = {
 };
 function skills(): SkillsPort {
   return {
+    freezeCandidates: () => Promise.resolve([skillCandidate(skill)]),
+    loadCandidate: () => Promise.resolve(skill),
     list: () => Promise.resolve([]),
     freezeSelections: () => Promise.resolve([skill]),
     validateBindings: () => Promise.resolve(),

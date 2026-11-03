@@ -11,6 +11,12 @@ export {
 export { encodeContextMessage, decodeContextMessage } from './context/codec.js';
 export { BUILTIN_PROVIDER_IDS, loadBuiltinProvider } from './models/providers.js';
 export { ToolRuntime } from './tools/runtime.js';
+export {
+  RunToolset,
+  type RunToolDefinition,
+  type RunToolSelection,
+  type RunToolRecord,
+} from './tools/toolset.js';
 export type { SkillsPort, ToolDiscoveryPort } from './capabilities/ports.js';
 export type { ToolSearchEmbedder } from './capabilities/search.js';
 export type { ToolRuntimeOptions } from './tools/types.js';

@@ -7,6 +7,7 @@ import type {
   SessionSummary,
   WorkState,
   FrozenSkill,
+  SessionSnapshot,
 } from '@my-pi-harness/protocol';
 import type { ResolvedModel } from '../models/gateway.js';
 import type { WorkRuntime } from '../work/runtime.js';
@@ -14,12 +15,25 @@ import { encodeContextMessage, snapshotPrivateData } from './codec.js';
 import { contextSourceIds } from './sources.js';
 import { buildSystemContext } from './system-context.js';
 import { RuntimeError } from '../errors.js';
-import { pruneContext, requestUsage, selectRequestPrefix } from './projection.js';
+import {
+  pruneContext,
+  requestUsage,
+  selectRequestPrefix,
+  type RetainedToolText,
+} from './projection.js';
 import { renderSummary, summarizeContext } from './summary.js';
 import { assertCompleteToolCycles, type ContextToolDefinition } from './budget.js';
 import type { RunToolDefinition } from '../tools/toolset.js';
 import { activeSkillContext } from '../capabilities/context.js';
 import { communicationMessage } from './agent-message.js';
+import { toolCallRecordId } from '../tools/ledger.js';
+import { workToolRequirements } from '../tools/selection.js';
+
+interface RequestTools {
+  toolDefinitions: readonly RunToolDefinition[];
+  capabilityRevision: number;
+  skills: readonly FrozenSkill[];
+}
 
 interface RequestProjection {
   session: SessionSummary;
@@ -31,6 +45,8 @@ interface RequestProjection {
   toolDefinitions: readonly RunToolDefinition[];
   capabilityRevision?: number;
   skills?: readonly FrozenSkill[];
+  canUseTool?(name: string): boolean;
+  resolveTools?(requirements: readonly string[]): RequestTools;
   signal: AbortSignal;
 }
 interface RequestBaseline {
@@ -38,6 +54,34 @@ interface RequestBaseline {
   marker: string;
 }
 
+/** Only a terminal record in the selected task/branch can provide a retained-text reader identity. */
+function retainedToolText(
+  messages: readonly Message[],
+  sourceAnchors: ReadonlyMap<Message, string>,
+  tools: SessionSnapshot['tools'],
+): Map<Message, RetainedToolText> {
+  const references = new Map<Message, RetainedToolText>();
+  for (const message of messages) {
+    if (message.role !== 'toolResult') continue;
+    const anchor = sourceAnchors.get(message);
+    if (anchor === undefined) continue;
+    const tool = tools.find(
+      (entry) =>
+        entry.afterMessageId === anchor &&
+        entry.name === message.toolName &&
+        entry.id === toolCallRecordId(entry.runId, anchor, message.toolCallId),
+    );
+    if (
+      tool?.result !== undefined &&
+      tool.result !== null &&
+      tool.status !== 'reviewing' &&
+      tool.status !== 'awaiting_approval' &&
+      tool.status !== 'running'
+    )
+      references.set(message, { id: tool.id, text: tool.result });
+  }
+  return references;
+}
 /** Associate SDK copies before pruning; tool results inherit their assistant message's durable anchor. */
 function anchors(
   messages: readonly Message[],
@@ -90,6 +134,9 @@ export class WorkContext {
       return anchor !== undefined && selected.has(anchor);
     });
     assertCompleteToolCycles(raw);
+    const retainedTools = this.canUseTool(input, 'read_tool_result')
+      ? retainedToolText(raw, sourceAnchors, snapshot.tools)
+      : new Map<Message, RetainedToolText>();
     const taskFor = (messages: readonly Message[]): string =>
       messages.some(
         (message) =>
@@ -104,16 +151,17 @@ export class WorkContext {
       )
         ? ''
         : input.currentTask;
-    const basePrompt = [input.basePrompt, activeSkillContext(input.skills ?? [])].join('\n\n');
+    let pruned = pruneContext(raw, input.resolved.model.input.includes('image'), retainedTools);
+    let toolState = this.requestTools(input, state, pruned.requiredTools);
+    let basePrompt = [input.basePrompt, activeSkillContext(toolState.skills)].join('\n\n');
     let prompt = this.prompt(basePrompt, taskFor(raw), state);
-    let pruned = pruneContext(raw, input.resolved.model.input.includes('image'));
     let usage = requestUsage(
       pruned.messages,
       prompt,
       state,
       input.resolved.model.contextWindow,
       input.resolved.model.maxTokens,
-      input.toolDefinitions,
+      toolState.toolDefinitions,
     );
     const marker = this.marker(state);
     const baseline = this.baselines.get(input.run.id);
@@ -153,19 +201,21 @@ export class WorkContext {
           input.run.id,
           (next) => this.prompt(basePrompt, taskFor(prefix.retained), next),
           input.signal,
-          input.toolDefinitions,
+          toolState.toolDefinitions,
           prompt,
         );
         raw = prefix.retained;
+        pruned = pruneContext(raw, input.resolved.model.input.includes('image'), retainedTools);
+        toolState = this.requestTools(input, state, pruned.requiredTools);
+        basePrompt = [input.basePrompt, activeSkillContext(toolState.skills)].join('\n\n');
         prompt = this.prompt(basePrompt, taskFor(raw), state);
-        pruned = pruneContext(raw, input.resolved.model.input.includes('image'));
         usage = requestUsage(
           pruned.messages,
           prompt,
           state,
           input.resolved.model.contextWindow,
           input.resolved.model.maxTokens,
-          input.toolDefinitions,
+          toolState.toolDefinitions,
         );
       }
     }
@@ -183,7 +233,7 @@ export class WorkContext {
           ? leading
           : { role: 'system' as const, timestamp: Date.now() }),
         content: prompt,
-        toolsAdded: [...input.toolDefinitions],
+        toolsAdded: [...toolState.toolDefinitions],
         toolsRemoved: [],
       },
       ...pruned.messages,
@@ -213,7 +263,7 @@ export class WorkContext {
           usage,
           messageIds,
           attachmentIds,
-          capabilityRevision: input.capabilityRevision ?? 1,
+          capabilityRevision: toolState.capabilityRevision,
         },
         privateData: snapshotPrivateData({
           version: 1,
@@ -228,10 +278,34 @@ export class WorkContext {
       state,
       input.resolved.model.contextWindow,
       input.resolved.model.maxTokens,
-      input.toolDefinitions,
+      toolState.toolDefinitions,
     ).estimatedTokens;
     this.baselines.set(input.run.id, { heuristic, marker: this.marker(state) });
     return messages;
+  }
+
+  private requestTools(
+    input: RequestProjection,
+    state: WorkState,
+    projectionTools: readonly string[],
+  ): RequestTools {
+    const requirements = [...new Set([...workToolRequirements(state), ...projectionTools])].filter(
+      (name) => this.canUseTool(input, name),
+    );
+    return (
+      input.resolveTools?.(requirements) ?? {
+        toolDefinitions: input.toolDefinitions,
+        capabilityRevision: input.capabilityRevision ?? 1,
+        skills: input.skills ?? [],
+      }
+    );
+  }
+
+  private canUseTool(input: RequestProjection, name: string): boolean {
+    return (
+      input.canUseTool?.(name) ??
+      input.toolDefinitions.some((definition) => definition.name === name)
+    );
   }
 
   public async compact(

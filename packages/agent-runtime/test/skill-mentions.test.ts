@@ -7,6 +7,7 @@ import type { SkillsPort } from '../src/capabilities/ports.js';
 import { explicitSkillNames } from '../src/capabilities/skill-mentions.js';
 import { RuntimeError } from '../src/errors.js';
 import { call, fixture, gate, idle } from './support/work-fixture.js';
+import { skillCandidate } from './support/skill-candidate.js';
 
 function skillCatalog() {
   let enabled = true;
@@ -71,6 +72,13 @@ function skillCatalog() {
       throw new RuntimeError('SKILL_CHANGED', 'Skill authorization changed');
   };
   const port: SkillsPort = {
+    freezeCandidates: () => Promise.resolve(enabled ? [skillCandidate(frozen())] : []),
+    loadCandidate: async (workspace, candidate, signal) => {
+      current([frozen()]);
+      const [loaded] = await freeze(workspace, [candidate.selection], signal);
+      if (!loaded) throw new Error('Missing Skill fixture');
+      return loaded;
+    },
     list: () =>
       Promise.resolve([
         metadata(),
@@ -116,7 +124,10 @@ describe('explicit Skill invocations', () => {
         f.faux.setResponses(
           source === 'mention'
             ? [fauxAssistantMessage('Skill ready')]
-            : [call('load_skill', s.frozen().selection), fauxAssistantMessage('Skill ready')],
+            : [
+                call('load_skill', { id: s.frozen().selection.id }),
+                fauxAssistantMessage('Skill ready'),
+              ],
         );
         await f.runtime.send(f.session.id, {
           text:

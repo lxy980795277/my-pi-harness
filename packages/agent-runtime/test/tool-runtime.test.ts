@@ -103,7 +103,7 @@ describe('durable Pi tool execution', () => {
   it('returns bounded parser errors before approval or effects and keeps later calls independent', async () => {
     const f = await workFixture(true);
     const execute = vi.spyOn(execution, 'executeTool');
-    const reset = vi.spyOn(f.work, 'resetWorkingState');
+    const ask = vi.spyOn(f.work, 'ask');
     const raw = 'Invalid JSON. Received arguments: {"path":"blocked.txt"';
     const longError = `second parser error ${'x'.repeat(10_000)} discarded tail`;
     const requests: TranscriptContext[] = [];
@@ -122,7 +122,7 @@ describe('durable Pi tool execution', () => {
             {
               type: 'toolCall',
               id: 'empty-schema',
-              name: 'reset_working_state',
+              name: 'ask_user',
               arguments: {},
               argumentsError: longError,
             },
@@ -163,7 +163,7 @@ describe('durable Pi tool execution', () => {
       );
       expect(execute).toHaveBeenCalledTimes(1);
       expect(execute.mock.calls[0]?.[0]).toBe('read_file');
-      expect(reset).not.toHaveBeenCalled();
+      expect(ask).not.toHaveBeenCalled();
       await expect(readFile(join(f.root, 'blocked.txt'))).rejects.toMatchObject({ code: 'ENOENT' });
       const nextResults = requests[0]?.messages.filter((message) => message.role === 'toolResult');
       expect(nextResults).toHaveLength(2);
@@ -187,7 +187,7 @@ describe('durable Pi tool execution', () => {
       ).toEqual([raw, longError, undefined]);
       expect(f.errors).toEqual([]);
     } finally {
-      reset.mockRestore();
+      ask.mockRestore();
       execute.mockRestore();
       await f.close();
     }
@@ -199,6 +199,17 @@ describe('durable Pi tool execution', () => {
     let requests = 0;
     try {
       f.faux.setResponses([
+        fauxAssistantMessage(
+          [
+            {
+              type: 'toolCall',
+              id: 'discover-history',
+              name: 'tool_search',
+              arguments: { query: 'search_session_history', limit: 1 },
+            },
+          ],
+          { stopReason: 'toolUse' },
+        ),
         () => {
           requests += 1;
           return fauxAssistantMessage(
@@ -226,10 +237,14 @@ describe('durable Pi tool execution', () => {
       await until(() => f.errors.length > 0);
       await f.runtime.close();
       expect(requests).toBe(1);
-      expect(f.store.getSnapshot(f.session.id).tools[0]?.status).not.toBe('completed');
+      expect(
+        f.store
+          .getSnapshot(f.session.id)
+          .tools.find((tool) => tool.name === 'search_session_history')?.status,
+      ).not.toBe('completed');
       expect(
         f.store.readEvents(f.session.id, 0, 1000).filter(({ type }) => type === 'tool.context'),
-      ).toEqual([]);
+      ).toHaveLength(1);
       expect(() => f.runtime.getSnapshot(f.session.id)).toThrow(
         expect.objectContaining({ code: 'SESSION_UNAVAILABLE' }),
       );

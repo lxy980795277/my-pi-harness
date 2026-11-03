@@ -97,6 +97,12 @@ describe('Agent task collaboration through real Pi', () => {
         if (!hasResult(context, 'spawn_agent'))
           return delegate('Continue this task', 'CONTINUABLE_CHILD');
         if (resultCount(context, 'wait_agents') === 0) return waitForResults(context, 'first-wait');
+        if (!hasResult(context, 'tool_search'))
+          return call(
+            'tool_search',
+            { query: 'send_agent_message', limit: 1 },
+            'find-communication',
+          );
         if (!hasResult(context, 'send_agent_message')) {
           const task = taskResults(context)[0];
           if (!task) throw new Error('Missing continuation target');

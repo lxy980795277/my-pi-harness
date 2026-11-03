@@ -24,6 +24,8 @@ export interface RunExecutionOptions {
   user: UserMessage;
   systemPrompt: string;
   basePrompt: string;
+  /** Application instructions without the parent's scoped capability directory. */
+  instructionsPrompt?: string;
   eligibleInputIds: readonly string[];
   toolset: RunToolset;
   capabilities?: RunCapabilities;
@@ -31,6 +33,8 @@ export interface RunExecutionOptions {
   commit(events: readonly EventInput[]): void;
   publishMessageDelta(delta: LiveMessageDelta): void;
   queue(): QueueInput[];
+  /** Read the accepted private bindings of the exact queue revision being consumed. */
+  queuedCapabilities?(inputId: string): FrozenInputCapabilities;
   onError(error: unknown): void;
   tools?: ToolRuntime;
   work?: WorkRuntime;
@@ -47,7 +51,6 @@ export interface RunAgentHost {
   failPersistence(error: unknown): never;
   rememberFailure(error: unknown): void;
   fail(error: unknown): void;
-  cancel(reason: string): void;
   outcomeUnknown(message: string): void;
   assertKnownOutcome(): void;
   isOutcomeUnknown(): boolean;

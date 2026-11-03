@@ -1,4 +1,3 @@
-import { OFFICE_TOOL_DEFINITIONS } from '@my-pi-harness/execution';
 import type { InputRequest } from '@my-pi-harness/protocol';
 import type { AgentRuntime } from './runtime.js';
 import type { AgentNode } from './types.js';
@@ -9,14 +8,10 @@ import { prepareRun, resolveRunModel } from '../runs/prepare.js';
 import { decodeContextMessage } from '../context/codec.js';
 import { completeToolHistory } from '../context/tool-history.js';
 import { RunCapabilities } from '../capabilities/run.js';
-import {
-  filterTaskToolset,
-  allowedTaskCandidates,
-  isReadOnlyWorkspaceTool,
-} from '../tools/task-toolset.js';
-import { createAgentHooks } from './run-hooks.js';
-import { AGENT_TOOL_DEFINITIONS } from './definitions.js';
-import { RunToolset, type RunToolSelection } from '../tools/toolset.js';
+import { allowedTaskCandidates } from '../tools/task-toolset.js';
+import { selectRunTools } from '../tools/selection.js';
+import { capabilityContext } from '../capabilities/context.js';
+import { agentContext, createAgentHooks } from './run-hooks.js';
 
 /** A child uses the same RunExecution and durable acceptance as a root conversation. */
 export async function launchAgentRun(
@@ -58,43 +53,60 @@ export async function launchAgentRun(
     node.session = session;
     const source = parent.execution.options;
     const current = source.capabilities?.active ?? source.toolset;
-    const filtered = filterTaskToolset(current, task.role.access);
-    const records: RunToolSelection[] = [...filtered.records];
-    for (const definition of AGENT_TOOL_DEFINITIONS)
-      if (!records.some((record) => record.definition.name === definition.name))
-        records.push({ definition, source: { kind: 'session' } });
-    const toolset = new RunToolset(records);
-    const external = toolset.records.flatMap((record) =>
-      record.external ? [record.external] : [],
-    );
     const candidates = allowedTaskCandidates(
       source.acceptedCapabilities?.candidates ?? [],
       task.role.access,
     );
     const skills = source.capabilities?.skills() ?? source.acceptedCapabilities?.skills ?? [];
-    const workspaceCandidates =
-      session.workspaceId === null
-        ? []
-        : OFFICE_TOOL_DEFINITIONS.filter(
-            (definition) =>
-              task.role.access === 'write' || isReadOnlyWorkspaceTool(definition.name),
-          );
+    const skillCandidates = source.acceptedCapabilities?.skillCandidates ?? [];
+    const work = owner.options.work?.forTask(session.id, task.id);
+    const settings = owner.settings();
+    const canSpawn =
+      settings.enabled && node.depth < Math.min(node.limits.maxDepth, settings.limits.maxDepth);
+    const selection = selectRunTools({
+      workspaceId: session.workspaceId,
+      work: owner.options.tools.supportsWorkTools,
+      skills: owner.options.skills !== undefined,
+      skillDirectory: skillCandidates.length > 0 || skills.length > 0,
+      agents: true,
+      canSpawn,
+      task: true,
+      access: task.role.access,
+      inherited: current,
+      activeSkills: skills,
+      ...(work ? { state: work.snapshot(session.id).state } : {}),
+    });
+    const toolset = selection.initial;
+    const nativeCandidates = selection.nativeCandidates;
+    const external = toolset.records.flatMap((record) =>
+      record.external ? [record.external] : [],
+    );
     if (source.capabilities)
       capabilities = new RunCapabilities({
         runId: node.run.id,
         workspaceId: session.workspaceId,
         initial: toolset,
         candidates,
-        workspaceCandidates,
+        nativeCandidates,
+        skillCandidates,
         skills,
         ...(owner.options.search ? { search: owner.options.search } : {}),
         ...(owner.options.skills ? { skillPort: owner.options.skills } : {}),
         commit: (events) => owner.commit(session.id, events),
       });
-    const work = owner.options.work?.forTask(session.id, task.id);
     const snapshot = owner.options.store.getTaskSnapshot(session.id, task.id);
     const basePrompt = [
-      source.basePrompt,
+      source.instructionsPrompt ?? source.basePrompt,
+      capabilityContext({
+        discovery: candidates.length > 0,
+        candidates,
+        diagnostics: [],
+        skills: skillCandidates,
+        nativeTools: nativeCandidates
+          .filter((tool) => !toolset.definitions.some(({ name }) => name === tool.definition.name))
+          .map(({ definition }) => definition),
+      }),
+      ...(canSpawn ? [agentContext(settings.roles)] : []),
       `You are the delegated ${task.role.name} agent. Work only on the supplied task and explicit inputs. Your context is separate from the parent. Role instructions:\n${task.role.instructions}`,
       'Do not change the parent conversation or its branch. Return a bounded conclusion with evidence and remaining uncertainty. Collect your own delegated results before finishing.',
     ]
@@ -141,7 +153,8 @@ export async function launchAgentRun(
           external,
           candidates,
           diagnostics: [],
-          workspaceCandidates,
+          nativeCandidates,
+          skillCandidates,
           skills,
         },
         (at) =>
@@ -166,9 +179,10 @@ export async function launchAgentRun(
       user: prepared.user,
       systemPrompt: prepared.systemPrompt,
       basePrompt,
+      instructionsPrompt: source.instructionsPrompt ?? source.basePrompt,
       eligibleInputIds: [],
       toolset,
-      acceptedCapabilities: { external, candidates, skills },
+      acceptedCapabilities: { external, candidates, skills, skillCandidates },
       ...(capabilities ? { capabilities } : {}),
       tools: owner.options.tools,
       ...(work ? { work } : {}),

@@ -310,9 +310,15 @@ test('M3 计划反馈与批准保持同一次运行，快照恢复和两类重�
     expect(completed.state.plan?.review).toBe('approved');
     expect(completed.state.plan?.content).toContain('核对来源');
     expect(completed.state.todos[0]?.completionNote).toContain('纯文本资料整理');
-    expect(JSON.stringify(model.requests[1]?.body['messages'])).toContain(
-      '请先核对来源，并记录依据',
-    );
+    const mainRequests = model.requests.filter((request) => {
+      return Array.isArray(request.body['tools']);
+    });
+    expect(JSON.stringify(mainRequests[0]?.body['tools'])).not.toContain('"name":"update_plan"');
+    expect(JSON.stringify(mainRequests[1]?.body['tools'])).toContain('"name":"update_plan"');
+    expect(JSON.stringify(mainRequests[2]?.body['messages'])).toContain('请先核对来源，并记录依据');
+    expect(JSON.stringify(mainRequests[3]?.body['tools'])).toContain('"name":"update_plan_steps"');
+    expect(JSON.stringify(mainRequests[3]?.body['tools'])).not.toContain('"name":"update_todos"');
+    expect(JSON.stringify(mainRequests[4]?.body['tools'])).toContain('"name":"update_todos"');
     const openWork = page.getByRole('button', { name: '上下文与工作状态', exact: true });
     await openWork.click();
     let dialog = page.getByRole('dialog', { name: '上下文与工作状态', exact: true });
@@ -419,13 +425,10 @@ test('M3 计划反馈与批准保持同一次运行，快照恢复和两类重�
       .toBe(0);
     expect((await readWork(page, daemon.origin, id)).state.plan).toBeNull();
     expect((await readSession(page, daemon.origin, id)).messages).toEqual(original.messages);
-    const mainRequests = model.requests.filter((request) => {
-      return Array.isArray(request.body['tools']);
-    });
     const summaryRequests = model.requests.filter((request) => {
       return !Array.isArray(request.body['tools']);
     });
-    expect(mainRequests).toHaveLength(5);
+    expect(mainRequests).toHaveLength(7);
     expect(summaryRequests).toHaveLength(completed.compactions.length);
   } finally {
     await daemon.stop();

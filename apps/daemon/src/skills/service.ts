@@ -10,6 +10,7 @@ import {
 } from '@my-pi-harness/integrations';
 import type {
   FrozenSkill,
+  SkillCandidate,
   SkillCreateInput,
   SkillDetail,
   SkillInstallInput,
@@ -18,6 +19,8 @@ import type {
   Workspace,
 } from '@my-pi-harness/protocol';
 import type { ExtensionRepository, StoredSkill } from '@my-pi-harness/storage';
+
+type SkillBinding = Pick<SkillCandidate, 'selection' | 'authorization'>;
 
 export interface SkillsServiceOptions {
   repository: ExtensionRepository;
@@ -144,6 +147,61 @@ export class SkillsService {
       allowedTools: entry.allowedTools,
     };
   }
+  private binding(skill: Pick<SkillView, 'id' | 'pluginId' | 'source'>) {
+    const record = this.options.repository.skills().find((entry) => entry.id === skill.id);
+    const plugin = this.options.repository.plugins().find((entry) => entry.id === skill.pluginId);
+    let source = skill.source;
+    if (record?.source.startsWith('github:')) source = `${record.source} (${skill.source})`;
+    if (plugin !== undefined) source = `plugin:${plugin.id}@${plugin.generation} (${skill.source})`;
+    return {
+      source,
+      authorization: {
+        skillEpoch: record?.revision ?? 0,
+        pluginId: skill.pluginId,
+        pluginEpoch: plugin?.revision ?? 0,
+        pluginGeneration: plugin?.generation ?? null,
+      },
+    };
+  }
+  /** Freeze the enabled catalog identities without creating snapshots or acquiring leases. */
+  public async freezeCandidates(
+    workspaceId: string | null,
+    signal: AbortSignal,
+  ): Promise<SkillCandidate[]> {
+    if (this.stopped) throw new SkillError('SKILL_CLOSED', 'Skills service is closing');
+    const views = await this.list(workspaceId, signal);
+    signal.throwIfAborted();
+    const candidates = views
+      .filter((skill) => skill.enabled && !skill.shadowed)
+      .map((skill) => ({
+        selection: { id: skill.id, contentHash: skill.contentHash },
+        ...this.binding(skill),
+        name: skill.name,
+        description: skill.description,
+        scope: skill.scope,
+      }));
+    this.assertBindingsCurrent(candidates);
+    return candidates;
+  }
+  /** Load only the content and authorization recorded for this accepted candidate. */
+  public async loadCandidate(
+    workspaceId: string | null,
+    candidate: SkillCandidate,
+    signal: AbortSignal,
+  ): Promise<FrozenSkill> {
+    this.assertBindingsCurrent([candidate]);
+    const [skill] = await this.freezeSelections(workspaceId, [candidate.selection], signal);
+    this.assertBindingsCurrent([candidate]);
+    if (
+      skill === undefined ||
+      skill.source !== candidate.source ||
+      skill.scope !== candidate.scope ||
+      skill.name !== candidate.name ||
+      skill.description !== candidate.description
+    )
+      throw new SkillError('SKILL_STALE', 'Skill source no longer matches the accepted catalog');
+    return skill;
+  }
   public async freezeSelections(
     workspaceId: string | null,
     selections: readonly SkillSelection[],
@@ -172,20 +230,14 @@ export class SkillsService {
           'SKILL_STALE',
           'Skill was disabled, replaced or changed; select its current version',
         );
-      const record = this.options.repository.skills().find((entry) => entry.id === skill.id);
-      const plugin = this.options.repository.plugins().find((entry) => entry.id === skill.pluginId);
-      const frozen = await this.catalog.freeze(skill, signal, {
-        skillEpoch: record?.revision ?? 0,
-        pluginId: skill.pluginId,
-        pluginEpoch: plugin?.revision ?? 0,
-        pluginGeneration: plugin?.generation ?? null,
-      });
-      let source = skill.source;
-      if (record?.source.startsWith('github:')) source = `${record.source} (${skill.source})`;
-      if (plugin !== undefined)
-        source = `plugin:${plugin.id}@${plugin.generation} (${skill.source})`;
+      const binding = this.binding(skill);
+      const frozen = await this.catalog.freeze(skill, signal, binding.authorization);
       const gatewayUrl = this.options.pluginGatewayUrl?.(skill.pluginId ?? '');
-      output.push({ ...frozen, source, ...(gatewayUrl === undefined ? {} : { gatewayUrl }) });
+      output.push({
+        ...frozen,
+        source: binding.source,
+        ...(gatewayUrl === undefined ? {} : { gatewayUrl }),
+      });
     }
     this.assertBindingsCurrent(output);
     return output;
@@ -200,7 +252,7 @@ export class SkillsService {
       await this.catalog.verifySnapshot(skill, signal);
     }
   }
-  public assertBindingsCurrent(skills: readonly FrozenSkill[]): void {
+  public assertBindingsCurrent(skills: readonly SkillBinding[]): void {
     for (const skill of skills) {
       const record = this.options.repository
         .skills()

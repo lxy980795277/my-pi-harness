@@ -6,7 +6,7 @@ allowed-tools: 'web_fetch'
 
 从链接、文件ID或日历ID确定目标服务并核对账户。Drive负责文件发现和权限，Docs负责正文，Sheets负责单元格，Slides负责页面，Calendar负责日程。本地DOCX/PDF插件不提供Google在线文档操作。
 
-用skill_search查找google-drive、google-docs、google-sheets、google-slides或google-calendar，再以真实id/contentHash激活所需技能。跨服务任务只加载相关技能。
+从已提供的Skill目录中选择google-drive、google-docs、google-sheets、google-slides或google-calendar，使用目录中的真实ID调用load_skill({id})激活所需技能。跨服务任务只加载相关技能。
 
 通过read_skill_resource读取references/access.md，使用已连接账户与真实目录。五个App共享此插件的授权，各自启用状态与启动信任仍独立检查；缺少能力时报告具体缺项，不索取Token。
 

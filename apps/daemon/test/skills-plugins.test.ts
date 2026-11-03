@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Fastify from 'fastify';
 import { openProfileStore, type ProfileStore } from '@my-pi-harness/storage';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SkillsService } from '../src/skills/service.js';
 import { PluginService, type PluginAppPort } from '../src/plugins/service.js';
 import { registerSkillRoutes } from '../src/skills/routes.js';
@@ -67,6 +67,151 @@ afterEach(async () => {
   }
 });
 describe('Skill and plugin installation ownership', () => {
+  it('accepts enabled candidate metadata without creating snapshots or retaining resources', async () => {
+    const f = await fixture();
+    const skill = await f.skills.create(
+      {
+        scope: 'user',
+        workspaceId: null,
+        name: 'example',
+        description: 'Example task',
+        content: 'Instructions loaded later',
+      },
+      signal,
+    );
+    const disabled = await f.skills.create(
+      {
+        scope: 'user',
+        workspaceId: null,
+        name: 'disabled',
+        description: 'Disabled task',
+        content: 'Unavailable instructions',
+      },
+      signal,
+    );
+    await f.skills.control(disabled.id, null, disabled.contentHash, false, signal);
+    const candidates = await f.skills.freezeCandidates(null, signal);
+    expect(candidates).toEqual([
+      {
+        selection: { id: skill.id, contentHash: skill.contentHash },
+        authorization: {
+          skillEpoch: 1,
+          pluginId: null,
+          pluginEpoch: 0,
+          pluginGeneration: null,
+        },
+        name: skill.name,
+        description: skill.description,
+        scope: skill.scope,
+        source: skill.source,
+      },
+    ]);
+    expect(await readdir(f.profile)).not.toContain('skill-versions');
+    await f.skills.remove(skill.id, null, skill.contentHash, signal);
+    expect(await f.skills.freezeCandidates(null, signal)).toEqual([]);
+  });
+  it('omits shadowed candidates and retains the accepted body after source edits', async () => {
+    const f = await fixture();
+    await f.skills.create(
+      {
+        scope: 'user',
+        workspaceId: null,
+        name: 'example',
+        description: 'User task',
+        content: 'User instructions',
+      },
+      signal,
+    );
+    const project = await f.skills.create(
+      {
+        scope: 'project',
+        workspaceId: 'project',
+        name: 'example',
+        description: 'Project task',
+        content: 'Project instructions',
+      },
+      signal,
+    );
+    const candidates = await f.skills.freezeCandidates('project', signal);
+    expect(candidates).toHaveLength(1);
+    const candidate = candidates[0];
+    if (candidate === undefined) throw new Error('missing candidate');
+    expect(candidate.selection.id).toBe(project.id);
+    const loaded = await f.skills.loadCandidate('project', candidate, signal);
+    await writeFile(
+      join(f.project, '.my-pi-harness/skills/example/SKILL.md'),
+      '---\nname: example\ndescription: Project task\n---\nUpdated instructions\n',
+    );
+    await expect(f.skills.loadCandidate('project', candidate, signal)).rejects.toMatchObject({
+      code: 'SKILL_STALE',
+    });
+    await f.skills.validateBindings([loaded], signal);
+    expect(loaded.content).toBe('Project instructions');
+  });
+  it('rejects a same-content plugin reinstall before loading an accepted candidate', async () => {
+    const f = await fixture();
+    const plugin = await f.plugins.install('documents', signal);
+    const [candidate] = await f.skills.freezeCandidates(null, signal);
+    if (candidate === undefined) throw new Error('missing candidate');
+    await f.plugins.remove('documents', plugin.revision);
+    await f.plugins.install('documents', signal);
+    const current = (await f.skills.freezeCandidates(null, signal)).find(
+      (entry) => entry.selection.id === candidate.selection.id,
+    );
+    if (current === undefined) throw new Error('missing reinstalled candidate');
+    expect(current.selection).toEqual(candidate.selection);
+    expect(current.authorization.pluginGeneration).not.toBe(
+      candidate.authorization.pluginGeneration,
+    );
+    await expect(f.skills.loadCandidate(null, candidate, signal)).rejects.toMatchObject({
+      code: 'SKILL_REVOKED',
+    });
+    expect((await f.skills.loadCandidate(null, current, signal)).content).not.toBe('');
+  });
+  it('rechecks accepted authorization when it changes while the body is being frozen', async () => {
+    const f = await fixture();
+    const skill = await f.skills.create(
+      {
+        scope: 'user',
+        workspaceId: null,
+        name: 'example',
+        description: 'Example task',
+        content: 'Original instructions',
+      },
+      signal,
+    );
+    const [candidate] = await f.skills.freezeCandidates(null, signal);
+    if (candidate === undefined) throw new Error('missing candidate');
+    const original = f.skills.freezeSelections.bind(f.skills);
+    let entered: () => void = () => undefined;
+    const freezing = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const spy = vi
+      .spyOn(f.skills, 'freezeSelections')
+      .mockImplementation(async (workspaceId, selections, ownedSignal) => {
+        const result = await original(workspaceId, selections, ownedSignal);
+        entered();
+        await gate;
+        return result;
+      });
+    const loading = f.skills.loadCandidate(null, candidate, signal);
+    const rejected = expect(loading).rejects.toMatchObject({ code: 'SKILL_REVOKED' });
+    try {
+      await freezing;
+      await f.skills.control(skill.id, null, skill.contentHash, false, signal);
+      await f.skills.control(skill.id, null, skill.contentHash, true, signal);
+      release();
+      await rejected;
+    } finally {
+      release();
+      spy.mockRestore();
+    }
+  });
   it('creates, freezes, revokes and re-enables without reviving accepted grants', async () => {
     const f = await fixture();
     const skill = await f.skills.create(
