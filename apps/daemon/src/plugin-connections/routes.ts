@@ -1,4 +1,4 @@
-import { pluginConnectionDefinition } from './definitions';
+import { pluginConnectionDefinition } from '@my-pi-harness/plugins';
 import { Type } from 'typebox';
 import { Value } from 'typebox/value';
 import {
@@ -9,9 +9,9 @@ import {
 import type { FastifyInstance } from 'fastify';
 import type { ApplicationServices } from '../application/services';
 import { requestOperation } from '../http/request-operation';
-import { requestPluginGateway } from './gateway';
+import { requestPluginGateway } from '@my-pi-harness/plugins';
 import { describePluginOAuthFailure } from './failure';
-import { PluginError } from '@my-pi-harness/integrations';
+import { PluginError } from '@my-pi-harness/plugins';
 
 const Params = Type.Object(
   { collectionId: Type.String({ pattern: '^[a-z][a-z0-9-]{0,63}$' }) },

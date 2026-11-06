@@ -11,6 +11,7 @@ export default defineConfig({
       'apps/web/test/**/*.test.ts',
       'packages/storage/test/**/*.test.ts',
       'packages/tools/test/**/*.test.ts',
+      'packages/plugins/test/**/*.test.ts',
       'packages/sandbox/test/**/*.test.ts',
       'packages/integrations/test/**/*.test.ts',
       'packages/agent-runtime/test/**/*.test.ts',

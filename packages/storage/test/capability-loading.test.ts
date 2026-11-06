@@ -1,9 +1,10 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { FrozenSkill, RunView, SkillCandidate } from '@my-pi-harness/protocol';
+import type { RunView } from '@my-pi-harness/protocol';
+import type { FrozenSkill, SkillCandidate, EventInput } from '@my-pi-harness/protocol/internal';
 import { afterEach, expect, it } from 'vitest';
-import { openProfileStore, type EventInput, type ProfileStore } from '../src/index';
+import { openProfileStore, type ProfileStore } from '../src/index';
 
 interface NativeCandidate {
   definition: { name: string; description: string; parameters: Record<string, unknown> };

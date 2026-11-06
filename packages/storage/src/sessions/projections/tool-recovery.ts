@@ -2,9 +2,9 @@ import {
   ToolCallRecordSchema,
   type MessageView,
   type ToolCallRecord,
-  type StoredToolResult,
 } from '@my-pi-harness/protocol';
-import type { EventInput } from '../types';
+import type { StoredToolResult, EventInput } from '@my-pi-harness/protocol/internal';
+
 import { assistantToolIntents, storedToolCallId, isRetainableToolArguments } from './tool-intents';
 import { activeTool } from './tool-batch';
 import { checked } from '../../shared/validation';

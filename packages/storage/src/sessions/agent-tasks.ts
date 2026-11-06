@@ -38,6 +38,21 @@ interface TaskMessagePage {
 export class AgentTaskQuery {
   public constructor(private readonly db: BetterSQLite3Database<typeof schema>) {}
 
+  /** Resolve the task created by one committed delegation tool. */
+  public findBySource(sessionId: string, sourceToolCallId: string): AgentTaskSummary | undefined {
+    const row = this.db
+      .select({ id: schema.agentTasks.id })
+      .from(schema.agentTasks)
+      .where(
+        and(
+          eq(schema.agentTasks.sessionId, sessionId),
+          eq(schema.agentTasks.sourceToolCallId, sourceToolCallId),
+        ),
+      )
+      .get();
+    return row ? this.get(sessionId, row.id) : undefined;
+  }
+
   public row(sessionId: string, taskId: string): typeof schema.agentTasks.$inferSelect {
     const session = this.db
       .select({ archived: schema.sessions.archived })

@@ -1,8 +1,5 @@
-import type {
-  FrozenSkill as ProtocolFrozenSkill,
-  SkillResource,
-  SkillScope,
-} from '@my-pi-harness/protocol';
+import type { SkillResource, SkillScope } from '@my-pi-harness/protocol';
+import type { FrozenSkill as ProtocolFrozenSkill } from '@my-pi-harness/protocol/internal';
 export type { SkillResource, SkillScope, SkillResourceContent } from '@my-pi-harness/protocol';
 
 /** Source snapshots do not own the gateway URL later attached by the daemon. */
@@ -40,9 +37,12 @@ export interface SkillCatalogOptions {
   /** Host-managed resource copies must live outside every protected profile directory. */
   materializationDirectory?: string;
   protectedDirectories?: readonly string[];
-  /** Shared dependency sources are resolved relative to tools/src by default. */
-  bundledResourceDirectory?: string;
+  /** Exact host-registered dependencies; Skill manifests cannot select arbitrary files. */
+  resourceSources?: SkillResourceSources;
 }
+export type SkillResourceSources = Readonly<
+  Record<string, { readonly directory: string; readonly path: string }>
+>;
 /** The host rechecks activation and current Skill/plugin epochs before each new dispatch. */
 export type AssertSkillAuthorized = (skill: FrozenSkill, signal: AbortSignal) => Promise<void>;
 /** A command receives its own lease; releasing a Run cannot reclaim that command's resources. */

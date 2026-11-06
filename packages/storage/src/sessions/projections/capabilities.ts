@@ -3,15 +3,17 @@ import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import { isDeepStrictEqual } from 'node:util';
 import { Type } from 'typebox';
 import {
-  FrozenSkillSchema,
-  SkillCandidatesSchema,
-  FrozenMcpToolSchema,
   ToolSourceSchema,
   ToolDiscoveryDiagnosticSchema,
   type HarnessEvent,
+} from '@my-pi-harness/protocol';
+import {
+  FrozenSkillSchema,
+  SkillCandidatesSchema,
+  FrozenMcpToolSchema,
   type FrozenSkill,
   type SkillCandidate,
-} from '@my-pi-harness/protocol';
+} from '@my-pi-harness/protocol/internal';
 import { checked } from '../../shared/validation';
 import { StorageError } from '../../shared/errors';
 import * as schema from '../../sqlite/schema';

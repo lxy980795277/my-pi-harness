@@ -3,9 +3,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import Database from 'better-sqlite3';
-import type { FrozenSkill, MessageView, RunView } from '@my-pi-harness/protocol';
+import type { MessageView, RunView } from '@my-pi-harness/protocol';
+import type { FrozenSkill, EventInput } from '@my-pi-harness/protocol/internal';
 import { afterEach, expect, it } from 'vitest';
-import { openProfileStore, type EventInput, type ProfileStore } from '../src/index';
+import { openProfileStore, type ProfileStore } from '../src/index';
 
 const owned: { directory: string; store: ProfileStore }[] = [];
 afterEach(async () => {

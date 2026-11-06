@@ -8,7 +8,7 @@ import {
   type PluginRemoveInput,
 } from '@my-pi-harness/protocol';
 import type { FastifyInstance } from 'fastify';
-import type { PluginService } from './service';
+import type { PluginService } from '@my-pi-harness/plugins';
 import { requestOperation } from '../http/request-operation';
 const Params = Type.Object(
   { id: Type.String({ minLength: 1, maxLength: 160 }) },

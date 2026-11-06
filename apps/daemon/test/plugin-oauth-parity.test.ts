@@ -4,8 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
 import { PluginCredentialStore } from '@my-pi-harness/storage';
-import type { PluginOAuthFetch } from '@my-pi-harness/integrations';
-import { PluginConnectionService } from '../src/plugin-connections/service';
+import type { OAuthFetch } from '@my-pi-harness/integrations';
+import { PluginConnectionService } from '@my-pi-harness/plugins';
 
 const cleanups: (() => Promise<void>)[] = [];
 afterEach(async () => {
@@ -23,7 +23,7 @@ function requestBody(init: RequestInit | undefined): string {
   if (typeof init?.body !== 'string') throw new Error('Expected an encoded OAuth request body');
   return init.body;
 }
-async function fixture(requestOverride?: PluginOAuthFetch) {
+async function fixture(requestOverride?: OAuthFetch) {
   let customRequest = requestOverride;
   const directory = await mkdtemp(join(tmpdir(), 'plugin-oauth-parity-'));
   cleanups.push(async () => await rm(directory, { recursive: true, force: true }));
@@ -38,7 +38,7 @@ async function fixture(requestOverride?: PluginOAuthFetch) {
   let identity = { ownerId: 'owner-fixture', epoch: 1 };
   let tokenVersion = 0;
   const changed: string[] = [];
-  const request: PluginOAuthFetch = async (id, url, init) => {
+  const request: OAuthFetch = async (id, url, init) => {
     calls.push({ id, url, init });
     if (customRequest !== undefined) return await customRequest(id, url, init);
     if (url.pathname === '/user')
@@ -90,7 +90,7 @@ async function fixture(requestOverride?: PluginOAuthFetch) {
     identity: (value: typeof identity) => {
       identity = value;
     },
-    setRequest: (request: PluginOAuthFetch) => {
+    setRequest: (request: OAuthFetch) => {
       customRequest = request;
     },
   };

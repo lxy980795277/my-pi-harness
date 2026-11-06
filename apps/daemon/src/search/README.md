@@ -1,0 +1,9 @@
+# 本地工具搜索向量
+
+daemon持有LocalToolSearchEmbedder并通过ToolSearchEmbedder接口注入运行时；工具目录、排名和搜索回退仍由tools及runtime拥有。本模块不管理MCP连接、插件授权或模型工具加载。
+
+首次推理在独占Node Worker内按需加载Transformers.js的CPU/q8特征提取，固定Xenova/multilingual-e5-small提交761b726dd34fb83930e26aab4e9ac3899aa1fa78，输出384维归一化向量。模型缓存目录由应用装配显式指定；Worker不继承daemon环境或启动参数，不接受模型工具提供的模型/脚本路径。
+
+每次最多512条、每批32条、单条16000字符。调用者取消移除自己的排队工作，共享权重可供后续搜索复用；关闭拒绝新请求并终止Worker、等待退出。模型加载与推理的原始错误不向模型传播。
+
+单测使用显式注入的本地fixture模块，不下载真实权重；生产部署由daemon的直接依赖携带Transformers.js。

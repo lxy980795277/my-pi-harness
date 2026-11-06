@@ -6,13 +6,15 @@ import type {
   InputRequest,
   QueueInput,
   QueuePatchInput,
-  ResolvedSessionCreateInput,
   SessionPatchInput,
   SessionSnapshot,
   SessionSummary,
+} from '@my-pi-harness/protocol';
+import type {
+  ResolvedSessionCreateInput,
   FrozenSkill,
   LiveMessageDelta,
-} from '@my-pi-harness/protocol';
+} from '@my-pi-harness/protocol/internal';
 import { decodeContextMessage, snapshotPrivateData } from '../context/codec';
 import { RuntimeError } from '../errors';
 import type { ModelGateway } from '../models/gateway';

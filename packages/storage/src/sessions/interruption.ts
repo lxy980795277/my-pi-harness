@@ -1,5 +1,5 @@
 import { ToolCallRecordSchema, type SessionSummary, type WorkState } from '@my-pi-harness/protocol';
-import type { EventInput } from './types';
+import type { EventInput } from '@my-pi-harness/protocol/internal';
 import { checked } from '../shared/validation';
 
 /** Build terminal facts for resources abandoned by the previous daemon; no work is executed. */

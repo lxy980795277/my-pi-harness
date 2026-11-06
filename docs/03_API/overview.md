@@ -1,10 +1,12 @@
 # API与共享协议
 
-`packages/protocol` 是Web、daemon和桌面实际共享DTO与schema的唯一来源，必须保持浏览器安全。API边界校验与TypeScript类型从同一schema派生，消费者不复制定义。
+`packages/protocol`根入口是Web、daemon和桌面共享公开DTO与schema的唯一来源，必须保持浏览器安全。API边界校验与TypeScript类型从同一schema派生，消费者不复制定义。
+
+宿主模块间的数据通过`@my-pi-harness/protocol/internal`导入，包括冻结授权与Skill绑定、canonical工具结果、实时消息输入、插件私有存储记录和会话提交数据。EventInput与RequestAcceptance在此唯一定义；公开模块不得引用internal，Renderer不得导入internal。该出口不新增HTTP/SSE字段或访问权限，服务仍须显式投影公开响应。
 
 应用版本与协议版本用途不同：应用版本来自根版本生成流程；`PROTOCOL_VERSION` 管理跨端协议兼容。修改协议时更新所有消费者和相应检查，不能用产品版本代替兼容判定。
 
-当前协议为24，包含本地/远程MCP、工具目录与动态加载、Skill选择及插件/服务连接、子Agent任务与看板，以及持久seq和实时liveRevision分离的会话快照。FrozenSkill可记录本Run物化后的resourceDirectory，ToolCallView可记录宿主注册的artifacts，产物按artifact ID下载不可变字节。AgentLimits不含累计tokenBudget或maxTurns；设置、委派参数和任务详情不提供累计预算或请求轮数限制，原用量计量保留。任务详情移除无消费者的messagesQueue，正文和相关工具按页读取，内部通信事实与查询保持。客户端与daemon必须采用相同协议版本，开发期不保留旧协议兼容。SQLite schema为10，公开持久事件envelope为1；Session JSONL外层仅有records/checksum，不设批次版本，实际磁盘格式见[存储说明](../../packages/storage/README.md)。这些职责不随HTTP版本机械变化。
+当前协议为24，包含本地/远程MCP、工具目录与动态加载、Skill选择及插件/服务连接、子Agent任务与看板，以及持久seq和实时liveRevision分离的会话快照。宿主internal中的FrozenSkill可记录本Run物化后的resourceDirectory，ToolCallView可记录宿主注册的artifacts，产物按artifact ID下载不可变字节。AgentLimits不含累计tokenBudget或maxTurns；设置、委派参数和任务详情不提供累计预算或请求轮数限制，原用量计量保留。任务详情移除无消费者的messagesQueue，正文和相关工具按页读取，内部通信事实与查询保持。客户端与daemon必须采用相同协议版本，开发期不保留旧协议兼容。SQLite schema为10，公开持久事件envelope为1；Session JSONL外层仅有records/checksum，不设批次版本，实际磁盘格式见[存储说明](../../packages/storage/README.md)。这些职责不随HTTP版本机械变化。
 
 ## M0 HTTP
 

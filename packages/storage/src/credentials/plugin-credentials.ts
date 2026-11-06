@@ -2,34 +2,17 @@ import { constants, renameSync } from 'node:fs';
 import { lstat, mkdir, open, realpath, rm } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { Type, type Static } from 'typebox';
-import { SkillConnectionAccountSchema } from '@my-pi-harness/protocol';
+import { Type } from 'typebox';
+import {
+  PluginOAuthCredentialSchema,
+  type PluginOAuthCredential,
+} from '@my-pi-harness/protocol/internal';
 import { checked } from '../shared/validation';
 import { StorageError } from '../shared/errors';
 
-export type PluginOAuthCredential = Static<typeof CredentialSchema>;
-
-const object = { additionalProperties: false } as const;
-const id = Type.String({ minLength: 1, maxLength: 160 });
-
-const CredentialSchema = Type.Object(
-  {
-    accessToken: Type.String({ minLength: 1, maxLength: 65536 }),
-    refreshToken: Type.Optional(Type.String({ minLength: 1, maxLength: 65536 })),
-    account: Type.Union([SkillConnectionAccountSchema, Type.Null()]),
-    apiUrl: Type.String({ minLength: 1, maxLength: 4096 }),
-    connectedAt: Type.Integer({ minimum: 0 }),
-    expiresAt: Type.Optional(Type.Integer({ minimum: 0 })),
-    ownerId: id,
-    identityEpoch: Type.Integer({ minimum: 1 }),
-    pluginGeneration: id,
-  },
-  object,
-);
-
 const FileSchema = Type.Record(
   Type.String({ pattern: '^[a-z][a-z0-9-]{0,63}$' }),
-  CredentialSchema,
+  PluginOAuthCredentialSchema,
   { maxProperties: 64, additionalProperties: false },
 );
 

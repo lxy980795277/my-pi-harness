@@ -1,7 +1,7 @@
 import { asc, eq, sql } from 'drizzle-orm';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import { ToolCallRecordSchema, type SessionSummary } from '@my-pi-harness/protocol';
-import type { EventInput } from './types';
+import type { EventInput } from '@my-pi-harness/protocol/internal';
 import * as schema from '../sqlite/schema';
 import { checked } from '../shared/validation';
 import { interruptionEvents } from './interruption';

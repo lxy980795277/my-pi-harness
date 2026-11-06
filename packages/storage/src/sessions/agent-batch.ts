@@ -3,7 +3,7 @@ import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import { StorageError } from '../shared/errors';
 import { checked } from '../shared/validation';
 import * as schema from '../sqlite/schema';
-import type { EventInput } from './types';
+import type { EventInput } from '@my-pi-harness/protocol/internal';
 import { TaskMessageConsumedSchema, TaskMessageQueuedSchema } from './event-validation';
 
 /** A consumed communication and the exact model-visible input commit in one journal batch. */

@@ -1,4 +1,5 @@
-import type { FrozenSkill, SkillCandidate, ToolDiscoveryDiagnostic } from '@my-pi-harness/protocol';
+import type { ToolDiscoveryDiagnostic } from '@my-pi-harness/protocol';
+import type { FrozenSkill, SkillCandidate } from '@my-pi-harness/protocol/internal';
 import type { FrozenMcpTool } from '../tools/external';
 import type { SkillContextDiagnostic } from './skill-history';
 

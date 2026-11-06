@@ -2,7 +2,7 @@ import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fauxAssistantMessage, type TranscriptContext } from '@earendil-works/pi-ai';
 import { observeNativeTool } from './support/native-tool';
-import { StoredToolResultSchema } from '@my-pi-harness/protocol';
+import { StoredToolResultSchema } from '@my-pi-harness/protocol/internal';
 import { openProfileStore } from '@my-pi-harness/storage';
 import { ArrayOptions } from 'typebox/type';
 import { describe, expect, it } from 'vitest';

@@ -1,10 +1,10 @@
 # Tools
 
-模型工具、Skill资源和插件贡献的实现包。工具定义及绑定由本包拥有，agent-runtime负责接受、审批和日志提交，daemon提供实际服务，sandbox落实文件、网络和进程机制。tools依赖protocol及sandbox，不导入agent-runtime、daemon、storage或integrations实现。
+模型工具、通用Skill资源和受管理命令的实现包。工具定义及绑定由本包拥有，agent-runtime负责接受、审批和日志提交，daemon提供实际服务，sandbox落实文件、网络和进程机制。tools依赖protocol及sandbox，不导入agent-runtime、daemon、storage或integrations实现。
 
 ## 公开入口与源码职责
 
-根index.ts组合公开API，skills、plugins和document-text提供对应叶入口，源码与发布exports保持同一职责。document-text直接导出utils/document-text.ts中的授权字节提取能力，不加载工具目录。TS相对模块导入无后缀，真实脚本与资源保留扩展；开发、测试与生产均通过exports读取src，Node进程显式加载tsx。
+根index.ts组合公开API，skills和document-text提供对应叶入口，源码与发布exports保持同一职责。document-text直接导出utils/document-text.ts中的授权字节提取能力，不加载工具目录。TS相对模块导入无后缀，真实脚本与资源保留扩展；开发、测试与生产均通过exports读取src，Node进程显式加载tsx。
 
 | 目录      | 负责的内容                                                         |
 | --------- | ------------------------------------------------------------------ |
@@ -12,7 +12,6 @@
 | lib/      | 注册契约、执行上下文及多个工具实际复用的文件操作、输入与传输机制   |
 | utils/    | 工具目录检索及工具、附件共用的文档正文提取                         |
 | skills/   | YAML解析、发现优先级、安装文件、不可变快照、共享依赖及独立资源租约 |
-| plugins/  | 有限manifest、App声明、Skill/CLI资源与只读预览                     |
 | commands/ | 命令归属、短等待、输出游标、总生存期与命令资源引用                 |
 
 ## 工具注册和领域端口
@@ -21,7 +20,7 @@ lib/tool-registry.ts拥有ToolRegistration、注册工厂和ToolRegistry。ToolR
 
 tools/按模型工具名使用kebab-case文件名，例如read-file.ts、edit-file.ts、spawn-agent.ts和load-skill.ts。每个文件集中声明自己的参数schema、注册元数据和执行逻辑；工具专属实现留在所属文件。tools/index.ts只聚合导出，根workspace-tool-registry.ts组合原生目录，目录顺序与默认/按需声明保持明确。utils/tool-search.ts拥有目录检索，不与注册装配混放。不存在按工具族拆出的schema清单、注册数组或按工具名称选择实现的第二套派发。
 
-lib/提供注册与上下文契约和有实际共同消费者的操作，不承接每个模型工具的声明或统一执行所有工具。文件预像校验、稳定读取与原子写入可由多个工具共用；命令状态、Skill版本与租约、插件贡献分别由commands/、skills/、plugins/拥有，正文提取由utils/document-text.ts提供。拆分工具入口不拆散这些服务，也不把它们放回工具注册文件。
+lib/提供注册与上下文契约和有实际共同消费者的操作，不承接每个模型工具的声明或统一执行所有工具。文件预像校验、稳定读取与原子写入可由多个工具共用；命令状态和Skill版本与租约分别由commands/、skills/拥有，插件贡献由独立plugins包拥有，正文提取由utils/document-text.ts提供。拆分工具入口不拆散这些服务，也不把它们放回工具注册文件。
 
 bind接收当前Run的ToolContext，返回异步调用入口；注册工厂同时接纳同步和异步实现，同步异常也通过返回Promise拒绝。lib/tool-context.ts拥有公共执行上下文及各类工具回调组合，具体工具的回调接口和输入类型随对应工具文件定义；回调仅提供实际领域操作，不传Run、Coordinator或数据库。主子执行器各自重绑session/run/task、Work上下文与角色上限。执行闭包不进入日志，模型可见定义、来源指纹和授权版本由runtime冻结。新增工具同时设计参数校验、结果内容、效果策略和真实服务可用性。
 
@@ -31,11 +30,11 @@ bind接收当前Run的ToolContext，返回异步调用入口；注册工厂同�
 
 SkillCatalog发现注册根并按project、user、plugin、system排序，正文与资源索引共同生成contentHash。freeze重新读取源树验证相同内容，再发布不可变快照；loadResource只读取已接受路径并检查hash和大小。安装拒绝链接、隐藏资源、路径遍历、重复及超限文件，不执行源安装脚本。GitHub下载固定提交及blob身份，网络请求由宿主注入受控传输。
 
-resource-manifest.json的version为1，dependencies每项包含source、target和hash。source相对于tools/src，仅接受plugins/shared/office中的common.py、cli_support.py、convert_pdf.py及utils/document-view/pdf_safety.py；target是Skill内唯一相对路径。发现和冻结验证SHA-256，将共享依赖复制进快照，后续读取不依赖升级后的源码；专属格式模块直接随各Skill保存。
+resource-manifest.json的version为1，dependencies每项包含source、target和hash。source是宿主resourceSources中注册的精确标识，映射到固定目录与相对文件；未注册来源明确拒绝。target是Skill内唯一相对路径。通用引擎不自行查找插件或宿主源码，也不接受模型提供共享文件根。发现和冻结验证SHA-256，将共享依赖复制进快照，后续读取不依赖升级后的源码；专属格式模块直接随各Skill保存。
 
 materializeBindings接收已接受FrozenSkill、取消信号及宿主assertAuthorized回调，复核授权和快照后在profile外生成只读副本。宿主用protectedDirectories传入profile根；文件0400、目录0500，sandbox接收精确readOnlyDirectories。返回租约包含bindings、readOnlyDirectories、verify、retain和release；每次新命令retain独立引用，最后引用释放才删除物化目录。revokeBindings及close拒绝新派发，宿主先收束仍在使用资源的进程再释放其引用。full-access保留宿主文件权限，资源校验不替代OS路径保护。
 
-PluginCatalog拥有manifest与贡献索引，公开清单不含凭据。App声明同时提供安全公开元数据与宿主固定传输目标；OAuth交换、Token和用户安装/开关/generation仍由integrations及daemon拥有。插件预览只读取所属SKILL.md，不安装、激活或执行资源。
+插件声明、资源、安装/开关与授权生命周期由[plugins](../plugins/README.md)拥有；daemon通过窄接口连接Skills与插件贡献。工具包不反向导入plugins，用户和项目Skills仍独立发现与管理。
 
 ## 命令、文档与交付
 
@@ -47,9 +46,9 @@ publish_artifact调用宿主注入的PublishArtifactHandler注册工作区文件
 
 ## 运行与验证
 
-插件manifest、App声明和Skill位于src/plugins/<id>，专属脚本随Skill保存，共用办公支持位于src/plugins/shared/office；原生PDF页图支持位于src/utils/document-view。生产部署包含完整src，通过模块位置解析资源。Python、LibreOffice和字体等依赖按实际操作准备，缺失明确诊断；安装走显式授权的普通命令。当前受管理本地命令的正向OS后端限macOS，其他平台明确拒绝，不能从文件解析成功推导平台隔离可用。
+插件manifest、App声明和Skill位于plugins包，专属脚本随Skill保存，共用办公支持由plugins包显式声明；原生PDF页图支持位于本包src/utils/document-view，由DOCUMENT_VIEW_RESOURCE_DIRECTORY公开固定目录。生产部署包含完整src，通过模块位置解析资源。Python、LibreOffice和字体等依赖按实际操作准备，缺失明确诊断；安装走显式授权的普通命令。当前受管理本地命令的正向OS后端限macOS，其他平台明确拒绝，不能从文件解析成功推导平台隔离可用。
 
-test覆盖注册调用、文件/Web、Skill快照和租约、插件声明、命令及正文读取；临时目录与受控fixture避免使用用户profile或凭据。办公结构、真实重算、视觉及独立桌面运行分别提供证据，范围见[工具体系与沙箱](../../docs/09_TECHNICAL/工具体系与沙箱.md)。
+test覆盖注册调用、文件/Web、Skill快照和租约、命令及正文读取；临时目录与受控fixture避免使用用户profile或凭据。办公结构、真实重算、视觉及独立桌面运行分别提供证据，范围见[工具体系与沙箱](../../docs/09_TECHNICAL/工具体系与沙箱.md)。
 
 ```sh
 pnpm --filter @my-pi-harness/tools typecheck

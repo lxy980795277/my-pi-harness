@@ -1,7 +1,7 @@
-import { pluginConnectionDefinition } from '../src/plugin-connections/definitions';
-import { type PluginConnectionDefinition } from '@my-pi-harness/integrations';
+import { pluginConnectionDefinition } from '@my-pi-harness/plugins';
+import { type PluginConnectionDefinition } from '@my-pi-harness/plugins';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { requestPluginGateway } from '../src/plugin-connections/gateway';
+import { requestPluginGateway } from '@my-pi-harness/plugins';
 
 function definition(id: string): PluginConnectionDefinition {
   const found = pluginConnectionDefinition(id);

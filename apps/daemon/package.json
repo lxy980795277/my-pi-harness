@@ -31,7 +31,9 @@
     "@my-pi-harness/integrations": "workspace:*",
     "@my-pi-harness/sandbox": "workspace:*",
     "@my-pi-harness/tools": "workspace:*",
-    "tsx": "catalog:"
+    "tsx": "catalog:",
+    "@my-pi-harness/plugins": "workspace:*",
+    "@huggingface/transformers": "catalog:"
   },
   "devDependencies": {
     "@types/node": "catalog:",

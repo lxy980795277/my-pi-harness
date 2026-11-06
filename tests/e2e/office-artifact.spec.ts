@@ -7,11 +7,11 @@ import {
   AuthStatusSchema,
   AgentTaskListSchema,
   AgentTaskDetailSchema,
-  FrozenSkillSchema,
   SkillViewSchema,
   SessionSnapshotSchema,
   SessionSummarySchema,
 } from '@my-pi-harness/protocol';
+import { FrozenSkillSchema } from '@my-pi-harness/protocol/internal';
 import { test, expect } from './fixture';
 import { chooseConversationModel, chooseOption } from './ui-controls';
 import { configureTestProvider } from './model-fixtures';

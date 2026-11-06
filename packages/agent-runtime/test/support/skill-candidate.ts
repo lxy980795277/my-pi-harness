@@ -1,4 +1,4 @@
-import type { FrozenSkill, SkillCandidate } from '@my-pi-harness/protocol';
+import type { FrozenSkill, SkillCandidate } from '@my-pi-harness/protocol/internal';
 
 /** Candidate fixtures retain accepted identities without leaking instruction bodies into metadata. */
 export function skillCandidate(skill: FrozenSkill): SkillCandidate {

@@ -6,9 +6,9 @@ import type {
   RunView,
   SessionSummary,
   WorkState,
-  FrozenSkill,
   SessionSnapshot,
 } from '@my-pi-harness/protocol';
+import type { FrozenSkill } from '@my-pi-harness/protocol/internal';
 import type { ResolvedModel } from '../models/gateway';
 import type { WorkRuntime } from '../work/runtime';
 import { encodeContextMessage, snapshotPrivateData } from './codec';

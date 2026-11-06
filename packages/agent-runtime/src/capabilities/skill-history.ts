@@ -1,4 +1,5 @@
-import type { FrozenSkill, WorkState } from '@my-pi-harness/protocol';
+import type { WorkState } from '@my-pi-harness/protocol';
+import type { FrozenSkill } from '@my-pi-harness/protocol/internal';
 import type { SkillsPort } from './ports';
 
 export interface SkillContextDiagnostic {

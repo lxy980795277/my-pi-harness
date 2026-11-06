@@ -4,7 +4,9 @@ Node 24 宿主使用的同步存储。JSONL保存会话执行事实，独立不�
 
 ## 源码职责
 
-`src/index.ts`是唯一公开入口。`profile/`拥有打开、锁、关闭、恢复及跨JSONL与SQLite的提交编排；`sqlite/`保存Drizzle表和按版本校验的迁移；`sessions/`保存日志、附件、上下文查询和事件校验，`sessions/projections/`维护可重建的会话、工具、能力及工作状态投影。`repositories/`保存身份、模型配置、工作区、MCP、扩展及高级账户的SQLite仓储；`credentials/`拥有系统凭据和插件私有凭据；`shared/`仅放存储错误和通用持久数据校验。
+`src/index.ts`是唯一公开入口。`profile/`拥有打开、锁、关闭和跨JSONL与SQLite的唯一事务编排；`sqlite/`保存Drizzle表和按版本校验的迁移；`sessions/`保存日志、附件、上下文查询和事件校验，`sessions/projections/`维护可重建的会话、工具、能力及工作状态投影。`repositories/`保存身份、模型配置、工作区、MCP、扩展及高级账户的SQLite仓储；`credentials/`拥有系统凭据和插件私有凭据；`shared/`仅放存储错误和通用持久数据校验。
+
+SessionQueries拥有会话快照、输入队列来源、幂等接受结果及公开事件分页的SQL读取；SessionRecovery在ProfileStore的启动事务内从日志与附件重建投影并核对产物引用。SessionEventCommit拥有会话创建与后续事件的校验和暂存，不自行提交事务；ArtifactRepository拥有已发布产物的元数据、可见性核对和blob引用。ProfileStore保留公开门面、资源所有权、提交顺序与失败冻结，所有查询与恢复共用同一数据库和内存流式覆盖层，没有第二份会话状态。
 
 模型配置、厂商绑定和默认模型由`ModelSettingsRepository`查询与更新，`ProfileStore`保持对外方法和事务所有权。配置更新通过宿主提供的事务函数执行，继续服从profile关闭状态和日志写入失败后的写入冻结，不另建提交或恢复路径。
 
@@ -105,7 +107,7 @@ SQLite schema按版本和checksum校验：0001保存配置与会话投影，0002
 
 ## M4能力配置与会话事实
 
-当前SQLite schema为9；第7代迁移移除已退役插件默认账户的归属标记，保留原账户及系统凭据引用，第8代添加`mcp_catalog_snapshots`派生目录，第9代加入下述子任务投影与独立角色配置。目录按Server及作用域保存非秘密授权指纹、有界协议定义JSON和发现时间，不保存凭据字节或可执行TypeBox对象；宿主恢复时重验官方协议与当前授权。目录可重建，损坏或失效不能授予信任，也不能替代配置/秘密。MCP目录开关/精确只读授权、远程配置、Skill启停、插件安装及高级外部服务连接是SQLite配置事实；插件共享 OAuth 按上述私有 JSON 独立保存，其他秘密保留系统凭据库。Skill冻结文件保存于profile的不可变版本目录，资源使用hash校验和Run lease，不能仅备份会话日志替代这些资源。
+当前SQLite schema为10；第7代迁移移除已退役插件默认账户的归属标记，保留原账户及系统凭据引用，第8代添加`mcp_catalog_snapshots`派生目录，第9代加入下述子任务投影与独立角色配置，第10代添加不可变产物的查询索引。目录按Server及作用域保存非秘密授权指纹、有界协议定义JSON和发现时间，不保存凭据字节或可执行TypeBox对象；宿主恢复时重验官方协议与当前授权。目录可重建，损坏或失效不能授予信任，也不能替代配置/秘密。MCP目录开关/精确只读授权、远程配置、Skill启停、插件安装及高级外部服务连接是SQLite配置事实；插件共享 OAuth 按上述私有 JSON 独立保存，其他秘密保留系统凭据库。Skill冻结文件保存于profile的不可变版本目录，资源使用hash校验和Run lease，不能仅备份会话日志替代这些资源。
 
 `run.accepted`私有数据保存初始工具、MCP绑定、带真实来源和指纹的原生候选、Skill候选元数据及已激活正文/授权；候选元数据不预加载正文。`run.tools_loaded`保存递增可见版本、完整定义/来源及冻结Skill。投影校验版本连续、公开名称对应私有定义，新增session/workspace工具必须与接受记录的schema、来源和指纹一致，初始工具/Skill不能悄悄丢失。新增Skill必须匹配接受目录或当前Run已消费输入的精确内容和绑定身份；消费按此前最近一次有效接受元数据校验，尚未消费、被删除或编辑移除的输入不作为新增激活依据。同内容插件重装不能替换旧generation。`context.prepared.capabilityRevision`必须等于当前可见版本。服务插件的只读网关地址保存在冻结Skill中，私有网关访问能力不进入日志。重建不连接上游或重做请求。
 

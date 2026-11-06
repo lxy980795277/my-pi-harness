@@ -62,8 +62,24 @@ export function importViolation(file, specifier, repoRoot = root) {
     }
   }
 
-  if (/^@my-pi-harness\/protocol\//.test(specifier)) {
+  if (
+    /^@my-pi-harness\/protocol\//.test(specifier) &&
+    specifier !== '@my-pi-harness/protocol/internal'
+  ) {
     return '公共协议必须从显式 exports 导入';
+  }
+
+  if (
+    path.startsWith('packages/protocol/src/') &&
+    !path.startsWith('packages/protocol/src/internal/') &&
+    (localTarget === 'packages/protocol/src/internal' ||
+      localTarget?.startsWith('packages/protocol/src/internal/'))
+  ) {
+    return '公开协议不能依赖宿主内部数据';
+  }
+
+  if (path.startsWith('apps/web/src/') && specifier === '@my-pi-harness/protocol/internal') {
+    return 'Renderer不能导入宿主内部协议';
   }
 
   const isHostDependency =
@@ -97,8 +113,26 @@ export function importViolation(file, specifier, repoRoot = root) {
   }
 
   if (
+    path.startsWith('packages/integrations/src/') &&
+    /^@my-pi-harness\/plugins(?:\/|$)/.test(specifier)
+  ) {
+    return 'Integrations不能反向依赖Plugins';
+  }
+
+  if (
+    path.startsWith('packages/plugins/src/') &&
+    (/^@my-pi-harness\/(?:storage|agent-runtime|daemon|desktop|web)(?:\/|$)/.test(specifier) ||
+      /^(?:@earendil-works\/|@fastify\/|fastify(?:\/|$)|react(?:\/|$)|react-dom(?:\/|$)|electron(?:\/|$))/.test(
+        specifier,
+      ) ||
+      serverPackages.has(packageName(specifier)))
+  ) {
+    return 'Plugins只能通过窄端口访问持久化、Runtime、HTTP或Renderer';
+  }
+
+  if (
     path.startsWith('packages/tools/src/') &&
-    /^@my-pi-harness\/(?:agent-runtime|storage|integrations|daemon)(?:\/|$)/.test(specifier)
+    /^@my-pi-harness\/(?:agent-runtime|storage|integrations|plugins|daemon)(?:\/|$)/.test(specifier)
   )
     return 'Tools只能通过窄端口访问宿主领域';
   if (

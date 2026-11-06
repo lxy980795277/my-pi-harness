@@ -1,6 +1,6 @@
 import { fauxAssistantMessage } from '@earendil-works/pi-ai';
 import { observeNativeTool } from './support/native-tool';
-import type { FrozenSkill } from '@my-pi-harness/protocol';
+import type { FrozenSkill } from '@my-pi-harness/protocol/internal';
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
 import type { FrozenMcpTool } from '../src/tools/external';

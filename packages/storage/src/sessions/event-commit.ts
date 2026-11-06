@@ -2,9 +2,12 @@ import { randomUUID } from 'node:crypto';
 import { and, eq } from 'drizzle-orm';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import {
+  BranchViewSchema,
+  SessionSummarySchema,
   HarnessEventSchema,
   QueueInputSchema,
   RunViewSchema,
+  type SessionSummary,
   type HarnessEvent,
 } from '@my-pi-harness/protocol';
 import { StorageError } from '../shared/errors';
@@ -15,7 +18,12 @@ import { InputIdSchema, QueueRequestSchema, RunAcceptedSchema } from './event-va
 import type { ProjectionWriter } from './projections/projector';
 import { validateToolBatch } from './projections/tool-batch';
 import type { StoredSessionEvent } from './session-jsonl';
-import type { EventInput, RequestAcceptance } from './types';
+import type {
+  SessionCreateRecord,
+  EventInput,
+  RequestAcceptance,
+} from '@my-pi-harness/protocol/internal';
+import type { WorkspaceRepository } from '../repositories/workspaces';
 
 /** Validates one durable command and stages its journal records inside the profile transaction. */
 export class SessionEventCommit {
@@ -23,7 +31,65 @@ export class SessionEventCommit {
     private readonly db: BetterSQLite3Database<typeof schema>,
     private readonly projector: ProjectionWriter,
     private readonly stage: (record: StoredSessionEvent) => void,
+    private readonly workspaces: WorkspaceRepository,
   ) {}
+
+  /** Stage the initial branch and session event inside the profile transaction. */
+  public createSession(input: SessionCreateRecord): SessionSummary {
+    if (input.workspaceId !== null && this.workspaces.get(input.workspaceId) === undefined)
+      throw new StorageError('WORKSPACE_NOT_FOUND', 'Workspace does not exist');
+    const session = checked(SessionSummarySchema, {
+      id: input.id,
+      title: input.title,
+      providerId: input.providerId,
+      modelId: input.modelId,
+      thinkingLevel: input.thinkingLevel,
+      workspaceId: input.workspaceId,
+      approvalMode: input.approvalMode,
+      createdAt: input.at,
+      updatedAt: input.at,
+      activeBranchId: input.branchId,
+      activeRunId: null,
+      snapshotSeq: 1,
+    });
+    const branch = checked(BranchViewSchema, {
+      id: input.branchId,
+      sessionId: input.id,
+      parentId: null,
+      forkMessageId: null,
+      createdAt: input.at,
+    });
+    this.db
+      .insert(schema.sessions)
+      .values({
+        id: session.id,
+        data: session,
+        snapshotSeq: 1,
+        activeRunId: null,
+        workspaceId: session.workspaceId,
+      })
+      .run();
+    this.db
+      .insert(schema.branches)
+      .values({ id: branch.id, sessionId: session.id, data: branch })
+      .run();
+    const event = checked(HarnessEventSchema, {
+      version: 1,
+      eventId: randomUUID(),
+      sessionId: session.id,
+      runId: null,
+      seq: 1,
+      type: 'session.created',
+      at: input.at,
+      data: { session, branch },
+    });
+    this.db
+      .insert(schema.events)
+      .values({ ...event, privateData: null })
+      .run();
+    this.stage({ event, privateData: null });
+    return session;
+  }
 
   private duplicate(sessionId: string, inputs: readonly EventInput[]): boolean {
     if (inputs.length === 1 && inputs[0]?.type === 'run.finished') {

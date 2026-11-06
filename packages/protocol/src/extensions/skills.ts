@@ -4,8 +4,6 @@ export type SkillScope = Static<typeof SkillScopeSchema>;
 export type SkillSelection = Static<typeof SkillSelectionSchema>;
 export type SkillView = Static<typeof SkillViewSchema>;
 export type SkillResource = Static<typeof SkillResourceSchema>;
-export type FrozenSkill = Static<typeof FrozenSkillSchema>;
-export type SkillCandidate = Static<typeof SkillCandidateSchema>;
 export type SkillDetail = Static<typeof SkillDetailSchema>;
 export type SkillCreateInput = Static<typeof SkillCreateInputSchema>;
 export type SkillInstallInput = Static<typeof SkillInstallInputSchema>;
@@ -48,44 +46,6 @@ export const SkillResourceSchema = Type.Object(
   { path: Type.String(), hash, size: Type.Integer({ minimum: 0 }), mediaType: Type.String() },
   object,
 );
-
-/** Loaded instructions and resource identities can be stored in the private Run log. */
-export const FrozenSkillSchema = Type.Object(
-  {
-    selection: SkillSelectionSchema,
-    authorization: Type.Object(
-      {
-        skillEpoch: Type.Integer({ minimum: 0 }),
-        pluginId: Type.Union([id, Type.Null()]),
-        pluginEpoch: Type.Integer({ minimum: 0 }),
-        pluginGeneration: Type.Union([Type.String(), Type.Null()]),
-      },
-      object,
-    ),
-    name: Type.String(),
-    description: Type.String(),
-    scope: SkillScopeSchema,
-    source: Type.String(),
-    content: Type.String({ maxLength: 131072 }),
-    resourceDirectory: Type.Optional(Type.String({ minLength: 1, maxLength: 4096 })),
-    gatewayUrl: Type.Optional(Type.String({ minLength: 1, maxLength: 4096 })),
-    resources: Type.Array(SkillResourceSchema, { maxItems: 256 }),
-    allowedTools: Type.Array(Type.String(), { maxItems: 128 }),
-  },
-  object,
-);
-
-/** Accepted metadata binds an unloaded Skill without retaining its body or resources. */
-export const SkillCandidateSchema = Type.Pick(FrozenSkillSchema, [
-  'selection',
-  'authorization',
-  'name',
-  'description',
-  'scope',
-  'source',
-]);
-
-export const SkillCandidatesSchema = Type.Array(SkillCandidateSchema, { maxItems: 512 });
 
 export const SkillDetailSchema = Type.Object(
   {

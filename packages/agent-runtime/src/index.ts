@@ -21,7 +21,7 @@ export type {
   ExternalToolOutcome,
   FrozenMcpTool,
 } from './tools/external';
-export type { ExternalToolAuthorization } from '@my-pi-harness/protocol';
+export type { ExternalToolAuthorization } from '@my-pi-harness/protocol/internal';
 export type {
   EventInput,
   InputAcceptance,

@@ -1,7 +1,7 @@
 import { text as streamText } from 'node:stream/consumers';
 import { createServer } from 'node:http';
 import { fauxAssistantMessage, type TranscriptContext } from '@earendil-works/pi-ai';
-import type { FrozenSkill } from '@my-pi-harness/protocol';
+import type { FrozenSkill } from '@my-pi-harness/protocol/internal';
 import { describe, expect, it, vi } from 'vitest';
 import type { SkillsPort } from '../src/capabilities/ports';
 import { call, fixture, idle } from './support/work-fixture';

@@ -15,11 +15,9 @@
     "test": "vitest run --config vitest.config.ts"
   },
   "dependencies": {
-    "@huggingface/transformers": "catalog:",
     "@modelcontextprotocol/client": "catalog:",
     "@my-pi-harness/sandbox": "workspace:*",
     "typebox": "catalog:",
-    "yaml": "catalog:",
     "oauth4webapi": "catalog:",
     "@my-pi-harness/protocol": "workspace:*"
   },

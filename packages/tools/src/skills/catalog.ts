@@ -56,7 +56,7 @@ export class SkillCatalog {
         const directory = join(root.path, entry.name);
         let files;
         try {
-          files = await readSkillSource(directory, signal, this.options.bundledResourceDirectory);
+          files = await readSkillSource(directory, signal, this.options.resourceSources);
         } catch (error: unknown) {
           if (isMissing(error)) continue;
           throw error;
@@ -116,11 +116,7 @@ export class SkillCatalog {
       pluginGeneration: null,
     },
   ): Promise<FrozenSkill> {
-    const files = await readSkillSource(
-      skill.directory,
-      signal,
-      this.options.bundledResourceDirectory,
-    );
+    const files = await readSkillSource(skill.directory, signal, this.options.resourceSources);
     const main = files.find((file) => file.path === 'SKILL.md');
     if (!main) throw new SkillError('SKILL_CHANGED', 'SKILL.md disappeared');
     const parsed = parseSkill(

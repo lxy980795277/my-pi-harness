@@ -1,7 +1,7 @@
 import { RuntimeError } from '@my-pi-harness/agent-runtime';
 import { StorageError } from '@my-pi-harness/storage';
-import { PluginError as IntegrationPluginError } from '@my-pi-harness/integrations';
-import { PluginError, SkillError } from '@my-pi-harness/tools';
+import { SkillError } from '@my-pi-harness/tools';
+import { PluginError } from '@my-pi-harness/plugins';
 import type { FastifyInstance } from 'fastify';
 import { LoginError } from '../auth/errors';
 import { OAuthLaunchError } from './oauth-launch-tickets';
@@ -9,11 +9,7 @@ import { OAuthLaunchError } from './oauth-launch-tickets';
 /** Map application failures to bounded public errors without disclosing host details. */
 export function registerRequestErrors(server: FastifyInstance): void {
   server.setErrorHandler((error, request, reply) => {
-    if (
-      error instanceof SkillError ||
-      error instanceof PluginError ||
-      error instanceof IntegrationPluginError
-    ) {
+    if (error instanceof SkillError || error instanceof PluginError) {
       const status = /NOT_FOUND/.test(error.code)
         ? 404
         : /CONFLICT|BUSY|STALE|CLOSED|REVOKED/.test(error.code)

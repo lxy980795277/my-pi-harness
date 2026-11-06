@@ -1,6 +1,6 @@
 # 后端规范
 
-适用于 daemon、agent-runtime、storage、共享 protocol 及 Node 工具。Fastify 装配 HTTP，agent-runtime 拥有模型与 Run，storage 拥有事务和系统凭据；进程职责见 [架构](../01_ARCHITECTURE/overview.md)。下列工具、插件和导入要求在对应能力实现时生效，不表示后续功能已经可用。
+适用于daemon、agent-runtime、tools、plugins、integrations、storage及共享protocol。Fastify装配HTTP，agent-runtime拥有模型与Run，plugins拥有插件业务生命周期，integrations提供外部协议适配，storage拥有事务和凭据存储；进程职责见 [架构](../01_ARCHITECTURE/overview.md)。下列工具、插件和导入要求在对应能力实现时生效，不表示后续功能已经可用。
 
 ## 类型与模块
 
@@ -8,7 +8,7 @@
 
 - ESM、strict、noUncheckedIndexedAccess、exactOptionalPropertyTypes；包间用 `@my-pi-harness/*`，TS/TSX模块相对导入遵循[统一无后缀约定](source-layout.md#模块导入)。Node 能力使用 node: 前缀，不深层跨 workspace 导入私有源码。
 - 类型 PascalCase，值与函数 camelCase，协议常量 UPPER_SNAKE_CASE，文件 kebab-case。interface 表达对象，type 表达联合/组合；闭合联合显式处理每个状态，扩展事件声明未知类型政策。
-- 共享 DTO 从 protocol schema 派生，不复制定义；protocol 不含 Node/Electron、环境读取、数据库对象、业务配置、凭据或 Pi 实例。内部类型留在真实所有者，不建万能共享包。
+- 公开DTO从protocol根入口schema派生，不复制定义；宿主跨模块共享记录只从protocol/internal导入，EventInput与RequestAcceptance保留唯一所有者。protocol不包含Node/Electron运行能力、环境读取、数据库对象或Pi实例；私有凭据记录的定义仅在internal，实际值不进入公开DTO。其他内部类型留在真实所有者。
 - 外部 JSON 先用 unknown，经 schema/守卫解析；禁止 any、双重断言、非空断言和 ts-ignore 掩盖缺失校验。同进程类型已要求的值不反复猜测 typeof、可选链或默认值。
 - 一个 package 声明自己直接使用的依赖，不借根包或传递依赖偶然解析。后端私有包通过exports公开src，源码检查、测试和生产部署使用同一出口；Node进程显式加载生产依赖tsx，不用paths或测试别名覆盖包出口，也不回退旧dist。
 - 导出函数/类记录非显然行为、失败、时间与资源所有权，不逐行解释。文件超过 500 行评估职责，超过 1000 行先拆分；不建空包、转发层或保留注释实现与废弃业务副本。
@@ -23,6 +23,7 @@
 | repository/adapter   | 数据库或外部系统读写及错误映射                 | 组件、路由处理和产品缓存             |
 
 - 按功能域组织模块，工厂显式接收依赖；不模拟 Nest 装饰器/DI 容器，不用全局变量绕过拥有者。
+- plugins通过宿主注入的仓储、凭据、Skills与MCP端口管理插件，不导入storage、Runtime、HTTP或Renderer实现。tools保留通用Skill能力；tools和integrations不反向依赖plugins，daemon统一装配。
 - HTTP/IPC、配置、文件、持久记录、子进程消息与模型工具 JSON 在入口校验结构、版本、大小和关联。模型或外部文档的指令不能覆盖应用策略。
 - 路由声明实际 params/query/body/headers 与响应 schema，只使用应用拥有的受信 schema。数据库存在性、权限及外部查询在结构校验后处理，不塞进首轮 Ajv 异步验证。
 - 未知字段、转换与默认值政策必须实际配置；additionalProperties:false 不等于 Fastify 默认会拒绝。非法请求需要真实拒绝用例。
@@ -58,6 +59,7 @@
 
 - 当前项目处于开发期，不建立按历史API、数据库或模型codec版本分支的兼容层。持久会话日志在原文完整性校验后按已声明字段投影，未使用的附加元数据不阻断读取；必要字段、类型、范围和关系错误仍拒绝，不填默认值或转换类型来掩盖损坏。HTTP与新写业务参数仍严格校验。数据重建/清理须在用户授权范围内，不触碰工作区源文件或其他项目。
 - storage独占持久写入。JSONL是会话执行事实的唯一权威，SQLite保存Provider/应用/工作区配置及可重建会话投影。会话创建、更新、归档、Run、队列、消息、分支、工作状态和恢复锚点必须有完整磁盘记录；不能仅记录客户端可见字段。
+- ProfileStore保留profile资源和跨JSONL/SQLite的唯一事务编排；SessionQueries执行会话读取，SessionRecovery在所属启动事务内重建，SessionEventCommit只校验和暂存，ArtifactRepository管理产物元数据与引用。拆分模块不创建第二份数据库、流式覆盖层或独立提交流程。
 - 单Session批次包含稳定ID、顺序及宿主私有数据，先完成整批业务校验，再写完整JSONL行并fsync，之后提交SQLite投影，最后发布公开事件。批内关联操作整体回放，不能消费队列后丢失对应消息。
 - 文本/思考增量不进入JSONL或SQLite事务，实时更新由独立内存覆盖层拥有。完整消息在正常完成、取消或失败时一次持久化；snapshotSeq只计连续持久事件，liveRevision只计当前seq的实时更新，持久提交后归零。模型上下文仍只读取持久完整事实，工具审批、派发屏障和终态不得当作临时进度丢弃。
 - 数据库与文件不承诺跨介质原子性。任一日志写入/fsync或索引提交失败冻结持久写入并报告已知提交状态；JSONL已经提交的操作不能因客户端错误重复执行。启动持锁校验日志并重建会话投影，不以SQLite回填或覆盖权威日志。

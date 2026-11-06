@@ -293,12 +293,18 @@ importers:
       '@fastify/static':
         specifier: 'catalog:'
         version: 10.1.6
+      '@huggingface/transformers':
+        specifier: 'catalog:'
+        version: 4.3.1(@types/node@24.19.2)
       '@my-pi-harness/agent-runtime':
         specifier: workspace:*
         version: link:../../packages/agent-runtime
       '@my-pi-harness/integrations':
         specifier: workspace:*
         version: link:../../packages/integrations
+      '@my-pi-harness/plugins':
+        specifier: workspace:*
+        version: link:../../packages/plugins
       '@my-pi-harness/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
@@ -516,9 +522,6 @@ importers:
 
   packages/integrations:
     dependencies:
-      '@huggingface/transformers':
-        specifier: 'catalog:'
-        version: 4.3.1(@types/node@24.19.2)
       '@modelcontextprotocol/client':
         specifier: 'catalog:'
         version: 2.3.1
@@ -534,9 +537,6 @@ importers:
       typebox:
         specifier: 'catalog:'
         version: 1.3.30
-      yaml:
-        specifier: 'catalog:'
-        version: 2.9.1
     devDependencies:
       '@earendil-works/pi-ai':
         specifier: 'catalog:'
@@ -544,6 +544,37 @@ importers:
       '@modelcontextprotocol/server':
         specifier: 'catalog:'
         version: 2.3.1
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.19.2
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.11(@types/node@24.19.2)(vite@7.3.7(@types/node@24.19.2)(jiti@2.7.0)(lightningcss@1.33.0)(tsx@4.23.15)(yaml@2.9.1))
+
+  packages/plugins:
+    dependencies:
+      '@my-pi-harness/integrations':
+        specifier: workspace:*
+        version: link:../integrations
+      '@my-pi-harness/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+      '@my-pi-harness/sandbox':
+        specifier: workspace:*
+        version: link:../sandbox
+      '@my-pi-harness/tools':
+        specifier: workspace:*
+        version: link:../tools
+      typebox:
+        specifier: 'catalog:'
+        version: 1.3.30
+      yaml:
+        specifier: 'catalog:'
+        version: 2.9.1
+    devDependencies:
       '@types/node':
         specifier: 'catalog:'
         version: 24.19.2

@@ -3,13 +3,10 @@ import { chmod, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, expect, it } from 'vitest';
-import type { Artifact, ToolCallRecord, StoredToolResult } from '@my-pi-harness/protocol';
-import {
-  openProfileStore,
-  sessionLogDirectory,
-  type EventInput,
-  type ProfileStore,
-} from '../src/index';
+import type { Artifact, ToolCallRecord } from '@my-pi-harness/protocol';
+import type { StoredToolResult, EventInput } from '@my-pi-harness/protocol/internal';
+import { openProfileStore, sessionLogDirectory, type ProfileStore } from '../src/index';
+
 import { storedToolCallId } from '../src/sessions/projections/tool-intents';
 import { ArtifactBlobs } from '../src/artifacts/blobs';
 import { PrivateSessionFiles } from '../src/sessions/private-files';

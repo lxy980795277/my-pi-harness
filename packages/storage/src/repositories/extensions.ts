@@ -1,11 +1,14 @@
+import {
+  PluginInstallationSchema,
+  type PluginInstallation,
+} from '@my-pi-harness/protocol/internal';
 import type Database from 'better-sqlite3';
 import { Type, type Static, type TSchema } from 'typebox';
-import { SkillScopeSchema, PluginComponentSchema } from '@my-pi-harness/protocol';
+import { SkillScopeSchema } from '@my-pi-harness/protocol';
 import { StorageError } from '../shared/errors';
 import { checked } from '../shared/validation';
 
 export type StoredSkill = Static<typeof SkillRecordSchema>;
-export type StoredPlugin = Static<typeof PluginRecordSchema>;
 
 const object = { additionalProperties: false } as const;
 const id = Type.String({ minLength: 1, maxLength: 160 });
@@ -22,18 +25,6 @@ const SkillRecordSchema = Type.Object(
     workspaceId: Type.Union([id, Type.Null()]),
     source: Type.String(),
     contentHash: Type.String({ pattern: '^[a-f0-9]{64}$' }),
-  },
-  object,
-);
-
-const PluginRecordSchema = Type.Object(
-  {
-    generation: Type.String({ minLength: 1, maxLength: 160 }),
-    id,
-    revision: Type.Integer({ minimum: 1 }),
-    enabled: Type.Boolean(),
-    directory: Type.String(),
-    components: Type.Array(PluginComponentSchema),
   },
   object,
 );
@@ -73,12 +64,12 @@ export class ExtensionRepository {
   public skills(): StoredSkill[] {
     return this.rows('skill', SkillRecordSchema);
   }
-  public plugins(): StoredPlugin[] {
-    return this.rows('plugin', PluginRecordSchema);
+  public plugins(): PluginInstallation[] {
+    return this.rows('plugin', PluginInstallationSchema);
   }
   private save(
     kind: string,
-    input: StoredSkill | StoredPlugin,
+    input: StoredSkill | PluginInstallation,
     expectedRevision: number | null,
   ): void {
     this.assertOpen();
@@ -108,8 +99,11 @@ export class ExtensionRepository {
     this.save('skill', value, expectedRevision);
     return value;
   }
-  public savePlugin(input: StoredPlugin, expectedRevision: number | null): StoredPlugin {
-    const value = checked(PluginRecordSchema, input);
+  public savePlugin(
+    input: PluginInstallation,
+    expectedRevision: number | null,
+  ): PluginInstallation {
+    const value = checked(PluginInstallationSchema, input);
     this.save('plugin', value, expectedRevision);
     return value;
   }

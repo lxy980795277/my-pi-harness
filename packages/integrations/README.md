@@ -4,7 +4,7 @@
 
 ## 源码组织
 
-`src/index.ts`仅导出包API；`mcp/`拥有本地与远端连接、传输、目录及快照、协议schema和结果投影，`network/`拥有MCP和服务OAuth共用的受控远端网络访问。`plugins/`保留OAuth、网关声明解析和授权错误，`connections/`拥有独立服务连接，`search/`拥有本地向量Worker。McpError、NetworkError和PluginError由各自领域的errors模块定义。Skill资源、插件目录和随包脚本由[tools](../tools/README.md)拥有；生产OAuth声明由daemon从tools资源读取，并交给本包的`parsePluginConnectionManifest`校验。
+`src/index.ts`仅导出包API；`mcp/`拥有本地与远端连接、传输、目录及快照、协议schema和结果投影，`network/`拥有MCP和服务OAuth共用的受控远端网络访问。`oauth/`拥有通用授权码、PKCE、Token交换、刷新和安全错误，`connections/`提供独立服务账户的凭据编码与协议适配。McpError和NetworkError由各自领域的errors模块定义。插件声明、资源与授权生命周期由[plugins](../plugins/README.md)拥有；本地工具搜索Worker由daemon拥有，本包不承接插件安装或本地模型推理。
 
 ## 启动与租约
 
@@ -42,18 +42,10 @@
 
 包级 `typecheck`、`lint`、`test` 在真实临时工作根运行。fixture 使用同版本官方 Server，通过实际 stdio 覆盖成功、已知错误、派发屏障、超时、共享租约、撤销、坏协议、目录界限与秘密回显；执行进程生命周期测试由 sandbox 拥有。macOS 是当前实际验证平台；Windows/Linux 的受监管 stdio 明确不可用，真实第三方 MCP Server 与账户另外验收。
 
-## 插件OAuth
+## 服务OAuth
 
-`parsePluginConnectionManifest`校验宿主提供的API来源、OAuth、账号字段及网关允许路径，不自行定位安装目录或资源。YAML拒绝未知字段、重复键、别名、执行标签、非法来源、未锚定路径模式和覆盖认证的请求头。manifest不建立连接或安装授权；凭据持久化、应用启停、内置声明装配和公开App元数据由宿主拥有。
+`oauth/authorization-code`通过oauth4webapi生成state、PKCE和校验回调，使用固定声明执行form/JSON Token请求与body/basic客户端认证。声明显式提供issuer；回调iss存在时精确匹配，未提供仍校验state。授权流程单次消费，调用者拥有有效期、账号归属、取消与凭据保存。网络统一经过createRemoteFetch的来源、地址、大小与截止时间检查。Basic客户端认证使用SDK的表单编码；Token响应按grant调用SDK授权码或刷新校验，保留nonce、issuer、audience及字段类型检查。零秒expiry保留为立即过期，超出支持范围明确拒绝，不将错误字段转换为永久Token。
 
-`plugins/oauth.ts` 使用 oauth4webapi 生成随机 state、PKCE 与校验回调，按 manifest 执行 form/JSON Token 请求和 body/basic 客户端认证。manifest 的 `oauth.issuer` 显式声明授权发行者，回调包含 `iss` 时精确匹配，未提供时仍校验 state 并继续授权码流程；不从授权地址的 origin 推断发行者。GitHub 的发行者为 `https://github.com/login/oauth`，见[官方发现文档](https://docs.github.com/en/apps/github-authentication-discovery-endpoints)。账号可从 userinfo、Token 响应或 Google `id_token` 读取；显示字段不建立应用登录身份。网络受十秒截止、公共来源检查与响应大小限制约束。回调寿命、取消、六十秒刷新、用户/安装归属与私有 JSON 发布由 daemon/storage 拥有。Skills 只读网关和 MCP Apps 使用同一插件 Token；高级多账户 Connections 保持独立。
+OAuthError仅包含有限阶段、原因、固定安全提示和可选HTTP状态；未知供应商正文、网络消息和cause不保留。无效刷新grant抛出独立OAuthRefreshRequiredError，由账号拥有者撤销对应凭据。Token响应含error时，即使HTTP成功且同时包含Token也拒绝使用。
 
-`PluginOAuthError` 仅公开授权回调、Token 交换或账号读取阶段，有限失败原因、固定提示及可选 HTTP 状态。供应商错误只识别明确允许的代码；未知错误正文、描述、网络消息和 cause 均不保留。Token 响应出现 `error` 时即使 HTTP 200 且含 Token 也拒绝使用；失效 refresh grant 仍返回需要重新连接的独立错误。
-
-高级服务连接的OAuth供应商描述不读取插件资源；daemon把tools的公开App名称和精确MCP目标与对应provider组合。管理API与Run冻结见[Skills与插件协议](../../docs/03_API/skills-plugins.md)。
-
-## 本地工具搜索向量
-
-`LocalToolSearchEmbedder`按需在独占Node Worker内运行Transformers.js的CPU/q8多语言特征提取，固定`Xenova/multilingual-e5-small`的提交`761b726dd34fb83930e26aab4e9ac3899aa1fa78`，输出384维归一化向量。输入按query/passage前缀区分，每批最多32条、每次最多512条，文本最多16000字符；首次使用下载模型到宿主显式传入的缓存目录，复用权重。Worker不继承daemon环境或启动参数，不提供模型/脚本路径配置；测试模块只能通过宿主选项注入。
-
-调用方取消移除自己的排队推理；共享模型初始化可供后续搜索复用，daemon关闭会终止Worker并等待退出。原始加载或推理错误不向模型传播；运行层拥有18秒搜索截止和BM25回退。本包不拥有工具排序、自动加载或任何MCP授权。
+插件授权和高级多账户通过同一OAuth机制执行，分别保留自己的身份、安装归属与权限策略。插件的声明与账号展示字段在plugins维护；高级账户适配只编码私有Token及scope，不保存插件安装状态，也不处理HTTP回调。插件适配显式允许缺失token_type并将id_token仅作为账号展示字段；已提供Token类型、刷新字段和scope仍校验。高级账户不启用这些响应策略，保留严格SDK校验。独立MCP OAuth继续使用SDK公开Provider进行发现、PKCE和刷新，不与固定服务端点的授权实现混用。

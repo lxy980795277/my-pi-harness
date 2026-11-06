@@ -4,12 +4,27 @@ import { access, mkdir, readFile, realpath, stat, writeFile } from 'node:fs/prom
 import { dirname, isAbsolute, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import '@my-pi-harness/daemon';
-import { SkillCatalog, BUNDLED_SKILL_RESOURCE_DIRECTORY } from '@my-pi-harness/tools/skills';
-import { BUILTIN_PLUGINS, BUILTIN_PLUGIN_RESOURCE_DIRECTORY } from '@my-pi-harness/tools/plugins';
-import { nativeTool } from '@my-pi-harness/tools';
+import { SkillCatalog } from '@my-pi-harness/tools/skills';
+import {
+  BUILTIN_PLUGINS,
+  BUILTIN_PLUGIN_RESOURCE_DIRECTORY,
+  BUNDLED_PLUGIN_RESOURCE_DIRECTORY,
+  BUILTIN_PLUGIN_SKILL_RESOURCES,
+} from '@my-pi-harness/plugins';
+import { nativeTool, DOCUMENT_VIEW_RESOURCE_DIRECTORY } from '@my-pi-harness/tools';
+import * as protocol from '@my-pi-harness/protocol';
+import { StoredToolResultSchema } from '@my-pi-harness/protocol/internal';
 import { extractPdf } from '@my-pi-harness/tools/document-text';
 import { collectProcess, resolveProcess } from '@my-pi-harness/sandbox/process';
 import { isPublicAddress } from '@my-pi-harness/sandbox/network';
+
+const resourceSources = {
+  ...BUILTIN_PLUGIN_SKILL_RESOURCES,
+  'utils/document-view/pdf_safety.py': {
+    directory: DOCUMENT_VIEW_RESOURCE_DIRECTORY,
+    path: 'pdf_safety.py',
+  },
+};
 
 const officeScripts = [
   ['documents', 'docx_edit.py', ['documents.py', 'word_layout.py']],
@@ -43,7 +58,11 @@ async function main() {
   assert.equal(typeof fixture, 'string');
   assert.equal(typeof python, 'string');
   const deployment = dirname(fileURLToPath(import.meta.url));
-  for (const removed of ['@my-pi-harness/tools/documents', '@my-pi-harness/tools/registry']) {
+  for (const removed of [
+    '@my-pi-harness/tools/documents',
+    '@my-pi-harness/tools/registry',
+    '@my-pi-harness/tools/plugins',
+  ]) {
     assert.throws(() => import.meta.resolve(removed), { code: 'ERR_PACKAGE_PATH_NOT_EXPORTED' });
   }
   for (const specifier of [
@@ -54,7 +73,8 @@ async function main() {
     '@my-pi-harness/integrations',
     '@my-pi-harness/tools',
     '@my-pi-harness/tools/skills',
-    '@my-pi-harness/tools/plugins',
+    '@my-pi-harness/plugins',
+    '@my-pi-harness/protocol/internal',
     '@my-pi-harness/tools/document-text',
     '@my-pi-harness/sandbox',
     '@my-pi-harness/sandbox/process',
@@ -68,12 +88,25 @@ async function main() {
       `${specifier} did not resolve deployed TypeScript source`,
     );
   }
-  for (const resources of [BUILTIN_PLUGIN_RESOURCE_DIRECTORY, BUNDLED_SKILL_RESOURCE_DIRECTORY]) {
+  for (const resources of [
+    BUILTIN_PLUGIN_RESOURCE_DIRECTORY,
+    BUNDLED_PLUGIN_RESOURCE_DIRECTORY,
+    DOCUMENT_VIEW_RESOURCE_DIRECTORY,
+  ]) {
     const path = relative(deployment, await realpath(resources));
     assert(!isAbsolute(path) && !path.startsWith('..'), 'Bundled resources escaped the deployment');
   }
   for (const helper of ['render_pdf_pages.py', 'pdf_safety.py'])
-    await access(join(BUNDLED_SKILL_RESOURCE_DIRECTORY, 'utils', 'document-view', helper));
+    await access(join(DOCUMENT_VIEW_RESOURCE_DIRECTORY, helper));
+  assert(StoredToolResultSchema);
+  for (const name of [
+    'StoredToolResultSchema',
+    'FrozenSkillSchema',
+    'FrozenMcpToolSchema',
+    'LiveMessageDeltaSchema',
+    'ResolvedSessionCreateInputSchema',
+  ])
+    assert.equal(name in protocol, false, `${name} escaped into the public protocol`);
   assert.equal(isPublicAddress('::ffff:127.0.0.1'), false);
   assert.equal(isPublicAddress('::ffff:8.8.8.8'), true);
   const workspaceRoot = join(fixture, 'workspace');
@@ -100,6 +133,7 @@ async function main() {
     snapshotDirectory: join(profileDirectory, 'versions'),
     materializationDirectory: join(fixture, 'materialized'),
     protectedDirectories: [profileDirectory],
+    resourceSources,
   });
   const frozen = [];
   for (const [id] of officeScripts) {
@@ -145,7 +179,9 @@ async function main() {
       );
       for (const dependency of manifest.dependencies) {
         const materialized = await readFile(join(binding.directory, dependency.target));
-        const bundled = await readFile(join(BUNDLED_SKILL_RESOURCE_DIRECTORY, dependency.source));
+        const source = resourceSources[dependency.source];
+        assert(source, `Unregistered shared helper ${dependency.source}`);
+        const bundled = await readFile(join(source.directory, source.path));
         assert(materialized.equals(bundled), `Shared helper mismatch for ${id}`);
         assert.equal(createHash('sha256').update(materialized).digest('hex'), dependency.hash);
       }

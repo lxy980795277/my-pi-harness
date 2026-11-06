@@ -13,7 +13,6 @@ export type BranchView = Static<typeof BranchViewSchema>;
 export type SessionSnapshot = Static<typeof SessionSnapshotSchema>;
 export type HarnessEvent = Static<typeof HarnessEventSchema>;
 export type SessionCreateInput = Static<typeof SessionCreateInputSchema>;
-export type ResolvedSessionCreateInput = Static<typeof ResolvedSessionCreateInputSchema>;
 export type SessionPatchInput = Static<typeof SessionPatchInputSchema>;
 export type InputRequest = Static<typeof InputRequestSchema>;
 export type EditInput = Static<typeof EditInputSchema>;
@@ -178,19 +177,6 @@ export const SessionCreateInputSchema = Type.Object(
     thinkingLevel: Type.Optional(ThinkingLevelSchema),
     workspaceId: Type.Optional(nullableId),
     approvalMode: Type.Optional(ApprovalModeSchema),
-  },
-  { additionalProperties: false },
-);
-
-/** Validated owner selection; durable session data never contains omitted defaults. */
-export const ResolvedSessionCreateInputSchema = Type.Object(
-  {
-    title: Type.String({ minLength: 1, maxLength: 200 }),
-    providerId: id,
-    modelId: id,
-    thinkingLevel: ThinkingLevelSchema,
-    workspaceId: nullableId,
-    approvalMode: ApprovalModeSchema,
   },
   { additionalProperties: false },
 );

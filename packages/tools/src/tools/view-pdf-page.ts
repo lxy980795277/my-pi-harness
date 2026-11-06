@@ -1,7 +1,6 @@
 import { constants } from 'node:fs';
 import { access } from 'node:fs/promises';
-import { dirname, isAbsolute } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { dirname, isAbsolute, join } from 'node:path';
 import { Type } from 'typebox';
 import { Value } from 'typebox/value';
 import { checkCancelled } from '@my-pi-harness/sandbox';
@@ -10,6 +9,7 @@ import { resolvePythonRuntime } from '../lib/python-runtime';
 import { DocumentError } from '../utils/document-text';
 import { readDocumentInput } from '../lib/document-input';
 import { completeToolRegistration } from '../lib/tool-registry';
+import { DOCUMENT_VIEW_RESOURCE_DIRECTORY } from '../utils/document-view/resources';
 
 const parameters = Type.Object(
   {
@@ -57,9 +57,7 @@ export const viewPdfPageTool = completeToolRegistration({
     if (bytes.subarray(0, 5).toString() !== '%PDF-')
       throw new DocumentError('PDF_FAILED', 'PDF header is missing');
     const python = await pythonProgram(context.pythonPath);
-    const script = fileURLToPath(
-      new URL('../utils/document-view/render_pdf_pages.py', import.meta.url),
-    );
+    const script = join(DOCUMENT_VIEW_RESOURCE_DIRECTORY, 'render_pdf_pages.py');
     const launch = await resolveProcess({
       command: python,
       args: [

@@ -3,9 +3,6 @@ import {
   BranchViewSchema,
   CheckpointSchema,
   ContextUsageSchema,
-  FrozenMcpToolSchema,
-  FrozenSkillSchema,
-  SkillCandidatesSchema,
   MessageViewSchema,
   QueueInputSchema,
   RunViewSchema,
@@ -21,6 +18,11 @@ import {
   AgentMessageQueuedSchema,
   ArtifactPublishedSchema,
 } from '@my-pi-harness/protocol';
+import {
+  FrozenMcpToolSchema,
+  FrozenSkillSchema,
+  SkillCandidatesSchema,
+} from '@my-pi-harness/protocol/internal';
 
 export const SessionCreatedSchema = Type.Object(
   { session: SessionSummarySchema, branch: BranchViewSchema },

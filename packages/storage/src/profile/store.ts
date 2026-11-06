@@ -1,42 +1,36 @@
-import { randomUUID } from 'node:crypto';
 import type Database from 'better-sqlite3';
-import { and, asc, eq, gt, sql } from 'drizzle-orm';
 import { drizzle, type BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
-import {
-  BranchViewSchema,
-  HarnessEventSchema,
-  MessageViewSchema,
-  QueueInputSchema,
-  RunViewSchema,
-  SessionSnapshotSchema,
-  SessionSummarySchema,
-  type Compaction,
-  type HarnessEvent,
-  type AppSettings,
-  type AppSettingsInput,
-  type ProviderConfig,
-  type SessionSnapshot,
-  type SessionSummary,
-  type Workspace,
-  type WorkspaceRenameInput,
-  type WorkState,
-  type AttachmentContent,
-  type Checkpoint,
-  type FrozenSkill,
-  type AgentTaskSummary,
-  type AgentTaskDetail,
-  type AgentMessageTarget,
-  type AgentMessage,
-  type AgentBoard,
-  type AgentBoardQuery,
-  type AgentSettings,
-  type AgentSettingsInput,
-  type LiveMessageDelta,
-  type ToolCallView,
-  ArtifactSchema,
-  ArtifactPublishedSchema,
-  type Artifact,
+import type {
+  Compaction,
+  HarnessEvent,
+  AppSettings,
+  AppSettingsInput,
+  ProviderConfig,
+  SessionSnapshot,
+  SessionSummary,
+  Workspace,
+  WorkspaceRenameInput,
+  WorkState,
+  AttachmentContent,
+  Checkpoint,
+  AgentTaskSummary,
+  AgentTaskDetail,
+  AgentMessageTarget,
+  AgentMessage,
+  AgentBoard,
+  AgentBoardQuery,
+  AgentSettings,
+  AgentSettingsInput,
+  ToolCallView,
+  Artifact,
 } from '@my-pi-harness/protocol';
+import type {
+  EventInput,
+  FrozenSkill,
+  LiveMessageDelta,
+  RequestAcceptance,
+  SessionCreateRecord,
+} from '@my-pi-harness/protocol/internal';
 import { StorageError } from '../shared/errors';
 import { AuthRepository } from '../repositories/auth';
 import { McpRepository } from '../repositories/mcp';
@@ -57,21 +51,20 @@ import {
 import { PrivateSessionFiles } from '../sessions/private-files';
 import { AttachmentBlobs } from '../sessions/attachment-blobs';
 import { agentInterruptionEvents } from '../sessions/agent-recovery';
-import { validateToolBatch } from '../sessions/projections/tool-batch';
 import { ModelContextQuery } from '../sessions/model-context';
 import type { ProfileStoreOptions } from '../sessions/session-log-directory';
 import { SkillContextQuery } from '../sessions/skill-context';
 import { AgentTaskQuery } from '../sessions/agent-tasks';
 import { AgentSettingsRepository } from '../repositories/agent-settings';
-import { validateAgentBatch } from '../sessions/agent-batch';
 import * as schema from '../sqlite/schema';
-import type { CreateSessionInput, EventInput, RequestAcceptance } from '../sessions/types';
-import { checked } from '../shared/validation';
-import { QueueRequestSchema, SessionCreatedSchema } from '../sessions/event-validation';
+
 import { SessionEventCommit } from '../sessions/event-commit';
 import { assertPersistentEvent } from '../sessions/event-persistence';
 import { LiveMessages } from '../sessions/live-messages';
 import { ArtifactBlobs, type ArtifactDownload, type ArtifactBlob } from '../artifacts/blobs';
+import { ArtifactRepository } from '../artifacts/repository';
+import { SessionQueries } from '../sessions/queries';
+import { SessionRecovery } from '../sessions/recovery';
 
 /** JSONL session facts, immutable attachments and SQLite configuration/projections for one daemon. */
 export class ProfileStore {
@@ -84,13 +77,15 @@ export class ProfileStore {
   private readonly projector: ProjectionWriter;
   private readonly workspaces: WorkspaceRepository;
   private readonly modelSettings: ModelSettingsRepository;
-  private readonly tools: ToolProjection;
   private readonly modelContext: ModelContextQuery;
   private readonly work: WorkRepository;
   private readonly agentTasks: AgentTaskQuery;
   private readonly agentSettings: AgentSettingsRepository;
   private readonly eventCommit: SessionEventCommit;
   private readonly live: LiveMessages;
+  private readonly sessions: SessionQueries;
+  private readonly artifacts: ArtifactRepository;
+  private readonly skillContext: SkillContextQuery;
   private closed = false;
   private readonly files: PrivateSessionFiles;
   private readonly journal: SessionJournal;
@@ -118,21 +113,36 @@ export class ProfileStore {
       () => this.assertOpen(),
       (operation) => this.transaction(operation),
     );
-    this.tools = new ToolProjection(this.db);
+    const tools = new ToolProjection(this.db);
     this.modelContext = new ModelContextQuery(this.db);
+    this.skillContext = new SkillContextQuery(this.db);
     this.work = new WorkRepository(this.db);
     this.agentTasks = new AgentTaskQuery(this.db);
     this.agentSettings = new AgentSettingsRepository(this.db);
-    this.eventCommit = new SessionEventCommit(this.db, this.projector, (record) => {
-      this.pendingRecords.push(record);
-    });
+    this.eventCommit = new SessionEventCommit(
+      this.db,
+      this.projector,
+      (record) => this.pendingRecords.push(record),
+      this.workspaces,
+    );
     this.live = new LiveMessages(this.db);
+    this.sessions = new SessionQueries(this.db, this.projector, tools, this.live);
     this.files = new PrivateSessionFiles(lock.directory, options.sessionLogRoot);
     this.journal = new SessionJournal(this.files);
     this.blobs = new AttachmentBlobs(this.files);
     this.artifactBlobs = new ArtifactBlobs(this.files, options.artifactLimits);
+    this.artifacts = new ArtifactRepository(this.db, this.artifactBlobs, (sessionId, toolId) =>
+      this.getVisibleTool(sessionId, toolId),
+    );
     try {
-      this.rebuildProjections();
+      const recovery = new SessionRecovery(
+        this.db,
+        this.projector,
+        this.journal,
+        this.blobs,
+        this.artifactBlobs,
+      );
+      this.sqlite.transaction(() => recovery.rebuild()).immediate();
     } catch (error) {
       this.files.close();
       throw error;
@@ -141,155 +151,6 @@ export class ProfileStore {
 
   private assertOpen(): void {
     if (this.closed) throw new StorageError('STORAGE_CLOSED', 'Storage is closed');
-  }
-
-  private createProjection(event: HarnessEvent): void {
-    const { session, branch } = checked(SessionCreatedSchema, event.data);
-    if (
-      event.seq !== 1 ||
-      event.runId !== null ||
-      session.id !== event.sessionId ||
-      session.snapshotSeq !== 1 ||
-      session.activeRunId !== null ||
-      session.activeBranchId !== branch.id ||
-      branch.sessionId !== session.id ||
-      branch.parentId !== null ||
-      branch.forkMessageId !== null
-    )
-      throw new StorageError(
-        'SESSION_LOG_INVALID',
-        'Initial session and branch identities are invalid',
-      );
-    this.db
-      .insert(schema.sessions)
-      .values({
-        id: session.id,
-        data: session,
-        snapshotSeq: 1,
-        activeRunId: null,
-        workspaceId: session.workspaceId,
-      })
-      .run();
-    this.db
-      .insert(schema.branches)
-      .values({ id: branch.id, sessionId: session.id, data: branch })
-      .run();
-  }
-
-  private rebuildProjections(): void {
-    const ids = this.journal.sessionIds();
-    const available = new Set(ids);
-    const previousIds = this.db.select({ id: schema.sessions.id }).from(schema.sessions).all();
-    for (const { id } of previousIds)
-      if (!available.has(id))
-        throw new StorageError(
-          'SESSION_LOG_INVALID',
-          'An authoritative session journal is missing; SQLite cannot replace it',
-        );
-    this.sqlite
-      .transaction(() => {
-        for (const table of [
-          schema.taskMessages,
-          schema.taskWorkStates,
-          schema.agentMessages,
-          schema.agentTasks,
-          schema.toolContexts,
-          schema.artifacts,
-          schema.toolCalls,
-          schema.branchMessages,
-          schema.workStates,
-          schema.checkpoints,
-          schema.requests,
-          schema.queue,
-          schema.events,
-          schema.messages,
-          schema.runs,
-          schema.branches,
-          schema.sessions,
-          schema.attachments,
-        ])
-          this.db.delete(table).run();
-        for (const id of this.blobs.ids()) {
-          const content = this.blobs.read(id);
-          if (!content)
-            throw new StorageError(
-              'SESSION_LOG_INVALID',
-              'Attachment blob disappeared during recovery',
-            );
-          this.db.insert(schema.attachments).values({ id, data: content.attachment }).run();
-        }
-        for (const id of ids) {
-          for (const records of this.journal.read(id)) {
-            validateToolBatch(records.map(({ event, privateData }) => ({ ...event, privateData })));
-            validateAgentBatch(
-              this.db,
-              id,
-              records.map(({ event, privateData }) => ({
-                ...event,
-                ...(privateData === null ? {} : { privateData }),
-              })),
-            );
-            for (const { event, privateData } of records) {
-              if (event.type === 'session.created') this.createProjection(event);
-              else this.projector.apply(event, privateData ?? undefined);
-              this.db
-                .insert(schema.events)
-                .values({
-                  ...event,
-                  privateData: event.type === 'context.prepared' ? null : privateData,
-                })
-                .run();
-            }
-          }
-        }
-        for (const { data } of this.db
-          .select({ data: schema.artifacts.data })
-          .from(schema.artifacts)
-          .all())
-          this.artifactBlobs.read(checked(ArtifactSchema, data));
-        for (const { id } of previousIds)
-          if (
-            !this.db
-              .select({ id: schema.sessions.id })
-              .from(schema.sessions)
-              .where(eq(schema.sessions.id, id))
-              .get()
-          )
-            throw new StorageError(
-              'SESSION_LOG_INVALID',
-              'An indexed session journal contains no committed creation record',
-            );
-        const attachmentIds = new Set<string>();
-        for (const { data } of this.db
-          .select({ data: schema.messages.data })
-          .from(schema.messages)
-          .all()) {
-          const message = checked(MessageViewSchema, data);
-          if (message.attachmentIds === undefined) continue;
-          for (const id of message.attachmentIds) attachmentIds.add(id);
-        }
-        for (const { data } of this.db
-          .select({ data: schema.queue.data })
-          .from(schema.queue)
-          .all()) {
-          const queued = checked(QueueInputSchema, data);
-          if (queued.attachmentIds === undefined) continue;
-          for (const id of queued.attachmentIds) attachmentIds.add(id);
-        }
-        for (const id of attachmentIds)
-          if (
-            !this.db
-              .select({ id: schema.attachments.id })
-              .from(schema.attachments)
-              .where(eq(schema.attachments.id, id))
-              .get()
-          )
-            throw new StorageError(
-              'SESSION_LOG_INVALID',
-              'A committed message or queued input attachment blob is missing',
-            );
-      })
-      .immediate();
   }
 
   private transaction<T>(operation: () => T, readOnly = false): T {
@@ -415,63 +276,9 @@ export class ProfileStore {
   }
 
   /** Create the initial branch and session event in one transaction. */
-  public createSession(input: CreateSessionInput): SessionSummary {
+  public createSession(input: SessionCreateRecord): SessionSummary {
     this.files.validateId(input.id);
-    return this.transaction(() => {
-      if (input.workspaceId !== null && this.workspaces.get(input.workspaceId) === undefined)
-        throw new StorageError('WORKSPACE_NOT_FOUND', 'Workspace does not exist');
-      const session = checked(SessionSummarySchema, {
-        id: input.id,
-        title: input.title,
-        providerId: input.providerId,
-        modelId: input.modelId,
-        thinkingLevel: input.thinkingLevel,
-        workspaceId: input.workspaceId,
-        approvalMode: input.approvalMode,
-        createdAt: input.at,
-        updatedAt: input.at,
-        activeBranchId: input.branchId,
-        activeRunId: null,
-        snapshotSeq: 1,
-      });
-      const branch = checked(BranchViewSchema, {
-        id: input.branchId,
-        sessionId: input.id,
-        parentId: null,
-        forkMessageId: null,
-        createdAt: input.at,
-      });
-      this.db
-        .insert(schema.sessions)
-        .values({
-          id: session.id,
-          data: session,
-          snapshotSeq: 1,
-          activeRunId: null,
-          workspaceId: session.workspaceId,
-        })
-        .run();
-      this.db
-        .insert(schema.branches)
-        .values({ id: branch.id, sessionId: session.id, data: branch })
-        .run();
-      const event = checked(HarnessEventSchema, {
-        version: 1,
-        eventId: randomUUID(),
-        sessionId: session.id,
-        runId: null,
-        seq: 1,
-        type: 'session.created',
-        at: input.at,
-        data: { session, branch },
-      });
-      this.db
-        .insert(schema.events)
-        .values({ ...event, privateData: null })
-        .run();
-      this.pendingRecords.push({ event, privateData: null });
-      return session;
-    });
+    return this.transaction(() => this.eventCommit.createSession(input));
   }
 
   /** Registered active directories; filesystem availability is checked by the daemon owner. */
@@ -502,8 +309,7 @@ export class ProfileStore {
   /** Return the current session projection, not live SDK memory. */
   public getSession(id: string): SessionSummary | undefined {
     this.assertOpen();
-    const row = this.db.select().from(schema.sessions).where(eq(schema.sessions.id, id)).get();
-    return row && !row.archived ? this.projector.session(id) : undefined;
+    return this.sessions.getSession(id);
   }
 
   /** Export this session's original committed JSONL across all branches; credentials are separate. */
@@ -518,69 +324,18 @@ export class ProfileStore {
   /** Sort navigation by the latest committed event and validate every durable row. */
   public listSessions(): SessionSummary[] {
     this.assertOpen();
-    return this.db
-      .select()
-      .from(schema.sessions)
-      .where(eq(schema.sessions.archived, false))
-      .all()
-      .map((row) => this.projector.session(row.id))
-      .sort((left, right) => right.updatedAt - left.updatedAt || left.id.localeCompare(right.id));
+    return this.sessions.listSessions();
   }
 
   /** Read every projection and its cursor atomically; messages follow selected branch history. */
   public getSnapshot(id: string): SessionSnapshot {
-    return this.transaction(() => {
-      if (this.getSession(id) === undefined)
-        throw new StorageError('SESSION_NOT_FOUND', 'Session does not exist or is archived');
-      const session = this.projector.session(id);
-      const branchRows = this.db
-        .select()
-        .from(schema.branches)
-        .where(eq(schema.branches.sessionId, id))
-        .all();
-      const messageRows = this.db
-        .select({ data: schema.messages.data })
-        .from(schema.branchMessages)
-        .innerJoin(schema.messages, eq(schema.messages.id, schema.branchMessages.messageId))
-        .where(eq(schema.branchMessages.branchId, session.activeBranchId))
-        .orderBy(asc(schema.branchMessages.ordinal))
-        .all();
-      const runRows = this.db.select().from(schema.runs).where(eq(schema.runs.sessionId, id)).all();
-      const queued = this.db
-        .select()
-        .from(schema.queue)
-        .where(eq(schema.queue.sessionId, id))
-        .all();
-      return checked(SessionSnapshotSchema, {
-        session,
-        snapshotSeq: session.snapshotSeq,
-        branches: branchRows.map((row) => checked(BranchViewSchema, row.data)),
-        messages: this.live.merge(
-          id,
-          messageRows.map((row) => checked(MessageViewSchema, row.data)),
-        ),
-        liveRevision: this.live.revision(id),
-        runs: runRows
-          .filter((row) => row.taskId === null)
-          .map((row) => checked(RunViewSchema, row.data)),
-        tools: this.tools.list(id, session.activeBranchId),
-        queue: queued
-          .map((row) => checked(QueueInputSchema, row.data))
-          .sort(
-            (left, right) => left.createdAt - right.createdAt || left.id.localeCompare(right.id),
-          ),
-      });
-    }, true);
+    return this.transaction(() => this.sessions.getSnapshot(id), true);
   }
 
   /** Read one tool visible in the current branch without loading either root or child transcripts. */
   public getVisibleTool(sessionId: string, toolId: string): ToolCallView | undefined {
     if (this.writeFailure) throw this.writeFailure;
-    return this.transaction(() => {
-      const session = this.getSession(sessionId);
-      if (!session) return undefined;
-      return this.tools.visible(sessionId, toolId, session.activeBranchId);
-    }, true);
+    return this.transaction(() => this.sessions.getVisibleTool(sessionId, toolId), true);
   }
 
   /** Freeze exact host-read bytes before their metadata enters the session journal. */
@@ -592,50 +347,11 @@ export class ProfileStore {
 
   /** Only committed, currently visible root or child publications are downloadable. */
   public getArtifact(sessionId: string, artifactId: string): Artifact | undefined {
-    return this.transaction(() => {
-      const row = this.db
-        .select()
-        .from(schema.artifacts)
-        .where(and(eq(schema.artifacts.id, artifactId), eq(schema.artifacts.sessionId, sessionId)))
-        .get();
-      if (row === undefined) return undefined;
-      const artifact = checked(ArtifactSchema, row.data);
-      if (
-        artifact.id !== row.id ||
-        artifact.sessionId !== row.sessionId ||
-        artifact.runId !== row.runId ||
-        artifact.toolCallId !== row.toolCallId ||
-        artifact.sha256 !== row.sha256
-      )
-        throw new StorageError('INVALID_RECORD', 'Artifact index does not match its publication');
-      const tool = this.getVisibleTool(sessionId, artifact.toolCallId);
-      if (tool === undefined) return undefined;
-      if (
-        tool.status !== 'completed' ||
-        tool.runId !== artifact.runId ||
-        tool.artifacts?.some(
-          (entry) => entry.id === artifact.id && JSON.stringify(entry) === JSON.stringify(artifact),
-        ) !== true
-      )
-        throw new StorageError(
-          'INVALID_RECORD',
-          'Artifact metadata does not match its completed tool',
-        );
-      return artifact;
-    }, true);
+    return this.transaction(() => this.artifacts.get(sessionId, artifactId), true);
   }
 
   public listArtifacts(sessionId: string): Artifact[] {
-    this.assertOpen();
-    return this.db
-      .select({ id: schema.artifacts.id })
-      .from(schema.artifacts)
-      .where(eq(schema.artifacts.sessionId, sessionId))
-      .all()
-      .flatMap(({ id }) => {
-        const artifact = this.getArtifact(sessionId, id);
-        return artifact === undefined ? [] : [artifact];
-      });
+    return this.transaction(() => this.artifacts.list(sessionId), true);
   }
 
   public acquireArtifactDownload(sessionId: string, artifactId: string): ArtifactDownload {
@@ -651,17 +367,10 @@ export class ProfileStore {
     this.artifactBlobs.abandon(hash);
   }
 
-  /** Archive and branch changes keep references; only uncommitted or explicitly unreferenced blobs are reclaimed. */
+  /** Archive and branch changes preserve every committed artifact reference. */
   public collectUnreferencedArtifacts(): number {
     this.assertOpen();
-    const referenced = new Set(
-      this.db
-        .select({ hash: schema.artifacts.sha256 })
-        .from(schema.artifacts)
-        .all()
-        .map(({ hash }) => hash),
-    );
-    return this.artifactBlobs.collectUnreferenced(referenced);
+    return this.artifacts.collectUnreferenced();
   }
 
   /** Read the selected branch's durable work state, or the empty revision-zero state. */
@@ -734,109 +443,33 @@ export class ProfileStore {
   /** An acceptance remains queryable after its queue item is consumed or removed. */
   public findRequest(sessionId: string, requestId: string): RequestAcceptance | undefined {
     this.assertOpen();
-    const row = this.db
-      .select()
-      .from(schema.requests)
-      .where(
-        and(eq(schema.requests.sessionId, sessionId), eq(schema.requests.requestId, requestId)),
-      )
-      .get();
-    return row ? { runId: row.runId, inputId: row.inputId } : undefined;
+    return this.sessions.findRequest(sessionId, requestId);
   }
 
   /** Host-only frozen input authority; browser responses never receive this column. */
   public getQueuePrivateData(sessionId: string, inputId: string): Record<string, unknown> | null {
     this.assertOpen();
-    const row = this.db
-      .select()
-      .from(schema.queue)
-      .where(and(eq(schema.queue.sessionId, sessionId), eq(schema.queue.id, inputId)))
-      .get();
-    if (row === undefined) throw new StorageError('CONFLICT', 'Queued input no longer exists');
-    if (row.privateData === null) return null;
-    checked(QueueRequestSchema, row.privateData);
-    return row.privateData;
+    return this.sessions.getQueuePrivateData(sessionId, inputId);
   }
 
   /** Resolve pending input provenance from its immutable acceptance and original run. */
   public getQueueBranch(sessionId: string, inputId: string): string {
     this.assertOpen();
-    if (this.getSession(sessionId) === undefined)
-      throw new StorageError('SESSION_NOT_FOUND', 'Session does not exist or is archived');
-    const queued = this.db
-      .select()
-      .from(schema.queue)
-      .where(and(eq(schema.queue.sessionId, sessionId), eq(schema.queue.id, inputId)))
-      .get();
-    if (!queued) throw new StorageError('CONFLICT', 'Queued input no longer exists');
-    checked(QueueInputSchema, queued.data);
-    const acceptance = this.db
-      .select({ version: schema.events.version, input: schema.events.data, run: schema.runs.data })
-      .from(schema.events)
-      .innerJoin(schema.runs, eq(schema.events.runId, schema.runs.id))
-      .where(
-        and(
-          eq(schema.events.sessionId, sessionId),
-          eq(schema.events.type, 'queue.added'),
-          eq(schema.runs.sessionId, sessionId),
-          sql`json_extract(${schema.events.data}, '$.id') = ${inputId}`,
-        ),
-      )
-      .get();
-    if (!acceptance)
-      throw new StorageError('INVALID_RECORD', 'Queued input has no original run provenance');
-    checked(HarnessEventSchema.properties.version, acceptance.version);
-    const input = checked(QueueInputSchema, acceptance.input);
-    const run = checked(RunViewSchema, acceptance.run);
-    if (input.id !== inputId || input.sessionId !== sessionId || run.sessionId !== sessionId)
-      throw new StorageError('INVALID_RECORD', 'Queued input provenance is inconsistent');
-    return run.branchId;
+    return this.sessions.getQueueBranch(sessionId, inputId);
   }
 
   /** Return committed public records only; host codecs do not cross the event stream. */
   public readEvents(sessionId: string, afterSeq = 0, limit = 1000): HarnessEvent[] {
     this.assertOpen();
-    this.projector.session(sessionId);
-    if (
-      !Number.isSafeInteger(afterSeq) ||
-      afterSeq < 0 ||
-      !Number.isSafeInteger(limit) ||
-      limit < 1 ||
-      limit > 1000
-    )
-      throw new StorageError('INVALID_RECORD', 'Event page cursor or limit is invalid');
-    return this.db
-      .select({
-        version: schema.events.version,
-        eventId: schema.events.eventId,
-        sessionId: schema.events.sessionId,
-        runId: schema.events.runId,
-        seq: schema.events.seq,
-        type: schema.events.type,
-        at: schema.events.at,
-        data: schema.events.data,
-      })
-      .from(schema.events)
-      .where(and(eq(schema.events.sessionId, sessionId), gt(schema.events.seq, afterSeq)))
-      .orderBy(asc(schema.events.seq))
-      .limit(limit)
-      .all()
-      .map((row) => checked(HarnessEventSchema, row));
+    return this.sessions.readEvents(sessionId, afterSeq, limit);
   }
 
   /** Append durable facts; transient output uses its separate process-local entry point. */
   public append(sessionId: string, inputs: readonly EventInput[]): HarnessEvent[] {
-    for (const input of inputs) {
-      assertPersistentEvent(input.type);
-      if (input.type === 'artifact.published')
-        this.artifactBlobs.read(checked(ArtifactPublishedSchema, input.data).artifact);
-    }
+    for (const input of inputs) assertPersistentEvent(input.type);
+    this.artifacts.validatePublications(inputs);
     const events = this.transaction(() => this.eventCommit.append(sessionId, inputs));
-    this.artifactBlobs.committed(
-      events
-        .filter((event) => event.type === 'artifact.published')
-        .map((event) => checked(ArtifactSchema, event.data.artifact).sha256),
-    );
+    this.artifacts.committed(events);
     return events;
   }
 
@@ -873,7 +506,7 @@ export class ProfileStore {
     messageIds?: readonly string[],
   ): readonly FrozenSkill[] {
     this.assertOpen();
-    return new SkillContextQuery(this.db).read(sessionId, branchId, messageIds);
+    return this.skillContext.read(sessionId, branchId, messageIds);
   }
 
   public getAgentSettings(): AgentSettings {
@@ -902,17 +535,7 @@ export class ProfileStore {
     sourceToolCallId: string,
   ): AgentTaskSummary | undefined {
     this.assertOpen();
-    const row = this.db
-      .select({ id: schema.agentTasks.id })
-      .from(schema.agentTasks)
-      .where(
-        and(
-          eq(schema.agentTasks.sessionId, sessionId),
-          eq(schema.agentTasks.sourceToolCallId, sourceToolCallId),
-        ),
-      )
-      .get();
-    return row ? this.agentTasks.get(sessionId, row.id) : undefined;
+    return this.agentTasks.findBySource(sessionId, sourceToolCallId);
   }
 
   public getAgentTaskDetail(

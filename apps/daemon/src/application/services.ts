@@ -1,4 +1,5 @@
-import { PLUGIN_CONNECTION_DEFINITIONS } from '../plugin-connections/definitions';
+import { BUNDLED_SKILL_RESOURCES } from '../skills/resources';
+import { PLUGIN_CONNECTION_DEFINITIONS } from '@my-pi-harness/plugins';
 import { CommandManager, type ToolSearchEmbedder } from '@my-pi-harness/tools';
 import { ArtifactService } from '../artifacts/service';
 import { createSkillsPort } from '../skills/runtime';
@@ -31,12 +32,13 @@ import type { McpManager } from '../mcp/types';
 import { RemoteMcpService } from '../mcp/remote-service';
 import { createExternalToolPorts } from '../mcp/external-tools';
 import { SkillsService } from '../skills/service';
-import { PluginService } from '../plugins/service';
+import { PluginService } from '@my-pi-harness/plugins';
 import { createPluginAppPort } from '../plugins/apps';
 import { ConnectionService } from '../connections/service';
-import { PluginConnectionService } from '../plugin-connections/service';
+import { PluginConnectionService } from '@my-pi-harness/plugins';
 import { OAuthLaunchTickets } from '../http/oauth-launch-tickets';
-import { LocalToolSearchEmbedder, type RemoteMcpManager } from '@my-pi-harness/integrations';
+import type { RemoteMcpManager } from '@my-pi-harness/integrations';
+import { LocalToolSearchEmbedder } from '../search/local-embedder';
 
 /** Resources have one daemon owner and close in dependency order. */
 export interface ApplicationServices {
@@ -184,6 +186,7 @@ export async function createApplicationServices(
     });
     const ownedConnections = connections;
     plugins = new PluginService({
+      resourceSources: BUNDLED_SKILL_RESOURCES,
       repository: store.extensions,
       profileDirectory,
       skills: ownedSkills,

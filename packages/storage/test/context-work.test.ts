@@ -4,12 +4,8 @@ import { join } from 'node:path';
 import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
 import { initialWorkState, type WorkState } from '@my-pi-harness/protocol';
-import {
-  openProfileStore,
-  type ProfileStore,
-  type EventInput,
-  type CreateSessionInput,
-} from '../src/index';
+import { openProfileStore, type ProfileStore } from '../src/index';
+import type { EventInput, SessionCreateRecord } from '@my-pi-harness/protocol/internal';
 
 const fixtures: { directory: string; store: ProfileStore }[] = [];
 async function fixture(): Promise<{ directory: string; store: ProfileStore }> {
@@ -88,7 +84,7 @@ describe('M3 durable work state', () => {
   it('creates a session with empty work state and no extra work event', async () => {
     const { store } = await fixture();
     expect(store.getWorkState('session')).toEqual(initialWorkState('main'));
-    const input: CreateSessionInput = {
+    const input: SessionCreateRecord = {
       id: 'new-session',
       branchId: 'new-main',
       title: 'New session',

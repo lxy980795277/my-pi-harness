@@ -1,4 +1,5 @@
-import type { StoredToolResult, ToolCallRecord } from '@my-pi-harness/protocol';
+import type { ToolCallRecord } from '@my-pi-harness/protocol';
+import type { StoredToolResult } from '@my-pi-harness/protocol/internal';
 import { toolResultText } from './ledger';
 import type { ToolExecutionResult } from './types';
 

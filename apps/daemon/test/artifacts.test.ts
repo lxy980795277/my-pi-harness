@@ -12,7 +12,8 @@ import {
   type ToolCallView,
 } from '@my-pi-harness/protocol';
 import { RuntimeError } from '@my-pi-harness/agent-runtime';
-import { openProfileStore, type EventInput, type ProfileStore } from '@my-pi-harness/storage';
+import { openProfileStore, type ProfileStore } from '@my-pi-harness/storage';
+import type { EventInput } from '@my-pi-harness/protocol/internal';
 import { describe, expect, it } from 'vitest';
 import { registerArtifactRoute } from '../src/sessions/artifact-route';
 

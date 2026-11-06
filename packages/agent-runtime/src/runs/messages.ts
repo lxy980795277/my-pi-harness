@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import type { AgentEvent } from '@earendil-works/pi-agent-core';
 import type { AssistantMessage } from '@earendil-works/pi-ai';
-import { StoredToolIntentSchema, type MessageView } from '@my-pi-harness/protocol';
+import type { MessageView } from '@my-pi-harness/protocol';
+import { StoredToolIntentSchema } from '@my-pi-harness/protocol/internal';
 import { Type } from 'typebox';
 import { Value } from 'typebox/value';
 import { encodeContextMessage } from '../context/codec';

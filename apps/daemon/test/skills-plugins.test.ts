@@ -5,7 +5,7 @@ import Fastify from 'fastify';
 import { openProfileStore, type ProfileStore } from '@my-pi-harness/storage';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SkillsService } from '../src/skills/service';
-import { PluginService, type PluginAppPort } from '../src/plugins/service';
+import { PluginService, type PluginAppPort } from '@my-pi-harness/plugins';
 import { registerSkillRoutes } from '../src/skills/routes';
 import { registerPluginRoutes } from '../src/plugins/routes';
 

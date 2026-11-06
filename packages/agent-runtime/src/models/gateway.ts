@@ -17,12 +17,12 @@ import type {
   AppSettings,
   AppSettingsInput,
   SessionCreateInput,
-  ResolvedSessionCreateInput,
   DefaultModel,
   NativeProviderInfo,
   ProviderConfig,
   ProviderInput,
 } from '@my-pi-harness/protocol';
+import type { ResolvedSessionCreateInput } from '@my-pi-harness/protocol/internal';
 import { AuthFlows } from './auth-flows';
 import { createPiCredentialStore, type SecretStore } from './credentials';
 import { RuntimeError } from '../errors';

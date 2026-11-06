@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { buffer } from 'node:stream/consumers';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Type } from 'typebox';
-import type { StoredToolResult } from '@my-pi-harness/protocol';
+import type { StoredToolResult } from '@my-pi-harness/protocol/internal';
 import {
   decodeJournalRecords,
   encodeJournalRecords,

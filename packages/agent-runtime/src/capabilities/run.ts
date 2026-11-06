@@ -1,7 +1,8 @@
 import type { CommandResourceLease } from '@my-pi-harness/tools';
 import { Value } from 'typebox/value';
 import type { ToolContent } from '@my-pi-harness/tools';
-import type { FrozenSkill, SkillCandidate, ToolDiscoveryDiagnostic } from '@my-pi-harness/protocol';
+import type { ToolDiscoveryDiagnostic } from '@my-pi-harness/protocol';
+import type { FrozenSkill, SkillCandidate } from '@my-pi-harness/protocol/internal';
 import type { FrozenMcpTool } from '../tools/external';
 import type { EventInput } from '../sessions/ports';
 import { RuntimeError } from '../errors';

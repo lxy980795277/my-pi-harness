@@ -1,6 +1,7 @@
 import { RuntimeError } from '@my-pi-harness/agent-runtime';
-import { McpError, NetworkError, PluginError } from '@my-pi-harness/integrations';
-import { PluginError as ToolPluginError, SkillError } from '@my-pi-harness/tools';
+import { McpError, NetworkError } from '@my-pi-harness/integrations';
+import { PluginError } from '@my-pi-harness/plugins';
+import { SkillError } from '@my-pi-harness/tools';
 import type { ToolDiscoveryDiagnostic } from '@my-pi-harness/protocol';
 import { StorageError } from '@my-pi-harness/storage';
 
@@ -21,7 +22,6 @@ export function catalogFailure(
     error instanceof McpError ||
     error instanceof NetworkError ||
     error instanceof PluginError ||
-    error instanceof ToolPluginError ||
     error instanceof SkillError
       ? error.code
       : '';

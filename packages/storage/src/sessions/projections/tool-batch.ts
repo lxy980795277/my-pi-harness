@@ -1,10 +1,10 @@
 import { Type } from 'typebox';
 import {
   ArtifactPublishedSchema,
-  StoredToolResultSchema,
   type ToolCallRecord,
   type Artifact,
 } from '@my-pi-harness/protocol';
+import { StoredToolResultSchema } from '@my-pi-harness/protocol/internal';
 import { checked } from '../../shared/validation';
 import { StorageError } from '../../shared/errors';
 import { ToolContextEventSchema, ToolEventSchema } from '../event-validation';

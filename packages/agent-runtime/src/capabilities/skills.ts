@@ -1,7 +1,7 @@
 import type { SkillResourceLease, CommandResourceLease } from '@my-pi-harness/tools';
 import { Value } from 'typebox/value';
 import type { ToolContent } from '@my-pi-harness/tools';
-import type { FrozenSkill, SkillCandidate } from '@my-pi-harness/protocol';
+import type { FrozenSkill, SkillCandidate } from '@my-pi-harness/protocol/internal';
 import { RuntimeError } from '../errors';
 import type { SkillsPort } from './ports';
 

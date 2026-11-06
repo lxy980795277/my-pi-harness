@@ -11,8 +11,6 @@ import {
 } from '@my-pi-harness/tools';
 import { createRemoteFetch } from '@my-pi-harness/integrations';
 import type {
-  FrozenSkill,
-  SkillCandidate,
   SkillCreateInput,
   SkillDetail,
   SkillInstallInput,
@@ -20,7 +18,9 @@ import type {
   SkillView,
   Workspace,
 } from '@my-pi-harness/protocol';
+import type { FrozenSkill, SkillCandidate } from '@my-pi-harness/protocol/internal';
 import type { ExtensionRepository, StoredSkill } from '@my-pi-harness/storage';
+import { BUNDLED_SKILL_RESOURCES } from './resources';
 
 type SkillBinding = Pick<SkillCandidate, 'selection' | 'authorization'>;
 
@@ -41,6 +41,7 @@ export class SkillsService {
     this.catalog = new SkillCatalog({
       snapshotDirectory: join(options.profileDirectory, 'skill-versions'),
       protectedDirectories: [options.profileDirectory],
+      resourceSources: BUNDLED_SKILL_RESOURCES,
     });
   }
   private async roots(workspaceId: string | null): Promise<SkillRoot[]> {

@@ -4,15 +4,15 @@
 
 ## 现有入口
 
-| 入口                                                                                                                                                         | 当前能力与M6接入点                                                           |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------- |
-| [ProfileStore](../../../packages/storage/src/profile/store.ts) / [打开profile](../../../packages/storage/src/profile/open.ts)                                | 持锁、迁移、JSONL重建及中断恢复；独立记忆事实不能纳入会话投影清空列表        |
-| [应用身份](../../../packages/storage/src/repositories/auth.ts)                                                                                               | profileOwner稳定AppUser.id；从认证上下文取得owner，不用昵称/邮箱推断         |
-| [WorkContext](../../../packages/agent-runtime/src/context/request-context.ts) / [RunExecution](../../../packages/agent-runtime/src/runs/execution.ts)        | 每请求准备、预算、摘要和context.prepared；加入召回、最终有效性检查与私有快照 |
-| [WorkRuntime](../../../packages/agent-runtime/src/work/runtime.ts) / [任务上下文](../../../packages/storage/src/sessions/model-context.ts)                   | 当前分支/Task原文读取和search_session_history，不改成跨会话扫描              |
-| [工具目录搜索](../../../packages/tools/src/utils/tool-search.ts)                                                                                             | MiniSearch、中文分词、精确名称优先、向量及RRF；保留冻结目录、授权和自动加载  |
-| [本地embedding](../../../packages/integrations/src/search/local-embedder.ts) / [Worker](../../../packages/integrations/src/search/local-embedding-worker.ts) | 固定多语言E5、CPU/q8、384维；提取多文本用途接口，补队列及资源状态            |
-| [宿主装配](../../../apps/daemon/src/application/services.ts) / [桌面资源](../../../scripts/prepare-desktop.mjs)                                              | daemon拥有者及profile模型缓存；目前没有随包权重，准备与查询需要分开          |
+| 入口                                                                                                                                                  | 当前能力与M6接入点                                                           |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| [ProfileStore](../../../packages/storage/src/profile/store.ts) / [打开profile](../../../packages/storage/src/profile/open.ts)                         | 持锁、迁移、JSONL重建及中断恢复；独立记忆事实不能纳入会话投影清空列表        |
+| [应用身份](../../../packages/storage/src/repositories/auth.ts)                                                                                        | profileOwner稳定AppUser.id；从认证上下文取得owner，不用昵称/邮箱推断         |
+| [WorkContext](../../../packages/agent-runtime/src/context/request-context.ts) / [RunExecution](../../../packages/agent-runtime/src/runs/execution.ts) | 每请求准备、预算、摘要和context.prepared；加入召回、最终有效性检查与私有快照 |
+| [WorkRuntime](../../../packages/agent-runtime/src/work/runtime.ts) / [任务上下文](../../../packages/storage/src/sessions/model-context.ts)            | 当前分支/Task原文读取和search_session_history，不改成跨会话扫描              |
+| [工具目录搜索](../../../packages/tools/src/utils/tool-search.ts)                                                                                      | MiniSearch、中文分词、精确名称优先、向量及RRF；保留冻结目录、授权和自动加载  |
+| [本地embedding](../../../apps/daemon/src/search/local-embedder.ts) / [Worker](../../../apps/daemon/src/search/local-embedding-worker.ts)              | 固定多语言E5、CPU/q8、384维；提取多文本用途接口，补队列及资源状态            |
+| [宿主装配](../../../apps/daemon/src/application/services.ts) / [桌面资源](../../../scripts/prepare-desktop.mjs)                                       | daemon拥有者及profile模型缓存；目前没有随包权重，准备与查询需要分开          |
 
 ## 事实与派生数据
 

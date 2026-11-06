@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
 import { openProfileStore } from '@my-pi-harness/storage';
 import { SkillsService } from '../src/skills/service';
-import { PluginService, type PluginAppPort } from '../src/plugins/service';
+import { PluginService, type PluginAppPort } from '@my-pi-harness/plugins';
 
 const cleanup: (() => Promise<void>)[] = [];
 const signal = new AbortController().signal;

@@ -2,6 +2,8 @@
 
 本页管理功能范围与里程碑顺序，详细验收由各里程碑 Spec 承担。`规划` 不表示能力已经可用；只有实现与必要验证都完成后才能调整状态。
 
+2026-11-06按用户确认完成[插件、协议与存储职责治理](../04_FEATURES/202611061544_refactor_plugin-protocol-storage/spec.md)：独立plugins包，Skills保留tools，收紧integrations并划分公开/宿主协议及Store职责。本机2094项源码回归、7项生产部署、全仓静态/类型/构建通过，见[验证记录](../04_FEATURES/202611061544_refactor_plugin-protocol-storage/verify.md)。本轮按用户后续提交授权整理为[0.18.4](../06_RELEASES/0.18.4.md)，仅同步产品元数据。属于M0和既有M1–M5维护，M6及既有外部验收缺口保持原状态。
+
 2026-11-06完成[ESLint配置归入仓库工程工具](../04_FEATURES/202611061250_refactor_repository-eslint/spec.md)：本仓专用配置与自定义规则迁至scripts/eslint，依赖归根开发工具；两份实现字节保持，166项规则/覆盖测试、全仓格式/lint及offline frozen安装通过，见[验证记录](../04_FEATURES/202611061250_refactor_repository-eslint/verify.md)。属于M0治理，不改变M1–M5功能、协议或M6状态。
 
 2026-11-06完成[TypeScript模块导入统一无后缀](../04_FEATURES/202611061220_refactor_extensionless-imports/spec.md)：433个TS文件的1487处模块引用及tsx辅助入口同步，保留原生Node和真实资源扩展；门禁正反fixture、2045项源码测试、类型/静态/构建、7项部署检查、4条浏览器链路及macOS arm64应用目录smoke通过，见[验证记录](../04_FEATURES/202611061220_refactor_extensionless-imports/verify.md)。属于M0治理，M1–M5行为、协议24、SQLite10及M6状态保持。

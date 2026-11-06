@@ -22,7 +22,7 @@
 
 根 package.json 是可执行入口，命令变化同步本页。局部变更运行最小充分检查；里程碑整体验收可做工程范围检查。代码、环境及风险未变化时复用已有通过结果，不因 commit/push 重复全量。CI负责keyless全量和macOS/Windows矩阵，真实供应商与外部账户独立配置，不让普通测试依赖用户Key或产生费用。
 
-后端源码与部署检查解析实际package exports，不设置workspace源码覆盖别名。`daemon test:deployment`独立运行CLI/恢复与生产资源检查；隔离deploy必须包含源码和生产tsx，Node子进程不能引用仓库外部依赖。Web和Electron仍检查真实构建产物，旧后端dist不参与任何启动路径。
+后端源码与部署检查解析实际package exports，不设置workspace源码覆盖别名。`daemon test:deployment`独立运行CLI/恢复与生产资源检查；隔离deploy必须包含源码、生产tsx、plugins随包资源与daemon本地搜索依赖，Node子进程不能引用仓库外部依赖。Web和Electron仍检查真实构建产物，旧后端dist不参与任何启动路径。
 
 全仓ESLint同时持有多个TypeScript程序，lint入口仅为该检查进程设置8GiB堆上限，避免默认堆耗尽；不改变规则或扫描范围，不设置影响开发服务与模型进程的全局NODE_OPTIONS。
 
@@ -37,6 +37,7 @@ ESLint根入口加载scripts/eslint中的本地配置与规则，相关依赖位
 - Web 全禁三目、void 运算符和 then/catch/finally 调用；检查 TSX Service/Query 编排、裸交互控件、内联事件、组件声明、Hook 与 Store 选择器。唯一 use-async-event.ts 启动豁免由源码 gate 限定路径、单条说明和对应调用，不开放全局 Promise 例外。
 - 源码 gate 检查命名、组件目录、helper 聚合、样式 import 顺序、[模块声明分组](source-layout.md)、1000 行上限，以及[TS模块无后缀与原生脚本/资源实际扩展](source-layout.md#模块导入)。生成代码例外必须登记具体路径，不整片排除手写目录。
 - 每个新增或调整的硬规则同时有合法与非法 fixture，必须执行规则并看到拒绝；只比对配置文本或错误字符串不算规则生效。配置覆盖测试检查每类真实文件适用实际规则。
+- 导入边界覆盖protocol公开/internal出口、Renderer拒绝私有数据、plugins窄端口以及tools/integrations不反向依赖plugins。新增workspace同时接入类型、ESLint、Vitest与生产部署检查，不借旧包测试或源码别名遗漏实际入口。
 - Oxlint a11y 检查 HTML/ARIA 基础约束；shadcn 仍需真实页面检查名称、键盘、焦点及 Dialog 状态。不能以可点击 div/span 规避裸控件门禁。
 - 行数不能证明职责，静态检查不做完整别名或所有权证明。TSX 复杂度、是否值得抽 Hook、Store/Query 单一来源、取消责任和凭据不进入缓存由 review 与行为检查共同确认。
 
@@ -53,7 +54,7 @@ ESLint根入口加载scripts/eslint中的本地配置与规则，相关依赖位
 
 不机械为纯 DTO、转发函数或简单布局建镜像测试；修复 bug 建立可复现回归，重构优先沿用行为测试。存储使用真实临时 SQLite，HTTP/SSE/IPC/进程保留真实边界，不全 mock 后称集成通过。普通单测可替换模型和不确定网络，真实 Provider 独立测试且标明未配置原因。
 
-测试位于所有者 app/package 的 test 目录和根 tests/unit、tests/e2e；源码用路径解析 src，产物测试先 build 并解析 exports，不混用旧 dist。mock只声明消费者需要的接口，通过参数或工厂注入；不使用双重 unknown 断言伪造完整服务，Vitest类型从vitest导入。
+测试位于所有者app/package的test目录和根tests/unit、tests/e2e；源码消费者通过真实package exports解析src，Web与Electron产物测试先build，不混用旧后端dist。mock只声明消费者需要的接口，通过参数或工厂注入；不使用双重 unknown 断言伪造完整服务，Vitest类型从vitest导入。
 
 ## 并发与清理
 

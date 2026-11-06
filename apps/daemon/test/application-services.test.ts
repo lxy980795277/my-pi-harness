@@ -7,7 +7,7 @@ import { createMemoryCredentialStore, openProfileStore } from '@my-pi-harness/st
 import { loadDaemonConfig } from '../src/application/config';
 import { createApplicationServices } from '../src/application/services';
 import { RemoteMcpService } from '../src/mcp/remote-service';
-import { PluginService } from '../src/plugins/service';
+import { PluginService } from '@my-pi-harness/plugins';
 import { SkillsService } from '../src/skills/service';
 import { mcpManagerFixture } from './support/mcp';
 

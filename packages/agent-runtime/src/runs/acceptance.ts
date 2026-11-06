@@ -1,10 +1,5 @@
-import type {
-  FrozenSkill,
-  SkillCandidate,
-  RunView,
-  SessionSummary,
-  ToolDiscoveryDiagnostic,
-} from '@my-pi-harness/protocol';
+import type { RunView, SessionSummary, ToolDiscoveryDiagnostic } from '@my-pi-harness/protocol';
+import type { FrozenSkill, SkillCandidate } from '@my-pi-harness/protocol/internal';
 import type { ResolvedModel } from '../models/gateway';
 import type { EventInput } from '../sessions/ports';
 import type { RunToolRecord, RunToolset } from '../tools/toolset';

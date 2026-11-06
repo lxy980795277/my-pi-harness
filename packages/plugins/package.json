@@ -1,0 +1,30 @@
+{
+  "name": "@my-pi-harness/plugins",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "files": [
+    "src"
+  ],
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run --config vitest.config.ts"
+  },
+  "dependencies": {
+    "@my-pi-harness/protocol": "workspace:*",
+    "@my-pi-harness/tools": "workspace:*",
+    "@my-pi-harness/integrations": "workspace:*",
+    "@my-pi-harness/sandbox": "workspace:*",
+    "typebox": "catalog:",
+    "yaml": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

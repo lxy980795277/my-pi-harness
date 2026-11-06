@@ -1,10 +1,6 @@
 import type { Message, UserMessage } from '@earendil-works/pi-ai';
-import type {
-  LiveMessageDelta,
-  QueueInput,
-  RunView,
-  SessionSummary,
-} from '@my-pi-harness/protocol';
+import type { QueueInput, RunView, SessionSummary } from '@my-pi-harness/protocol';
+import type { LiveMessageDelta } from '@my-pi-harness/protocol/internal';
 import type { RunHooks } from './ports';
 import type { RunCapabilities } from '../capabilities/run';
 import type { FrozenInputCapabilities } from '../capabilities/inputs';

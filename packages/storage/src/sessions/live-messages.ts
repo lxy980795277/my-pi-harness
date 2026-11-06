@@ -1,12 +1,7 @@
 import { and, eq } from 'drizzle-orm';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
-import {
-  LiveMessageDeltaSchema,
-  MessageViewSchema,
-  type HarnessEvent,
-  type LiveMessageDelta,
-  type MessageView,
-} from '@my-pi-harness/protocol';
+import { MessageViewSchema, type HarnessEvent, type MessageView } from '@my-pi-harness/protocol';
+import { LiveMessageDeltaSchema, type LiveMessageDelta } from '@my-pi-harness/protocol/internal';
 import { StorageError } from '../shared/errors';
 import { checked } from '../shared/validation';
 import * as schema from '../sqlite/schema';

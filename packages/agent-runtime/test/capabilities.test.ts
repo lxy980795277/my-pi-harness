@@ -6,7 +6,8 @@ import {
   getCurrentTools,
   type TranscriptContext,
 } from '@earendil-works/pi-ai';
-import type { FrozenSkill, SkillCandidate, SkillView } from '@my-pi-harness/protocol';
+import type { SkillView } from '@my-pi-harness/protocol';
+import type { FrozenSkill, SkillCandidate } from '@my-pi-harness/protocol/internal';
 import type { SessionBatch } from '@my-pi-harness/storage';
 import { Type } from 'typebox';
 import { describe, expect, it, vi } from 'vitest';

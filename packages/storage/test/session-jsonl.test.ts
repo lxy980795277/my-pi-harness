@@ -18,12 +18,8 @@ import { buffer } from 'node:stream/consumers';
 import Database from 'better-sqlite3';
 import { initialWorkState, type MessageView, type RunView } from '@my-pi-harness/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import {
-  openProfileStore,
-  sessionLogDirectory,
-  type EventInput,
-  type ProfileStore,
-} from '../src/index';
+import { openProfileStore, sessionLogDirectory, type ProfileStore } from '../src/index';
+import type { EventInput } from '@my-pi-harness/protocol/internal';
 import { SessionBatchSchema, type SessionBatch } from '../src/sessions/session-jsonl';
 import { checked } from '../src/shared/validation';
 

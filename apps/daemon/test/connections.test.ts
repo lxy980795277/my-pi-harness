@@ -330,3 +330,52 @@ it('rejects issuer mismatch, wrong-provider and expired OAuth states before toke
   ).rejects.toMatchObject({ code: 'CONNECTION_OAUTH_EXPIRED' });
   expect(value.upstream.calls).toHaveLength(0);
 });
+
+function responseIdToken(overrides: Record<string, unknown>): string {
+  const encode = (value: unknown): string =>
+    Buffer.from(JSON.stringify(value)).toString('base64url');
+  const now = Math.floor(Date.now() / 1000);
+  return `${encode({ alg: 'RS256' })}.${encode({ iss: 'https://github.com/login/oauth', aud: 'fixture-client', sub: 'fixture', iat: now, exp: now + 600, ...overrides })}.ZmFrZQ`;
+}
+
+it.each([
+  { token_type: 'mac' },
+  { token_type: undefined },
+  { expires_in: 'invalid' },
+  { refresh_token: 123 },
+  { scope: ['repo'] },
+  { id_token: responseIdToken({ nonce: 'unexpected' }) },
+  { id_token: responseIdToken({ iss: 'https://other.example' }) },
+  { id_token: responseIdToken({ aud: 'another-client' }) },
+])(
+  'rejects malformed OAuth token fields without connecting the advanced account: %j',
+  async (fields) => {
+    const value = await fixture();
+    const created = await value.create('github', 'oauth');
+    const configured = await value.services.connections.writeClientSecret(created.id, {
+      ...control(created),
+      value: 'fixture-client-secret',
+    });
+    const signal = new AbortController().signal;
+    const start = await value.services.connections.beginOAuth(
+      configured.id,
+      control(configured),
+      `${value.origin}/api/connections/oauth/callback/github`,
+      signal,
+    );
+    const state = new URL(start.url).searchParams.get('state');
+    if (state === null) throw new Error('Missing state');
+    value.upstream.failToken(
+      { access_token: 'rejected-token', token_type: 'Bearer', ...fields },
+      200,
+    );
+    await expect(
+      value.services.connections.completeOAuth(
+        'github',
+        new URLSearchParams({ state, code: 'fixture-code' }),
+        signal,
+      ),
+    ).rejects.toMatchObject({ code: 'CONNECTION_OAUTH_FAILED' });
+    expect(value.services.connections.get(created.id).connected).toBe(false);
+  },
+);

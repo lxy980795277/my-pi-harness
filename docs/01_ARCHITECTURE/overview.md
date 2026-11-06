@@ -22,18 +22,19 @@
 
 ## Monorepo职责
 
-| 路径                     | 负责                                                                 | 不负责                                    |
-| ------------------------ | -------------------------------------------------------------------- | ----------------------------------------- |
-| `apps/web`               | 页面、交互、HTTP/SSE客户端、状态呈现                                 | Node API、凭据与Agent实例                 |
-| `apps/daemon`            | API装配、本机信任与应用登录、事件重放、profile与服务生命周期         | 页面组件与桌面窗口                        |
-| `apps/desktop`           | Electron窗口、有限preload桥、daemon启动和退出、桌面资源与发布装配    | Agent Loop、业务数据库与工具实现          |
-| `packages/agent-runtime` | Pi模型、认证与主/子Run编排、任务树及请求调度、审批、取消、队列和分支 | Electron、React、Fastify与SQL实现         |
-| `packages/tools`         | 工具注册与领域操作、Skill目录/不可变资源、插件贡献、受管理命令       | Pi Loop、审批决定、数据库、OAuth或MCP协议 |
-| `packages/sandbox`       | 宿主文件守卫、公网地址判定、平台隔离与受监管字节进程                 | 工具名称、插件状态、Pi、数据库与业务DTO   |
-| `packages/integrations`  | MCP传输/目录/租约、远端服务OAuth、凭据消费与本地向量适配             | 数据库、启动授权决策、Pi Loop、HTTP与页面 |
-| `packages/storage`       | JSONL批日志、SQLite配置/投影、附件和产物blob、profile锁与凭据        | 模型调用和页面状态                        |
-| `packages/protocol`      | 跨端DTO、schema、协议版本、公开桌面桥                                | Node imports、业务服务、环境配置或密钥    |
-| `packages/tsconfig`      | 明确的TypeScript编译配置                                             | 运行时代码                                |
+| 路径                     | 负责                                                                 | 不负责                                                        |
+| ------------------------ | -------------------------------------------------------------------- | ------------------------------------------------------------- |
+| `apps/web`               | 页面、交互、HTTP/SSE客户端、状态呈现                                 | Node API、凭据与Agent实例                                     |
+| `apps/daemon`            | API装配、本机信任与应用登录、事件重放、profile与服务生命周期         | 页面组件与桌面窗口                                            |
+| `apps/desktop`           | Electron窗口、有限preload桥、daemon启动和退出、桌面资源与发布装配    | Agent Loop、业务数据库与工具实现                              |
+| `packages/agent-runtime` | Pi模型、认证与主/子Run编排、任务树及请求调度、审批、取消、队列和分支 | Electron、React、Fastify与SQL实现                             |
+| `packages/tools`         | 27个原生工具、通用Skill目录/不可变资源、受管理命令                   | 插件生命周期、Pi Loop、审批决定、数据库、OAuth或MCP协议       |
+| `packages/plugins`       | 插件声明/资源、安装启停更新、贡献与授权生命周期                      | SQL、HTTP、模型运行或通用Skill引擎                            |
+| `packages/sandbox`       | 宿主文件守卫、公网地址判定、平台隔离与受监管字节进程                 | 工具名称、插件状态、Pi、数据库与业务DTO                       |
+| `packages/integrations`  | MCP传输/目录/租约、通用OAuth、受控网络与高级账户协议适配             | 插件业务、本地推理、数据库、启动授权决策、Pi Loop、HTTP与页面 |
+| `packages/storage`       | JSONL批日志、SQLite配置/投影、附件和产物blob、profile锁与凭据        | 模型调用和页面状态                                            |
+| `packages/protocol`      | 公开跨端DTO/schema、协议版本、桌面桥及宿主internal共享数据           | Node imports、业务服务、环境读取或运行时实例                  |
+| `packages/tsconfig`      | 明确的TypeScript编译配置                                             | 运行时代码                                                    |
 
 `agent-runtime`通过明确RuntimeStore/ProviderStore与SecretStore接口接入宿主，ToolRuntime按冻结策略逐次确认、调用独立ModelApprovalReviewer或使用用户明确选择的full-access，再调用tools注册项为当前Run绑定的领域端口；daemon提供工作区、命令、Skill和产物服务及复核资料，Renderer只消费公开工具事件。`storage`拥有JSONL会话事实、不可变附件及产物字节，以及SQLite配置/会话投影；完整批次校验后先写日志并fsync，再提交SQLite投影，Runtime随后发布公开SSE。文本/思考片段通过独立发布入口更新内存覆盖层，不写日志或SQLite；公开快照合并当前片段，持久seq与实时修订分别追踪。失败冻结持久写入，重启从日志重建并中断在途运行，不恢复未持久片段或重执行副作用。其他package在真实职责出现时创建，避免无边界共享工具包。跨包导入使用`@my-pi-harness/*`；相对导入仅留在同一app/package，源码检查拒绝跨workspace私有源码引用。
 
@@ -43,21 +44,26 @@
 
 源码目录表达实际拥有者，领域内直接引用具体实现。package根`index.ts`只提供公开导出，daemon根`bootstrap.ts`保留进程启动；生成的protocol版本文件和真正包级错误可留在根目录。没有旧路径兼容转发文件，也不以utils收纳未判断归属的代码。
 
-| 源码目录                     | 内部职责                                                                                                                                                                                                                                                                  |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `apps/daemon/src`            | `application`负责配置、启动准备和服务装配；`http`负责Fastify、访问校验、错误映射、请求/SSE及Web资源；auth、models、sessions、mcp等领域直接位于src                                                                                                                         |
-| `packages/tools/src`         | `tools`按工具名平铺，一工具一文件，拥有参数、策略、回调类型与执行入口；`lib/tool-registry`拥有注册契约，`lib/tool-context`声明公共执行上下文；根`workspace-tool-registry`装配目录；`utils`提供检索及文档提取；`skills`、`plugins`和`commands`各自拥有资源、贡献和命令状态 |
-| `packages/sandbox/src`       | `filesystem`拥有真实路径与稳定读取；`network`拥有地址原语；`policy`拥有共享敏感名称规则；`platform`实现OS隔离；`process`拥有启动、字节流、预算、watchdog与物理回收                                                                                                        |
-| `packages/integrations/src`  | `mcp`负责传输、目录、schema与租约；`network`提供受限远端访问；`plugins`拥有OAuth协议适配，`connections`拥有手动账户，`search`拥有本地向量适配                                                                                                                             |
-| `packages/protocol/src`      | `application`、`sessions`、`tools`、`extensions`和`host`按协议领域提供浏览器安全schema/DTO；host命名不授予Node能力                                                                                                                                                        |
-| `packages/storage/src`       | `profile`负责打开与跨介质提交/恢复；`sqlite`负责表和迁移；`sessions`负责JSONL、附件、查询及派生投影；`artifacts`负责不可变blob、配额与下载租约；`repositories`负责独立配置；`credentials`负责凭据；`shared`仅放包级错误与校验                                             |
-| `packages/agent-runtime/src` | `models`负责Provider及模型认证；`sessions`负责主会话；`subagents`负责任务树、角色、请求调度、通信与收束；`runs`复用单次Pi执行；`tools`负责每Run领域绑定、执行与审批；`capabilities`负责发现、绑定和动态加载；`work`负责独立工作状态；`context`负责模型请求上下文          |
+| 源码目录                     | 内部职责                                                                                                                                                                                                                                                                   |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/daemon/src`            | `application`负责配置、启动准备和服务装配；`http`负责Fastify、访问校验、错误映射、请求/SSE及Web资源；`search`拥有本地向量Worker；auth、models、sessions、mcp等领域直接位于src                                                                                              |
+| `packages/tools/src`         | `tools`按工具名平铺，一工具一文件，拥有参数、策略、回调类型与执行入口；`lib/tool-registry`拥有注册契约，`lib/tool-context`声明公共执行上下文；根`workspace-tool-registry`装配目录；`utils`提供检索及文档提取；`skills`拥有通用发现、冻结与资源租约，`commands`拥有命令状态 |
+| `packages/plugins/src`       | `plugins/<id>`保存插件声明、Skill正文和脚本；`lifecycle`拥有安装/启停/更新/卸载，`auth`拥有插件授权生命周期；`apps`和`gateway`管理固定贡献与访问规则，`accounts`提供高级账户供应商策略                                                                                     |
+| `packages/sandbox/src`       | `filesystem`拥有真实路径与稳定读取；`network`拥有地址原语；`policy`拥有共享敏感名称规则；`platform`实现OS隔离；`process`拥有启动、字节流、预算、watchdog与物理回收                                                                                                         |
+| `packages/integrations/src`  | `mcp`负责传输、目录、schema与租约；`network`提供受限远端访问；`oauth`提供共用授权码、PKCE、交换/刷新与安全错误，`connections`提供高级账户凭据编码和协议适配                                                                                                                |
+| `packages/protocol/src`      | `application`、`sessions`、`tools`、`extensions`和`host`提供公开schema/DTO；`internal`提供宿主冻结绑定、恢复/提交记录和插件私有数据；两个出口均无Node依赖                                                                                                                  |
+| `packages/storage/src`       | `profile`负责打开、锁与跨介质唯一提交；`sqlite`负责表和迁移；`sessions`负责JSONL、附件、查询、恢复与派生投影；`artifacts`负责元数据/引用、不可变blob、配额与下载租约；`repositories`负责独立配置；`credentials`负责凭据；`shared`仅放包级错误与校验                        |
+| `packages/agent-runtime/src` | `models`负责Provider及模型认证；`sessions`负责主会话；`subagents`负责任务树、角色、请求调度、通信与收束；`runs`复用单次Pi执行；`tools`负责每Run领域绑定、执行与审批；`capabilities`负责发现、绑定和动态加载；`work`负责独立工作状态；`context`负责模型请求上下文           |
 
-ProfileStore保留JSONL、SQLite、锁和失败冻结的单一编排，模型配置仓储通过它的事务入口写入。模型Provider认证、应用登录与插件OAuth继续由各自领域拥有；共享网络访问不归入某一个供应商或MCP传输。
+ProfileStore保留JSONL、SQLite、锁和失败冻结的单一编排，模型配置仓储通过它的事务入口写入。SessionQueries拥有快照、队列来源、幂等结果和事件分页；SessionRecovery在所属启动事务内重建，SessionEventCommit校验和暂存会话创建及事件，ArtifactRepository管理产物元数据与引用。
+
+protocol根入口只导出公开跨端数据，宿主使用显式internal出口。EventInput、RequestAcceptance和SessionCreateRecord由internal唯一定义；公开协议不依赖internal，Renderer不导入internal，runtime与storage不为复用类型相互依赖实现。
+
+模型Provider认证、应用登录与插件授权继续由各自领域拥有；插件与高级账户复用integrations/oauth的协议机制，保留各自账户和安装归属。plugins通过窄接口使用宿主存储、凭据、Skills与MCP；tools和integrations不反向依赖plugins。
 
 Agent执行内部以拥有者拆分：主子Run共用`runs/prepare`准备输入接受事实，`runs/execution`管理生命周期，SDK装配、输入投递和消息事件记录各自独立。`runs/ports`声明RunHooks和注入输入接口，subagents适配器实现它们，runs不反向导入子任务领域；SubagentCoordinator唯一拥有任务树和资源收束，通信与委派策略各归所属模块。tools包的完整注册项统一模型定义、可用条件、效果策略和绑定入口，runtime的`tools/selection`按调用者约束选择初始集合和获准候选，`RunCapabilities`拥有请求前激活，`RunSkills`管理正文和资源租约；`tools/runtime`编排逐次校验、审批及结果，`tools/bindings`为主子Run分别绑定领域端口。具体文件职责由[agent-runtime](../../packages/agent-runtime/README.md#源码职责)维护，消息和持久格式由既有协议拥有。
 
-集成错误由实际领域拥有：McpError位于mcp，NetworkError位于network，插件资源和Skill错误位于tools所属领域，OAuth阶段错误位于integrations/plugins。宿主在明确调用处完成安全诊断映射；共用HTTP授权启动ticket由http拥有，插件和独立MCP路由分别注册，避免用跨域错误继承或路由混放连接模块。
+集成错误由实际领域拥有：McpError位于integrations/mcp，NetworkError位于integrations/network，OAuth阶段错误位于integrations/oauth；插件领域错误由plugins拥有，Skill错误由tools/skills拥有。宿主在明确调用处完成安全诊断映射；共用HTTP授权启动ticket由http拥有，插件和独立MCP路由分别注册，避免用跨域错误继承或路由混放连接模块。
 
 M3由agent-runtime内的WorkRuntime/context模块拥有规则、预算、摘要和会话工具；WorkStore扩展宿主存储端口，工作状态按分支持久化。daemon的AttachmentService接收显式上传或安全工作区引用，保存冻结内容并提供受保护预览；Renderer仅缓存元数据/ID，base64仅在上传与局部预览操作中存在。人工提问和Plan/Todos不要求工作区；文件/Shell仍执行M2策略。每次模型请求前统一处理预算、压缩与工作状态。自动上下文检查点选择摘要版本；手动会话快照通过新增分支恢复消息前缀和工作状态。二者都不撤销磁盘或外部副作用。
 
@@ -67,7 +73,7 @@ MCP由daemon的`McpService`管理配置、系统秘密与启动授权，`Externa
 
 工具的定义、来源、默认/按需加载、可用条件、参数效果策略和执行绑定由`ToolRegistration`统一声明。原生领域直接贡献注册项，外部MCP保留自己的精确Server绑定；runtime按同一接受集合校验、审批和记录，主子Run分别绑定当前会话、任务、角色和工作区端口。tools与integrations分别依赖sandbox，彼此不导入实现；sandbox不依赖tools、integrations、Pi、storage或业务protocol。
 
-原生工具在`packages/tools/src/tools/`按名称平铺，每个文件集中拥有自己的schema、描述、可用条件、策略和执行逻辑；`tools/index.ts`只聚合导出，根`workspace-tool-registry.ts`组合目录。注册契约、公共上下文与共用文件操作由`lib`拥有，检索与授权字节正文提取在`utils`；具体工具回调类型随工具定义，命令、Skill及插件由各自领域服务负责。这些服务不按模型工具数量拆分。具体源码职责见[tools包](../../packages/tools/README.md#公开入口与源码职责)。
+原生工具在`packages/tools/src/tools/`按名称平铺，每个文件集中拥有自己的schema、描述、可用条件、策略和执行逻辑；`tools/index.ts`只聚合导出，根`workspace-tool-registry.ts`组合目录。注册契约、公共上下文与共用文件操作由`lib`拥有，检索与授权字节正文提取在`utils`；具体工具回调类型随工具定义，命令和通用Skill由tools内领域服务负责，插件贡献由plugins负责。这些服务不按模型工具数量拆分。具体源码职责见[tools包](../../packages/tools/README.md#公开入口与源码职责)。
 
 Skill快照留在私有存储，命令读取的副本由租约物化到profile外。首次模型请求前完成初始Skill的物化，以`run.tools_loaded`持久化同一正文/授权及当前`resourceDirectory`；本Run已记录的目录不可替换，历史接受记录的目录可在新Run首次加载时重新绑定。后台命令独立retain资源引用，每秒复核授权与hash，撤销后停止，再释放资源。命令总时限与一次工具等待分别管理；成功根Run可留下受监管命令，子任务终态收束所属命令。
 
@@ -119,10 +125,10 @@ M5的SubagentCoordinator拥有同Session日志内的子任务树，RunExecution�
 
 ## M4能力所有权
 
-`McpService`与`RemoteMcpService`拥有MCP配置、启动与工具授权；`SkillsService`冻结Skill正文、资源及公开gatewayUrl；`PluginService`按精确引用装配Skill和App。`PluginConnectionService`以每插件单一凭据完成OAuth、账号及刷新，专用`PluginCredentialStore`保存0600原子文件。插件manifest声明OAuth与只读路径，私有网关能力只由宿主web_fetch附加；MCP按官方endpoint共享插件Token。接口与桌面适配见[插件连接协议](../03_API/plugin-connections.md)。
+`McpService`与`RemoteMcpService`拥有MCP配置、启动与工具授权；`SkillsService`冻结Skill正文、资源及公开gatewayUrl；plugins包的`PluginService`按精确引用管理安装和Skill/App贡献，`PluginConnectionService`拥有每插件单一授权、账号、刷新及撤销；daemon注入存储、Skills、MCP和回调配置。专用`PluginCredentialStore`由storage保存0600原子文件，通用OAuth机制由integrations提供。插件manifest声明OAuth与只读路径，私有网关能力只由宿主web_fetch附加；MCP按官方endpoint共享插件Token。接口与桌面适配见[插件连接协议](../03_API/plugin-connections.md)。
 
 MCP目录由宿主按当前身份、配置、凭据epoch和信任指纹保存至SQLite；启动恢复有效快照并后台预热远程服务，输入接受等待有界单飞准备。各服务失败保留独立诊断，不阻塞其他目录；GET不进行发现，关闭和撤销取消所属工作并阻止迟到发布。
 
-`RunCapabilities`管理真实session/workspace/MCP来源的候选与当前集合，搜索自动暂存命中，`run.tools_loaded`持久化后推进下一请求，结束释放且新Run重新选择。Skill候选元数据、显式正文及目录诊断进入可回放接受事实，模型按ID加载，由宿主解析预期内容与插件授权代次；正文继承独立于可执行工具集合。默认/按需策略及限额见[运行时能力协议](../03_API/capability-runtime.md)。daemon拥有懒加载的本地CPU向量Worker，缓存固定版本模型至profile的models目录，不继承供应商凭据环境；关闭时终止推理与下载，语义不可用时保留词法检索。插件只读API通过web_fetch访问允许网关，写入通过明确开启的MCP App和原有审批；不另建Skill工具grant。高级手动`ConnectionService`保持独立用途，办公Skill通过通用命令、文档/视觉读取和产物注册完成任务。
+`RunCapabilities`管理真实session/workspace/MCP来源的候选与当前集合，搜索自动暂存命中，`run.tools_loaded`持久化后推进下一请求，结束释放且新Run重新选择。Skill候选元数据、显式正文及目录诊断进入可回放接受事实，模型按ID加载，由宿主解析预期内容与插件授权代次；正文继承独立于可执行工具集合。默认/按需策略及限额见[运行时能力协议](../03_API/capability-runtime.md)。daemon/search拥有懒加载的本地CPU向量Worker，Transformers.js为daemon生产依赖；缓存固定版本模型至profile的models目录，不继承供应商凭据环境；关闭时终止推理与下载，语义不可用时保留词法检索。插件只读API通过web_fetch访问允许网关，写入通过明确开启的MCP App和原有审批；不另建Skill工具grant。高级手动`ConnectionService`保持独立用途，办公Skill通过通用命令、文档/视觉读取和产物注册完成任务。
 
-生产package包含`tools/src`：插件manifest、App声明、Skill和专属脚本位于`plugins/<id>`，共用办公支持位于`plugins/shared/office`，原生PDF页图支持位于`utils/document-view`。共享依赖按Skill清单和hash冻结，运行资源物化到profile外受控目录。Python/LibreOffice等可选办公依赖按明确配置检测，准备依赖使用获准的普通命令。资源、Skills及账号授权见[插件体系设计](../09_TECHNICAL/插件体系设计.md)，协议传输、目录与调用见[MCP连接设计](../09_TECHNICAL/MCP连接设计.md)。
+生产部署同时包含`plugins/src`和`tools/src`：插件manifest、App声明、Skill及专属脚本位于`plugins/src/plugins/<id>`，共用办公支持位于`plugins/src/plugins/shared/office`；原生PDF页图支持位于`tools/src/utils/document-view`。daemon将三个共享办公脚本与原生pdf_safety.py合成显式resourceSources映射，通用Skill引擎只解析已注册来源，继续按清单路径、大小和hash冻结；运行资源物化到profile外受控目录。Python/LibreOffice等可选办公依赖按明确配置检测，准备依赖使用获准的普通命令。资源、Skills及账号授权见[插件体系设计](../09_TECHNICAL/插件体系设计.md)，协议传输、目录与调用见[MCP连接设计](../09_TECHNICAL/MCP连接设计.md)。

@@ -9,7 +9,6 @@
   "exports": {
     ".": "./src/index.ts",
     "./skills": "./src/skills/index.ts",
-    "./plugins": "./src/plugins/index.ts",
     "./document-text": "./src/utils/document-text.ts"
   },
   "scripts": {

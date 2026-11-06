@@ -1,4 +1,5 @@
-import type { FrozenSkill, WorkState } from '@my-pi-harness/protocol';
+import type { WorkState } from '@my-pi-harness/protocol';
+import type { FrozenSkill } from '@my-pi-harness/protocol/internal';
 import { nativeTools, type ToolRegistration } from '@my-pi-harness/tools';
 import type { FrozenMcpTool } from './external';
 import { RunToolset, type RunToolRecord, type RunToolSelection } from './toolset';

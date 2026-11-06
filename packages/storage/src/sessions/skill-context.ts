@@ -1,7 +1,8 @@
 import { and, asc, eq, gt, inArray, sql } from 'drizzle-orm';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import { Type } from 'typebox';
-import { FrozenSkillSchema, MessageViewSchema, type FrozenSkill } from '@my-pi-harness/protocol';
+import { MessageViewSchema } from '@my-pi-harness/protocol';
+import { FrozenSkillSchema, type FrozenSkill } from '@my-pi-harness/protocol/internal';
 import { StorageError } from '../shared/errors';
 import { checked } from '../shared/validation';
 import * as schema from '../sqlite/schema';

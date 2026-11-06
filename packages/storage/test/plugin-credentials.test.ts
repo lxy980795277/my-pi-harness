@@ -1,8 +1,9 @@
+import type { PluginOAuthCredential } from '@my-pi-harness/protocol/internal';
 import { mkdtemp, readFile, readdir, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, expect, it } from 'vitest';
-import { PluginCredentialStore, type PluginOAuthCredential } from '../src/index';
+import { PluginCredentialStore } from '../src/index';
 
 const directories: string[] = [];
 afterEach(async () => {

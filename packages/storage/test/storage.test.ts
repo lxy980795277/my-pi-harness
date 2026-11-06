@@ -5,13 +5,13 @@ import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
 import type {
   BranchView,
-  FrozenMcpToolData,
   MessageView,
   ProviderConfig,
   QueueInput,
   RunView,
 } from '@my-pi-harness/protocol';
-import { openProfileStore, type EventInput, type ProfileStore } from '../src/index';
+import type { FrozenMcpToolData, EventInput } from '@my-pi-harness/protocol/internal';
+import { openProfileStore, type ProfileStore } from '../src/index';
 
 const fixtures: { directory: string; store: ProfileStore }[] = [];
 const provider: ProviderConfig = {

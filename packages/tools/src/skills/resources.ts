@@ -1,4 +1,3 @@
-import { fileURLToPath } from 'node:url';
 import { Type, type Static } from 'typebox';
 import { Value } from 'typebox/value';
 import { SkillError } from './errors';
@@ -9,17 +8,11 @@ import {
   skillHash,
   skillResourcePath,
 } from './files';
-import type { SkillDownloadFile } from './types';
+import type { SkillDownloadFile, SkillResourceSources } from './types';
 
 export type SkillResourceManifest = Static<typeof manifestSchema>;
 
 const manifestName = 'resource-manifest.json';
-const sharedResourceSources = new Set([
-  'plugins/shared/office/common.py',
-  'plugins/shared/office/cli_support.py',
-  'plugins/shared/office/convert_pdf.py',
-  'utils/document-view/pdf_safety.py',
-]);
 const manifestSchema = Type.Object(
   {
     version: Type.Literal(1),
@@ -38,9 +31,7 @@ const manifestSchema = Type.Object(
   { additionalProperties: false },
 );
 
-export const BUNDLED_SKILL_RESOURCE_DIRECTORY = fileURLToPath(new URL('../', import.meta.url));
-
-/** Shared files are named relative to tools/src and pinned by their exact SHA-256. */
+/** Dependency declarations contain safe relative identifiers, unique targets and exact hashes. */
 export function parseSkillResourceManifest(source: Uint8Array): SkillResourceManifest {
   let parsed: unknown;
   try {
@@ -57,7 +48,6 @@ export function parseSkillResourceManifest(source: Uint8Array): SkillResourceMan
     skillResourcePath(dependency.source);
     skillResourcePath(dependency.target);
     if (
-      !sharedResourceSources.has(dependency.source) ||
       dependency.target === 'SKILL.md' ||
       dependency.target === manifestName ||
       targets.has(dependency.target)
@@ -72,19 +62,24 @@ export function parseSkillResourceManifest(source: Uint8Array): SkillResourceMan
 export async function readSkillSource(
   directory: string,
   signal: AbortSignal,
-  bundledDirectory = BUNDLED_SKILL_RESOURCE_DIRECTORY,
+  resourceSources: SkillResourceSources = {},
 ): Promise<SkillDownloadFile[]> {
   const files = await readSkillTree(directory, signal);
   const manifest = files.find((file) => file.path === manifestName);
   if (manifest === undefined) return files;
   const parsed = parseSkillResourceManifest(manifest.content);
   const paths = new Set(files.map((file) => file.path));
-  const root = await checkedSkillDirectory(bundledDirectory);
   let total = files.reduce((sum, file) => sum + file.content.length, 0);
   for (const dependency of parsed.dependencies) {
+    const source = Object.hasOwn(resourceSources, dependency.source)
+      ? resourceSources[dependency.source]
+      : undefined;
+    if (source === undefined)
+      throw new SkillError('SKILL_MANIFEST', 'Shared resource source is not registered');
     if (paths.has(dependency.target))
       throw new SkillError('SKILL_MANIFEST', 'Shared dependency overwrites a Skill resource');
-    const bytes = await readSkillFile(root, dependency.source, signal);
+    const root = await checkedSkillDirectory(source.directory);
+    const bytes = await readSkillFile(root, source.path, signal);
     if (skillHash(bytes) !== dependency.hash)
       throw new SkillError('SKILL_CHANGED', 'Shared dependency does not match its declared hash');
     total += bytes.length;

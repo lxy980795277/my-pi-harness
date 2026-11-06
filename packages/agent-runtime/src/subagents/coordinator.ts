@@ -12,8 +12,8 @@ import type {
   HarnessEvent,
   RunView,
   SessionSummary,
-  LiveMessageDelta,
 } from '@my-pi-harness/protocol';
+import type { LiveMessageDelta } from '@my-pi-harness/protocol/internal';
 import type { ModelGateway } from '../models/gateway';
 import type { ToolRuntime } from '../tools/runtime';
 import type { WorkRuntime } from '../work/runtime';

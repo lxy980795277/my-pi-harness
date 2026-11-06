@@ -1,12 +1,8 @@
+import type { PluginInstallation } from '@my-pi-harness/protocol/internal';
 import { randomUUID } from 'node:crypto';
 import { RuntimeError } from '@my-pi-harness/agent-runtime';
-import type {
-  CredentialStore,
-  McpIdentity,
-  StoredPlugin,
-  StoredRemoteMcpServer,
-} from '@my-pi-harness/storage';
-import { pluginAppConfiguration, pluginEndpointMatches } from '../plugins/app-catalog';
+import type { CredentialStore, McpIdentity, StoredRemoteMcpServer } from '@my-pi-harness/storage';
+import { pluginAppConfiguration, pluginEndpointMatches } from '@my-pi-harness/plugins';
 
 export interface ServiceCredentialAuthority {
   accessEpoch: number;
@@ -38,7 +34,7 @@ export function pluginCredentialId(server: StoredRemoteMcpServer): string | unde
 
 export function pluginAppAvailable(
   server: StoredRemoteMcpServer,
-  plugins: readonly StoredPlugin[],
+  plugins: readonly PluginInstallation[],
 ): boolean {
   const owner = server.pluginOwner;
   if (owner === undefined) return true;

@@ -1,9 +1,6 @@
 import type { AgentTool } from '@earendil-works/pi-agent-core';
-import {
-  StoredToolResultSchema,
-  type StoredToolResult,
-  type ToolDecisionInput,
-} from '@my-pi-harness/protocol';
+import type { ToolDecisionInput } from '@my-pi-harness/protocol';
+import { StoredToolResultSchema, type StoredToolResult } from '@my-pi-harness/protocol/internal';
 import { Type, type TSchema } from 'typebox';
 import { ArrayOptions } from 'typebox/type';
 import { Value } from 'typebox/value';

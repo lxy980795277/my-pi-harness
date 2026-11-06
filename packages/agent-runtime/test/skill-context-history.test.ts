@@ -1,5 +1,5 @@
 import { fauxAssistantMessage, type TranscriptContext } from '@earendil-works/pi-ai';
-import type { FrozenSkill } from '@my-pi-harness/protocol';
+import type { FrozenSkill } from '@my-pi-harness/protocol/internal';
 import { expect, it } from 'vitest';
 import type { SkillsPort } from '../src/capabilities/ports';
 import { fixture, idle, summary } from './support/work-fixture';

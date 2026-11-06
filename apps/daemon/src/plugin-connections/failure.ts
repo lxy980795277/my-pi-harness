@@ -1,4 +1,4 @@
-import { PluginOAuthError, PluginError } from '@my-pi-harness/integrations';
+import { PluginOAuthError, PluginError } from '@my-pi-harness/plugins';
 import { StorageError } from '@my-pi-harness/storage';
 
 interface PluginOAuthFailure {

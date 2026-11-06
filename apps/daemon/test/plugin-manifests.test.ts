@@ -1,13 +1,10 @@
-import { BUILTIN_PLUGINS } from '@my-pi-harness/tools';
-import {
-  PLUGIN_CONNECTION_DEFINITIONS,
-  pluginConnectionDefinition,
-} from '../src/plugin-connections/definitions';
+import { BUILTIN_PLUGINS, connectionProvider } from '@my-pi-harness/plugins';
+import { PLUGIN_CONNECTION_DEFINITIONS, pluginConnectionDefinition } from '@my-pi-harness/plugins';
 import { expect, it } from 'vitest';
 import {
   parsePluginConnectionManifest,
   type PluginConnectionDefinition,
-} from '@my-pi-harness/integrations';
+} from '@my-pi-harness/plugins';
 
 it('loads all five host manifests and keeps clients and OAuth metadata outside the public plugin catalog', () => {
   expect(PLUGIN_CONNECTION_DEFINITIONS).toHaveLength(5);
@@ -19,6 +16,17 @@ it('loads all five host manifests and keeps clients and OAuth metadata outside t
     ['supabase', 'https://api.supabase.com'],
   ]);
   expect(pluginConnectionDefinition('github').oauth.scopes).toEqual(['repo', 'user']);
+  for (const id of ['github', 'google', 'vercel', 'notion', 'supabase'] as const) {
+    const declared = pluginConnectionDefinition(id);
+    const account = connectionProvider(id);
+    expect(account.apiUrl).toBe(declared.apiUrl);
+    expect(account.oauth.issuer).toBe(declared.oauth.issuer);
+    expect(account.oauth.authorizationEndpoint).toBe(declared.oauth.authorizationEndpoint);
+    expect(account.oauth.tokenEndpoint).toBe(declared.oauth.tokenEndpoint);
+    expect(account.oauth.tokenFormat).toBe(declared.oauth.tokenFormat);
+  }
+  expect(connectionProvider('github').defaultScopes).toEqual(['read:user', 'repo']);
+  expect(connectionProvider('vercel').oauth.tokenAuth).toBe('basic');
   const manifest = structuredClone(pluginConnectionDefinition('github'));
   manifest.oauth.clientId = 'fixture-manifest-client';
   manifest.oauth.clientSecret = 'fixture-manifest-secret';

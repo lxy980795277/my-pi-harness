@@ -1,5 +1,6 @@
 import { Type } from 'typebox';
-import { StoredToolResultSchema, type HarnessEvent } from '@my-pi-harness/protocol';
+import type { HarnessEvent } from '@my-pi-harness/protocol';
+import { StoredToolResultSchema } from '@my-pi-harness/protocol/internal';
 import { StorageError } from '../shared/errors';
 import { checked } from '../shared/validation';
 import {

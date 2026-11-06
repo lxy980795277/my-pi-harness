@@ -1,8 +1,5 @@
-import {
-  LiveMessageDeltaSchema,
-  SessionStreamUpdateSchema,
-  type SessionStreamUpdate,
-} from '@my-pi-harness/protocol';
+import { SessionStreamUpdateSchema, type SessionStreamUpdate } from '@my-pi-harness/protocol';
+import { LiveMessageDeltaSchema } from '@my-pi-harness/protocol/internal';
 import { Value } from 'typebox/value';
 import { describe, expect, it } from 'vitest';
 import { sessionProjection, projectionMessage } from '../../../tests/fixtures/session-projection';

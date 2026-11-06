@@ -1,6 +1,6 @@
 import type { ToolContent } from '@my-pi-harness/tools';
 import type { ApprovalMode, McpToolSelection } from '@my-pi-harness/protocol';
-import type { ExternalToolAuthorization } from '@my-pi-harness/protocol';
+import type { ExternalToolAuthorization } from '@my-pi-harness/protocol/internal';
 import type { RunToolDefinition } from './toolset';
 /** Hydrated executable schemas retain TypeBox metadata; the shared journal schema validates JSON. */
 export interface FrozenMcpTool {

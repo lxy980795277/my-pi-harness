@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { FastifyBaseLogger } from 'fastify';
 import pino from 'pino';
-import { PluginOAuthError } from '@my-pi-harness/integrations';
+import { PluginOAuthError } from '@my-pi-harness/plugins';
 import { nativeTools } from '@my-pi-harness/tools';
 import { Value } from 'typebox/value';
 import {

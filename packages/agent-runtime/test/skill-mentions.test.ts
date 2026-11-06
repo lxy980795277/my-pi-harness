@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto';
 import { text as streamText } from 'node:stream/consumers';
 import { fauxAssistantMessage, type TranscriptContext } from '@earendil-works/pi-ai';
-import type { FrozenSkill, SkillView } from '@my-pi-harness/protocol';
+import type { SkillView } from '@my-pi-harness/protocol';
+import type { FrozenSkill } from '@my-pi-harness/protocol/internal';
 import { describe, expect, it, vi } from 'vitest';
 import type { SkillsPort } from '../src/capabilities/ports';
 import { explicitSkillNames } from '../src/capabilities/skill-mentions';

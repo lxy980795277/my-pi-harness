@@ -1,37 +1,22 @@
+import type { HarnessEvent, SessionSnapshot, SessionSummary } from '@my-pi-harness/protocol';
 import type {
-  HarnessEvent,
-  ResolvedSessionCreateInput,
-  SessionSnapshot,
-  SessionSummary,
+  EventInput,
+  RequestAcceptance,
+  SessionCreateRecord,
   FrozenSkill,
   LiveMessageDelta,
-} from '@my-pi-harness/protocol';
+} from '@my-pi-harness/protocol/internal';
+
+export type { EventInput, RequestAcceptance } from '@my-pi-harness/protocol/internal';
 
 /** Durable events retain their journal identity; live deltas only announce an updated snapshot. */
 export type RuntimeNotification =
   | HarnessEvent
   | { type: 'message.delta'; sessionId: string; runId: string };
 
-/** One short local transaction; privateData never enters the public event. */
-export interface EventInput {
-  type: string;
-  runId: string | null;
-  at: number;
-  data: HarnessEvent['data'];
-  privateData?: Record<string, unknown>;
-}
-
-/** Stored acceptance remains stable after an input is consumed. */
-export interface RequestAcceptance {
-  runId: string | null;
-  inputId: string | null;
-}
-
 /** Storage owns sequence allocation, uniqueness, migrations and atomic projections. */
 export interface RuntimeStore {
-  createSession(
-    input: ResolvedSessionCreateInput & { id: string; branchId: string; at: number },
-  ): SessionSummary;
+  createSession(input: SessionCreateRecord): SessionSummary;
   listSessions(): SessionSummary[];
   getSession(id: string): SessionSummary | undefined;
   getSnapshot(id: string): SessionSnapshot;

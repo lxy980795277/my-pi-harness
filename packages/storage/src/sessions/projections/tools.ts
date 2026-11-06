@@ -2,20 +2,20 @@ import { and, asc, desc, eq, sql } from 'drizzle-orm';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import {
   MessageViewSchema,
-  StoredToolResultSchema,
   RunViewSchema,
   ToolCallRecordSchema,
   ToolCallViewSchema,
   type HarnessEvent,
   type ToolCallView,
 } from '@my-pi-harness/protocol';
+import { StoredToolResultSchema } from '@my-pi-harness/protocol/internal';
 import { StorageError } from '../../shared/errors';
 import * as schema from '../../sqlite/schema';
 import { checked } from '../../shared/validation';
 import { activeTool } from './tool-batch';
 import { assistantToolIntents, storedToolCallId, isRetainableToolArguments } from './tool-intents';
 import { recoverToolEvents } from './tool-recovery';
-import type { EventInput } from '../types';
+import type { EventInput } from '@my-pi-harness/protocol/internal';
 import { ToolContextEventSchema, ToolEventSchema } from '../event-validation';
 
 /** Tool cards and private results are projected within their session event transaction. */

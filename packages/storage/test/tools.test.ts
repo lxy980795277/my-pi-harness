@@ -1,14 +1,11 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import {
-  StoredToolResultSchema,
-  type MessageView,
-  type ToolCallRecord,
-  type StoredToolResult,
-} from '@my-pi-harness/protocol';
+import type { MessageView, ToolCallRecord } from '@my-pi-harness/protocol';
+import { StoredToolResultSchema, type StoredToolResult } from '@my-pi-harness/protocol/internal';
 import { afterEach, describe, expect, it } from 'vitest';
-import { openProfileStore, type EventInput, type ProfileStore } from '../src/index';
+import { openProfileStore, type ProfileStore } from '../src/index';
+import type { EventInput } from '@my-pi-harness/protocol/internal';
 import { assistantToolIntents, storedToolCallId } from '../src/sessions/projections/tool-intents';
 import { checked } from '../src/shared/validation';
 

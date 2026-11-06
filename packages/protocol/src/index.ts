@@ -1,7 +1,5 @@
 export * from './sessions/context';
-export * from './sessions/live';
 export * from './extensions/mcp';
-export * from './tools/tool-results';
 export * from './extensions/skills';
 export * from './extensions/plugins';
 export * from './extensions/skill-connections';
@@ -52,7 +50,6 @@ export {
   SessionSnapshotSchema,
   HarnessEventSchema,
   SessionCreateInputSchema,
-  ResolvedSessionCreateInputSchema,
   SessionPatchInputSchema,
   InputRequestSchema,
   EditInputSchema,
@@ -68,7 +65,6 @@ export type {
   SessionSnapshot,
   HarnessEvent,
   SessionCreateInput,
-  ResolvedSessionCreateInput,
   SessionPatchInput,
   InputRequest,
   EditInput,
@@ -146,5 +142,4 @@ export type {
   DesktopBridge,
 } from './host/desktop';
 export * from './extensions/connections';
-export * from './tools/frozen-tools';
 export * from './sessions/agents';

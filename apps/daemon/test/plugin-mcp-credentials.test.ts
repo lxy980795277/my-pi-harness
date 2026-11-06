@@ -13,11 +13,11 @@ import {
   createMemoryCredentialStore,
   openProfileStore,
 } from '@my-pi-harness/storage';
-import { PluginConnectionService } from '../src/plugin-connections/service';
+import { PluginConnectionService } from '@my-pi-harness/plugins';
 import { RemoteMcpService } from '../src/mcp/remote-service';
 import type { PluginRefreshDiagnostic } from '../src/mcp/remote-options';
 import { SkillsService } from '../src/skills/service';
-import { PluginService } from '../src/plugins/service';
+import { PluginService } from '@my-pi-harness/plugins';
 import { createPluginAppPort } from '../src/plugins/apps';
 
 const cleanups: (() => Promise<void>)[] = [];

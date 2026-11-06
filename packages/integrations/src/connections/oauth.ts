@@ -1,8 +1,12 @@
-import * as oauth from 'oauth4webapi';
 import { Type, type Static } from 'typebox';
 import { Value } from 'typebox/value';
-import type { ConnectionProvider } from './providers';
-import { createRemoteFetch } from '../network/remote-fetch';
+import {
+  beginOAuth,
+  refreshOAuth,
+  oauthFetch,
+  type OAuthTokens,
+} from '../oauth/authorization-code';
+import type { OAuthDefinition } from '../oauth/types';
 
 export type ConnectionCredential = Static<typeof ConnectionCredentialSchema>;
 
@@ -46,137 +50,48 @@ export function parseConnectionCredential(encoded: string | undefined): Connecti
   return value;
 }
 
-/** Fixture rewriting is injected by tests; product callers cannot choose an upstream origin. */
-export function connectionFetch(provider: ConnectionProvider, fixtureOrigin?: string) {
-  return async (url: string | URL, init: RequestInit): Promise<Response> => {
-    const target = new URL(url);
-    let actual = target;
-    if (fixtureOrigin !== undefined) {
-      actual = new URL(`/${provider.serviceId}${target.pathname}${target.search}`, fixtureOrigin);
-    }
-    const fetch = createRemoteFetch({
-      allowedOrigins: new Set([actual.origin]),
-      maximumResponseBytes: 2_000_000,
-      ...(fixtureOrigin === undefined ? {} : { fixtureOrigin }),
-    });
-    return await fetch(actual, init);
-  };
+/** Account adapters use the same bounded transport as plugin authorization. */
+export function connectionFetch(provider: Pick<OAuthDefinition, 'id'>, fixtureOrigin?: string) {
+  const request = oauthFetch(fixtureOrigin);
+  return async (url: string | URL, init: RequestInit): Promise<Response> =>
+    await request(provider.id, new URL(url), init);
 }
 
-function metadata(provider: ConnectionProvider): oauth.AuthorizationServer {
-  return {
-    issuer: provider.issuer,
-    authorization_endpoint: provider.authorizationEndpoint,
-    token_endpoint: provider.tokenEndpoint,
-    code_challenge_methods_supported: ['S256'],
-  };
+function definition(provider: OAuthDefinition, config: OAuthClientConfiguration): OAuthDefinition {
+  const { profile: _profile, responsePolicy: _responsePolicy, ...oauth } = provider.oauth;
+  return { ...provider, oauth: { ...oauth, pkce: true, scopes: config.scopes } };
 }
 
-function client(config: OAuthClientConfiguration): oauth.Client {
-  return { client_id: config.clientId };
-}
-
-function authentication(
-  provider: ConnectionProvider,
-  config: OAuthClientConfiguration,
-): oauth.ClientAuth {
-  if (config.clientSecret === undefined) return oauth.None();
-  if (provider.clientAuthentication === 'basic')
-    return oauth.ClientSecretBasic(config.clientSecret);
-  return oauth.ClientSecretPost(config.clientSecret);
-}
-
-function options(
-  provider: ConnectionProvider,
-  config: OAuthClientConfiguration,
-  signal: AbortSignal,
-): oauth.TokenEndpointRequestOptions {
-  return {
-    signal,
-    [oauth.customFetch]: async (url, init) => {
-      const request: RequestInit = { ...init };
-      if (provider.tokenJson && typeof init.body === 'string') {
-        request.body = JSON.stringify(Object.fromEntries(new URLSearchParams(init.body)));
-        const headers = new Headers(init.headers);
-        headers.set('content-type', 'application/json');
-        request.headers = headers;
-      } else if (provider.tokenJson && init.body instanceof URLSearchParams) {
-        request.body = JSON.stringify(Object.fromEntries(init.body));
-        const headers = new Headers(init.headers);
-        headers.set('content-type', 'application/json');
-        request.headers = headers;
-      }
-      return await connectionFetch(provider, config.fixtureOrigin)(url, request);
-    },
-  };
-}
-
-function credential(
-  tokens: oauth.TokenEndpointResponse,
-  previous: ConnectionCredential,
-): ConnectionCredential {
-  const result: ConnectionCredential = {
-    ...previous,
-    accessToken: tokens.access_token,
-  };
-  if (tokens.refresh_token !== undefined) result.refreshToken = tokens.refresh_token;
-  if (tokens.expires_in !== undefined) result.expiresAt = Date.now() + tokens.expires_in * 1000;
+function credential(tokens: OAuthTokens, previous: ConnectionCredential): ConnectionCredential {
+  const result: ConnectionCredential = { ...previous, accessToken: tokens.accessToken };
+  if (tokens.refreshToken !== undefined) result.refreshToken = tokens.refreshToken;
+  if (tokens.expiresAt !== undefined) result.expiresAt = tokens.expiresAt;
   else delete result.expiresAt;
-  if (tokens.scope !== undefined) result.scopes = tokens.scope.split(/[ ,]+/).filter(Boolean);
+  if (tokens.scopes !== undefined) result.scopes = tokens.scopes;
   if (!Value.Check(ConnectionCredentialSchema, result))
     throw new Error('OAuth returned unsupported token fields');
   return result;
 }
 
-/** Start an independent state/PKCE flow against fixed provider metadata. */
+/** Account ownership remains independent while authorization-code and PKCE are shared. */
 export async function beginConnectionOAuth(
-  provider: ConnectionProvider,
+  provider: OAuthDefinition,
   config: OAuthClientConfiguration,
 ): Promise<ConnectionOAuthFlow> {
-  const state = oauth.generateRandomState();
-  const verifier = oauth.generateRandomCodeVerifier();
-  const challenge = await oauth.calculatePKCECodeChallenge(verifier);
-  const authorization = new URL(provider.authorizationEndpoint);
-  authorization.searchParams.set('client_id', config.clientId);
-  authorization.searchParams.set('redirect_uri', config.redirectUrl);
-  authorization.searchParams.set('response_type', 'code');
-  authorization.searchParams.set('state', state);
-  authorization.searchParams.set('code_challenge', challenge);
-  authorization.searchParams.set('code_challenge_method', 'S256');
-  if (config.scopes.length > 0) authorization.searchParams.set('scope', config.scopes.join(' '));
-  if (provider.serviceId === 'google') {
-    authorization.searchParams.set('access_type', 'offline');
-    authorization.searchParams.set('prompt', 'consent');
-  }
-  if (provider.serviceId === 'notion') authorization.searchParams.set('owner', 'user');
-  let consumed = false;
+  const flow = await beginOAuth(
+    definition(provider, config),
+    {
+      clientId: config.clientId,
+      callbackUrl: config.redirectUrl,
+      ...(config.clientSecret === undefined ? {} : { clientSecret: config.clientSecret }),
+    },
+    oauthFetch(config.fixtureOrigin),
+  );
   return {
-    state,
-    url: authorization.toString(),
+    state: flow.state,
+    url: flow.authorizationUrl,
     async complete(params, signal) {
-      if (consumed) throw new Error('OAuth flow was already consumed');
-      consumed = true;
-      const validated = oauth.validateAuthResponse(
-        metadata(provider),
-        client(config),
-        params,
-        state,
-      );
-      const response = await oauth.authorizationCodeGrantRequest(
-        metadata(provider),
-        client(config),
-        authentication(provider, config),
-        validated,
-        config.redirectUrl,
-        verifier,
-        options(provider, config, signal),
-      );
-      const tokens = await oauth.processAuthorizationCodeResponse(
-        metadata(provider),
-        client(config),
-        response,
-      );
-      return credential(tokens, {
+      return credential(await flow.complete(params, signal), {
         version: 1,
         ...(config.clientSecret === undefined ? {} : { clientSecret: config.clientSecret }),
       });
@@ -184,26 +99,28 @@ export async function beginConnectionOAuth(
   };
 }
 
-/** The caller serializes each credential reference across rotation and account validation. */
+/** The caller serializes credential rotation and invalidates an expired refresh grant. */
 export async function refreshConnectionOAuth(
-  provider: ConnectionProvider,
+  provider: OAuthDefinition,
   config: OAuthClientConfiguration,
   previous: ConnectionCredential,
   signal: AbortSignal,
 ): Promise<ConnectionCredential> {
-  if (previous.refreshToken === undefined)
+  if (previous.accessToken === undefined)
     throw new Error('Connection authorization expired; reconnect the account');
-  const response = await oauth.refreshTokenGrantRequest(
-    metadata(provider),
-    client(config),
-    authentication(provider, config),
-    previous.refreshToken,
-    options(provider, config, signal),
-  );
-  const tokens = await oauth.processRefreshTokenResponse(
-    metadata(provider),
-    client(config),
-    response,
+  const tokens = await refreshOAuth(
+    definition(provider, config),
+    {
+      clientId: config.clientId,
+      callbackUrl: config.redirectUrl,
+      ...(config.clientSecret === undefined ? {} : { clientSecret: config.clientSecret }),
+    },
+    {
+      accessToken: previous.accessToken,
+      ...(previous.refreshToken === undefined ? {} : { refreshToken: previous.refreshToken }),
+    },
+    signal,
+    oauthFetch(config.fixtureOrigin),
   );
   return credential(tokens, previous);
 }

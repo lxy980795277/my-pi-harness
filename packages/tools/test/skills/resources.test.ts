@@ -3,7 +3,6 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
 import { afterEach, expect, it } from 'vitest';
-import { BUILTIN_PLUGIN_RESOURCE_DIRECTORY } from '../../src/plugins/index';
 import {
   SkillCatalog,
   installSkillFiles,
@@ -64,7 +63,12 @@ it('freezes exact shared dependency bytes and rejects changed source dependencie
   };
   const catalog = new SkillCatalog({
     snapshotDirectory: join(directory, 'versions'),
-    bundledResourceDirectory: bundled,
+    resourceSources: {
+      'plugins/shared/office/common.py': {
+        directory: bundled,
+        path: 'plugins/shared/office/common.py',
+      },
+    },
   });
   const [entry] = await catalog.discover([source], signal);
   if (entry === undefined) throw new Error('missing fixture');
@@ -84,13 +88,6 @@ it('freezes exact shared dependency bytes and rejects changed source dependencie
 
 it.each([
   { source: '../private', target: 'scripts/helper.py', hash: 'a'.repeat(64) },
-  { source: 'plugins/example/private', target: 'scripts/helper.py', hash: 'a'.repeat(64) },
-  { source: 'plugins/shared/private.ts', target: 'scripts/helper.py', hash: 'a'.repeat(64) },
-  {
-    source: 'utils/document-view/render_pdf_pages.py',
-    target: 'scripts/helper.py',
-    hash: 'a'.repeat(64),
-  },
   { source: 'plugins/shared/office/common.py', target: 'SKILL.md', hash: 'a'.repeat(64) },
   { source: 'plugins/shared/office/common.py', target: '../helper.py', hash: 'a'.repeat(64) },
   { source: 'plugins/shared/office/common.py', target: 'scripts/helper.py', hash: 'bad' },
@@ -102,38 +99,38 @@ it.each([
   ).toThrow();
 });
 
-it.each(['documents', 'pdf', 'spreadsheets', 'presentations'])(
-  'freezes and materializes the bundled %s Skill with its pinned shared helpers',
-  async (pluginId) => {
-    const directory = await realpath(await mkdtemp(join(tmpdir(), 'bundled-skill-resource-')));
+it.each(['unregistered.py', 'toString', '__proto__'])(
+  'rejects the undeclared resource source %s before opening a host file',
+  async (source) => {
+    const directory = await realpath(await mkdtemp(join(tmpdir(), 'unregistered-skill-resource-')));
     directories.push(directory);
-    const catalog = new SkillCatalog({
-      snapshotDirectory: join(directory, 'profile/versions'),
-      materializationDirectory: join(directory, 'readable'),
-      protectedDirectories: [join(directory, 'profile')],
-    });
-    const [entry] = await catalog.discover(
+    const root = join(directory, 'skills');
+    await installSkillFiles(
+      root,
+      'example',
       [
         {
-          path: join(BUILTIN_PLUGIN_RESOURCE_DIRECTORY, pluginId, 'skills'),
-          scope: 'plugin',
-          pluginId,
-          workspaceId: null,
-          managed: true,
+          path: 'SKILL.md',
+          content: Buffer.from('---\nname: example\ndescription: Example\n---\nInstructions\n'),
+        },
+        {
+          path: 'resource-manifest.json',
+          content: Buffer.from(
+            JSON.stringify({
+              version: 1,
+              dependencies: [{ source, target: 'scripts/helper.py', hash: 'a'.repeat(64) }],
+            }),
+          ),
         },
       ],
       signal,
     );
-    if (entry === undefined) throw new Error('missing bundled Skill');
-    const frozen = await catalog.freeze(entry, signal);
-    expect(frozen.resources.some((resource) => resource.path === 'scripts/common.py')).toBe(true);
-    const lease = await catalog.materializeBindings([frozen], signal, () => Promise.resolve());
-    try {
-      await lease.verify(signal);
-      expect(lease.bindings).toHaveLength(1);
-      expect((await catalog.loadResource(frozen, 'scripts/common.py', signal)).type).toBe('text');
-    } finally {
-      await lease.release();
-    }
+    const catalog = new SkillCatalog({ snapshotDirectory: join(directory, 'versions') });
+    await expect(
+      catalog.discover(
+        [{ path: root, scope: 'user', pluginId: null, workspaceId: null, managed: true }],
+        signal,
+      ),
+    ).rejects.toMatchObject({ code: 'SKILL_MANIFEST' });
   },
 );

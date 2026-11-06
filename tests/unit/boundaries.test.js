@@ -188,6 +188,53 @@ describe('workspace source imports', () => {
     await expect(checkBoundaries(root)).rejects.toThrow('公共协议必须从显式 exports 导入');
   });
 
+  it('allows host consumers to use the declared internal protocol entry', async () => {
+    const root = await fixture({
+      'apps/daemon/src/service.ts':
+        "import type { EventInput } from '@my-pi-harness/protocol/internal';",
+      'packages/agent-runtime/src/ports.ts':
+        "export type { RequestAcceptance } from '@my-pi-harness/protocol/internal';",
+      'packages/storage/src/session.ts':
+        "import { FrozenSkillSchema } from '@my-pi-harness/protocol/internal';",
+      'packages/protocol/src/internal/skills.ts':
+        "import { SkillSelectionSchema } from '../extensions/skills'; import { Type } from 'typebox';",
+    });
+
+    await expect(checkBoundaries(root)).resolves.toBe(4);
+  });
+
+  it.each([
+    "import type { FrozenSkill } from '@my-pi-harness/protocol/internal';",
+    "const host = await import('@my-pi-harness/protocol/internal');",
+  ])('rejects renderer access to internal protocol: %s', async (content) => {
+    const root = await fixture({ 'apps/web/src/invalid.ts': content });
+
+    await expect(checkBoundaries(root)).rejects.toThrow('Renderer不能导入宿主内部协议');
+  });
+
+  it.each(['@my-pi-harness/protocol/unknown', '@my-pi-harness/protocol/internal/skills'])(
+    'rejects undeclared protocol entry %s from a host consumer',
+    async (specifier) => {
+      const root = await fixture({
+        'apps/daemon/src/service.ts': `import type { Value } from '${specifier}';`,
+      });
+
+      await expect(checkBoundaries(root)).rejects.toThrow('公共协议必须从显式 exports 导入');
+    },
+  );
+
+  it.each([
+    ['packages/protocol/src/index.ts', "export * from './internal';"],
+    [
+      'packages/protocol/src/extensions/skills.ts',
+      "import type { FrozenSkill } from '../internal/skills';",
+    ],
+  ])('rejects internal data referenced by the public module %s', async (path, content) => {
+    const root = await fixture({ [path]: content });
+
+    await expect(checkBoundaries(root)).rejects.toThrow('公开协议不能依赖宿主内部数据');
+  });
+
   it('allows browser-safe protocol and schema libraries without treating strings as imports', async () => {
     const root = await fixture({
       'apps/web/src/index.ts': [
@@ -249,6 +296,63 @@ describe('MCP integration ownership', () => {
     });
     await expect(checkBoundaries(root)).resolves.toBe(1);
   });
+
+  it.each(['@my-pi-harness/plugins', '@my-pi-harness/plugins/auth'])(
+    'rejects an integration adapter importing plugin implementation %s',
+    async (dependency) => {
+      const root = await fixture({
+        'packages/integrations/src/oauth.ts': `import type { Plugin } from '${dependency}';`,
+      });
+
+      await expect(checkBoundaries(root)).rejects.toThrow('Integrations不能反向依赖Plugins');
+    },
+  );
+});
+
+describe('plugin domain ownership', () => {
+  it.each([
+    '@my-pi-harness/storage',
+    '@my-pi-harness/storage/credentials',
+    '@my-pi-harness/agent-runtime',
+    '@my-pi-harness/daemon',
+    '@my-pi-harness/desktop',
+    '@my-pi-harness/web',
+    '@earendil-works/pi-agent-core',
+    'fastify',
+    'fastify/types',
+    '@fastify/static',
+    'better-sqlite3',
+    'drizzle-orm/better-sqlite3',
+    'react',
+    'react/jsx-runtime',
+    'react-dom/client',
+    'electron',
+  ])('rejects host implementation %s from plugins', async (dependency) => {
+    const root = await fixture({
+      'packages/plugins/src/service.ts': `import type { Host } from '${dependency}';`,
+    });
+
+    await expect(checkBoundaries(root)).rejects.toThrow(
+      'Plugins只能通过窄端口访问持久化、Runtime、HTTP或Renderer',
+    );
+  });
+
+  it('allows plugin services to use declared domain ports, Skills and integration mechanisms', async () => {
+    const root = await fixture({
+      'packages/plugins/src/service.ts': [
+        "import type { PluginInstallation } from '@my-pi-harness/protocol/internal';",
+        "import type { PluginView } from '@my-pi-harness/protocol';",
+        "import { SkillCatalog } from '@my-pi-harness/tools/skills';",
+        "import { beginOAuth } from '@my-pi-harness/integrations';",
+        "import { isPublicAddress } from '@my-pi-harness/sandbox';",
+        "import { readFile } from 'node:fs/promises';",
+        "import type { PluginRepository } from './ports';",
+      ].join('\n'),
+      'packages/plugins/src/ports.ts': 'export interface PluginRepository {}',
+    });
+
+    await expect(checkBoundaries(root)).resolves.toBe(2);
+  });
 });
 
 describe('tool and sandbox ownership', () => {
@@ -257,6 +361,8 @@ describe('tool and sandbox ownership', () => {
     '@my-pi-harness/agent-runtime/tools',
     '@my-pi-harness/storage',
     '@my-pi-harness/integrations',
+    '@my-pi-harness/plugins',
+    '@my-pi-harness/plugins/auth',
     '@my-pi-harness/daemon',
   ])('rejects host implementation %s from tools', async (dependency) => {
     const root = await fixture({

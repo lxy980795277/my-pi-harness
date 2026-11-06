@@ -2,10 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { Value } from 'typebox/value';
 import { Type } from 'typebox';
 import { RuntimeError } from '@my-pi-harness/agent-runtime';
-import { BUILTIN_PLUGIN_APPS } from '@my-pi-harness/tools';
+import { BUILTIN_PLUGIN_APPS } from '@my-pi-harness/plugins';
 import {
-  CONNECTION_PROVIDERS,
-  connectionProvider,
   beginConnectionOAuth,
   refreshConnectionOAuth,
   parseConnectionCredential,
@@ -13,6 +11,7 @@ import {
   type ConnectionCredential,
   type ConnectionOAuthFlow,
 } from '@my-pi-harness/integrations';
+import { CONNECTION_PROVIDERS, connectionProvider } from '@my-pi-harness/plugins';
 import type {
   ConnectionControl,
   ConnectionInput,
@@ -27,7 +26,7 @@ import type {
   ConnectionRepository,
   StoredConnection,
 } from '@my-pi-harness/storage';
-import { pluginEndpointComponent } from '../plugins/app-catalog';
+import { pluginEndpointComponent } from '@my-pi-harness/plugins';
 
 interface PendingFlow {
   connectionId: string;

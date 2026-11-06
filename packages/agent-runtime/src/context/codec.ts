@@ -2,7 +2,7 @@ import { PI_AI_VERSION, type Message } from '@earendil-works/pi-ai';
 import { Type } from 'typebox';
 import { Value } from 'typebox/value';
 import { RuntimeError } from '../errors';
-import { StoredToolResultSchema, type StoredToolResult } from '@my-pi-harness/protocol';
+import { StoredToolResultSchema, type StoredToolResult } from '@my-pi-harness/protocol/internal';
 
 const jsonObject = Type.Record(Type.String(), Type.Unknown());
 const text = Type.Object({

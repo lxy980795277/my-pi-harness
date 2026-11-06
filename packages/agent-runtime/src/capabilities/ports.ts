@@ -1,11 +1,10 @@
 import type {
   ApprovalMode,
-  FrozenSkill,
-  SkillCandidate,
   SkillSelection,
   SkillView,
   ToolDiscoveryDiagnostic,
 } from '@my-pi-harness/protocol';
+import type { FrozenSkill, SkillCandidate } from '@my-pi-harness/protocol/internal';
 import type { ToolContent } from '@my-pi-harness/tools';
 import type {
   CapabilityToolHandlers,

@@ -9,7 +9,6 @@ export {
   createMemoryCredentialStore,
 } from './credentials/credentials';
 export type { CredentialStore, CredentialBackend, SecretUpdate } from './credentials/credentials';
-export type { CreateSessionInput, EventInput, RequestAcceptance } from './sessions/types';
 export type { ArtifactBlob, ArtifactDownload, ArtifactLimits } from './artifacts/blobs';
 
 export { sessionLogDirectory, type ProfileStoreOptions } from './sessions/session-log-directory';
@@ -34,11 +33,7 @@ export type {
   McpStartupGrant,
   McpIdentity,
 } from './repositories/mcp';
-export {
-  ExtensionRepository,
-  type StoredSkill,
-  type StoredPlugin,
-} from './repositories/extensions';
+export { ExtensionRepository, type StoredSkill } from './repositories/extensions';
 export { RemoteMcpRepository, type StoredRemoteMcpServer } from './repositories/remote-mcp';
 export {
   McpDirectoryRepository,
@@ -47,7 +42,4 @@ export {
 } from './repositories/mcp-directory';
 
 export { ConnectionRepository, type StoredConnection } from './repositories/connections';
-export {
-  PluginCredentialStore,
-  type PluginOAuthCredential,
-} from './credentials/plugin-credentials';
+export { PluginCredentialStore } from './credentials/plugin-credentials';

@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { ToolContent } from '@my-pi-harness/tools';
-import type { StoredToolResult, ToolCallRecord } from '@my-pi-harness/protocol';
+import type { ToolCallRecord } from '@my-pi-harness/protocol';
+import type { StoredToolResult } from '@my-pi-harness/protocol/internal';
 import { encodeToolResult } from '../context/codec';
 import { RuntimeError } from '../errors';
 import type { EventInput } from '../sessions/ports';

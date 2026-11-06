@@ -43,11 +43,12 @@ apps/
   desktop/         Electron main/preload、daemon 监督、打包
 packages/
   agent-runtime/   Pi模型网关、Run/工具、上下文与会话工作状态
-  tools/           原生工具、Skill与插件资源、受管理命令
+  tools/           27个原生工具、通用Skill能力与受管理命令
+  plugins/         插件声明/资源、安装启停更新、服务授权与贡献
   sandbox/         宿主文件/网络守卫、平台隔离与受监管进程
-  integrations/    MCP、OAuth及远端服务适配
+  integrations/    MCP、通用OAuth、受控网络与高级账户协议适配
   storage/         JSONL批日志、SQLite/Drizzle配置和投影、附件、凭据与profile锁
-  protocol/        浏览器安全 DTO、TypeBox schema、协议版本
+  protocol/        公开跨端DTO/schema、宿主internal数据与协议版本
   tsconfig/        Node / Browser 编译配置
 scripts/           开发、版本、ESLint规则、依赖边界及产物检查
 tests/             工程边界测试与浏览器 E2E

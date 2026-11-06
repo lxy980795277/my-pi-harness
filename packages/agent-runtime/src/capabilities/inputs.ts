@@ -1,17 +1,19 @@
 import { Type, type Static } from 'typebox';
 import { Value } from 'typebox/value';
 import {
-  FrozenSkillSchema,
-  SkillCandidatesSchema,
-  FrozenMcpToolsSchema,
   ToolDiscoveryDiagnosticSchema,
-  type FrozenSkill,
   type InputRequest,
   type SessionSummary,
   type SkillSelection,
-  type SkillCandidate,
   type ToolDiscoveryDiagnostic,
 } from '@my-pi-harness/protocol';
+import {
+  FrozenSkillSchema,
+  SkillCandidatesSchema,
+  FrozenMcpToolsSchema,
+  type FrozenSkill,
+  type SkillCandidate,
+} from '@my-pi-harness/protocol/internal';
 import { externalBindingKey, type ExternalTools, type FrozenMcpTool } from '../tools/external';
 import type { SkillsPort, ToolDiscoveryPort } from './ports';
 import type { RuntimeStore } from '../sessions/ports';

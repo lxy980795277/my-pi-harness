@@ -1,4 +1,4 @@
-import type { FrozenSkill } from '@my-pi-harness/protocol';
+import type { FrozenSkill } from '@my-pi-harness/protocol/internal';
 import type { SkillsPort } from './ports';
 
 /** Explicit invocations use a standalone lowercase $skill-name token in user-authored text. */
