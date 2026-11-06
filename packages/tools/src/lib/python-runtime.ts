@@ -1,7 +1,7 @@
 import { constants } from 'node:fs';
 import { access, realpath } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, parse } from 'node:path';
-import { ToolError } from './tool-registry.js';
+import { ToolError } from './tool-registry';
 
 export interface PythonRuntime {
   program: string;

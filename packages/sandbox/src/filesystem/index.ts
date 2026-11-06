@@ -7,11 +7,7 @@ export {
   toWorkspaceRelativePath,
   isPortableFileName,
   isSensitiveName,
-} from './workspace-path.js';
-export { readStableFile } from './read-file.js';
-export type {
-  WorkspaceContext,
-  WorkspaceRootInput,
-  WorkspacePathPlatform,
-} from './workspace-path.js';
-export { SandboxError, checkCancelled, isMissing } from '../errors.js';
+} from './workspace-path';
+export { readStableFile } from './read-file';
+export type { WorkspaceContext, WorkspaceRootInput, WorkspacePathPlatform } from './workspace-path';
+export { SandboxError, checkCancelled, isMissing } from '../errors';

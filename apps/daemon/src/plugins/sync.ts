@@ -10,7 +10,7 @@ import {
 } from '@my-pi-harness/tools';
 import type { PluginManifest, PluginComponent } from '@my-pi-harness/protocol';
 import type { ExtensionRepository, StoredPlugin } from '@my-pi-harness/storage';
-import type { SkillsService } from '../skills/service.js';
+import type { SkillsService } from '../skills/service';
 
 interface PluginSyncOptions {
   plugin: StoredPlugin;

@@ -6,8 +6,8 @@ import {
   toWorkspaceRelativePath,
   workspacePath,
 } from '@my-pi-harness/sandbox';
-import { decodeText, MAXIMUM_TEXT_BYTES, walkWorkspace } from '../lib/filesystem.js';
-import { ToolError, completeToolRegistration, strictObjectSchema } from '../lib/tool-registry.js';
+import { decodeText, MAXIMUM_TEXT_BYTES, walkWorkspace } from '../lib/filesystem';
+import { ToolError, completeToolRegistration, strictObjectSchema } from '../lib/tool-registry';
 
 const parameters = strictObjectSchema({
   path: Type.Optional(Type.String({ minLength: 1, maxLength: 2048 })),

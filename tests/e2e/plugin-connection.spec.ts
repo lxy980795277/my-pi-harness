@@ -20,10 +20,10 @@ import {
 } from '@my-pi-harness/protocol';
 import { Type } from 'typebox';
 import { Value } from 'typebox/value';
-import { test, expect } from './fixture.js';
-import { chooseConversationModel, openUserSettings, chooseOption } from './ui-controls.js';
-import { configureTestProvider } from './model-fixtures.js';
-import { startToolSequenceModel } from './m2-completion-model.js';
+import { test, expect } from './fixture';
+import { chooseConversationModel, openUserSettings, chooseOption } from './ui-controls';
+import { configureTestProvider } from './model-fixtures';
+import { startToolSequenceModel } from './m2-completion-model';
 
 const GITHUB_CLIENT = 'synthetic-browser-oauth-client-github';
 const GOOGLE_CLIENT = 'synthetic-browser-oauth-client-google';

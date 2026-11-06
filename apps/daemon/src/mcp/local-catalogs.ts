@@ -7,8 +7,8 @@ import type {
   ToolDiscoveryDiagnostic,
 } from '@my-pi-harness/protocol';
 import type { McpIdentity, ProfileStore, StoredMcpServer } from '@my-pi-harness/storage';
-import { CatalogCache, type CatalogEntry } from './catalog-cache.js';
-import { remoteFingerprint } from './remote-fingerprint.js';
+import { CatalogCache, type CatalogEntry } from './catalog-cache';
+import { remoteFingerprint } from './remote-fingerprint';
 
 export interface LocalCatalogEntry extends CatalogEntry {
   revision: number;

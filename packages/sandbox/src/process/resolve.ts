@@ -1,10 +1,10 @@
 import { constants } from 'node:fs';
 import { access, lstat, realpath, stat } from 'node:fs/promises';
 import { isAbsolute, relative, sep } from 'node:path';
-import { SandboxError } from '../errors.js';
-import { resolveWorkspaceRoot } from '../filesystem/workspace-path.js';
-import { isAllowedProcessEnvironmentName } from './environment.js';
-import type { ProcessInput, ProcessLaunch, ProcessLimits } from './types.js';
+import { SandboxError } from '../errors';
+import { resolveWorkspaceRoot } from '../filesystem/workspace-path';
+import { isAllowedProcessEnvironmentName } from './environment';
+import type { ProcessInput, ProcessLaunch, ProcessLimits } from './types';
 
 const DEFAULT_LIMITS: Required<Omit<ProcessLimits, 'lifetimeMs'>> = {
   stdoutBytes: 64 * 1024 * 1024,

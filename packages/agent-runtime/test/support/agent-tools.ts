@@ -2,7 +2,7 @@ import type { AssistantMessage, TranscriptContext } from '@earendil-works/pi-ai'
 import { AgentTaskSummarySchema } from '@my-pi-harness/protocol';
 import { Type, type Static } from 'typebox';
 import { Value } from 'typebox/value';
-import { call } from './work-fixture.js';
+import { call } from './work-fixture';
 
 type SpawnReceipt = Static<typeof SpawnReceiptSchema>;
 

@@ -2,14 +2,14 @@ import { randomUUID } from 'node:crypto';
 import type { Agent } from '@earendil-works/pi-agent-core';
 import type { UserMessage } from '@earendil-works/pi-ai';
 import type { MessageView, QueueInput } from '@my-pi-harness/protocol';
-import { userWithAttachments } from '../context/attachments.js';
-import { encodeContextMessage } from '../context/codec.js';
-import { RuntimeError } from '../errors.js';
-import { combinedSkills } from '../capabilities/inputs.js';
-import type { EventInput } from '../sessions/ports.js';
-import { assertQueuedAuthority } from './agent.js';
-import type { RunExecutionOptions } from './types.js';
-import type { RunInjectedInput } from './ports.js';
+import { userWithAttachments } from '../context/attachments';
+import { encodeContextMessage } from '../context/codec';
+import { RuntimeError } from '../errors';
+import { combinedSkills } from '../capabilities/inputs';
+import type { EventInput } from '../sessions/ports';
+import { assertQueuedAuthority } from './agent';
+import type { RunExecutionOptions } from './types';
+import type { RunInjectedInput } from './ports';
 
 interface RunInputHost {
   assertKnownOutcome(): void;

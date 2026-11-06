@@ -1,9 +1,9 @@
 import { Type } from 'typebox';
 
-import { completeToolRegistration, strictObjectSchema } from '../lib/tool-registry.js';
-import { textResult } from '../lib/tool-result.js';
+import { completeToolRegistration, strictObjectSchema } from '../lib/tool-registry';
+import { textResult } from '../lib/tool-result';
 
-import { requireCommandHandlers } from '../lib/tool-context.js';
+import { requireCommandHandlers } from '../lib/tool-context';
 
 export type WaitCommandHandler = (
   commandId: string,

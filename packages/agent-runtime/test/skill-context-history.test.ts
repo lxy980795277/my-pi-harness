@@ -1,9 +1,9 @@
 import { fauxAssistantMessage, type TranscriptContext } from '@earendil-works/pi-ai';
 import type { FrozenSkill } from '@my-pi-harness/protocol';
 import { expect, it } from 'vitest';
-import type { SkillsPort } from '../src/capabilities/ports.js';
-import { fixture, idle, summary } from './support/work-fixture.js';
-import { skillCandidate } from './support/skill-candidate.js';
+import type { SkillsPort } from '../src/capabilities/ports';
+import { fixture, idle, summary } from './support/work-fixture';
+import { skillCandidate } from './support/skill-candidate';
 
 it('does not revive instructions discarded before the source context reset when selecting a later summary', async () => {
   const skill: FrozenSkill = {

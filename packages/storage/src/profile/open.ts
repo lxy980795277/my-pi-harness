@@ -1,12 +1,9 @@
 import { join, resolve } from 'node:path';
 import Database from 'better-sqlite3';
-import { ProfileStore } from './store.js';
-import { applyMigrations } from '../sqlite/migrations/apply.js';
-import { acquireProfileLock } from './profile-lock.js';
-import {
-  sessionLogDirectory,
-  type ProfileStoreOptions,
-} from '../sessions/session-log-directory.js';
+import { ProfileStore } from './store';
+import { applyMigrations } from '../sqlite/migrations/apply';
+import { acquireProfileLock } from './profile-lock';
+import { sessionLogDirectory, type ProfileStoreOptions } from '../sessions/session-log-directory';
 
 /**
  * Open one profile, migrate and interrupt old runs before any model work can begin.

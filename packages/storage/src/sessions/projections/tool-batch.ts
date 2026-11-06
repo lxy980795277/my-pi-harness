@@ -5,9 +5,9 @@ import {
   type ToolCallRecord,
   type Artifact,
 } from '@my-pi-harness/protocol';
-import { checked } from '../../shared/validation.js';
-import { StorageError } from '../../shared/errors.js';
-import { ToolContextEventSchema, ToolEventSchema } from '../event-validation.js';
+import { checked } from '../../shared/validation';
+import { StorageError } from '../../shared/errors';
+import { ToolContextEventSchema, ToolEventSchema } from '../event-validation';
 
 interface BatchRecord {
   type: string;

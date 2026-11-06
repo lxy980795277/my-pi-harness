@@ -2,6 +2,8 @@
 
 本页管理功能范围与里程碑顺序，详细验收由各里程碑 Spec 承担。`规划` 不表示能力已经可用；只有实现与必要验证都完成后才能调整状态。
 
+2026-11-06完成[TypeScript模块导入统一无后缀](../04_FEATURES/202611061220_refactor_extensionless-imports/spec.md)：433个TS文件的1487处模块引用及tsx辅助入口同步，保留原生Node和真实资源扩展；门禁正反fixture、2045项源码测试、类型/静态/构建、7项部署检查、4条浏览器链路及macOS arm64应用目录smoke通过，见[验证记录](../04_FEATURES/202611061220_refactor_extensionless-imports/verify.md)。属于M0治理，M1–M5行为、协议24、SQLite10及M6状态保持。
+
 2026-11-06完成[源码运行与插件资源归并](../04_FEATURES/202611061105_refactor_source-runtime-plugin-assets/spec.md)：统一后端源码exports与随包Node/tsx执行，归并插件资源并清理确证冗余；全仓检查、2014项源码测试、隔离生产部署、四条浏览器链路及macOS arm64应用目录打包/smoke通过，见[验证记录](../04_FEATURES/202611061105_refactor_source-runtime-plugin-assets/verify.md)。属于M0及既有M2–M5维护，M6与原有平台、账号和办公质量缺口保持。
 
 2026-11-06完成同专题的[配套源码组织对齐](../04_FEATURES/202611041712_refactor_tools-skills-sandbox/verify.md#配套源码组织对齐2026-11-06)：删除tools/src中的documents、ports、registry目录，正文提取与检索归utils，注册契约与公共上下文归lib，原生装配归根文件；专属输入和回调类型随工具定义。318项聚焦回归、全workspace类型/静态/构建及独立生产部署通过，旧叶出口明确拒绝，27个序列化工具声明保持不变。属于M0及既有M2–M5维护，协议24、SQLite10和原有外部验收缺口不变，M6继续暂缓。

@@ -1,8 +1,8 @@
-import { McpToolSelectionsSchema } from '../extensions/mcp.js';
-import { SkillSelectionsSchema } from '../extensions/skills.js';
+import { McpToolSelectionsSchema } from '../extensions/mcp';
+import { SkillSelectionsSchema } from '../extensions/skills';
 import { type Static, Type } from 'typebox';
-import { ThinkingLevelSchema } from '../application/models.js';
-import { ApprovalModeSchema, ToolCallViewSchema } from '../tools/tools.js';
+import { ThinkingLevelSchema } from '../application/models';
+import { ApprovalModeSchema, ToolCallViewSchema } from '../tools/tools';
 
 export type SessionSummary = Static<typeof SessionSummarySchema>;
 export type MessageUsage = Static<typeof MessageUsageSchema>;

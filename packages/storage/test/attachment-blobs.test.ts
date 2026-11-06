@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import Database from 'better-sqlite3';
 import type { AttachmentContent } from '@my-pi-harness/protocol';
 import { describe, expect, it } from 'vitest';
-import { openProfileStore, sessionLogDirectory } from '../src/index.js';
+import { openProfileStore, sessionLogDirectory } from '../src/index';
 
 const content: AttachmentContent = {
   attachment: {

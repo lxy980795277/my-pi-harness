@@ -40,12 +40,12 @@ import {
   type StoredMcpServer,
   type McpStartupGrant,
 } from '@my-pi-harness/storage';
-import type { McpManager } from './types.js';
-import { McpDirectoryPolicy, mcpMetadata } from './directory.js';
-import { LocalCatalogs, type LocalCatalogEntry as CatalogEntry } from './local-catalogs.js';
-import { closeMcpResources } from './lifecycle.js';
-import { validateLocalMcpInput } from './local-input.js';
-import { LocalPreflights } from './local-preflights.js';
+import type { McpManager } from './types';
+import { McpDirectoryPolicy, mcpMetadata } from './directory';
+import { LocalCatalogs, type LocalCatalogEntry as CatalogEntry } from './local-catalogs';
+import { closeMcpResources } from './lifecycle';
+import { validateLocalMcpInput } from './local-input';
+import { LocalPreflights } from './local-preflights';
 
 export interface McpServiceOptions {
   store: ProfileStore;

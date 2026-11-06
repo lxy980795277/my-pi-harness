@@ -2,9 +2,9 @@ import { mkdtemp, mkdir, readFile, realpath, rm, symlink, writeFile } from 'node
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, it } from 'vitest';
-import { previewBuiltinPluginSkills } from '../../src/plugins/preview.js';
-import { BUILTIN_PLUGINS, BUILTIN_PLUGIN_RESOURCE_DIRECTORY } from '../../src/plugins/catalog.js';
-import { parseSkill } from '../../src/skills/parser.js';
+import { previewBuiltinPluginSkills } from '../../src/plugins/preview';
+import { BUILTIN_PLUGINS, BUILTIN_PLUGIN_RESOURCE_DIRECTORY } from '../../src/plugins/catalog';
+import { parseSkill } from '../../src/skills/parser';
 
 const temporary: string[] = [];
 const signal = new AbortController().signal;

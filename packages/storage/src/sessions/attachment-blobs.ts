@@ -12,9 +12,9 @@ import {
 import { join } from 'node:path';
 import { Type } from 'typebox';
 import { AttachmentContentSchema, type AttachmentContent } from '@my-pi-harness/protocol';
-import { StorageError } from '../shared/errors.js';
-import type { PrivateSessionFiles } from './private-files.js';
-import { checked } from '../shared/validation.js';
+import { StorageError } from '../shared/errors';
+import type { PrivateSessionFiles } from './private-files';
+import { checked } from '../shared/validation';
 
 const BlobSchema = Type.Object(
   {

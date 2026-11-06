@@ -12,7 +12,7 @@ import type {
   CommandResourceLease,
   SkillResourceLease,
 } from '@my-pi-harness/tools';
-import type { FrozenMcpTool } from '../tools/external.js';
+import type { FrozenMcpTool } from '../tools/external';
 
 /** Host-authorized discovery prepares catalogs before freezing their non-secret metadata. */
 export interface ToolDiscoveryPort {

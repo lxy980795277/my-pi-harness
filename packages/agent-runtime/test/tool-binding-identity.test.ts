@@ -2,11 +2,11 @@ import { Type } from 'typebox';
 import { Value } from 'typebox/value';
 import { expect, it } from 'vitest';
 import { ToolCallRecordSchema, type SessionSummary } from '@my-pi-harness/protocol';
-import { ToolRuntime } from '../src/tools/runtime.js';
-import { RunToolset } from '../src/tools/toolset.js';
-import type { ExternalTools, FrozenMcpTool } from '../src/tools/external.js';
-import type { ToolRunContext } from '../src/tools/types.js';
-import type { EventInput } from '../src/sessions/ports.js';
+import { ToolRuntime } from '../src/tools/runtime';
+import { RunToolset } from '../src/tools/toolset';
+import type { ExternalTools, FrozenMcpTool } from '../src/tools/external';
+import type { ToolRunContext } from '../src/tools/types';
+import type { EventInput } from '../src/sessions/ports';
 
 function external(serverId: string): FrozenMcpTool {
   return {

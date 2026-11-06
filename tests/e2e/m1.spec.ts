@@ -1,9 +1,9 @@
-import { test, expect } from './fixture.js';
-import { startTestModel } from './model-server.js';
-import { configureTestProvider } from './model-fixtures.js';
-import { chooseConversationModel, chooseOption, openUserSettings } from './ui-controls.js';
+import { test, expect } from './fixture';
+import { startTestModel } from './model-server';
+import { configureTestProvider } from './model-fixtures';
+import { chooseConversationModel, chooseOption, openUserSettings } from './ui-controls';
 import { AuthStatusSchema, SessionSnapshotSchema } from '@my-pi-harness/protocol';
-import { selectTestSessionBranch } from './session-fixtures.js';
+import { selectTestSessionBranch } from './session-fixtures';
 import { Value } from 'typebox/value';
 
 test('配置兼容 API、真实 Pi 流式请求、刷新与编辑分支', async ({ page, daemon }, testInfo) => {

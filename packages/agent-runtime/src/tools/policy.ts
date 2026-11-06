@@ -1,10 +1,10 @@
 import { nativeTool } from '@my-pi-harness/tools';
 import type { ToolDecisionInput } from '@my-pi-harness/protocol';
-import { RuntimeError } from '../errors.js';
-import type { ApprovalReviewResult } from './approval-review.js';
-import type { ToolCallLedger } from './ledger.js';
-import type { RunToolRecord } from './toolset.js';
-import type { ToolRunContext, ToolRuntimeOptions } from './types.js';
+import { RuntimeError } from '../errors';
+import type { ApprovalReviewResult } from './approval-review';
+import type { ToolCallLedger } from './ledger';
+import type { RunToolRecord } from './toolset';
+import type { ToolRunContext, ToolRuntimeOptions } from './types';
 
 interface PendingApproval {
   sessionId: string;

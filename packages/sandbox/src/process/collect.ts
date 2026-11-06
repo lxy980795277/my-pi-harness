@@ -1,7 +1,7 @@
 import { StringDecoder } from 'node:string_decoder';
-import type { SandboxError } from '../errors.js';
-import { startProcess } from './persistent.js';
-import type { ProcessExit, ProcessLaunch } from './types.js';
+import type { SandboxError } from '../errors';
+import { startProcess } from './persistent';
+import type { ProcessExit, ProcessLaunch } from './types';
 
 /** Collected output is bounded by the resolved process budgets. */
 export interface CollectedProcess extends ProcessExit {

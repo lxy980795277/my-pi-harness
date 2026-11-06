@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { join } from 'node:path';
-import { resolveProfileDirectory, resolveSessionLogRoot } from '../src/main/profile-directory.js';
+import { resolveProfileDirectory, resolveSessionLogRoot } from '../src/main/profile-directory';
 
 describe('desktop profile directory', () => {
   it('uses macOS userData, including spaces and Chinese paths', () => {

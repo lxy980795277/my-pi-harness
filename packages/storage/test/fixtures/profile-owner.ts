@@ -1,6 +1,6 @@
 import { Type } from 'typebox';
 import { Value } from 'typebox/value';
-import { openProfileStore } from '../../src/index.js';
+import { openProfileStore } from '../../src/index';
 
 const directory = process.argv[2];
 if (directory === undefined) throw new Error('Profile directory is required');

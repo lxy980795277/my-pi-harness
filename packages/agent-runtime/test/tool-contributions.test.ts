@@ -2,12 +2,12 @@ import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
 import { completeToolRegistration, nativeTools, ToolRegistry } from '@my-pi-harness/tools';
 import type { SessionSummary } from '@my-pi-harness/protocol';
-import { ToolRuntime } from '../src/tools/runtime.js';
-import type { ToolRunContext } from '../src/tools/types.js';
-import type { EventInput } from '../src/sessions/ports.js';
-import { selectRunTools } from '../src/tools/selection.js';
-import { RunToolset } from '../src/tools/toolset.js';
-import { toolCallRecordId } from '../src/tools/ledger.js';
+import { ToolRuntime } from '../src/tools/runtime';
+import type { ToolRunContext } from '../src/tools/types';
+import type { EventInput } from '../src/sessions/ports';
+import { selectRunTools } from '../src/tools/selection';
+import { RunToolset } from '../src/tools/toolset';
+import { toolCallRecordId } from '../src/tools/ledger';
 
 function context(runId: string, taskId: string | null, events: EventInput[]): ToolRunContext {
   const session: SessionSummary = {

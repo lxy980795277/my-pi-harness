@@ -6,8 +6,8 @@ import {
   RunViewSchema,
   SessionSnapshotSchema,
   SessionSummarySchema,
-} from './sessions.js';
-import { ToolCallViewSchema } from '../tools/tools.js';
+} from './sessions';
+import { ToolCallViewSchema } from '../tools/tools';
 
 export type SessionChange = Static<typeof SessionChangeSchema>;
 export type SessionPatch = Static<typeof SessionPatchSchema>;

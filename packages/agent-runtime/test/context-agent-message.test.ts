@@ -1,7 +1,7 @@
 import type { AgentMessage, MessageView } from '@my-pi-harness/protocol';
 import { describe, expect, it } from 'vitest';
-import { communicationMessage } from '../src/context/agent-message.js';
-import { contextSourceIds } from '../src/context/sources.js';
+import { communicationMessage } from '../src/context/agent-message';
+import { contextSourceIds } from '../src/context/sources';
 
 const communication: AgentMessage = {
   id: 'communication',

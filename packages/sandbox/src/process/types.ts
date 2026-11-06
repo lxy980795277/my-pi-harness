@@ -1,4 +1,4 @@
-import type { SandboxError } from '../errors.js';
+import type { SandboxError } from '../errors';
 
 /** UI scope; sandboxed resolves to workspace-write unless explicitly narrowed. */
 export type ProcessScope = 'sandboxed' | 'full-access';

@@ -2,8 +2,8 @@ import { constants } from 'node:fs';
 import { lstat, open, readdir, realpath } from 'node:fs/promises';
 import { dirname, extname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { createHash } from 'node:crypto';
-import { SkillError } from './errors.js';
-import type { SkillDownloadFile, SkillResource } from './types.js';
+import { SkillError } from './errors';
+import type { SkillDownloadFile, SkillResource } from './types';
 
 /** Resource names are portable relative paths with no traversal or hidden credential paths. */
 export function skillResourcePath(input: string): string {

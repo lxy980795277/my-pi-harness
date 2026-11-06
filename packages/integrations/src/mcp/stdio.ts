@@ -9,9 +9,9 @@ import {
   type ManagedProcess,
   type ProcessLaunch,
 } from '@my-pi-harness/sandbox/process';
-import { McpError } from './errors.js';
-import { fingerprint } from './fingerprint.js';
-import type { McpCallInput } from './types.js';
+import { McpError } from './errors';
+import { fingerprint } from './fingerprint';
+import type { McpCallInput } from './types';
 
 export interface DispatchAttempt {
   readonly id: string;

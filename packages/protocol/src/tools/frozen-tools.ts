@@ -1,5 +1,5 @@
 import { Type, type Static } from 'typebox';
-import { McpScopeSchema, McpToolSelectionSchema } from '../extensions/mcp.js';
+import { McpScopeSchema, McpToolSelectionSchema } from '../extensions/mcp';
 
 export type ExternalToolAuthorization = Static<typeof ExternalToolAuthorizationSchema>;
 export type FrozenMcpToolData = Static<typeof FrozenMcpToolSchema>;

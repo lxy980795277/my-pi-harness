@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isPublicAddress } from '../src/index.js';
+import { isPublicAddress } from '../src/index';
 
 describe('public web targets', () => {
   it.each([

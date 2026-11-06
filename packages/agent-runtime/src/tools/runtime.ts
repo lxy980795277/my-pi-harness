@@ -7,15 +7,15 @@ import {
 import { Type, type TSchema } from 'typebox';
 import { ArrayOptions } from 'typebox/type';
 import { Value } from 'typebox/value';
-import { RuntimeError } from '../errors.js';
+import { RuntimeError } from '../errors';
 import { nativeTools, type ToolRegistration } from '@my-pi-harness/tools';
-import { applyToolOutcome } from './outcome.js';
-import { createToolContext, bindRunTool, type BoundToolExecutor } from './bindings.js';
-import { ToolCallLedger } from './ledger.js';
-import { invocationPolicy, ToolApprovals } from './policy.js';
-import { RepeatToolReminder } from './repeat-reminder.js';
-import type { RunToolset, RunToolDefinition, RunToolRecord } from './toolset.js';
-import type { ToolExecutionResult, ToolRunContext, ToolRuntimeOptions } from './types.js';
+import { applyToolOutcome } from './outcome';
+import { createToolContext, bindRunTool, type BoundToolExecutor } from './bindings';
+import { ToolCallLedger } from './ledger';
+import { invocationPolicy, ToolApprovals } from './policy';
+import { RepeatToolReminder } from './repeat-reminder';
+import type { RunToolset, RunToolDefinition, RunToolRecord } from './toolset';
+import type { ToolExecutionResult, ToolRunContext, ToolRuntimeOptions } from './types';
 
 const toolArguments = Type.Record(Type.String(), Type.Unknown());
 const MAX_TOOL_ERROR_CHARACTERS = 4000;

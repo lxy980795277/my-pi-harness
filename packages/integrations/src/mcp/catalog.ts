@@ -5,10 +5,10 @@ import {
   type Resource,
   type Prompt,
 } from '@modelcontextprotocol/client';
-import { McpError } from './errors.js';
-import { deepFreeze, fingerprint } from './fingerprint.js';
-import { compileMcpInputSchema } from './schema.js';
-import type { McpCatalog, McpDiscoveredTool } from './types.js';
+import { McpError } from './errors';
+import { deepFreeze, fingerprint } from './fingerprint';
+import { compileMcpInputSchema } from './schema';
+import type { McpCatalog, McpDiscoveredTool } from './types';
 
 export function containsSecret(value: unknown, secrets: readonly string[]): boolean {
   if (typeof value === 'string')

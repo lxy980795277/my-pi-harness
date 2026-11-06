@@ -14,7 +14,7 @@ import {
 import { RuntimeError } from '@my-pi-harness/agent-runtime';
 import { openProfileStore, type EventInput, type ProfileStore } from '@my-pi-harness/storage';
 import { describe, expect, it } from 'vitest';
-import { registerArtifactRoute } from '../src/sessions/artifact-route.js';
+import { registerArtifactRoute } from '../src/sessions/artifact-route';
 
 function taskArtifact(
   store: ProfileStore,
@@ -331,7 +331,7 @@ describe('registered artifact HTTP download', () => {
 
   it('registers workspace files through the host and rejects traversal, links, false types and cancellation', async () => {
     const f = await fixture();
-    const { ArtifactService } = await import('../src/artifacts/service.js');
+    const { ArtifactService } = await import('../src/artifacts/service');
     const service = new ArtifactService(
       f.store,
       { requireAvailable: () => Promise.resolve(f.workspace) },

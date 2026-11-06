@@ -3,7 +3,7 @@ import { access, mkdtemp, realpath, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { WATCHDOG_SOURCE } from '../src/process/watchdog.js';
+import { WATCHDOG_SOURCE } from '../src/process/watchdog';
 
 async function running(pid: number): Promise<boolean> {
   return await new Promise<boolean>((accept, reject) => {

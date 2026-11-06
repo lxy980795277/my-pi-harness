@@ -1,6 +1,6 @@
 import type { WorkToolHandlers } from '@my-pi-harness/tools';
-import { RuntimeError } from '../errors.js';
-import type { WorkRuntime } from './runtime.js';
+import { RuntimeError } from '../errors';
+import type { WorkRuntime } from './runtime';
 
 /** Bind interaction state to the exact root or task Run, never the parent context. */
 export function createWorkToolHandlers(

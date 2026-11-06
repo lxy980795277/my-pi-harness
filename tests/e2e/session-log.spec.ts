@@ -2,11 +2,11 @@ import { readFile } from 'node:fs/promises';
 import type { Page, Route } from '@playwright/test';
 import { SessionSnapshotSchema, type SessionSnapshot } from '@my-pi-harness/protocol';
 import { Value } from 'typebox/value';
-import { test, expect } from './fixture.js';
-import { configureTestProvider } from './model-fixtures.js';
-import { startMarkdownModel } from './markdown-model.js';
-import { startTestModel } from './model-server.js';
-import { chooseConversationModel } from './ui-controls.js';
+import { test, expect } from './fixture';
+import { configureTestProvider } from './model-fixtures';
+import { startMarkdownModel } from './markdown-model';
+import { startTestModel } from './model-server';
+import { chooseConversationModel } from './ui-controls';
 
 declare global {
   interface Window {

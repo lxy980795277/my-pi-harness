@@ -7,9 +7,9 @@ import {
   type AppSettingsInput,
   type ProviderConfig,
 } from '@my-pi-harness/protocol';
-import { StorageError } from '../shared/errors.js';
-import { checked } from '../shared/validation.js';
-import * as schema from '../sqlite/schema.js';
+import { StorageError } from '../shared/errors';
+import { checked } from '../shared/validation';
+import * as schema from '../sqlite/schema';
 
 /** Model configuration and defaults; the profile owns transactions and the write-failure gate. */
 export class ModelSettingsRepository {

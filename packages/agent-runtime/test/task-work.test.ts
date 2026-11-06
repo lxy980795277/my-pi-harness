@@ -10,13 +10,9 @@ import {
 } from '@my-pi-harness/protocol';
 import { openProfileStore } from '@my-pi-harness/storage';
 import { describe, expect, it } from 'vitest';
-import {
-  decodeContextMessage,
-  encodeContextMessage,
-  encodeToolResult,
-} from '../src/context/codec.js';
-import { toolCallRecordId } from '../src/tools/ledger.js';
-import { WorkRuntime } from '../src/work/runtime.js';
+import { decodeContextMessage, encodeContextMessage, encodeToolResult } from '../src/context/codec';
+import { toolCallRecordId } from '../src/tools/ledger';
+import { WorkRuntime } from '../src/work/runtime';
 
 async function fixture() {
   const directory = await mkdtemp(join(tmpdir(), 'my-pi-task-work-'));

@@ -1,8 +1,8 @@
 import { HarnessEventSchema, type HarnessEvent } from '@my-pi-harness/protocol';
 import { Value } from 'typebox/value';
-import { checked } from '../shared/validation.js';
-import { EVENT_DATA_SCHEMAS } from './event-validation.js';
-import { assertPersistentEvent } from './event-persistence.js';
+import { checked } from '../shared/validation';
+import { EVENT_DATA_SCHEMAS } from './event-validation';
+import { assertPersistentEvent } from './event-persistence';
 
 /**
  * Select current public fields on a codec-owned clone, without defaults or type conversion.

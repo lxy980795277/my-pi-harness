@@ -6,8 +6,8 @@ import {
   fileChangeResult,
   readCurrentContent,
   writeTextFileAtomic,
-} from '../lib/filesystem.js';
-import { ToolError, completeToolRegistration, strictObjectSchema } from '../lib/tool-registry.js';
+} from '../lib/filesystem';
+import { ToolError, completeToolRegistration, strictObjectSchema } from '../lib/tool-registry';
 
 const parameters = strictObjectSchema({
   path: Type.String({ minLength: 1, maxLength: 2048 }),

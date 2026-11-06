@@ -13,8 +13,8 @@ import {
   type SkillInstallInput,
 } from '@my-pi-harness/protocol';
 import type { FastifyInstance } from 'fastify';
-import type { SkillsService } from './service.js';
-import { requestOperation } from '../http/request-operation.js';
+import type { SkillsService } from './service';
+import { requestOperation } from '../http/request-operation';
 
 const Params = Type.Object(
   { id: Type.String({ minLength: 1, maxLength: 160 }) },

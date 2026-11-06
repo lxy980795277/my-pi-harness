@@ -1,4 +1,4 @@
-import { canonicalToolJson } from './identity.js';
+import { canonicalToolJson } from './identity';
 
 const REMINDER_COUNTS = new Set([3, 5, 8]);
 

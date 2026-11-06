@@ -12,10 +12,10 @@ import {
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, describe, expect, it } from 'vitest';
-import { SkillCatalog } from '../../src/skills/catalog.js';
-import { parseSkill } from '../../src/skills/parser.js';
-import { installSkillFiles } from '../../src/skills/install.js';
-import type { SkillRoot } from '../../src/skills/types.js';
+import { SkillCatalog } from '../../src/skills/catalog';
+import { parseSkill } from '../../src/skills/parser';
+import { installSkillFiles } from '../../src/skills/install';
+import type { SkillRoot } from '../../src/skills/types';
 
 const directories: string[] = [];
 const signal = new AbortController().signal;

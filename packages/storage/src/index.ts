@@ -1,61 +1,53 @@
-export { ProfileStore } from './profile/store.js';
-export { openProfileStore } from './profile/open.js';
-export { StorageError, type StorageErrorCode } from './shared/errors.js';
-export {
-  ProfileLockedError,
-  acquireProfileLock,
-  type ProfileLock,
-} from './profile/profile-lock.js';
-export { SCHEMA_VERSION } from './sqlite/migrations/apply.js';
+export { ProfileStore } from './profile/store';
+export { openProfileStore } from './profile/open';
+export { StorageError, type StorageErrorCode } from './shared/errors';
+export { ProfileLockedError, acquireProfileLock, type ProfileLock } from './profile/profile-lock';
+export { SCHEMA_VERSION } from './sqlite/migrations/apply';
 export {
   createCredentialStore,
   createSystemCredentialStore,
   createMemoryCredentialStore,
-} from './credentials/credentials.js';
-export type {
-  CredentialStore,
-  CredentialBackend,
-  SecretUpdate,
-} from './credentials/credentials.js';
-export type { CreateSessionInput, EventInput, RequestAcceptance } from './sessions/types.js';
-export type { ArtifactBlob, ArtifactDownload, ArtifactLimits } from './artifacts/blobs.js';
+} from './credentials/credentials';
+export type { CredentialStore, CredentialBackend, SecretUpdate } from './credentials/credentials';
+export type { CreateSessionInput, EventInput, RequestAcceptance } from './sessions/types';
+export type { ArtifactBlob, ArtifactDownload, ArtifactLimits } from './artifacts/blobs';
 
-export { sessionLogDirectory, type ProfileStoreOptions } from './sessions/session-log-directory.js';
+export { sessionLogDirectory, type ProfileStoreOptions } from './sessions/session-log-directory';
 export {
   SessionBatchSchema,
   type SessionBatch,
   type SessionLogDownload,
-} from './sessions/session-jsonl.js';
+} from './sessions/session-jsonl';
 
-export { AuthRepository } from './repositories/auth.js';
+export { AuthRepository } from './repositories/auth';
 export type {
   VerifiedIdentity,
   LocalClient,
   LoginSessionInput,
   StoredLoginSession,
-} from './repositories/auth-types.js';
+} from './repositories/auth-types';
 
-export { McpRepository } from './repositories/mcp.js';
+export { McpRepository } from './repositories/mcp';
 export type {
   StoredMcpServer,
   McpSecretBinding,
   McpStartupGrant,
   McpIdentity,
-} from './repositories/mcp.js';
+} from './repositories/mcp';
 export {
   ExtensionRepository,
   type StoredSkill,
   type StoredPlugin,
-} from './repositories/extensions.js';
-export { RemoteMcpRepository, type StoredRemoteMcpServer } from './repositories/remote-mcp.js';
+} from './repositories/extensions';
+export { RemoteMcpRepository, type StoredRemoteMcpServer } from './repositories/remote-mcp';
 export {
   McpDirectoryRepository,
   type McpReadOnlyGrant,
   type StoredMcpCatalog,
-} from './repositories/mcp-directory.js';
+} from './repositories/mcp-directory';
 
-export { ConnectionRepository, type StoredConnection } from './repositories/connections.js';
+export { ConnectionRepository, type StoredConnection } from './repositories/connections';
 export {
   PluginCredentialStore,
   type PluginOAuthCredential,
-} from './credentials/plugin-credentials.js';
+} from './credentials/plugin-credentials';

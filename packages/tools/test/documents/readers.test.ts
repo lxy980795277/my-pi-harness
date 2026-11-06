@@ -5,9 +5,9 @@ import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, it } from 'vitest';
-import { executeRegistered as executeTool } from '../support/registered.js';
-import type { WorkspaceToolContext } from '../../src/lib/tool-context.js';
-import { extractDocument, extractPdf } from '../../src/utils/document-text.js';
+import { executeRegistered as executeTool } from '../support/registered';
+import type { WorkspaceToolContext } from '../../src/lib/tool-context';
+import { extractDocument, extractPdf } from '../../src/utils/document-text';
 
 const directories: string[] = [];
 async function fixture(): Promise<WorkspaceToolContext> {

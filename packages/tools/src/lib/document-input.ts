@@ -4,7 +4,7 @@ import {
   readStableFile,
   workspacePath,
 } from '@my-pi-harness/sandbox/filesystem';
-import type { WorkspaceToolContext } from './tool-context.js';
+import type { WorkspaceToolContext } from './tool-context';
 
 /** Read a bounded, stable workspace file after canonical root and path checks. */
 export async function readDocumentInput(

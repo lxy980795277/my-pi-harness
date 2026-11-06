@@ -5,9 +5,9 @@ import {
   type Workspace,
   type WorkspaceRenameInput,
 } from '@my-pi-harness/protocol';
-import { StorageError } from '../shared/errors.js';
-import * as schema from '../sqlite/schema.js';
-import { checked } from '../shared/validation.js';
+import { StorageError } from '../shared/errors';
+import * as schema from '../sqlite/schema';
+import { checked } from '../shared/validation';
 
 /** Workspace rows share the profile owner's transactions and never touch local files. */
 export class WorkspaceRepository {

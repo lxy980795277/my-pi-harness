@@ -13,8 +13,8 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 import type { Artifact } from '@my-pi-harness/protocol';
-import type { PrivateSessionFiles } from '../sessions/private-files.js';
-import { StorageError } from '../shared/errors.js';
+import type { PrivateSessionFiles } from '../sessions/private-files';
+import { StorageError } from '../shared/errors';
 
 export interface ArtifactLimits {
   maximumFileBytes: number;

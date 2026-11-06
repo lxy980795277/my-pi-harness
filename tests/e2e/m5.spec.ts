@@ -7,10 +7,10 @@ import {
   type SessionSnapshot,
 } from '@my-pi-harness/protocol';
 import { Value } from 'typebox/value';
-import { test, expect } from './fixture.js';
-import { configureTestProvider } from './model-fixtures.js';
-import { startM5Model } from './m5-model-server.js';
-import { chooseConversationModel, chooseOption, openUserSettings } from './ui-controls.js';
+import { test, expect } from './fixture';
+import { configureTestProvider } from './model-fixtures';
+import { startM5Model } from './m5-model-server';
+import { chooseConversationModel, chooseOption, openUserSettings } from './ui-controls';
 
 const CHILD_GET_POLICIES = [
   { mode: 'full-access', label: '完全访问权限', source: 'full-access', reviews: 0 },

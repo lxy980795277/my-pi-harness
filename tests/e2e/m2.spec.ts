@@ -3,13 +3,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { AuthStatusSchema, SessionSnapshotSchema } from '@my-pi-harness/protocol';
 import { Value } from 'typebox/value';
-import { test, expect } from './fixture.js';
-import { configureTestProvider } from './model-fixtures.js';
-import { chooseConversationModel, chooseOption, openUserSettings } from './ui-controls.js';
-import { startToolModel } from './tool-model-server.js';
-import { registerTestWorkspace } from './workspace-fixtures.js';
-import { archiveTestSession } from './session-fixtures.js';
-import { expandCompletedProcesses } from './process-controls.js';
+import { test, expect } from './fixture';
+import { configureTestProvider } from './model-fixtures';
+import { chooseConversationModel, chooseOption, openUserSettings } from './ui-controls';
+import { startToolModel } from './tool-model-server';
+import { registerTestWorkspace } from './workspace-fixtures';
+import { archiveTestSession } from './session-fixtures';
+import { expandCompletedProcesses } from './process-controls';
 
 for (const policy of ['请求批准', '只读'] as const) {
   test(`工作区树、首次发送与真实工具循环：${policy}`, async ({ page, daemon }, testInfo) => {

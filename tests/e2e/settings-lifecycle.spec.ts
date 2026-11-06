@@ -7,8 +7,8 @@ import {
 import type { APIRequestContext } from '@playwright/test';
 import { Type } from 'typebox';
 import { Value } from 'typebox/value';
-import { test, expect } from './fixture.js';
-import { openUserSettings } from './ui-controls.js';
+import { test, expect } from './fixture';
+import { openUserSettings } from './ui-controls';
 
 interface Gate {
   promise: Promise<void>;

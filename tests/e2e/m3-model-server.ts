@@ -1,5 +1,5 @@
 import { createServer } from 'node:http';
-import type { ModelRequest, TestModelServer } from './model-server.js';
+import type { ModelRequest, TestModelServer } from './model-server';
 
 const CURRENT_RUN_TASK_PREFIX =
   'Current Run user task (retained across compaction; tool permissions remain unchanged):\n';

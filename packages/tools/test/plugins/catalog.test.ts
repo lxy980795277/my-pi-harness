@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { PluginCatalog } from '../../src/plugins/index.js';
+import { PluginCatalog } from '../../src/plugins/index';
 
 it('returns independent public metadata', () => {
   const catalog = new PluginCatalog();

@@ -1,6 +1,6 @@
 import { createServer, type Server } from 'node:http';
 import { afterEach, describe, expect, it } from 'vitest';
-import { resolveRendererUrl, waitForRenderer } from '../src/main/renderer.js';
+import { resolveRendererUrl, waitForRenderer } from '../src/main/renderer';
 
 const servers: Server[] = [];
 

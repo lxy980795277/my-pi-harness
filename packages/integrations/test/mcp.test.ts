@@ -8,7 +8,7 @@ import {
   type McpCallInput,
   type McpConnectionBinding,
   type McpLease,
-} from '../src/index.js';
+} from '../src/index';
 
 const roots: string[] = [];
 const managers: McpConnectionManager[] = [];

@@ -12,13 +12,13 @@ import {
   SessionSnapshotSchema,
   SessionSummarySchema,
 } from '@my-pi-harness/protocol';
-import { test, expect } from './fixture.js';
-import { chooseConversationModel, chooseOption } from './ui-controls.js';
-import { configureTestProvider } from './model-fixtures.js';
-import { registerTestWorkspace } from './workspace-fixtures.js';
-import { startToolSequenceModel, type ToolSequenceEntry } from './m2-completion-model.js';
-import { expandCompletedProcesses } from './process-controls.js';
-import type { ModelRequest } from './model-server.js';
+import { test, expect } from './fixture';
+import { chooseConversationModel, chooseOption } from './ui-controls';
+import { configureTestProvider } from './model-fixtures';
+import { registerTestWorkspace } from './workspace-fixtures';
+import { startToolSequenceModel, type ToolSequenceEntry } from './m2-completion-model';
+import { expandCompletedProcesses } from './process-controls';
+import type { ModelRequest } from './model-server';
 
 const python = process.env['MY_PI_HARNESS_PYTHON'];
 const loadedSkill = Type.Object({ resourceDirectory: Type.String({ minLength: 1 }) });

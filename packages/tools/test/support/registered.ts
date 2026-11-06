@@ -7,7 +7,7 @@ import {
   type ToolResult,
   type ToolPolicy,
   type WebFetchGatewayAccess,
-} from '../../src/index.js';
+} from '../../src/index';
 
 export function describeRegistered(name: string, args: Record<string, unknown>): ToolPolicy {
   const registration = nativeTool(name);

@@ -13,7 +13,7 @@ import { openAICompletionsApi } from '@earendil-works/pi-ai/api/openai-completio
 import { Type } from 'typebox';
 import { Value } from 'typebox/value';
 import { describe, expect, it } from 'vitest';
-import { decodeContextMessage, encodeContextMessage } from '../src/context/codec.js';
+import { decodeContextMessage, encodeContextMessage } from '../src/context/codec';
 
 interface WireFixture {
   model: Model<'openai-completions'>;

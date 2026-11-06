@@ -2,13 +2,13 @@ import type { CommandResourceLease } from '@my-pi-harness/tools';
 import { Value } from 'typebox/value';
 import type { ToolContent } from '@my-pi-harness/tools';
 import type { FrozenSkill, SkillCandidate, ToolDiscoveryDiagnostic } from '@my-pi-harness/protocol';
-import type { FrozenMcpTool } from '../tools/external.js';
-import type { EventInput } from '../sessions/ports.js';
-import { RuntimeError } from '../errors.js';
-import { RunToolset, type RunToolRecord, type RunToolSelection } from '../tools/toolset.js';
-import type { RunControls, SkillsPort } from './ports.js';
-import { snapshotPrivateData } from '../context/codec.js';
-import { RunSkills } from './skills.js';
+import type { FrozenMcpTool } from '../tools/external';
+import type { EventInput } from '../sessions/ports';
+import { RuntimeError } from '../errors';
+import { RunToolset, type RunToolRecord, type RunToolSelection } from '../tools/toolset';
+import type { RunControls, SkillsPort } from './ports';
+import { snapshotPrivateData } from '../context/codec';
+import { RunSkills } from './skills';
 import {
   MAX_VISIBLE_TOOLS,
   ToolCatalogSearch,

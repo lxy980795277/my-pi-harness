@@ -14,8 +14,8 @@ import {
   type ConnectionSecretInput,
   type ConnectionServiceId,
 } from '@my-pi-harness/protocol';
-import type { ConnectionService } from './service.js';
-import { requestOperation } from '../http/request-operation.js';
+import type { ConnectionService } from './service';
+import { requestOperation } from '../http/request-operation';
 const Params = Type.Object(
   { id: Type.String({ minLength: 1, maxLength: 160 }) },
   { additionalProperties: false },

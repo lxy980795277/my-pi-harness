@@ -15,7 +15,7 @@ import {
   type PlanReview,
 } from '@my-pi-harness/protocol';
 import type { WorkRuntime } from '@my-pi-harness/agent-runtime';
-import { requestOperation } from '../http/request-operation.js';
+import { requestOperation } from '../http/request-operation';
 
 interface SessionParams {
   sessionId: string;

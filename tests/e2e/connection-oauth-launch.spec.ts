@@ -5,8 +5,8 @@ import {
 } from '@my-pi-harness/protocol';
 import type { Locator, Page, Request, Route } from '@playwright/test';
 import { Value } from 'typebox/value';
-import { test, expect } from './fixture.js';
-import { openUserSettings } from './ui-controls.js';
+import { test, expect } from './fixture';
+import { openUserSettings } from './ui-controls';
 
 const GITHUB_AUTHORIZE = 'https://github.com/login/oauth/authorize';
 const ACCOUNT_NAME = 'OAuth launch browser account';

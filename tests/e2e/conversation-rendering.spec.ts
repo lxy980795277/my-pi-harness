@@ -1,9 +1,9 @@
-import { test, expect } from './fixture.js';
-import { startMarkdownModel } from './markdown-model.js';
-import { configureTestProvider } from './model-fixtures.js';
-import { chooseConversationModel, openUserSettings } from './ui-controls.js';
-import { startToolSequenceModel } from './m2-completion-model.js';
-import { expandCompletedProcesses } from './process-controls.js';
+import { test, expect } from './fixture';
+import { startMarkdownModel } from './markdown-model';
+import { configureTestProvider } from './model-fixtures';
+import { chooseConversationModel, openUserSettings } from './ui-controls';
+import { startToolSequenceModel } from './m2-completion-model';
+import { expandCompletedProcesses } from './process-controls';
 
 const PREFIX = [
   '## 渲染验证',

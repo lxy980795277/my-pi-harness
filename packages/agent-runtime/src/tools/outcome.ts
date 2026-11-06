@@ -1,6 +1,6 @@
 import type { StoredToolResult, ToolCallRecord } from '@my-pi-harness/protocol';
-import { toolResultText } from './ledger.js';
-import type { ToolExecutionResult } from './types.js';
+import { toolResultText } from './ledger';
+import type { ToolExecutionResult } from './types';
 
 export interface ToolOutcome {
   status: Extract<ToolCallRecord['status'], 'completed' | 'failed' | 'cancelled' | 'unknown'>;

@@ -10,7 +10,7 @@ import {
   workspacePath,
 } from '@my-pi-harness/sandbox';
 import type { RuleSource } from '@my-pi-harness/protocol';
-import { abortError, RuntimeError } from '../errors.js';
+import { abortError, RuntimeError } from '../errors';
 
 export interface WorkspaceRulesInput {
   workspaceRoot: string;

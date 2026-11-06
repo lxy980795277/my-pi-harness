@@ -4,12 +4,12 @@ import type { AssistantMessage } from '@earendil-works/pi-ai';
 import { StoredToolIntentSchema, type MessageView } from '@my-pi-harness/protocol';
 import { Type } from 'typebox';
 import { Value } from 'typebox/value';
-import { encodeContextMessage } from '../context/codec.js';
-import { RuntimeError } from '../errors.js';
-import { recordHostToolOutcome, toolCallRecordId, type ToolCallIdentity } from '../tools/ledger.js';
-import type { EventInput } from '../sessions/ports.js';
-import { messageUsage } from './message-usage.js';
-import type { RunExecutionOptions } from './types.js';
+import { encodeContextMessage } from '../context/codec';
+import { RuntimeError } from '../errors';
+import { recordHostToolOutcome, toolCallRecordId, type ToolCallIdentity } from '../tools/ledger';
+import type { EventInput } from '../sessions/ports';
+import { messageUsage } from './message-usage';
+import type { RunExecutionOptions } from './types';
 
 interface RunMessageHost {
   cancelled(): boolean;

@@ -2,8 +2,8 @@ import { Type } from 'typebox';
 import type { FastifyInstance } from 'fastify';
 import { RuntimeError } from '@my-pi-harness/agent-runtime';
 import { McpImportDocumentSchema, type McpImportDocument } from '@my-pi-harness/protocol';
-import type { McpService } from './service.js';
-import type { RemoteMcpService } from './remote-service.js';
+import type { McpService } from './service';
+import type { RemoteMcpService } from './remote-service';
 const Preview = Type.Object(
   {
     local: Type.Array(Type.String()),

@@ -5,7 +5,7 @@ import { APP_VERSION, WorkspaceSchema, type Workspace } from '@my-pi-harness/pro
 import type { Page } from '@playwright/test';
 import { Type } from 'typebox';
 import { Value } from 'typebox/value';
-import { test, expect } from './fixture.js';
+import { test, expect } from './fixture';
 
 interface WorkspaceCreationControls {
   chooseCalls: number;

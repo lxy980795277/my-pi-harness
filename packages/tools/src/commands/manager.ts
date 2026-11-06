@@ -1,4 +1,4 @@
-import { resolvePythonRuntime } from '../lib/python-runtime.js';
+import { resolvePythonRuntime } from '../lib/python-runtime';
 import { StringDecoder } from 'node:string_decoder';
 import { randomUUID } from 'node:crypto';
 import {
@@ -7,9 +7,9 @@ import {
   type ManagedProcess,
   type ProcessAccess,
 } from '@my-pi-harness/sandbox';
-import type { CommandToolHandlers, ToolOwner, WorkspaceToolContext } from '../lib/tool-context.js';
-import type { CommandRunInput } from '../tools/run-command.js';
-import { type ToolInvocation, ToolError } from '../lib/tool-registry.js';
+import type { CommandToolHandlers, ToolOwner, WorkspaceToolContext } from '../lib/tool-context';
+import type { CommandRunInput } from '../tools/run-command';
+import { type ToolInvocation, ToolError } from '../lib/tool-registry';
 
 export interface CommandResourceLease {
   readonly readOnlyDirectories: readonly string[];

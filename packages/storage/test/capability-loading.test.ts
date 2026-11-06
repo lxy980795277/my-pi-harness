@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { FrozenSkill, RunView, SkillCandidate } from '@my-pi-harness/protocol';
 import { afterEach, expect, it } from 'vitest';
-import { openProfileStore, type EventInput, type ProfileStore } from '../src/index.js';
+import { openProfileStore, type EventInput, type ProfileStore } from '../src/index';
 
 interface NativeCandidate {
   definition: { name: string; description: string; parameters: Record<string, unknown> };

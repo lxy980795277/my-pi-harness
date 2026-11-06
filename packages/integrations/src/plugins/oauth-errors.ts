@@ -1,5 +1,5 @@
-import { PluginError } from './errors.js';
-import { NetworkError } from '../network/errors.js';
+import { PluginError } from './errors';
+import { NetworkError } from '../network/errors';
 
 export type PluginOAuthPhase = 'authorization-response' | 'token-exchange' | 'account';
 export type PluginOAuthFailureReason =

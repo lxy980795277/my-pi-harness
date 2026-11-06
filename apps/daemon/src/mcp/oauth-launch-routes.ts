@@ -6,8 +6,8 @@ import {
   type McpControlInput,
 } from '@my-pi-harness/protocol';
 import type { FastifyInstance } from 'fastify';
-import type { ApplicationServices } from '../application/services.js';
-import { requestOperation } from '../http/request-operation.js';
+import type { ApplicationServices } from '../application/services';
+import { requestOperation } from '../http/request-operation';
 
 const McpParams = Type.Object(
   { id: Type.String({ minLength: 1, maxLength: 160 }) },

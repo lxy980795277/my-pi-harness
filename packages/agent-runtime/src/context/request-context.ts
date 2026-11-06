@@ -9,25 +9,25 @@ import type {
   FrozenSkill,
   SessionSnapshot,
 } from '@my-pi-harness/protocol';
-import type { ResolvedModel } from '../models/gateway.js';
-import type { WorkRuntime } from '../work/runtime.js';
-import { encodeContextMessage, snapshotPrivateData } from './codec.js';
-import { contextSourceIds } from './sources.js';
-import { buildSystemContext } from './system-context.js';
-import { RuntimeError } from '../errors.js';
+import type { ResolvedModel } from '../models/gateway';
+import type { WorkRuntime } from '../work/runtime';
+import { encodeContextMessage, snapshotPrivateData } from './codec';
+import { contextSourceIds } from './sources';
+import { buildSystemContext } from './system-context';
+import { RuntimeError } from '../errors';
 import {
   pruneContext,
   requestUsage,
   selectRequestPrefix,
   type RetainedToolText,
-} from './projection.js';
-import { renderSummary, summarizeContext } from './summary.js';
-import { assertCompleteToolCycles, type ContextToolDefinition } from './budget.js';
-import type { RunToolDefinition } from '../tools/toolset.js';
-import { activeSkillContext } from '../capabilities/context.js';
-import { communicationMessage } from './agent-message.js';
-import { toolCallRecordId } from '../tools/ledger.js';
-import { workToolRequirements } from '../tools/selection.js';
+} from './projection';
+import { renderSummary, summarizeContext } from './summary';
+import { assertCompleteToolCycles, type ContextToolDefinition } from './budget';
+import type { RunToolDefinition } from '../tools/toolset';
+import { activeSkillContext } from '../capabilities/context';
+import { communicationMessage } from './agent-message';
+import { toolCallRecordId } from '../tools/ledger';
+import { workToolRequirements } from '../tools/selection';
 
 interface RequestTools {
   toolDefinitions: readonly RunToolDefinition[];

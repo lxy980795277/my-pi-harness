@@ -1,6 +1,6 @@
 import type { Message } from '@earendil-works/pi-ai';
 import type { MessageView } from '@my-pi-harness/protocol';
-import { RuntimeError } from '../errors.js';
+import { RuntimeError } from '../errors';
 
 /** Resolve the retained message suffix back to durable IDs without reading attachment bytes again. */
 export function contextSourceIds(

@@ -6,11 +6,11 @@ import { describe, expect, it, vi } from 'vitest';
 import { Value } from 'typebox/value';
 import { RemoteMcpDraftTestResultSchema, type RemoteMcpInput } from '@my-pi-harness/protocol';
 import { createMemoryCredentialStore } from '@my-pi-harness/storage';
-import { remoteFixture } from '../../../tests/fixtures/remote-mcp.js';
-import { loadDaemonConfig } from '../src/application/config.js';
-import { createApplicationServices } from '../src/application/services.js';
-import { createDaemonApplication } from '../src/http/server.js';
-import { loginFixture } from './support/login.js';
+import { remoteFixture } from '../../../tests/fixtures/remote-mcp';
+import { loadDaemonConfig } from '../src/application/config';
+import { createApplicationServices } from '../src/application/services';
+import { createDaemonApplication } from '../src/http/server';
+import { loginFixture } from './support/login';
 
 async function fixture(remoteFixtureOrigin?: string) {
   const directory = await mkdtemp(join(tmpdir(), 'my-pi-remote-config-'));

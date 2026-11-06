@@ -12,9 +12,9 @@ import {
   toWorkspaceRelativePath,
   workspacePath,
 } from '@my-pi-harness/sandbox';
-import { ToolError, type ToolResult } from './tool-registry.js';
+import { ToolError, type ToolResult } from './tool-registry';
 
-import type { WorkspaceToolContext } from './tool-context.js';
+import type { WorkspaceToolContext } from './tool-context';
 
 interface ListedEntry {
   path: string;

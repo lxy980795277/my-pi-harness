@@ -28,7 +28,7 @@ import {
   safeName,
   IMAGE_LIMIT,
   PDF_LIMIT,
-} from './content.js';
+} from './content';
 
 type AttachmentStore = Pick<ProfileStore, 'putAttachment' | 'getAttachment'>;
 type Workspaces = { requireAvailable(id: string): Promise<Workspace> };

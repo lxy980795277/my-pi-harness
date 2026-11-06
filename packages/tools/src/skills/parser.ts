@@ -1,6 +1,6 @@
 import { parseDocument } from 'yaml';
-import { SkillError } from './errors.js';
-import type { ParsedSkill } from './types.js';
+import { SkillError } from './errors';
+import type { ParsedSkill } from './types';
 
 /** Parse standard YAML frontmatter, rejecting aliases and malformed metadata. */
 export function parseSkill(text: string, directoryName: string): ParsedSkill {

@@ -6,12 +6,12 @@ import {
   type Model,
 } from '@earendil-works/pi-ai';
 import type { AgentMessage, MessageView } from '@my-pi-harness/protocol';
-import type { RunHooks } from '../runs/ports.js';
-import { communicationMessage } from '../context/agent-message.js';
-import { encodeContextMessage } from '../context/codec.js';
-import { RuntimeError } from '../errors.js';
-import type { SubagentNode } from './types.js';
-import { createSubagentToolControls, type SubagentToolHost } from './tool-dispatch.js';
+import type { RunHooks } from '../runs/ports';
+import { communicationMessage } from '../context/agent-message';
+import { encodeContextMessage } from '../context/codec';
+import { RuntimeError } from '../errors';
+import type { SubagentNode } from './types';
+import { createSubagentToolControls, type SubagentToolHost } from './tool-dispatch';
 
 /** Task lifecycle and messaging operations supplied to one Run adapter. */
 export interface SubagentRunHost extends SubagentToolHost {

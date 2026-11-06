@@ -1,8 +1,8 @@
 import { AuthStatusSchema, type DesktopBridge } from '@my-pi-harness/protocol';
 import type { Page } from '@playwright/test';
 import { Value } from 'typebox/value';
-import { test, expect } from './fixture.js';
-import { openLogoutConfirmation } from './ui-controls.js';
+import { test, expect } from './fixture';
+import { openLogoutConfirmation } from './ui-controls';
 
 test('GitHub浏览器授权拒绝后可重试，登录后恢复身份且退出清理草稿', async ({
   page,

@@ -4,7 +4,7 @@ import { text as streamText } from 'node:stream/consumers';
 import { fauxAssistantMessage } from '@earendil-works/pi-ai';
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
-import type { ExternalTools, FrozenMcpTool } from '../src/tools/external.js';
+import type { ExternalTools, FrozenMcpTool } from '../src/tools/external';
 import {
   agentChanged,
   agentFixture,
@@ -12,9 +12,9 @@ import {
   agentsIdle,
   firstTask,
   waitAtGate,
-} from './support/agent-fixture.js';
-import { delegate, hasResult, waitForResults } from './support/agent-tools.js';
-import { call } from './support/work-fixture.js';
+} from './support/agent-fixture';
+import { delegate, hasResult, waitForResults } from './support/agent-tools';
+import { call } from './support/work-fixture';
 
 const mutation: FrozenMcpTool = {
   selection: {

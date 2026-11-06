@@ -8,7 +8,7 @@ import {
   type ApprovalMode,
 } from '@my-pi-harness/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
-import { openProfileStore } from '../src/index.js';
+import { openProfileStore } from '../src/index';
 import {
   createAgentSession,
   codec,
@@ -17,8 +17,8 @@ import {
   spawn,
   user,
   type AgentSessionFixture,
-} from './fixtures/agent-session.js';
-import { storedToolCallId } from '../src/sessions/projections/tool-intents.js';
+} from './fixtures/agent-session';
+import { storedToolCallId } from '../src/sessions/projections/tool-intents';
 
 const fixtures: AgentSessionFixture[] = [];
 

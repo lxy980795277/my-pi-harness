@@ -8,12 +8,9 @@ import {
   type StoredToolResult,
 } from '@my-pi-harness/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
-import { openProfileStore, type EventInput, type ProfileStore } from '../src/index.js';
-import {
-  assistantToolIntents,
-  storedToolCallId,
-} from '../src/sessions/projections/tool-intents.js';
-import { checked } from '../src/shared/validation.js';
+import { openProfileStore, type EventInput, type ProfileStore } from '../src/index';
+import { assistantToolIntents, storedToolCallId } from '../src/sessions/projections/tool-intents';
+import { checked } from '../src/shared/validation';
 
 const owned: { directory: string; store: ProfileStore }[] = [];
 afterEach(async () => {

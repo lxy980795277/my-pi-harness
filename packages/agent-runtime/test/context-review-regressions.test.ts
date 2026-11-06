@@ -4,8 +4,8 @@ import { fauxAssistantMessage, type Message } from '@earendil-works/pi-ai';
 import { ContextSummarySchema, type ContextSummary, type WorkState } from '@my-pi-harness/protocol';
 import { Value } from 'typebox/value';
 import { describe, expect, it } from 'vitest';
-import { fallbackSummary, renderSummary } from '../src/context/summary.js';
-import { fixture, idle, call, sendTurn, todo, observe } from './support/work-fixture.js';
+import { fallbackSummary, renderSummary } from '../src/context/summary';
+import { fixture, idle, call, sendTurn, todo, observe } from './support/work-fixture';
 
 function largeSummary(): ContextSummary {
   const entries = Array.from({ length: 20 }, (_, index) =>

@@ -7,13 +7,13 @@ import {
   WorkSnapshotSchema,
 } from '@my-pi-harness/protocol';
 import { Value } from 'typebox/value';
-import { startApprovalModel } from './approval-model.js';
-import { registerTestWorkspace } from './workspace-fixtures.js';
-import { test, expect } from './fixture.js';
-import { configureTestProvider } from './model-fixtures.js';
-import { startToolModel } from './tool-model-server.js';
-import { chooseConversationModel, chooseOption } from './ui-controls.js';
-import { expandCompletedProcesses } from './process-controls.js';
+import { startApprovalModel } from './approval-model';
+import { registerTestWorkspace } from './workspace-fixtures';
+import { test, expect } from './fixture';
+import { configureTestProvider } from './model-fixtures';
+import { startToolModel } from './tool-model-server';
+import { chooseConversationModel, chooseOption } from './ui-controls';
+import { expandCompletedProcesses } from './process-controls';
 
 test('权限菜单展示三种策略、说明、统一图标和当前选项，完整访问使用警示样式', async ({
   page,

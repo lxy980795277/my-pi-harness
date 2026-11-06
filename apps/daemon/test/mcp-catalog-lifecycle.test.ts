@@ -4,10 +4,10 @@ import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
 import { RemoteMcpManager, decodeMcpCatalog } from '@my-pi-harness/integrations';
 import { createMemoryCredentialStore, openProfileStore } from '@my-pi-harness/storage';
-import { remoteFixture } from '../../../tests/fixtures/remote-mcp.js';
-import { RemoteMcpService } from '../src/mcp/remote-service.js';
-import { McpService } from '../src/mcp/service.js';
-import { mcpManagerFixture } from './support/mcp.js';
+import { remoteFixture } from '../../../tests/fixtures/remote-mcp';
+import { RemoteMcpService } from '../src/mcp/remote-service';
+import { McpService } from '../src/mcp/service';
+import { mcpManagerFixture } from './support/mcp';
 
 const cleanups: (() => Promise<void>)[] = [];
 afterEach(async () => {

@@ -1,4 +1,4 @@
-import { StorageError } from '../shared/errors.js';
+import { StorageError } from '../shared/errors';
 
 /** Streaming deltas are process-local; committed message bodies own durable output. */
 export function assertPersistentEvent(type: string): void {

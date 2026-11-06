@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { DesktopApplication } from '../src/main/application.js';
-import { startDaemon, type ManagedDaemon } from '../src/main/daemon.js';
+import { DesktopApplication } from '../src/main/application';
+import { startDaemon, type ManagedDaemon } from '../src/main/daemon';
 
 const window = vi.hoisted(() => ({
   create: vi.fn(),

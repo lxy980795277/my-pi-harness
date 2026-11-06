@@ -3,9 +3,9 @@ import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { openProfileStore, sessionLogDirectory, type ProfileStore } from '../src/index.js';
-import { SessionBatchSchema } from '../src/sessions/session-jsonl.js';
-import { checked } from '../src/shared/validation.js';
+import { openProfileStore, sessionLogDirectory, type ProfileStore } from '../src/index';
+import { SessionBatchSchema } from '../src/sessions/session-jsonl';
+import { checked } from '../src/shared/validation';
 
 vi.mock('node:fs', async (importOriginal) => ({ ...(await importOriginal<typeof fs>()) }));
 

@@ -4,7 +4,7 @@
 
 ## 公开入口与源码职责
 
-根index.ts组合公开API，skills、plugins和document-text提供对应叶入口，源码与发布exports保持同一职责。document-text直接导出utils/document-text.ts中的授权字节提取能力，不加载工具目录。后端相对导入保留.js；开发、测试与生产均通过exports读取src，Node进程显式加载tsx。
+根index.ts组合公开API，skills、plugins和document-text提供对应叶入口，源码与发布exports保持同一职责。document-text直接导出utils/document-text.ts中的授权字节提取能力，不加载工具目录。TS相对模块导入无后缀，真实脚本与资源保留扩展；开发、测试与生产均通过exports读取src，Node进程显式加载tsx。
 
 | 目录      | 负责的内容                                                         |
 | --------- | ------------------------------------------------------------------ |

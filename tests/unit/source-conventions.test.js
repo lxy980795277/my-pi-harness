@@ -73,15 +73,18 @@ describe('source file conventions', () => {
     const root = await fixture({
       'apps/desktop/electron.vite.config.ts':
         "const entry = new URL('./src/main/index.ts', import.meta.url);",
+      'apps/desktop/src/main/index.ts': 'export const ready = true;',
       'apps/desktop/electron-builder.config.cjs': "const pkg = require('../../package.json');",
+      'package.json': '{}',
       'apps/daemon/vitest.deployment.config.ts': 'export default {};',
       'eslint.config.js': 'export default [];',
       'apps/daemon/test/run-state.test.ts': 'export const value = 1;',
       'tests/e2e/runtime.spec.ts': 'export const value = 1;',
-      'packages/protocol/src/index.ts': "export { VERSION } from './version.js';",
+      'packages/protocol/src/index.ts': "export { VERSION } from './version';",
+      'packages/protocol/src/version.ts': 'export const VERSION = 1;',
     });
 
-    await expect(checkSourceConventions(root)).resolves.toBe(7);
+    await expect(checkSourceConventions(root)).resolves.toBe(8);
   });
 
   it.each([
@@ -151,6 +154,7 @@ describe('source file conventions', () => {
   it('rejects a module import that follows a style import', async () => {
     const root = await fixture({
       'apps/web/src/app/index.tsx': "import './index.scss'; import type { FC } from 'react';",
+      'apps/web/src/app/index.scss': 'main {}',
     });
 
     await expect(checkSourceConventions(root)).rejects.toThrow(
@@ -162,6 +166,8 @@ describe('source file conventions', () => {
     const root = await fixture({
       'apps/web/src/app/index.tsx':
         "import type { FC } from 'react'; import './index.css'; import './index.scss'; export const value = 1;",
+      'apps/web/src/app/index.css': 'main {}',
+      'apps/web/src/app/index.scss': 'main {}',
     });
 
     await expect(checkSourceConventions(root)).resolves.toBe(1);
@@ -171,7 +177,8 @@ describe('source file conventions', () => {
     'rejects an index re-export from Web %s',
     async (directory) => {
       const root = await fixture({
-        [`apps/web/src/features/runtime/${directory}/index.ts`]: "export * from './owned.js';",
+        [`apps/web/src/features/runtime/${directory}/index.ts`]: "export * from './owned';",
+        [`apps/web/src/features/runtime/${directory}/owned.ts`]: 'export const value = 1;',
       });
 
       await expect(checkSourceConventions(root)).rejects.toThrow('禁止 index 聚合导出');
@@ -180,8 +187,8 @@ describe('source file conventions', () => {
 
   it('rejects an imported binding exported again by a helper index', async () => {
     const root = await fixture({
-      'apps/web/src/hooks/index.ts':
-        "import { useTheme } from './use-theme.js'; export { useTheme };",
+      'apps/web/src/hooks/index.ts': "import { useTheme } from './use-theme'; export { useTheme };",
+      'apps/web/src/hooks/use-theme.ts': 'export const useTheme = () => {};',
     });
 
     await expect(checkSourceConventions(root)).rejects.toThrow('禁止 index 聚合导出');
@@ -197,41 +204,225 @@ describe('source file conventions', () => {
 
   it.each([
     "import { value } from './value';",
-    "export { value } from './value.ts';",
+    "import type { Module } from './value';",
+    "export { value } from './value';",
+    "export * from './value';",
     "const module = await import('./value');",
-    'const module = await import(`./value.ts`);',
+    'const module = await import(`./value`);',
     "type Module = import('./value').Module;",
-  ])('rejects extensionless or source-extension ESM: %s', async (content) => {
-    const root = await fixture({ 'apps/daemon/src/index.ts': content });
-    await expect(checkSourceConventions(root)).rejects.toThrow('相对 ESM import 必须写 .js 扩展');
+  ])('allows extensionless TypeScript module syntax: %s', async (content) => {
+    const root = await fixture({
+      'apps/daemon/src/index.ts': content,
+      'apps/daemon/src/value.ts': 'export interface Module {}\nexport const value = 1;',
+    });
+    await expect(checkSourceConventions(root)).resolves.toBe(2);
   });
 
-  it('allows explicit compiled modules, native scripts, JSON, styles and URL source paths', async () => {
+  it.each([
+    "import { value } from './value.js';",
+    "import type { Module } from './value.js';",
+    "export { value } from './value.ts';",
+    "export * from './value.js';",
+    "const module = await import('./value.js');",
+    'const module = await import(`./value.ts`);',
+    "type Module = import('./value.js').Module;",
+  ])('rejects TypeScript source and compiled extensions: %s', async (content) => {
+    const root = await fixture({
+      'apps/daemon/src/index.ts': content,
+      'apps/daemon/src/value.ts': 'export interface Module {}\nexport const value = 1;',
+    });
+    await expect(checkSourceConventions(root)).rejects.toThrow(
+      'TypeScript 模块 import 不写源码或编译扩展',
+    );
+  });
+
+  it.each(['./value.js', './value.jsx', './value.tsx'])(
+    'rejects %s for an existing TSX module',
+    async (specifier) => {
+      const root = await fixture({
+        'packages/tools/src/index.ts': `export { value } from '${specifier}';`,
+        'packages/tools/src/value.tsx': 'export const value = 1;',
+      });
+      await expect(checkSourceConventions(root)).rejects.toThrow(
+        'TypeScript 模块 import 不写源码或编译扩展',
+      );
+    },
+  );
+
+  it('rejects the compiled suffix when TypeScript and JavaScript share a stem', async () => {
+    const root = await fixture({
+      'packages/tools/src/index.ts': "import { value } from './value.js';",
+      'packages/tools/src/value.ts': 'export const value = 1;',
+      'packages/tools/src/value.js': 'export const value = 2;',
+    });
+    await expect(checkSourceConventions(root)).rejects.toThrow(
+      'TypeScript 模块 import 不写源码或编译扩展',
+    );
+  });
+
+  it('allows real JavaScript modules, native scripts, resources and URL source paths', async () => {
     const root = await fixture({
       'apps/daemon/src/index.ts': [
         "import { value } from './value.js';",
         "export { value as native } from './native.mjs';",
         "type Module = import('./value.js').Module;",
         "const native = await import('./native.cjs');",
+        "const typed = await import('./native.mts');",
+        "const common = await import('./native.cts');",
         "import schema from './schema.json' with { type: 'json' };",
         "const source = new URL('./bootstrap.ts', import.meta.url);",
       ].join('\n'),
+      'apps/daemon/src/value.js': 'export const value = 1;',
+      'apps/daemon/src/native.mjs': 'export const value = 1;',
+      'apps/daemon/src/native.cjs': 'module.exports = { value: 1 };',
+      'apps/daemon/src/native.mts': 'export const value = 1;',
+      'apps/daemon/src/native.cts': 'export const value = 1;',
+      'apps/daemon/src/schema.json': '{}',
+      'apps/daemon/src/bootstrap.ts': 'export const ready = true;',
       'apps/web/src/app/index.tsx': "import './index.css?inline'; import './index.scss';",
+      'apps/web/src/app/index.css': 'main {}',
+      'apps/web/src/app/index.scss': 'main {}',
       'scripts/dev.mjs': "import { ensureNode } from './node-runtime.mjs';",
+      'scripts/node-runtime.mjs': 'export const ensureNode = () => {};',
     });
 
-    await expect(checkSourceConventions(root)).resolves.toBe(3);
+    await expect(checkSourceConventions(root)).resolves.toBe(10);
+  });
+
+  it.each(['js', 'mjs', 'cjs'])(
+    'requires the actual %s extension for a JavaScript module',
+    async (extension) => {
+      const root = await fixture({
+        'packages/tools/src/index.ts': "export { value } from './native';",
+        [`packages/tools/src/native.${extension}`]: 'const value = 1;',
+      });
+      await expect(checkSourceConventions(root)).rejects.toThrow(
+        '真实 JavaScript 模块 import 必须保留实际扩展',
+      );
+    },
+  );
+
+  it('resolves a JavaScript file before a TypeScript directory index', async () => {
+    const root = await fixture({
+      'packages/tools/src/index.ts': "export { value } from './native';",
+      'packages/tools/src/native.js': 'export const value = 1;',
+      'packages/tools/src/native/index.ts': 'export const value = 2;',
+    });
+    await expect(checkSourceConventions(root)).rejects.toThrow(
+      '真实 JavaScript 模块 import 必须保留实际扩展',
+    );
+  });
+
+  it('allows an extensionless TypeScript directory index', async () => {
+    const root = await fixture({
+      'packages/tools/src/index.ts': "export { value } from './native';",
+      'packages/tools/src/native/index.ts': 'export const value = 1;',
+    });
+    await expect(checkSourceConventions(root)).resolves.toBe(2);
+  });
+
+  it.each(['js', 'mjs', 'cjs'])(
+    'requires explicit ESM extensions in a plain Node %s script',
+    async (extension) => {
+      const root = await fixture({
+        [`scripts/entry.${extension}`]: "const native = await import('./native');",
+        'scripts/native.mjs': 'export const value = 1;',
+      });
+      await expect(checkSourceConventions(root)).rejects.toThrow(
+        '原生 Node ESM 相对 import 必须保留实际文件扩展',
+      );
+    },
+  );
+
+  it.each([
+    "import { value } from './native';",
+    "export { value } from './native';",
+    'const native = await import(`./native`);',
+  ])('checks every plain Node ESM syntax: %s', async (content) => {
+    const root = await fixture({
+      'scripts/entry.mjs': content,
+      'scripts/native.mjs': 'export const value = 1;',
+    });
+    await expect(checkSourceConventions(root)).rejects.toThrow(
+      '原生 Node ESM 相对 import 必须保留实际文件扩展',
+    );
+  });
+
+  it('does not apply the tsx launcher rule to a similarly named plain Node script', async () => {
+    const root = await fixture({
+      'scripts/start-daemon.mjs': "import { value } from './owned';",
+      'scripts/owned.ts': 'export const value = 1;',
+    });
+    await expect(checkSourceConventions(root)).rejects.toThrow(
+      '原生 Node ESM 相对 import 必须保留实际文件扩展',
+    );
+  });
+
+  it('preserves real JavaScript extensions and require calls in plain Node scripts', async () => {
+    const root = await fixture({
+      'scripts/entry.mjs': [
+        "import { value } from './native.js';",
+        "export * from './native.mjs';",
+        "const required = require('./native');",
+        "const worker = `const worker = require('./native'); import('./owned.js')`;",
+      ].join('\n'),
+      'scripts/native.ts': 'export const value = 1;',
+      'scripts/native.js': 'export const value = 2;',
+      'scripts/native.mjs': 'export const native = 3;',
+    });
+    await expect(checkSourceConventions(root)).resolves.toBe(4);
+  });
+
+  it.each([
+    'scripts/smoke-desktop.mjs',
+    'tests/e2e/start-daemon.mjs',
+    'tests/e2e/plugin-mcp-upstream.mjs',
+    'apps/daemon/test/support/tools-resources-probe.mjs',
+  ])('allows extensionless TypeScript only through the declared tsx entry %s', async (entry) => {
+    const root = await fixture({
+      [entry]: "import { value } from './owned';",
+      [join(dirname(entry), 'owned.ts')]: 'export const value = 1;',
+    });
+    await expect(checkSourceConventions(root)).resolves.toBe(2);
+
+    const invalid = await fixture({
+      [entry]: "import { value } from './owned.js';",
+      [join(dirname(entry), 'owned.ts')]: 'export const value = 1;',
+      [join(dirname(entry), 'owned.js')]: 'export const value = 2;',
+    });
+    await expect(checkSourceConventions(invalid)).rejects.toThrow(
+      'TypeScript 模块 import 不写源码或编译扩展',
+    );
+  });
+
+  it('preserves real source-resource extensions, URL entries and embedded code', async () => {
+    const root = await fixture({
+      'apps/daemon/src/index.ts': [
+        "import raw from './owned.ts?raw';",
+        "import url from './owned.ts?url';",
+        "const source = new URL('./owned.ts', import.meta.url);",
+        "const worker = `require('./owned'); import('./owned.js')`;",
+      ].join('\n'),
+      'apps/daemon/src/owned.ts': 'export const value = 1;',
+    });
+    await expect(checkSourceConventions(root)).resolves.toBe(2);
   });
 
   it.each([
     "import { Button } from '@/components/ui/button/index.js';",
-    "export { Button } from './button.tsx';",
+    "export { Button } from './button/index.tsx';",
     "type State = import('./state.js').State;",
     "const module = await import('@/utils/owned.ts');",
   ])('rejects Web module extensions: %s', async (content) => {
-    const root = await fixture({ 'apps/web/src/app/index.tsx': content });
+    const root = await fixture({
+      'apps/web/src/app/index.tsx': content,
+      'apps/web/src/components/ui/button/index.tsx': 'export const Button = () => null;',
+      'apps/web/src/app/button/index.tsx': 'export const Button = () => null;',
+      'apps/web/src/app/state.ts': 'export interface State {}',
+      'apps/web/src/utils/owned.ts': 'export const value = 1;',
+    });
     await expect(checkSourceConventions(root)).rejects.toThrow(
-      'Web 模块 import 不写源码或编译扩展',
+      'TypeScript 模块 import 不写源码或编译扩展',
     );
   });
 
@@ -245,20 +436,27 @@ describe('source file conventions', () => {
         "import data from './data.json';",
         "import './index.css';",
       ].join('\n'),
+      'apps/web/src/components/ui/button/index.tsx': 'export const Button = () => null;',
+      'apps/web/src/app/state.ts': 'export interface State {}',
+      'apps/web/src/assets/provider.svg': '<svg />',
+      'apps/web/src/app/data.json': '{}',
+      'apps/web/src/app/index.css': 'main {}',
     });
-    await expect(checkSourceConventions(root)).resolves.toBe(1);
+    await expect(checkSourceConventions(root)).resolves.toBe(3);
   });
 
   it('uses extensionless imports for the independent Web test program', async () => {
     const valid = await fixture({
       'apps/web/test/owned.test.ts': "import { owned } from '../src/utils/owned';",
+      'apps/web/src/utils/owned.ts': 'export const owned = 1;',
     });
-    await expect(checkSourceConventions(valid)).resolves.toBe(1);
+    await expect(checkSourceConventions(valid)).resolves.toBe(2);
     const invalid = await fixture({
       'apps/web/test/owned.test.ts': "import { owned } from '../src/utils/owned.js';",
+      'apps/web/src/utils/owned.ts': 'export const owned = 1;',
     });
     await expect(checkSourceConventions(invalid)).rejects.toThrow(
-      'Web 模块 import 不写源码或编译扩展',
+      'TypeScript 模块 import 不写源码或编译扩展',
     );
   });
 

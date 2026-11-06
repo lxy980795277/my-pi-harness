@@ -8,9 +8,9 @@ import {
   agentsIdle,
   firstTask,
   waitAtGate,
-} from './support/agent-fixture.js';
-import { call, withinDeadline } from './support/work-fixture.js';
-import { delegate, hasResult, resultCount, waitForResults } from './support/agent-tools.js';
+} from './support/agent-fixture';
+import { call, withinDeadline } from './support/work-fixture';
+import { delegate, hasResult, resultCount, waitForResults } from './support/agent-tools';
 
 describe('durable structured Agent execution through real Pi', () => {
   it('delegates isolated input, collects a real child result and keeps child transcript out of root messages', async () => {

@@ -1,7 +1,7 @@
 import type { CallToolResult } from '@modelcontextprotocol/client';
-import { containsSecret } from './catalog.js';
-import { McpError } from './errors.js';
-import type { McpCallOutcome, McpResultContent } from './types.js';
+import { containsSecret } from './catalog';
+import { McpError } from './errors';
+import type { McpCallOutcome, McpResultContent } from './types';
 
 const TEXT_LIMIT = 128000;
 const IMAGE_LIMIT = 2 * 1024 * 1024;

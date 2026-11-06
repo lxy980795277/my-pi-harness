@@ -1,23 +1,23 @@
 import { chmod, mkdir, mkdtemp, readdir, realpath, rm } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { tmpdir } from 'node:os';
-import { SkillError } from './errors.js';
+import { SkillError } from './errors';
 import {
   checkedSkillDirectory,
   prepareSkillDirectory,
   readSkillTree,
   resourceIndex,
   writeOwnedSkillFile,
-} from './files.js';
-import { parseSkill } from './parser.js';
-import type { SkillCatalog } from './catalog.js';
+} from './files';
+import { parseSkill } from './parser';
+import type { SkillCatalog } from './catalog';
 import type {
   AssertSkillAuthorized,
   FrozenSkill,
   MaterializedSkillBinding,
   SkillCatalogOptions,
   SkillResourceLease,
-} from './types.js';
+} from './types';
 
 interface Materialization {
   root: string;

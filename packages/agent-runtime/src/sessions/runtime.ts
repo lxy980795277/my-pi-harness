@@ -13,17 +13,17 @@ import type {
   FrozenSkill,
   LiveMessageDelta,
 } from '@my-pi-harness/protocol';
-import { decodeContextMessage, snapshotPrivateData } from '../context/codec.js';
-import { RuntimeError } from '../errors.js';
-import type { ModelGateway } from '../models/gateway.js';
-import { RunExecution } from '../runs/execution.js';
-import type { EventInput, InputAcceptance, RuntimeNotification, RuntimeStore } from './ports.js';
-import type { ToolRuntime } from '../tools/runtime.js';
-import { completeToolHistory } from '../context/tool-history.js';
-import type { WorkRuntime } from '../work/runtime.js';
-import { userWithAttachments } from '../context/attachments.js';
-import { RunToolset } from '../tools/toolset.js';
-import { mcpSelectionKey, type ExternalTools } from '../tools/external.js';
+import { decodeContextMessage, snapshotPrivateData } from '../context/codec';
+import { RuntimeError } from '../errors';
+import type { ModelGateway } from '../models/gateway';
+import { RunExecution } from '../runs/execution';
+import type { EventInput, InputAcceptance, RuntimeNotification, RuntimeStore } from './ports';
+import type { ToolRuntime } from '../tools/runtime';
+import { completeToolHistory } from '../context/tool-history';
+import type { WorkRuntime } from '../work/runtime';
+import { userWithAttachments } from '../context/attachments';
+import { RunToolset } from '../tools/toolset';
+import { mcpSelectionKey, type ExternalTools } from '../tools/external';
 import {
   InputCapabilityResolver,
   encodeInputCapabilities,
@@ -31,18 +31,18 @@ import {
   skillSelectionKey,
   combinedSkills,
   type FrozenInputCapabilities,
-} from '../capabilities/inputs.js';
-import { RunCapabilities } from '../capabilities/run.js';
-import { selectRunTools } from '../tools/selection.js';
-import type { SkillsPort, ToolDiscoveryPort } from '../capabilities/ports.js';
-import { capabilityContext } from '../capabilities/context.js';
+} from '../capabilities/inputs';
+import { RunCapabilities } from '../capabilities/run';
+import { selectRunTools } from '../tools/selection';
+import type { SkillsPort, ToolDiscoveryPort } from '../capabilities/ports';
+import { capabilityContext } from '../capabilities/context';
 import { ToolCatalogSearch, type ToolSearchEmbedder } from '@my-pi-harness/tools';
-import { freezeSkillMentions } from '../capabilities/skill-mentions.js';
-import { availableSkillHistory, skillHistoryIds } from '../capabilities/skill-history.js';
-import { SubagentCoordinator } from '../subagents/coordinator.js';
-import type { SubagentStore } from '../subagents/ports.js';
-import { agentContext } from '../subagents/definitions.js';
-import { prepareRun, resolveRunModel } from '../runs/prepare.js';
+import { freezeSkillMentions } from '../capabilities/skill-mentions';
+import { availableSkillHistory, skillHistoryIds } from '../capabilities/skill-history';
+import { SubagentCoordinator } from '../subagents/coordinator';
+import type { SubagentStore } from '../subagents/ports';
+import { agentContext } from '../subagents/definitions';
+import { prepareRun, resolveRunModel } from '../runs/prepare';
 
 export interface SessionRuntimeOptions {
   store: RuntimeStore;

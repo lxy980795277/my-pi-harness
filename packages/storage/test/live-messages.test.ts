@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { MessageView, RunView } from '@my-pi-harness/protocol';
-import { openProfileStore, sessionLogDirectory, type ProfileStore } from '../src/index.js';
+import { openProfileStore, sessionLogDirectory, type ProfileStore } from '../src/index';
 
 interface Fixture {
   directory: string;

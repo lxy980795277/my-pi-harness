@@ -2,12 +2,12 @@ import { chmod, mkdir, mkdtemp, realpath, rename, rm, symlink, writeFile } from 
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { resolveWorkspaceRoot, workspacePath, type WorkspaceContext } from '../src/index.js';
+import { resolveWorkspaceRoot, workspacePath, type WorkspaceContext } from '../src/index';
 import {
   canonicalWorkspace,
   parseWorkspaceRelativePath,
   toWorkspaceRelativePath,
-} from '../src/filesystem/workspace-path.js';
+} from '../src/filesystem/workspace-path';
 
 let directory: string;
 let context: WorkspaceContext;

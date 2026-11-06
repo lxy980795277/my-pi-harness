@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import Database from 'better-sqlite3';
 import type { Workspace } from '@my-pi-harness/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
-import { openProfileStore, type ProfileStore } from '../src/index.js';
+import { openProfileStore, type ProfileStore } from '../src/index';
 
 const owned: { directory: string; store?: ProfileStore }[] = [];
 afterEach(async () => {

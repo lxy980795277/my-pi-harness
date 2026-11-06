@@ -9,11 +9,11 @@ import {
   type SessionSnapshot,
 } from '@my-pi-harness/protocol';
 import { Value } from 'typebox/value';
-import { test, expect } from './fixture.js';
-import { configureTestProvider } from './model-fixtures.js';
-import { startToolSequenceModel } from './m2-completion-model.js';
-import { chooseConversationModel, chooseOption } from './ui-controls.js';
-import { expandCompletedProcesses } from './process-controls.js';
+import { test, expect } from './fixture';
+import { configureTestProvider } from './model-fixtures';
+import { startToolSequenceModel } from './m2-completion-model';
+import { chooseConversationModel, chooseOption } from './ui-controls';
+import { expandCompletedProcesses } from './process-controls';
 
 test('完整工具链复用 SDK 调用ID，逐次审批、真实编辑与受限执行后保留历史', async ({
   page,

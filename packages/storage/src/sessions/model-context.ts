@@ -1,10 +1,10 @@
 import { and, asc, eq } from 'drizzle-orm';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import { MessageViewSchema } from '@my-pi-harness/protocol';
-import { StorageError } from '../shared/errors.js';
-import { ToolProjection } from './projections/tools.js';
-import { checked } from '../shared/validation.js';
-import * as schema from '../sqlite/schema.js';
+import { StorageError } from '../shared/errors';
+import { ToolProjection } from './projections/tools';
+import { checked } from '../shared/validation';
+import * as schema from '../sqlite/schema';
 
 interface ContextRow {
   message: ReturnType<typeof checked<typeof MessageViewSchema>>;

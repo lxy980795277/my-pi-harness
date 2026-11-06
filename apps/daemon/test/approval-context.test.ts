@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { initialWorkState, type Question } from '@my-pi-harness/protocol';
-import { sessionProjection } from '../../../tests/fixtures/session-projection.js';
-import { approvalContext } from '../src/tools/approval-context.js';
+import { sessionProjection } from '../../../tests/fixtures/session-projection';
+import { approvalContext } from '../src/tools/approval-context';
 
 function answered(id: string, text: string): Question {
   return {

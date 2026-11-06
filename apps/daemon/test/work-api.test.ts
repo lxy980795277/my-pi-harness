@@ -11,13 +11,10 @@ import {
 import { createMemoryCredentialStore, sessionLogDirectory } from '@my-pi-harness/storage';
 import { Value } from 'typebox/value';
 import { afterEach, describe, expect, it } from 'vitest';
-import { loadDaemonConfig } from '../src/application/config.js';
-import { createDaemonApplication, type DaemonApplication } from '../src/http/server.js';
-import {
-  createApplicationServices,
-  type ApplicationServices,
-} from '../src/application/services.js';
-import { loginFixture } from './support/login.js';
+import { loadDaemonConfig } from '../src/application/config';
+import { createDaemonApplication, type DaemonApplication } from '../src/http/server';
+import { createApplicationServices, type ApplicationServices } from '../src/application/services';
+import { loginFixture } from './support/login';
 
 const fixtures: { directory: string; application: DaemonApplication }[] = [];
 

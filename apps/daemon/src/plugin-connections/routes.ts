@@ -1,4 +1,4 @@
-import { pluginConnectionDefinition } from './definitions.js';
+import { pluginConnectionDefinition } from './definitions';
 import { Type } from 'typebox';
 import { Value } from 'typebox/value';
 import {
@@ -7,10 +7,10 @@ import {
   SkillOAuthLaunchTicketSchema,
 } from '@my-pi-harness/protocol';
 import type { FastifyInstance } from 'fastify';
-import type { ApplicationServices } from '../application/services.js';
-import { requestOperation } from '../http/request-operation.js';
-import { requestPluginGateway } from './gateway.js';
-import { describePluginOAuthFailure } from './failure.js';
+import type { ApplicationServices } from '../application/services';
+import { requestOperation } from '../http/request-operation';
+import { requestPluginGateway } from './gateway';
+import { describePluginOAuthFailure } from './failure';
 import { PluginError } from '@my-pi-harness/integrations';
 
 const Params = Type.Object(

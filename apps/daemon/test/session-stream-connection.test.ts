@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { sessionProjection } from '../../../tests/fixtures/session-projection.js';
-import { startSessionStream } from '../src/sessions/stream-connection.js';
+import { sessionProjection } from '../../../tests/fixtures/session-projection';
+import { startSessionStream } from '../src/sessions/stream-connection';
 
 class StreamResponseFixture extends EventEmitter {
   destroyed = false;

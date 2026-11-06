@@ -1,11 +1,11 @@
 import { DaemonControlMessageSchema, type DaemonReadyRecord } from '@my-pi-harness/protocol';
 import pino from 'pino';
 import { Value } from 'typebox/value';
-import { createApplicationServices } from './application/services.js';
-import { loadDaemonConfig } from './application/config.js';
-import { watchParentProcess } from './application/parent-monitor.js';
-import { createDaemonApplication } from './http/server.js';
-import { clearAmbientModelEnvironment } from './application/model-environment.js';
+import { createApplicationServices } from './application/services';
+import { loadDaemonConfig } from './application/config';
+import { watchParentProcess } from './application/parent-monitor';
+import { createDaemonApplication } from './http/server';
+import { clearAmbientModelEnvironment } from './application/model-environment';
 
 const logger = pino(
   {

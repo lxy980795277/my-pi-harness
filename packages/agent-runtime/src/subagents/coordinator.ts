@@ -14,24 +14,24 @@ import type {
   SessionSummary,
   LiveMessageDelta,
 } from '@my-pi-harness/protocol';
-import type { ModelGateway } from '../models/gateway.js';
-import type { ToolRuntime } from '../tools/runtime.js';
-import type { WorkRuntime } from '../work/runtime.js';
-import type { ExternalTools } from '../tools/external.js';
-import type { SkillsPort } from '../capabilities/ports.js';
+import type { ModelGateway } from '../models/gateway';
+import type { ToolRuntime } from '../tools/runtime';
+import type { WorkRuntime } from '../work/runtime';
+import type { ExternalTools } from '../tools/external';
+import type { SkillsPort } from '../capabilities/ports';
 import type { ToolCatalogSearch } from '@my-pi-harness/tools';
-import type { RunExecution } from '../runs/execution.js';
-import type { EventInput } from '../sessions/ports.js';
-import type { SubagentStore } from './ports.js';
-import type { SubagentNode, SubagentTaskNode, SubagentTree } from './types.js';
+import type { RunExecution } from '../runs/execution';
+import type { EventInput } from '../sessions/ports';
+import type { SubagentStore } from './ports';
+import type { SubagentNode, SubagentTaskNode, SubagentTree } from './types';
 import type { SpawnAgentInput } from '@my-pi-harness/tools';
-import { RuntimeError } from '../errors.js';
-import { AgentRequestScheduler } from './request-scheduler.js';
-import { createSubagentRunAdapter } from './run-adapter.js';
-import { launchAgentRun } from './launch.js';
-import { SubagentMessaging } from './messaging.js';
-import { assertDelegatedAttachments, isDescendant, resolveDelegationPolicy } from './policy.js';
-import type { RunHooks } from '../runs/ports.js';
+import { RuntimeError } from '../errors';
+import { AgentRequestScheduler } from './request-scheduler';
+import { createSubagentRunAdapter } from './run-adapter';
+import { launchAgentRun } from './launch';
+import { SubagentMessaging } from './messaging';
+import { assertDelegatedAttachments, isDescendant, resolveDelegationPolicy } from './policy';
+import type { RunHooks } from '../runs/ports';
 
 export interface SubagentCoordinatorOptions {
   store: SubagentStore;

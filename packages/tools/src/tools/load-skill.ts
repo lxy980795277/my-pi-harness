@@ -4,9 +4,9 @@ import {
   completeToolRegistration,
   strictObjectSchema,
   type ToolContent,
-} from '../lib/tool-registry.js';
+} from '../lib/tool-registry';
 
-import { requireCapabilityHandlers } from '../lib/tool-context.js';
+import { requireCapabilityHandlers } from '../lib/tool-context';
 
 export type LoadSkillHandler = (id: string, signal: AbortSignal) => Promise<ToolContent[]>;
 

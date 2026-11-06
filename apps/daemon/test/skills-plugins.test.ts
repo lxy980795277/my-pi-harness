@@ -4,10 +4,10 @@ import { join } from 'node:path';
 import Fastify from 'fastify';
 import { openProfileStore, type ProfileStore } from '@my-pi-harness/storage';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { SkillsService } from '../src/skills/service.js';
-import { PluginService, type PluginAppPort } from '../src/plugins/service.js';
-import { registerSkillRoutes } from '../src/skills/routes.js';
-import { registerPluginRoutes } from '../src/plugins/routes.js';
+import { SkillsService } from '../src/skills/service';
+import { PluginService, type PluginAppPort } from '../src/plugins/service';
+import { registerSkillRoutes } from '../src/skills/routes';
+import { registerPluginRoutes } from '../src/plugins/routes';
 
 const fixtures: { directory: string; store: ProfileStore; skills: SkillsService }[] = [];
 const signal = new AbortController().signal;

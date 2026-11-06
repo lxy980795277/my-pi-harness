@@ -15,7 +15,7 @@ import {
   sendTurn,
   gate,
   withinDeadline,
-} from './support/work-fixture.js';
+} from './support/work-fixture';
 
 describe('M3 durable session work through real Pi tools', () => {
   it.each(['restore_context_checkpoint', 'reset_working_state'])(

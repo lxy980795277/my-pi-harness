@@ -5,15 +5,15 @@ import type {
   RunView,
   SessionSummary,
 } from '@my-pi-harness/protocol';
-import type { RunHooks } from './ports.js';
-import type { RunCapabilities } from '../capabilities/run.js';
-import type { FrozenInputCapabilities } from '../capabilities/inputs.js';
-import type { ResolvedModel } from '../models/gateway.js';
-import type { EventInput } from '../sessions/ports.js';
-import type { ExternalTools } from '../tools/external.js';
-import type { ToolRuntime } from '../tools/runtime.js';
-import type { RunToolset } from '../tools/toolset.js';
-import type { WorkRuntime } from '../work/runtime.js';
+import type { RunHooks } from './ports';
+import type { RunCapabilities } from '../capabilities/run';
+import type { FrozenInputCapabilities } from '../capabilities/inputs';
+import type { ResolvedModel } from '../models/gateway';
+import type { EventInput } from '../sessions/ports';
+import type { ExternalTools } from '../tools/external';
+import type { ToolRuntime } from '../tools/runtime';
+import type { RunToolset } from '../tools/toolset';
+import type { WorkRuntime } from '../work/runtime';
 
 /** Accepted immutable input and host-owned ports shared by a root or delegated Run. */
 export interface RunExecutionOptions {

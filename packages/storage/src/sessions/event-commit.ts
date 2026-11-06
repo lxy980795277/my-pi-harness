@@ -7,15 +7,15 @@ import {
   RunViewSchema,
   type HarnessEvent,
 } from '@my-pi-harness/protocol';
-import { StorageError } from '../shared/errors.js';
-import { assertJson, checked } from '../shared/validation.js';
-import * as schema from '../sqlite/schema.js';
-import { validateAgentBatch } from './agent-batch.js';
-import { InputIdSchema, QueueRequestSchema, RunAcceptedSchema } from './event-validation.js';
-import type { ProjectionWriter } from './projections/projector.js';
-import { validateToolBatch } from './projections/tool-batch.js';
-import type { StoredSessionEvent } from './session-jsonl.js';
-import type { EventInput, RequestAcceptance } from './types.js';
+import { StorageError } from '../shared/errors';
+import { assertJson, checked } from '../shared/validation';
+import * as schema from '../sqlite/schema';
+import { validateAgentBatch } from './agent-batch';
+import { InputIdSchema, QueueRequestSchema, RunAcceptedSchema } from './event-validation';
+import type { ProjectionWriter } from './projections/projector';
+import { validateToolBatch } from './projections/tool-batch';
+import type { StoredSessionEvent } from './session-jsonl';
+import type { EventInput, RequestAcceptance } from './types';
 
 /** Validates one durable command and stages its journal records inside the profile transaction. */
 export class SessionEventCommit {

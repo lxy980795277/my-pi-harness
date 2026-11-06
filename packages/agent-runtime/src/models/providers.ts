@@ -1,5 +1,5 @@
 import type { Provider } from '@earendil-works/pi-ai';
-import { RuntimeError } from '../errors.js';
+import { RuntimeError } from '../errors';
 
 /** Product-supported native providers, loaded through Pi's public factory exports. */
 export const BUILTIN_PROVIDER_IDS = [

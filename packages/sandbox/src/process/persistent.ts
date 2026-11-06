@@ -3,13 +3,13 @@ import { mkdtemp, realpath, rm } from 'node:fs/promises';
 import { constants as osConstants, homedir, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { Readable, Writable } from 'node:stream';
-import { SandboxError, checkCancelled } from '../errors.js';
-import { sandboxProfile } from '../platform/macos.js';
-import { ByteBudget, redactProcessDiagnostics } from './budget.js';
-import { stopOwnedProcessGroup, waitForProcessClose } from './cleanup.js';
-import { resolveProcess } from './resolve.js';
-import { WATCHDOG_SOURCE } from './watchdog.js';
-import type { ManagedProcess, ProcessExit, ProcessLaunch, ProcessObserver } from './types.js';
+import { SandboxError, checkCancelled } from '../errors';
+import { sandboxProfile } from '../platform/macos';
+import { ByteBudget, redactProcessDiagnostics } from './budget';
+import { stopOwnedProcessGroup, waitForProcessClose } from './cleanup';
+import { resolveProcess } from './resolve';
+import { WATCHDOG_SOURCE } from './watchdog';
+import type { ManagedProcess, ProcessExit, ProcessLaunch, ProcessObserver } from './types';
 
 type WatchdogMessage =
   | { type: 'started'; pid: number }

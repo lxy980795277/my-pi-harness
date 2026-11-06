@@ -4,10 +4,10 @@ import { join } from 'node:path';
 import Database from 'better-sqlite3';
 import { Type } from 'typebox';
 import { afterEach, describe, expect, it } from 'vitest';
-import { openProfileStore, sessionLogDirectory } from '../src/index.js';
-import { SessionBatchSchema } from '../src/sessions/session-jsonl.js';
-import { checked } from '../src/shared/validation.js';
-import { createAgentSession, spawn, type AgentSessionFixture } from './fixtures/agent-session.js';
+import { openProfileStore, sessionLogDirectory } from '../src/index';
+import { SessionBatchSchema } from '../src/sessions/session-jsonl';
+import { checked } from '../src/shared/validation';
+import { createAgentSession, spawn, type AgentSessionFixture } from './fixtures/agent-session';
 
 const fixtures: AgentSessionFixture[] = [];
 const object = Type.Record(Type.String(), Type.Unknown());

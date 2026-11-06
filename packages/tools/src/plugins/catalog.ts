@@ -1,7 +1,7 @@
 import { fileURLToPath } from 'node:url';
 import type { PluginManifest } from '@my-pi-harness/protocol';
-import { PluginError } from './errors.js';
-import { loadBuiltinPluginApps, type OwnedBuiltinPluginApp } from './apps.js';
+import { PluginError } from './errors';
+import { loadBuiltinPluginApps, type OwnedBuiltinPluginApp } from './apps';
 
 /** Plugin assets are co-located with their source modules in every runtime. */
 export const BUILTIN_PLUGIN_RESOURCE_DIRECTORY = fileURLToPath(new URL('./', import.meta.url));

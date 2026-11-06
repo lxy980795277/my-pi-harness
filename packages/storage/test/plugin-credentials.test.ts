@@ -2,7 +2,7 @@ import { mkdtemp, readFile, readdir, rm, stat, symlink, writeFile } from 'node:f
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, expect, it } from 'vitest';
-import { PluginCredentialStore, type PluginOAuthCredential } from '../src/index.js';
+import { PluginCredentialStore, type PluginOAuthCredential } from '../src/index';
 
 const directories: string[] = [];
 afterEach(async () => {

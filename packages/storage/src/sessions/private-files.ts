@@ -12,8 +12,8 @@ import {
   type Stats,
 } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
-import { StorageError } from '../shared/errors.js';
-import { sessionLogDirectory } from './session-log-directory.js';
+import { StorageError } from '../shared/errors';
+import { sessionLogDirectory } from './session-log-directory';
 
 interface OwnedDirectory {
   path: string;

@@ -2,7 +2,7 @@ import { Worker } from 'node:worker_threads';
 import { isAbsolute } from 'node:path';
 import { Type } from 'typebox';
 import { Value } from 'typebox/value';
-import { LOCAL_EMBEDDING_WORKER } from './local-embedding-worker.js';
+import { LOCAL_EMBEDDING_WORKER } from './local-embedding-worker';
 
 interface Request {
   count: number;

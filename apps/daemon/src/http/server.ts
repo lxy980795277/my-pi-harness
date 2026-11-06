@@ -15,11 +15,11 @@ import Fastify, {
   type FastifyReply,
   type FastifyRequest,
 } from 'fastify';
-import type { DaemonConfig } from '../application/config.js';
-import type { ApplicationServices } from '../application/services.js';
-import { registerApplicationRoutes } from './routes.js';
-import { RuntimeEventStreams } from './runtime-events.js';
-import { createWebDocumentRenderer } from './web-document.js';
+import type { DaemonConfig } from '../application/config';
+import type { ApplicationServices } from '../application/services';
+import { registerApplicationRoutes } from './routes';
+import { RuntimeEventStreams } from './runtime-events';
+import { createWebDocumentRenderer } from './web-document';
 
 /** Resources owned by one local daemon process. */
 export interface DaemonApplication {

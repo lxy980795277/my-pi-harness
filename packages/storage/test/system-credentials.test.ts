@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createSystemCredentialStore } from '../src/index.js';
+import { createSystemCredentialStore } from '../src/index';
 
 const native = vi.hoisted(() => ({
   entries: new Map<string, Map<string, string>>(),

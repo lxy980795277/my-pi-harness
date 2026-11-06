@@ -9,13 +9,13 @@ import {
   type TranscriptContext,
 } from '@earendil-works/pi-ai';
 import { openProfileStore } from '@my-pi-harness/storage';
-import { observeNativeTool } from './support/native-tool.js';
+import { observeNativeTool } from './support/native-tool';
 import { describe, expect, it, vi } from 'vitest';
-import { ToolRuntime } from '../src/tools/runtime.js';
-import { SessionRuntime } from '../src/sessions/runtime.js';
-import { decodeContextMessage, encodeContextMessage } from '../src/context/codec.js';
-import { completeToolHistory } from '../src/context/tool-history.js';
-import { fixture as workFixture } from './support/work-fixture.js';
+import { ToolRuntime } from '../src/tools/runtime';
+import { SessionRuntime } from '../src/sessions/runtime';
+import { decodeContextMessage, encodeContextMessage } from '../src/context/codec';
+import { completeToolHistory } from '../src/context/tool-history';
+import { fixture as workFixture } from './support/work-fixture';
 
 async function until(predicate: () => boolean): Promise<void> {
   const deadline = Date.now() + 5000;

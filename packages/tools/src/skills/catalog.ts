@@ -1,7 +1,7 @@
 import { mkdir, readdir, rename, rm } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { SkillError } from './errors.js';
+import { SkillError } from './errors';
 import {
   checkedSkillDirectory,
   readSkillFile,
@@ -11,10 +11,10 @@ import {
   skillResourcePath,
   writeOwnedSkillFile,
   syncSkillDirectory,
-} from './files.js';
-import { parseSkill } from './parser.js';
-import { readSkillSource } from './resources.js';
-import { SkillMaterializer } from './materialization.js';
+} from './files';
+import { parseSkill } from './parser';
+import { readSkillSource } from './resources';
+import { SkillMaterializer } from './materialization';
 import type {
   AssertSkillAuthorized,
   DiscoveredSkill,
@@ -23,7 +23,7 @@ import type {
   SkillResourceContent,
   SkillRoot,
   SkillResourceLease,
-} from './types.js';
+} from './types';
 
 const precedence = { project: 0, user: 1, plugin: 2, system: 3 };
 /** Filesystem catalog owns content snapshots, never execution permission. */

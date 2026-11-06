@@ -1,9 +1,9 @@
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import type { AssistantMessage, UserMessage } from '@earendil-works/pi-ai';
-import type { ToolRunContext } from '../tools/types.js';
+import type { ToolRunContext } from '../tools/types';
 import type { AgentToolHandlers } from '@my-pi-harness/tools';
-import type { EventInput } from '../sessions/ports.js';
-import type { RuntimeError } from '../errors.js';
+import type { EventInput } from '../sessions/ports';
+import type { RuntimeError } from '../errors';
 
 /** An injected SDK message carries the records committed only when the Run consumes it. */
 export interface RunInjectedInput {

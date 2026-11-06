@@ -7,7 +7,7 @@ import {
 } from '@my-pi-harness/protocol';
 import type { FastifyInstance } from 'fastify';
 import { Type } from 'typebox';
-import type { WorkspaceService } from './service.js';
+import type { WorkspaceService } from './service';
 
 const Params = Type.Object(
   { id: Type.String({ minLength: 1, maxLength: 160 }) },

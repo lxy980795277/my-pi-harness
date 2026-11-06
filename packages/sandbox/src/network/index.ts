@@ -1,1 +1,1 @@
-export { isPublicAddress } from './public-address.js';
+export { isPublicAddress } from './public-address';

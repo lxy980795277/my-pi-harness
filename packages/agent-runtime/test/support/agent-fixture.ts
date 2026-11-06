@@ -14,13 +14,13 @@ import {
 } from '@earendil-works/pi-ai';
 import type { AgentSettings, ApprovalMode, SessionSummary } from '@my-pi-harness/protocol';
 import { openProfileStore } from '@my-pi-harness/storage';
-import type { ResolvedModel } from '../../src/models/gateway.js';
-import { SessionRuntime } from '../../src/sessions/runtime.js';
-import { ToolRuntime } from '../../src/tools/runtime.js';
-import type { ExternalTools } from '../../src/tools/external.js';
-import type { ApprovalReviewer } from '../../src/tools/approval-review.js';
-import type { SkillsPort, ToolDiscoveryPort } from '../../src/capabilities/ports.js';
-import { WorkRuntime } from '../../src/work/runtime.js';
+import type { ResolvedModel } from '../../src/models/gateway';
+import { SessionRuntime } from '../../src/sessions/runtime';
+import { ToolRuntime } from '../../src/tools/runtime';
+import type { ExternalTools } from '../../src/tools/external';
+import type { ApprovalReviewer } from '../../src/tools/approval-review';
+import type { SkillsPort, ToolDiscoveryPort } from '../../src/capabilities/ports';
+import { WorkRuntime } from '../../src/work/runtime';
 
 interface AgentFixtureOptions {
   model?(original: Model<Api>, modelId: string): Model<Api>;

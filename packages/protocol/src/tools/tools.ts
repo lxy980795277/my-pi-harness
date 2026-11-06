@@ -1,5 +1,5 @@
 import { type Static, Type } from 'typebox';
-import { ArtifactSchema } from './artifacts.js';
+import { ArtifactSchema } from './artifacts';
 
 export type ApprovalMode = Static<typeof ApprovalModeSchema>;
 export type ToolApproval = Static<typeof ToolApprovalSchema>;

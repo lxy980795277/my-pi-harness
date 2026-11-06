@@ -9,7 +9,7 @@ import {
   type Session,
 } from 'electron';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { secureWindow } from '../src/main/security.js';
+import { secureWindow } from '../src/main/security';
 
 type InfoHandler = (event: IpcMainInvokeEvent, ...arguments_: unknown[]) => unknown;
 type PermissionCheckHandler = NonNullable<Parameters<Session['setPermissionCheckHandler']>[0]>;

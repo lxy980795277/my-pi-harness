@@ -1,6 +1,6 @@
 import { type Static, type TSchema } from 'typebox';
 import { Value } from 'typebox/value';
-import { StorageError } from './errors.js';
+import { StorageError } from './errors';
 
 /**
  * Validate durable or event data against its owning schema without casting unknown input.

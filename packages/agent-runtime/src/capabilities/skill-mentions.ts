@@ -1,5 +1,5 @@
 import type { FrozenSkill } from '@my-pi-harness/protocol';
-import type { SkillsPort } from './ports.js';
+import type { SkillsPort } from './ports';
 
 /** Explicit invocations use a standalone lowercase $skill-name token in user-authored text. */
 export function explicitSkillNames(text: string): ReadonlySet<string> {

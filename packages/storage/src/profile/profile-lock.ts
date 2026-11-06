@@ -1,7 +1,7 @@
 import { mkdir, realpath } from 'node:fs/promises';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
-import { StorageError } from '../shared/errors.js';
+import { StorageError } from '../shared/errors';
 
 /** Owns a separate SQLite rollback-mode exclusive transaction for the daemon lifetime. */
 export interface ProfileLock {

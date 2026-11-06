@@ -20,8 +20,8 @@ import { sessionLogDirectory, SessionBatchSchema } from '@my-pi-harness/storage'
 import { Type, type Static, type TSchema } from 'typebox';
 import { Value } from 'typebox/value';
 import { describe, expect, it } from 'vitest';
-import { loginThroughHttp } from './support/login-http.js';
-import type { FixtureAuthorization } from './support/login.js';
+import { loginThroughHttp } from './support/login-http';
+import type { FixtureAuthorization } from './support/login';
 
 interface Outcome {
   code: number | null;

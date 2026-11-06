@@ -37,41 +37,41 @@ import {
   ArtifactPublishedSchema,
   type Artifact,
 } from '@my-pi-harness/protocol';
-import { StorageError } from '../shared/errors.js';
-import { AuthRepository } from '../repositories/auth.js';
-import { McpRepository } from '../repositories/mcp.js';
-import { ExtensionRepository } from '../repositories/extensions.js';
-import { RemoteMcpRepository } from '../repositories/remote-mcp.js';
-import { ConnectionRepository } from '../repositories/connections.js';
-import type { ProfileLock } from './profile-lock.js';
-import { ProjectionWriter } from '../sessions/projections/projector.js';
-import { WorkspaceRepository } from '../repositories/workspaces.js';
-import { ModelSettingsRepository } from '../repositories/model-settings.js';
-import { ToolProjection } from '../sessions/projections/tools.js';
-import { WorkRepository } from '../sessions/projections/work.js';
+import { StorageError } from '../shared/errors';
+import { AuthRepository } from '../repositories/auth';
+import { McpRepository } from '../repositories/mcp';
+import { ExtensionRepository } from '../repositories/extensions';
+import { RemoteMcpRepository } from '../repositories/remote-mcp';
+import { ConnectionRepository } from '../repositories/connections';
+import type { ProfileLock } from './profile-lock';
+import { ProjectionWriter } from '../sessions/projections/projector';
+import { WorkspaceRepository } from '../repositories/workspaces';
+import { ModelSettingsRepository } from '../repositories/model-settings';
+import { ToolProjection } from '../sessions/projections/tools';
+import { WorkRepository } from '../sessions/projections/work';
 import {
   SessionJournal,
   type SessionLogDownload,
   type StoredSessionEvent,
-} from '../sessions/session-jsonl.js';
-import { PrivateSessionFiles } from '../sessions/private-files.js';
-import { AttachmentBlobs } from '../sessions/attachment-blobs.js';
-import { agentInterruptionEvents } from '../sessions/agent-recovery.js';
-import { validateToolBatch } from '../sessions/projections/tool-batch.js';
-import { ModelContextQuery } from '../sessions/model-context.js';
-import type { ProfileStoreOptions } from '../sessions/session-log-directory.js';
-import { SkillContextQuery } from '../sessions/skill-context.js';
-import { AgentTaskQuery } from '../sessions/agent-tasks.js';
-import { AgentSettingsRepository } from '../repositories/agent-settings.js';
-import { validateAgentBatch } from '../sessions/agent-batch.js';
-import * as schema from '../sqlite/schema.js';
-import type { CreateSessionInput, EventInput, RequestAcceptance } from '../sessions/types.js';
-import { checked } from '../shared/validation.js';
-import { QueueRequestSchema, SessionCreatedSchema } from '../sessions/event-validation.js';
-import { SessionEventCommit } from '../sessions/event-commit.js';
-import { assertPersistentEvent } from '../sessions/event-persistence.js';
-import { LiveMessages } from '../sessions/live-messages.js';
-import { ArtifactBlobs, type ArtifactDownload, type ArtifactBlob } from '../artifacts/blobs.js';
+} from '../sessions/session-jsonl';
+import { PrivateSessionFiles } from '../sessions/private-files';
+import { AttachmentBlobs } from '../sessions/attachment-blobs';
+import { agentInterruptionEvents } from '../sessions/agent-recovery';
+import { validateToolBatch } from '../sessions/projections/tool-batch';
+import { ModelContextQuery } from '../sessions/model-context';
+import type { ProfileStoreOptions } from '../sessions/session-log-directory';
+import { SkillContextQuery } from '../sessions/skill-context';
+import { AgentTaskQuery } from '../sessions/agent-tasks';
+import { AgentSettingsRepository } from '../repositories/agent-settings';
+import { validateAgentBatch } from '../sessions/agent-batch';
+import * as schema from '../sqlite/schema';
+import type { CreateSessionInput, EventInput, RequestAcceptance } from '../sessions/types';
+import { checked } from '../shared/validation';
+import { QueueRequestSchema, SessionCreatedSchema } from '../sessions/event-validation';
+import { SessionEventCommit } from '../sessions/event-commit';
+import { assertPersistentEvent } from '../sessions/event-persistence';
+import { LiveMessages } from '../sessions/live-messages';
+import { ArtifactBlobs, type ArtifactDownload, type ArtifactBlob } from '../artifacts/blobs';
 
 /** JSONL session facts, immutable attachments and SQLite configuration/projections for one daemon. */
 export class ProfileStore {

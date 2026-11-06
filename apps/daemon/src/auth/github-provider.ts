@@ -8,8 +8,8 @@ import type {
   IdentityChallenge,
   IdentityProvider,
   WebIdentityChallenge,
-} from './identity-provider.js';
-import { LoginError } from './errors.js';
+} from './identity-provider';
+import { LoginError } from './errors';
 
 const DeviceSchema = Type.Object({
   device_code: Type.String({ minLength: 1, maxLength: 1024 }),

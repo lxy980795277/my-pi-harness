@@ -4,12 +4,12 @@ import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
 import { ModelGateway } from '@my-pi-harness/agent-runtime';
 import { createMemoryCredentialStore, openProfileStore } from '@my-pi-harness/storage';
-import { loadDaemonConfig } from '../src/application/config.js';
-import { createApplicationServices } from '../src/application/services.js';
-import { RemoteMcpService } from '../src/mcp/remote-service.js';
-import { PluginService } from '../src/plugins/service.js';
-import { SkillsService } from '../src/skills/service.js';
-import { mcpManagerFixture } from './support/mcp.js';
+import { loadDaemonConfig } from '../src/application/config';
+import { createApplicationServices } from '../src/application/services';
+import { RemoteMcpService } from '../src/mcp/remote-service';
+import { PluginService } from '../src/plugins/service';
+import { SkillsService } from '../src/skills/service';
+import { mcpManagerFixture } from './support/mcp';
 
 const directories: string[] = [];
 

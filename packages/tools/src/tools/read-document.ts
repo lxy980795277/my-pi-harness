@@ -1,8 +1,8 @@
 import { extname } from 'node:path';
 import { Type } from 'typebox';
-import { DocumentError, extractDocument, extractPdf } from '../utils/document-text.js';
-import { readDocumentInput } from '../lib/document-input.js';
-import { completeToolRegistration } from '../lib/tool-registry.js';
+import { DocumentError, extractDocument, extractPdf } from '../utils/document-text';
+import { readDocumentInput } from '../lib/document-input';
+import { completeToolRegistration } from '../lib/tool-registry';
 
 const parameters = Type.Object(
   { path: Type.String({ minLength: 1, maxLength: 2000 }) },

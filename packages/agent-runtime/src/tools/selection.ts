@@ -1,7 +1,7 @@
 import type { FrozenSkill, WorkState } from '@my-pi-harness/protocol';
 import { nativeTools, type ToolRegistration } from '@my-pi-harness/tools';
-import type { FrozenMcpTool } from './external.js';
-import { RunToolset, type RunToolRecord, type RunToolSelection } from './toolset.js';
+import type { FrozenMcpTool } from './external';
+import { RunToolset, type RunToolRecord, type RunToolSelection } from './toolset';
 
 export interface ToolSelectionInput {
   registrations?: readonly ToolRegistration[];

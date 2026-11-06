@@ -3,10 +3,10 @@ import type { UserMessage } from '@earendil-works/pi-ai';
 import type { SessionSummary, ToolCallRecord } from '@my-pi-harness/protocol';
 import { Type, type Static } from 'typebox';
 import { Value } from 'typebox/value';
-import { encodeContextMessage, snapshotPrivateData } from '../context/codec.js';
-import { fitContext } from '../context/budget.js';
-import type { ModelGateway, ResolvedModel } from '../models/gateway.js';
-import type { EventInput } from '../sessions/ports.js';
+import { encodeContextMessage, snapshotPrivateData } from '../context/codec';
+import { fitContext } from '../context/budget';
+import type { ModelGateway, ResolvedModel } from '../models/gateway';
+import type { EventInput } from '../sessions/ports';
 
 export type ApprovalReviewResult = Static<typeof REVIEW_RESULT>;
 

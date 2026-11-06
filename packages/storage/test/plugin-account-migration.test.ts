@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3';
 import { expect, it } from 'vitest';
-import { applyMigrations, SCHEMA_VERSION } from '../src/sqlite/migrations/apply.js';
-import { installHistoricalSchema } from './fixtures/historical-schema.js';
+import { applyMigrations, SCHEMA_VERSION } from '../src/sqlite/migrations/apply';
+import { installHistoricalSchema } from './fixtures/historical-schema';
 
 it('retires the plugin account marker without removing independent accounts, credential references or saved fields', () => {
   const db = new Database(':memory:');

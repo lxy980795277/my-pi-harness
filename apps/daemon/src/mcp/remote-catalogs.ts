@@ -10,9 +10,9 @@ import type {
   McpIdentity,
   StoredRemoteMcpServer,
 } from '@my-pi-harness/storage';
-import { CatalogCache, type CatalogEntry } from './catalog-cache.js';
-import { remoteFingerprint } from './remote-fingerprint.js';
-import { pluginCredentialId, type ServiceCredentialAuthority } from './plugin-credentials.js';
+import { CatalogCache, type CatalogEntry } from './catalog-cache';
+import { remoteFingerprint } from './remote-fingerprint';
+import { pluginCredentialId, type ServiceCredentialAuthority } from './plugin-credentials';
 
 export interface RemoteCatalogEntry extends CatalogEntry {
   revision: number;

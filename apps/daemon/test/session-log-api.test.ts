@@ -9,10 +9,10 @@ import {
 } from '@my-pi-harness/storage';
 import { Value } from 'typebox/value';
 import { describe, expect, it } from 'vitest';
-import { loadDaemonConfig } from '../src/application/config.js';
-import { createDaemonApplication, type DaemonApplication } from '../src/http/server.js';
-import { createApplicationServices } from '../src/application/services.js';
-import { loginFixture, pairFixture } from './support/login.js';
+import { loadDaemonConfig } from '../src/application/config';
+import { createDaemonApplication, type DaemonApplication } from '../src/http/server';
+import { createApplicationServices } from '../src/application/services';
+import { loginFixture, pairFixture } from './support/login';
 
 describe('authenticated original session JSONL download', () => {
   it('downloads original batches across branches and rejects untrusted, logged-out and invalid requests', async () => {

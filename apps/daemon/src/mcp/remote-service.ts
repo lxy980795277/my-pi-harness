@@ -34,19 +34,19 @@ import type {
 } from '@my-pi-harness/protocol';
 import type { StoredRemoteMcpServer } from '@my-pi-harness/storage';
 
-import type { RemoteMcpServiceOptions } from './remote-options.js';
-import { closeMcpResources } from './lifecycle.js';
-import { RemoteCatalogs, type RemoteCatalogEntry as CatalogEntry } from './remote-catalogs.js';
+import type { RemoteMcpServiceOptions } from './remote-options';
+import { closeMcpResources } from './lifecycle';
+import { RemoteCatalogs, type RemoteCatalogEntry as CatalogEntry } from './remote-catalogs';
 import {
   remoteStartupFingerprint,
   remoteFingerprint as hash,
   remoteToolAlias as alias,
-} from './remote-fingerprint.js';
-import { RemoteMcpOAuth } from './remote-oauth.js';
-import { remoteMcpView } from './remote-view.js';
-import { McpDirectoryPolicy, mcpMetadata } from './directory.js';
-import { assertRemoteNameAvailable, validateRemoteInput } from './remote-configuration.js';
-import { testRemoteMcpDraft } from './remote-connection-test.js';
+} from './remote-fingerprint';
+import { RemoteMcpOAuth } from './remote-oauth';
+import { remoteMcpView } from './remote-view';
+import { McpDirectoryPolicy, mcpMetadata } from './directory';
+import { assertRemoteNameAvailable, validateRemoteInput } from './remote-configuration';
+import { testRemoteMcpDraft } from './remote-connection-test';
 import {
   connectionAuthority,
   pluginCredentialId,
@@ -54,7 +54,7 @@ import {
   pluginStartupGrant,
   serviceToken,
   readMcpHeaders,
-} from './plugin-credentials.js';
+} from './plugin-credentials';
 function fail(code: string, message: string): never {
   throw new RuntimeError(code, message);
 }

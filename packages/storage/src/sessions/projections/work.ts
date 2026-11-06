@@ -10,17 +10,17 @@ import {
   type WorkState,
   type Compaction,
 } from '@my-pi-harness/protocol';
-import { StorageError } from '../../shared/errors.js';
-import * as schema from '../../sqlite/schema.js';
-import { checked } from '../../shared/validation.js';
-import { currentCapabilityRevision } from './capabilities.js';
+import { StorageError } from '../../shared/errors';
+import * as schema from '../../sqlite/schema';
+import { checked } from '../../shared/validation';
+import { currentCapabilityRevision } from './capabilities';
 import {
   CheckpointEventSchema,
   PreparedEventSchema,
   PreparedPrivateSchema,
   RestoreEventSchema,
   WorkEventSchema,
-} from '../event-validation.js';
+} from '../event-validation';
 
 /** Branch-local context facts and frozen content; writes run inside the store transaction. */
 export class WorkRepository {

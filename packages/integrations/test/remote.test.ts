@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { RemoteMcpManager } from '../src/mcp/remote.js';
-import { RemoteOAuthSession } from '../src/mcp/remote-oauth.js';
-import { NetworkError } from '../src/network/errors.js';
+import { RemoteMcpManager } from '../src/mcp/remote';
+import { RemoteOAuthSession } from '../src/mcp/remote-oauth';
+import { NetworkError } from '../src/network/errors';
 import {
   parseRemoteUrl,
   assertRemoteAddress,
   createRemoteFetch,
-} from '../src/network/remote-fetch.js';
-import { remoteFixture } from '../../../tests/fixtures/remote-mcp.js';
+} from '../src/network/remote-fetch';
+import { remoteFixture } from '../../../tests/fixtures/remote-mcp';
 
 for (const transport of ['streamable-http', 'sse'] as const)
   describe(`official SDK remote ${transport}`, () => {

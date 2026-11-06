@@ -1,8 +1,8 @@
 import { Type } from 'typebox';
 import { Value } from 'typebox/value';
 import { parseDocument } from 'yaml';
-import { PluginError } from './errors.js';
-import { parseRemoteUrl } from '../network/remote-fetch.js';
+import { PluginError } from './errors';
+import { parseRemoteUrl } from '../network/remote-fetch';
 
 /** Deployment-owned OAuth clients override the declarative plugin's client fields. */
 export interface PluginOAuthClient {

@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url';
 import { BrowserWindow } from 'electron';
-import { secureWindow } from './security.js';
+import { secureWindow } from './security';
 
 /**
  * Create the isolated application window without loading its page.

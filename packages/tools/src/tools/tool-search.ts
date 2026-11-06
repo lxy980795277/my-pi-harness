@@ -1,12 +1,12 @@
 import { Type } from 'typebox';
-import { MAX_TOOL_SEARCH_RESULTS } from '../utils/tool-search.js';
+import { MAX_TOOL_SEARCH_RESULTS } from '../utils/tool-search';
 import {
   completeToolRegistration,
   strictObjectSchema,
   type ToolContent,
-} from '../lib/tool-registry.js';
+} from '../lib/tool-registry';
 
-import { requireCapabilityHandlers } from '../lib/tool-context.js';
+import { requireCapabilityHandlers } from '../lib/tool-context';
 
 export type ToolSearchHandler = (
   query: string,

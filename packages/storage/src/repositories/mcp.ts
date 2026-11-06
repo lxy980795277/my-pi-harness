@@ -1,9 +1,9 @@
 import type Database from 'better-sqlite3';
 import { Type, type Static, type TSchema } from 'typebox';
 import { McpScopeSchema, McpServerInputSchema, type McpScope } from '@my-pi-harness/protocol';
-import { StorageError } from '../shared/errors.js';
-import { checked } from '../shared/validation.js';
-import { McpDirectoryRepository } from './mcp-directory.js';
+import { StorageError } from '../shared/errors';
+import { checked } from '../shared/validation';
+import { McpDirectoryRepository } from './mcp-directory';
 
 /** Host-only secret identities; bytes belong exclusively to the credential adapter. */
 export type McpSecretBinding = Static<typeof SecretBindingSchema>;

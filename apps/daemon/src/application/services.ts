@@ -1,8 +1,8 @@
-import { PLUGIN_CONNECTION_DEFINITIONS } from '../plugin-connections/definitions.js';
+import { PLUGIN_CONNECTION_DEFINITIONS } from '../plugin-connections/definitions';
 import { CommandManager, type ToolSearchEmbedder } from '@my-pi-harness/tools';
-import { ArtifactService } from '../artifacts/service.js';
-import { createSkillsPort } from '../skills/runtime.js';
-import { approvalContext } from '../tools/approval-context.js';
+import { ArtifactService } from '../artifacts/service';
+import { createSkillsPort } from '../skills/runtime';
+import { approvalContext } from '../tools/approval-context';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { join } from 'node:path';
 import { realpath } from 'node:fs/promises';
@@ -20,22 +20,22 @@ import {
   type CredentialStore,
   type ProfileStore,
 } from '@my-pi-harness/storage';
-import type { DaemonConfig } from './config.js';
-import { LocalAuth } from '../auth/local-auth.js';
-import { GitHubIdentityProvider } from '../auth/github-provider.js';
-import { LoginService } from '../auth/login-service.js';
-import { WorkspaceService } from '../workspaces/service.js';
-import { AttachmentService } from '../attachments/service.js';
-import { McpService } from '../mcp/service.js';
-import type { McpManager } from '../mcp/types.js';
-import { RemoteMcpService } from '../mcp/remote-service.js';
-import { createExternalToolPorts } from '../mcp/external-tools.js';
-import { SkillsService } from '../skills/service.js';
-import { PluginService } from '../plugins/service.js';
-import { createPluginAppPort } from '../plugins/apps.js';
-import { ConnectionService } from '../connections/service.js';
-import { PluginConnectionService } from '../plugin-connections/service.js';
-import { OAuthLaunchTickets } from '../http/oauth-launch-tickets.js';
+import type { DaemonConfig } from './config';
+import { LocalAuth } from '../auth/local-auth';
+import { GitHubIdentityProvider } from '../auth/github-provider';
+import { LoginService } from '../auth/login-service';
+import { WorkspaceService } from '../workspaces/service';
+import { AttachmentService } from '../attachments/service';
+import { McpService } from '../mcp/service';
+import type { McpManager } from '../mcp/types';
+import { RemoteMcpService } from '../mcp/remote-service';
+import { createExternalToolPorts } from '../mcp/external-tools';
+import { SkillsService } from '../skills/service';
+import { PluginService } from '../plugins/service';
+import { createPluginAppPort } from '../plugins/apps';
+import { ConnectionService } from '../connections/service';
+import { PluginConnectionService } from '../plugin-connections/service';
+import { OAuthLaunchTickets } from '../http/oauth-launch-tickets';
 import { LocalToolSearchEmbedder, type RemoteMcpManager } from '@my-pi-harness/integrations';
 
 /** Resources have one daemon owner and close in dependency order. */

@@ -1,7 +1,7 @@
 import { Type } from 'typebox';
 import { checkCancelled } from '@my-pi-harness/sandbox';
-import { gatewayTarget, parseWebUrl, requestWebUrl } from '../lib/web-request.js';
-import { ToolError, completeToolRegistration, strictObjectSchema } from '../lib/tool-registry.js';
+import { gatewayTarget, parseWebUrl, requestWebUrl } from '../lib/web-request';
+import { ToolError, completeToolRegistration, strictObjectSchema } from '../lib/tool-registry';
 
 const parameters = strictObjectSchema({
   url: Type.String({ minLength: 1, maxLength: 4096 }),

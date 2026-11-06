@@ -1,7 +1,7 @@
 import { lstat, mkdir, rename, rm } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { SkillError } from './errors.js';
+import { SkillError } from './errors';
 import {
   checkedSkillDirectory,
   prepareSkillDirectory,
@@ -9,9 +9,9 @@ import {
   skillResourcePath,
   writeOwnedSkillFile,
   syncSkillDirectory,
-} from './files.js';
-import { parseSkill } from './parser.js';
-import type { SkillDownloadFile } from './types.js';
+} from './files';
+import { parseSkill } from './parser';
+import type { SkillDownloadFile } from './types';
 
 /** Install only a new owned directory; cancellation never enables a partial tree. */
 export async function installSkillFiles(

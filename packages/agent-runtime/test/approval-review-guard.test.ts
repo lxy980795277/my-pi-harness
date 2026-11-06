@@ -2,9 +2,9 @@ import { createModels, fauxAssistantMessage, fauxProvider } from '@earendil-work
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import type { SessionSummary } from '@my-pi-harness/protocol';
 import { describe, expect, it } from 'vitest';
-import type { EventInput } from '../src/sessions/ports.js';
-import { RuntimeError } from '../src/errors.js';
-import { ModelApprovalReviewer, type ApprovalReviewInput } from '../src/tools/approval-review.js';
+import type { EventInput } from '../src/sessions/ports';
+import { RuntimeError } from '../src/errors';
+import { ModelApprovalReviewer, type ApprovalReviewInput } from '../src/tools/approval-review';
 
 const session: SessionSummary = {
   id: 'session',

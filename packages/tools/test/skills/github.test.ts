@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { downloadGitHubSkill } from '../../src/skills/github.js';
+import { downloadGitHubSkill } from '../../src/skills/github';
 
 const signal = new AbortController().signal;
 const sha = 'a'.repeat(40);

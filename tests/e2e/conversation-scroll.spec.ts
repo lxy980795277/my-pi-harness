@@ -3,10 +3,10 @@ import type { ServerResponse } from 'node:http';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { AuthStatusSchema, ProviderConfigSchema } from '@my-pi-harness/protocol';
 import { Value } from 'typebox/value';
-import { test, expect } from './fixture.js';
+import { test, expect } from './fixture';
 import type { Page } from '@playwright/test';
-import { configureTestProvider } from './model-fixtures.js';
-import { chooseConversationModel } from './ui-controls.js';
+import { configureTestProvider } from './model-fixtures';
+import { chooseConversationModel } from './ui-controls';
 
 interface ControlledModel {
   origin: string;

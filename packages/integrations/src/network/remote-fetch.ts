@@ -4,7 +4,7 @@ import { request as httpsRequest } from 'node:https';
 import { isIP } from 'node:net';
 import { isPublicAddress } from '@my-pi-harness/sandbox/network';
 import type { FetchLike } from '@modelcontextprotocol/client';
-import { NetworkError } from './errors.js';
+import { NetworkError } from './errors';
 
 export interface RemoteNetworkOptions {
   /** Only host tests may explicitly inject an exact local fixture origin. */

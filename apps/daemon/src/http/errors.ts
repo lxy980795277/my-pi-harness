@@ -3,8 +3,8 @@ import { StorageError } from '@my-pi-harness/storage';
 import { PluginError as IntegrationPluginError } from '@my-pi-harness/integrations';
 import { PluginError, SkillError } from '@my-pi-harness/tools';
 import type { FastifyInstance } from 'fastify';
-import { LoginError } from '../auth/errors.js';
-import { OAuthLaunchError } from './oauth-launch-tickets.js';
+import { LoginError } from '../auth/errors';
+import { OAuthLaunchError } from './oauth-launch-tickets';
 
 /** Map application failures to bounded public errors without disclosing host details. */
 export function registerRequestErrors(server: FastifyInstance): void {

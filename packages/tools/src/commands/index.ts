@@ -1,2 +1,2 @@
-export { CommandManager } from './manager.js';
-export type { CommandBinding, CommandResourceLease } from './manager.js';
+export { CommandManager } from './manager';
+export type { CommandBinding, CommandResourceLease } from './manager';

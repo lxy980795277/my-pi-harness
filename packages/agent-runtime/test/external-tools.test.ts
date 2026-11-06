@@ -4,10 +4,10 @@ import type { McpToolSelection } from '@my-pi-harness/protocol';
 import type { SessionBatch } from '@my-pi-harness/storage';
 import { Type } from 'typebox';
 import { describe, expect, it, vi } from 'vitest';
-import type { ExternalToolCall, ExternalTools, FrozenMcpTool } from '../src/tools/external.js';
-import { decodeContextMessage } from '../src/context/codec.js';
-import { fallbackSummary, summaryRecord } from '../src/context/summary.js';
-import { fixture, gate, idle, observe } from './support/work-fixture.js';
+import type { ExternalToolCall, ExternalTools, FrozenMcpTool } from '../src/tools/external';
+import { decodeContextMessage } from '../src/context/codec';
+import { fallbackSummary, summaryRecord } from '../src/context/summary';
+import { fixture, gate, idle, observe } from './support/work-fixture';
 
 const selection: McpToolSelection = {
   serverId: 'server',

@@ -5,10 +5,10 @@ import { SessionSnapshotSchema, WorkspaceSchema } from '@my-pi-harness/protocol'
 import { createMemoryCredentialStore } from '@my-pi-harness/storage';
 import { Value } from 'typebox/value';
 import { describe, expect, it } from 'vitest';
-import { loadDaemonConfig } from '../src/application/config.js';
-import { createDaemonApplication } from '../src/http/server.js';
-import { createApplicationServices } from '../src/application/services.js';
-import { loginFixture } from './support/login.js';
+import { loadDaemonConfig } from '../src/application/config';
+import { createDaemonApplication } from '../src/http/server';
+import { createApplicationServices } from '../src/application/services';
+import { loginFixture } from './support/login';
 
 describe('protected workspace API', () => {
   it('validates directories and optimistic names, fixes session workspace ownership and archives metadata only', async () => {

@@ -2,14 +2,14 @@ import { randomUUID } from 'node:crypto';
 import type Database from 'better-sqlite3';
 import { type Static, Type } from 'typebox';
 import { AppUserSchema, type AppUser } from '@my-pi-harness/protocol';
-import { StorageError } from '../shared/errors.js';
-import { checked } from '../shared/validation.js';
+import { StorageError } from '../shared/errors';
+import { checked } from '../shared/validation';
 import type {
   LocalClient,
   LoginSessionInput,
   StoredLoginSession,
   VerifiedIdentity,
-} from './auth-types.js';
+} from './auth-types';
 
 type SessionRow = Static<typeof SessionRowSchema>;
 

@@ -1,5 +1,5 @@
 import { createServer } from 'node:http';
-import type { TestModelServer } from './model-server.js';
+import type { TestModelServer } from './model-server';
 
 interface MarkdownModel extends Pick<TestModelServer, 'origin' | 'close'> {
   readonly requests: number;

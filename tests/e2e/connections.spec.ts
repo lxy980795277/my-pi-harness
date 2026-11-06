@@ -1,5 +1,5 @@
-import { test, expect } from './fixture.js';
-import { chooseOption, openUserSettings } from './ui-controls.js';
+import { test, expect } from './fixture';
+import { chooseOption, openUserSettings } from './ui-controls';
 
 test('设置中创建 Token 连接、核实账户并断开', async ({ page, daemon }, testInfo) => {
   await page.goto(daemon.origin);

@@ -5,8 +5,8 @@ import {
   type ToolDiscoveryPort,
 } from '@my-pi-harness/agent-runtime';
 import type { McpToolSelection } from '@my-pi-harness/protocol';
-import type { McpService } from './service.js';
-import type { RemoteMcpService } from './remote-service.js';
+import type { McpService } from './service';
+import type { RemoteMcpService } from './remote-service';
 
 /** Combines separately owned transports without interpreting aliases as execution identities. */
 export function createExternalToolPorts(

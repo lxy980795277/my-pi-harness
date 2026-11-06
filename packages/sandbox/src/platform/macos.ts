@@ -1,5 +1,5 @@
-import { protectedPathExpression } from '../policy/protected-paths.js';
-import type { ProcessAccess } from '../process/types.js';
+import { protectedPathExpression } from '../policy/protected-paths';
+import type { ProcessAccess } from '../process/types';
 
 /** Paths already resolved and authorized by the process resolver. */
 export interface MacOsPolicy {

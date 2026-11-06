@@ -9,8 +9,8 @@ import {
 } from '@my-pi-harness/protocol';
 import { Value } from 'typebox/value';
 import { app } from 'electron';
-import { createDesktopAuthorization } from './authorization.js';
-import { resolveProfileDirectory, resolveSessionLogRoot } from './profile-directory.js';
+import { createDesktopAuthorization } from './authorization';
+import { resolveProfileDirectory, resolveSessionLogRoot } from './profile-directory';
 
 /** 桌面只监督自己启动的独立 Node 服务，不 import 服务业务源码。 */
 export interface ManagedDaemon {

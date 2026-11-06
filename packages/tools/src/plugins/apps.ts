@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { Type, type Static } from 'typebox';
 import { Value } from 'typebox/value';
 import { ConnectionServiceIdSchema, RemoteMcpTransportSchema } from '@my-pi-harness/protocol';
-import { PluginError } from './errors.js';
+import { PluginError } from './errors';
 import { isIP } from 'node:net';
 import { isPublicAddress } from '@my-pi-harness/sandbox';
 

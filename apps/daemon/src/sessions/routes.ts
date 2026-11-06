@@ -15,9 +15,9 @@ import {
 import type { ModelGateway, SessionRuntime } from '@my-pi-harness/agent-runtime';
 import type { FastifyInstance } from 'fastify';
 import { Type } from 'typebox';
-import type { LocalAuth } from '../auth/local-auth.js';
-import type { WorkspaceService } from '../workspaces/service.js';
-import { registerSessionStreamRoute } from './stream-route.js';
+import type { LocalAuth } from '../auth/local-auth';
+import type { WorkspaceService } from '../workspaces/service';
+import { registerSessionStreamRoute } from './stream-route';
 
 const id = Type.String({ minLength: 1, maxLength: 160 });
 const IdParams = Type.Object({ id }, { additionalProperties: false });

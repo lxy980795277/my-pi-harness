@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
 import { afterEach, expect, it } from 'vitest';
-import { LocalToolSearchEmbedder } from '../src/search/local-embedder.js';
+import { LocalToolSearchEmbedder } from '../src/search/local-embedder';
 
 const cleanups: (() => Promise<void>)[] = [];
 afterEach(async () => {

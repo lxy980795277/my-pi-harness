@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { OAuthLaunchError, OAuthLaunchTickets } from '../src/http/oauth-launch-tickets.js';
+import { OAuthLaunchError, OAuthLaunchTickets } from '../src/http/oauth-launch-tickets';
 
 afterEach(() => {
   vi.useRealTimers();

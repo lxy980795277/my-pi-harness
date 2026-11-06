@@ -4,7 +4,7 @@ import {
   strictObjectSchema,
   ToolError,
   type ToolInvocation,
-} from '../lib/tool-registry.js';
+} from '../lib/tool-registry';
 
 import type { Artifact } from '@my-pi-harness/protocol';
 

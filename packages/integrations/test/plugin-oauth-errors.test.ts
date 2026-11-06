@@ -1,4 +1,4 @@
-import { pluginConnectionDefinition } from './plugin-definition.js';
+import { pluginConnectionDefinition } from './plugin-definition';
 import { expect, it } from 'vitest';
 import {
   beginPluginOAuth,
@@ -8,7 +8,7 @@ import {
   PluginError,
   type PluginOAuthFetch,
   type PluginOAuthFailureReason,
-} from '../src/index.js';
+} from '../src/index';
 
 const SECRET = 'sensitive-provider-token-code-state-client-secret';
 const client = {

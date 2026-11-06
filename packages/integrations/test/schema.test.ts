@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { validateToolArguments } from '@earendil-works/pi-ai';
 import { Value } from 'typebox/value';
-import { compileMcpInputSchema } from '../src/index.js';
+import { compileMcpInputSchema } from '../src/index';
 
 describe('bounded external JSON Schema to real TypeBox schemas', () => {
   it('preserves required/optional fields, array constraints, scalar enums and nested objects for actual Pi validation', () => {

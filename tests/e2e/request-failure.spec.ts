@@ -1,7 +1,7 @@
-import { test, expect } from './fixture.js';
-import { configureTestProvider } from './model-fixtures.js';
-import { startFailureModel } from './request-failure-model.js';
-import { chooseConversationModel } from './ui-controls.js';
+import { test, expect } from './fixture';
+import { configureTestProvider } from './model-fixtures';
+import { startFailureModel } from './request-failure-model';
+import { chooseConversationModel } from './ui-controls';
 
 test('请求错误显示在各自回答位置，保留部分正文及后续成功后的历史原因', async ({
   page,

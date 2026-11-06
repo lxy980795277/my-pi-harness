@@ -11,17 +11,17 @@ import {
   type SessionSnapshot,
 } from '@my-pi-harness/protocol';
 import { Value } from 'typebox/value';
-import { test, expect } from './fixture.js';
+import { test, expect } from './fixture';
 import {
   chooseConversationModel,
   openUserSettings,
   openMcpAdvancedSettings,
   chooseOption,
-} from './ui-controls.js';
-import { registerTestWorkspace } from './workspace-fixtures.js';
-import { configureTestProvider } from './model-fixtures.js';
-import { startToolSequenceModel } from './m2-completion-model.js';
-import { expandCompletedProcesses } from './process-controls.js';
+} from './ui-controls';
+import { registerTestWorkspace } from './workspace-fixtures';
+import { configureTestProvider } from './model-fixtures';
+import { startToolSequenceModel } from './m2-completion-model';
+import { expandCompletedProcesses } from './process-controls';
 
 test.skip(process.platform !== 'darwin', '当前本地 MCP stdio 仅提供 macOS 受监管进程实现。');
 

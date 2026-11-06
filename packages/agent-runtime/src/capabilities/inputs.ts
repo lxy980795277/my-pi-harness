@@ -12,12 +12,12 @@ import {
   type SkillCandidate,
   type ToolDiscoveryDiagnostic,
 } from '@my-pi-harness/protocol';
-import { externalBindingKey, type ExternalTools, type FrozenMcpTool } from '../tools/external.js';
-import type { SkillsPort, ToolDiscoveryPort } from './ports.js';
-import type { RuntimeStore } from '../sessions/ports.js';
-import { RuntimeError } from '../errors.js';
-import { freezeSkillMentions } from './skill-mentions.js';
-import { availableSkillHistory, type SkillContextDiagnostic } from './skill-history.js';
+import { externalBindingKey, type ExternalTools, type FrozenMcpTool } from '../tools/external';
+import type { SkillsPort, ToolDiscoveryPort } from './ports';
+import type { RuntimeStore } from '../sessions/ports';
+import { RuntimeError } from '../errors';
+import { freezeSkillMentions } from './skill-mentions';
+import { availableSkillHistory, type SkillContextDiagnostic } from './skill-history';
 
 export interface FrozenInputCapabilities {
   external: readonly FrozenMcpTool[];

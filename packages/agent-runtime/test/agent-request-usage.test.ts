@@ -1,8 +1,8 @@
 import { fauxAssistantMessage, type Usage } from '@earendil-works/pi-ai';
 import { describe, expect, it } from 'vitest';
-import { agentFixture, agentsIdle, firstTask } from './support/agent-fixture.js';
-import { delegate, hasResult, resultCount, waitForResults } from './support/agent-tools.js';
-import { call } from './support/work-fixture.js';
+import { agentFixture, agentsIdle, firstTask } from './support/agent-fixture';
+import { delegate, hasResult, resultCount, waitForResults } from './support/agent-tools';
+import { call } from './support/work-fixture';
 
 const reported: Usage = {
   input: 12_000,

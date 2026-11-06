@@ -14,12 +14,12 @@ import {
   type WorkSnapshot,
 } from '@my-pi-harness/protocol';
 import { Value } from 'typebox/value';
-import { test, expect } from './fixture.js';
-import { configureTestProvider } from './model-fixtures.js';
-import { startM3Model } from './m3-model-server.js';
-import { chooseConversationModel, chooseOption } from './ui-controls.js';
-import { selectTestSessionBranch } from './session-fixtures.js';
-import { expandCompletedProcesses } from './process-controls.js';
+import { test, expect } from './fixture';
+import { configureTestProvider } from './model-fixtures';
+import { startM3Model } from './m3-model-server';
+import { chooseConversationModel, chooseOption } from './ui-controls';
+import { selectTestSessionBranch } from './session-fixtures';
+import { expandCompletedProcesses } from './process-controls';
 
 interface ModelFixtureOptions {
   image?: boolean;

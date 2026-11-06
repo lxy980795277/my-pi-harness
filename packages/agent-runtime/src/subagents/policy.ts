@@ -4,12 +4,12 @@ import type {
   AgentSettings,
   SessionSnapshot,
 } from '@my-pi-harness/protocol';
-import type { FrozenMcpTool } from '../tools/external.js';
-import type { RunToolSelection } from '../tools/toolset.js';
+import type { FrozenMcpTool } from '../tools/external';
+import type { RunToolSelection } from '../tools/toolset';
 import { nativeTool, type ToolRegistration } from '@my-pi-harness/tools';
-import { RuntimeError } from '../errors.js';
+import { RuntimeError } from '../errors';
 import type { SpawnAgentInput } from '@my-pi-harness/tools';
-import type { SubagentNode } from './types.js';
+import type { SubagentNode } from './types';
 
 interface DelegationPolicy {
   role: AgentRole;

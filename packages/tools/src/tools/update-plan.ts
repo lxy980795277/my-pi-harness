@@ -4,10 +4,10 @@ import {
   completeToolRegistration,
   strictObjectSchema,
   type ToolInvocation,
-} from '../lib/tool-registry.js';
-import { textResult } from '../lib/tool-result.js';
+} from '../lib/tool-registry';
+import { textResult } from '../lib/tool-result';
 
-import { requireWorkHandlers } from '../lib/tool-context.js';
+import { requireWorkHandlers } from '../lib/tool-context';
 
 export type UpdatePlanHandler = (
   input: Static<typeof UpdatePlanParameters>,

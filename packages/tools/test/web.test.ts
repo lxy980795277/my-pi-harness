@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { assertPublicAddress, parseWebUrl } from '../src/lib/web-request.js';
-import { executeRegistered as executeTool } from './support/registered.js';
+import { assertPublicAddress, parseWebUrl } from '../src/lib/web-request';
+import { executeRegistered as executeTool } from './support/registered';
 import { isPublicAddress } from '@my-pi-harness/sandbox';
 
 describe('public web targets', () => {

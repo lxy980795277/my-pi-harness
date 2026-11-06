@@ -7,7 +7,7 @@ import {
 import type { BrowserWindow, PermissionCheckHandlerHandlerDetails, WebContents } from 'electron';
 import { dialog, ipcMain, shell } from 'electron';
 import { Value } from 'typebox/value';
-import { resolveWorkspaceDirectory } from './workspace-directory.js';
+import { resolveWorkspaceDirectory } from './workspace-directory';
 
 function isTrustedUrl(value: string, origin: string): boolean {
   try {

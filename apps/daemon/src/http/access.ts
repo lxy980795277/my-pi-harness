@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import type { ApplicationServices } from '../application/services.js';
+import type { ApplicationServices } from '../application/services';
 
 /** Enforce source trust, application login and CSRF before protected routes. */
 export function registerRequestAccess(

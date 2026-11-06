@@ -7,14 +7,14 @@ import type {
   RunView,
   SessionSummary,
 } from '@my-pi-harness/protocol';
-import { activeSkillContext } from '../capabilities/context.js';
-import { communicationMessage } from '../context/agent-message.js';
-import { encodeContextMessage } from '../context/codec.js';
-import { RuntimeError } from '../errors.js';
-import type { ModelGateway, ResolvedModel } from '../models/gateway.js';
-import type { EventInput } from '../sessions/ports.js';
-import type { WorkRuntime } from '../work/runtime.js';
-import { runAcceptanceEvent } from './acceptance.js';
+import { activeSkillContext } from '../capabilities/context';
+import { communicationMessage } from '../context/agent-message';
+import { encodeContextMessage } from '../context/codec';
+import { RuntimeError } from '../errors';
+import type { ModelGateway, ResolvedModel } from '../models/gateway';
+import type { EventInput } from '../sessions/ports';
+import type { WorkRuntime } from '../work/runtime';
+import { runAcceptanceEvent } from './acceptance';
 
 interface RunPreparationInput {
   session: SessionSummary;

@@ -23,9 +23,9 @@ import {
   sessionLogDirectory,
   type EventInput,
   type ProfileStore,
-} from '../src/index.js';
-import { SessionBatchSchema, type SessionBatch } from '../src/sessions/session-jsonl.js';
-import { checked } from '../src/shared/validation.js';
+} from '../src/index';
+import { SessionBatchSchema, type SessionBatch } from '../src/sessions/session-jsonl';
+import { checked } from '../src/shared/validation';
 
 vi.mock('node:fs', async (importOriginal) => ({ ...(await importOriginal<typeof fs>()) }));
 const fixtures: { directory: string; store: ProfileStore }[] = [];

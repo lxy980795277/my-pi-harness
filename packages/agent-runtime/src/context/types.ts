@@ -1,6 +1,6 @@
 import type { Message, UserMessage } from '@earendil-works/pi-ai';
 import type { Compaction, ContextSummary, WorkState } from '@my-pi-harness/protocol';
-import type { ResolvedModel } from '../models/gateway.js';
+import type { ResolvedModel } from '../models/gateway';
 
 export interface SummaryInput {
   source: readonly Message[];

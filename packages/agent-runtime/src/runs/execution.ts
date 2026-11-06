@@ -1,12 +1,12 @@
 import type { Agent } from '@earendil-works/pi-agent-core';
 import type { RunView } from '@my-pi-harness/protocol';
-import type { EventInput } from '../sessions/ports.js';
-import { RuntimeError } from '../errors.js';
-import { createRunAgent } from './agent.js';
-import { RunInputDelivery } from './inputs.js';
-import { RunMessageRecorder } from './messages.js';
-import { runFailureMessage } from './failure.js';
-import type { RunExecutionOptions } from './types.js';
+import type { EventInput } from '../sessions/ports';
+import { RuntimeError } from '../errors';
+import { createRunAgent } from './agent';
+import { RunInputDelivery } from './inputs';
+import { RunMessageRecorder } from './messages';
+import { runFailureMessage } from './failure';
+import type { RunExecutionOptions } from './types';
 
 /** One Pi execution owns cancellation, durable failure and coordinated settlement. */
 export class RunExecution {

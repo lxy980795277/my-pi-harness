@@ -9,6 +9,13 @@
 
 这是本项目的统一可读性约定。Google TypeScript指南规定[imports位于实现之前](https://google.github.io/styleguide/tsguide.html#source-file-structure)，没有规定本项目上述更细的类型/常量次序；不能将本约定称为业界唯一顺序。
 
+## 模块导入
+
+- 前后端由tsx或构建器消费的TS/TSX模块，普通相对及Web别名导入统一无后缀，包含import、export、import type及字面量动态import。例如`import './config'`对应`config.ts`；目录index按实际可解析路径引用，不增加聚合文件或兼容转发层。
+- 真实JS/MJS/CJS文件、JSON、CSS、图像及raw/url静态资源保留实际扩展。普通Node直接执行的脚本仍使用明确的ESM文件路径，不依赖TypeScript的模块推断。少量既有tsx辅助入口由门禁按实际启动方式登记，只对TS目标使用无后缀规则，不豁免真实JS引用。
+- 包名及已声明的公共子路径按package exports导入；exports目标、new URL、import.meta.resolve、Worker模块URL及子进程入口使用所属加载器要求的实际路径，不当作普通TS模块引用机械裁剪。嵌入脚本字符串遵守实际子进程运行方式。
+- 源码门禁以磁盘目标识别TS和真实JS模块；同名.ts与.js并存时按当前TS/tsx优先TS的解析处理，不能借一个.js文件绕过TS约定。类型检查、构建及生产加载共同验证真实可解析性，静态规则不代替运行时验收。
+
 ## 类型区
 
 - 类型定义放import之后、首个值声明之前，不穿插在常量、函数或类之间；泛型参数、函数签名内的类型表达式仍随所属声明。

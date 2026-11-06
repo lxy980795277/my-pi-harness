@@ -1,4 +1,4 @@
-import { test, expect } from './fixture.js';
+import { test, expect } from './fixture';
 import { PROTOCOL_VERSION } from '@my-pi-harness/protocol';
 
 test('真实健康与事件连接，主题切换保持一致', async ({ page, daemon }, testInfo) => {

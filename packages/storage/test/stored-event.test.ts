@@ -5,16 +5,16 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { Type } from 'typebox';
 import { initialWorkState, type HarnessEvent } from '@my-pi-harness/protocol';
-import { openProfileStore } from '../src/profile/open.js';
-import type { ProfileStore } from '../src/profile/store.js';
+import { openProfileStore } from '../src/profile/open';
+import type { ProfileStore } from '../src/profile/store';
 import {
   decodeJournalRecords,
   encodeJournalRecords,
   type JournalRecord,
-} from '../src/sessions/journal-codec.js';
-import { SessionBatchSchema } from '../src/sessions/session-jsonl.js';
-import { sessionLogDirectory } from '../src/sessions/session-log-directory.js';
-import { checked } from '../src/shared/validation.js';
+} from '../src/sessions/journal-codec';
+import { SessionBatchSchema } from '../src/sessions/session-jsonl';
+import { sessionLogDirectory } from '../src/sessions/session-log-directory';
+import { checked } from '../src/shared/validation';
 
 interface Fixture {
   root: string;

@@ -8,7 +8,7 @@ import {
   type ProfileStore,
   type StoredMcpServer,
   type McpStartupGrant,
-} from '../src/index.js';
+} from '../src/index';
 
 const fixtures: { directory: string; store: ProfileStore }[] = [];
 async function fixture() {

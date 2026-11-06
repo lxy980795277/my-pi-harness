@@ -4,13 +4,13 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as sandbox from '@my-pi-harness/sandbox';
 import type { ManagedProcess, ProcessObserver } from '@my-pi-harness/sandbox';
-import { CommandManager } from '../../src/commands/manager.js';
-import type { CommandResourceLease } from '../../src/commands/manager.js';
+import { CommandManager } from '../../src/commands/manager';
+import type { CommandResourceLease } from '../../src/commands/manager';
 import type {
   WorkspaceToolContext,
   CommandToolHandlers,
   ToolOwner,
-} from '../../src/lib/tool-context.js';
+} from '../../src/lib/tool-context';
 
 interface Gate<T> {
   promise: Promise<T>;

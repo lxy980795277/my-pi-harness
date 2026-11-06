@@ -1,6 +1,6 @@
 import { AuthStatusSchema, LoginFlowSchema } from '@my-pi-harness/protocol';
 import { Value } from 'typebox/value';
-import type { FixtureAuthorization } from './login.js';
+import type { FixtureAuthorization } from './login';
 
 /** Complete Device Flow against a daemon whose upstream GitHub adapter is test-injected. */
 export async function loginThroughHttp(

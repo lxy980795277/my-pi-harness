@@ -1,26 +1,26 @@
-import { registerRequestAccess } from './access.js';
-import { registerRequestErrors } from './errors.js';
+import { registerRequestAccess } from './access';
+import { registerRequestErrors } from './errors';
 import type { FastifyInstance } from 'fastify';
-import type { ApplicationServices } from '../application/services.js';
-import { registerAuthRoutes } from '../auth/routes.js';
-import { registerModelRoutes } from '../models/routes.js';
-import { registerSessionRoutes } from '../sessions/routes.js';
-import { registerSessionLogRoute } from '../sessions/log-route.js';
-import { registerArtifactRoute } from '../sessions/artifact-route.js';
-import { registerWorkspaceRoutes } from '../workspaces/routes.js';
-import { registerToolRoutes } from '../tools/routes.js';
-import { registerWorkRoutes } from '../work/routes.js';
-import { registerAttachmentRoutes } from '../attachments/routes.js';
-import { registerMcpRoutes } from '../mcp/routes.js';
-import { registerSkillRoutes } from '../skills/routes.js';
-import { registerPluginRoutes } from '../plugins/routes.js';
-import { registerRemoteMcpRoutes } from '../mcp/remote-routes.js';
-import { registerMcpOAuthLaunchRoutes } from '../mcp/oauth-launch-routes.js';
-import { registerMcpDirectoryRoutes } from '../mcp/directory-routes.js';
-import { registerMcpConfigurationRoutes } from '../mcp/configuration-routes.js';
-import { registerConnectionRoutes } from '../connections/routes.js';
-import { registerPluginConnectionRoutes } from '../plugin-connections/routes.js';
-import { registerAgentRoutes } from '../agents/routes.js';
+import type { ApplicationServices } from '../application/services';
+import { registerAuthRoutes } from '../auth/routes';
+import { registerModelRoutes } from '../models/routes';
+import { registerSessionRoutes } from '../sessions/routes';
+import { registerSessionLogRoute } from '../sessions/log-route';
+import { registerArtifactRoute } from '../sessions/artifact-route';
+import { registerWorkspaceRoutes } from '../workspaces/routes';
+import { registerToolRoutes } from '../tools/routes';
+import { registerWorkRoutes } from '../work/routes';
+import { registerAttachmentRoutes } from '../attachments/routes';
+import { registerMcpRoutes } from '../mcp/routes';
+import { registerSkillRoutes } from '../skills/routes';
+import { registerPluginRoutes } from '../plugins/routes';
+import { registerRemoteMcpRoutes } from '../mcp/remote-routes';
+import { registerMcpOAuthLaunchRoutes } from '../mcp/oauth-launch-routes';
+import { registerMcpDirectoryRoutes } from '../mcp/directory-routes';
+import { registerMcpConfigurationRoutes } from '../mcp/configuration-routes';
+import { registerConnectionRoutes } from '../connections/routes';
+import { registerPluginConnectionRoutes } from '../plugin-connections/routes';
+import { registerAgentRoutes } from '../agents/routes';
 
 /** Install application routes; health and public process identity remain readable. */
 export function registerApplicationRoutes(

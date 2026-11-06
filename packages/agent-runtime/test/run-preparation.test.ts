@@ -1,7 +1,7 @@
 import { fauxAssistantMessage } from '@earendil-works/pi-ai';
 import { describe, expect, it, vi } from 'vitest';
-import { agentFixture, agentsIdle, firstTask } from './support/agent-fixture.js';
-import { delegate, hasResult, waitForResults } from './support/agent-tools.js';
+import { agentFixture, agentsIdle, firstTask } from './support/agent-fixture';
+import { delegate, hasResult, waitForResults } from './support/agent-tools';
 
 describe('Shared preparation of root and delegated Runs', () => {
   it('preserves root selection defaults, child field absence and each atomic acceptance batch', async () => {

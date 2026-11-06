@@ -1,10 +1,10 @@
-export { PluginError } from './errors.js';
+export { PluginError } from './errors';
 export {
   BUILTIN_PLUGINS,
   BUILTIN_PLUGIN_APPS,
   BUILTIN_PLUGIN_RESOURCE_DIRECTORY,
   PluginCatalog,
-} from './catalog.js';
-export { loadBuiltinPluginApps, parseBuiltinPluginApps } from './apps.js';
-export type { BuiltinPluginApp, OwnedBuiltinPluginApp } from './apps.js';
-export { previewBuiltinPluginSkills, previewPluginSkills } from './preview.js';
+} from './catalog';
+export { loadBuiltinPluginApps, parseBuiltinPluginApps } from './apps';
+export type { BuiltinPluginApp, OwnedBuiltinPluginApp } from './apps';
+export { previewBuiltinPluginSkills, previewPluginSkills } from './preview';

@@ -8,10 +8,10 @@ import {
   type SessionSnapshot,
 } from '@my-pi-harness/protocol';
 import { Value } from 'typebox/value';
-import { test, expect } from './fixture.js';
-import { configureTestProvider } from './model-fixtures.js';
-import { startTestModel } from './model-server.js';
-import { chooseConversationModel, chooseOption } from './ui-controls.js';
+import { test, expect } from './fixture';
+import { configureTestProvider } from './model-fixtures';
+import { startTestModel } from './model-server';
+import { chooseConversationModel, chooseOption } from './ui-controls';
 
 const headersFor = async (page: Page): Promise<Record<string, string>> => {
   const origin = new URL(page.url()).origin;

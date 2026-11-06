@@ -6,8 +6,8 @@ import type {
   QuestionItem,
   QuestionResponse,
 } from '@my-pi-harness/protocol';
-import { RuntimeError } from '../errors.js';
-import type { WorkRuntime } from './runtime.js';
+import { RuntimeError } from '../errors';
+import type { WorkRuntime } from './runtime';
 
 interface Pending<T> {
   sessionId: string;

@@ -10,10 +10,10 @@ import type { FrozenSkill, SkillCandidate, SkillView } from '@my-pi-harness/prot
 import type { SessionBatch } from '@my-pi-harness/storage';
 import { Type } from 'typebox';
 import { describe, expect, it, vi } from 'vitest';
-import type { SkillsPort, ToolDiscoveryPort } from '../src/capabilities/ports.js';
-import type { ExternalTools, FrozenMcpTool } from '../src/tools/external.js';
-import { call, fixture, gate, idle, summary } from './support/work-fixture.js';
-import { acceptedTools, loadedTools } from './support/session-audit.js';
+import type { SkillsPort, ToolDiscoveryPort } from '../src/capabilities/ports';
+import type { ExternalTools, FrozenMcpTool } from '../src/tools/external';
+import { call, fixture, gate, idle, summary } from './support/work-fixture';
+import { acceptedTools, loadedTools } from './support/session-audit';
 
 function catalog() {
   const tool: FrozenMcpTool = {

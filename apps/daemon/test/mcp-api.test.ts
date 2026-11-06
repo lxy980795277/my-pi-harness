@@ -6,11 +6,11 @@ import { McpServerViewSchema, WorkspaceSchema, type McpServerInput } from '@my-p
 import { createMemoryCredentialStore, type CredentialStore } from '@my-pi-harness/storage';
 import { Value } from 'typebox/value';
 import { describe, expect, it } from 'vitest';
-import { loadDaemonConfig } from '../src/application/config.js';
-import { createDaemonApplication } from '../src/http/server.js';
-import { createApplicationServices } from '../src/application/services.js';
-import { loginFixture } from './support/login.js';
-import { mcpManagerFixture } from './support/mcp.js';
+import { loadDaemonConfig } from '../src/application/config';
+import { createDaemonApplication } from '../src/http/server';
+import { createApplicationServices } from '../src/application/services';
+import { loginFixture } from './support/login';
+import { mcpManagerFixture } from './support/mcp';
 
 async function fixture(
   credentials: CredentialStore = createMemoryCredentialStore(),

@@ -3,9 +3,9 @@ import { createServer } from 'node:http';
 import { fauxAssistantMessage, type TranscriptContext } from '@earendil-works/pi-ai';
 import type { FrozenSkill } from '@my-pi-harness/protocol';
 import { describe, expect, it, vi } from 'vitest';
-import type { SkillsPort } from '../src/capabilities/ports.js';
-import { call, fixture, idle } from './support/work-fixture.js';
-import { skillCandidate } from './support/skill-candidate.js';
+import type { SkillsPort } from '../src/capabilities/ports';
+import { call, fixture, idle } from './support/work-fixture';
+import { skillCandidate } from './support/skill-candidate';
 
 const skill: FrozenSkill = {
   selection: { id: 'plugin:github', contentHash: 'a'.repeat(64) },

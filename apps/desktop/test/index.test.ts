@@ -43,7 +43,7 @@ describe('desktop quit events', () => {
       }),
     );
     try {
-      await import('../src/main/index.js');
+      await import('../src/main/index');
       await vi.waitFor(() => expect(mocks.start).toHaveBeenCalledOnce());
       const first = { preventDefault: vi.fn() };
       const second = { preventDefault: vi.fn() };

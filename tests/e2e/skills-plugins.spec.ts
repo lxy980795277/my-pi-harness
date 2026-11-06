@@ -1,7 +1,7 @@
-import { test, expect } from './fixture.js';
-import { chooseConversationModel, openUserSettings, chooseOption } from './ui-controls.js';
-import { configureTestProvider } from './model-fixtures.js';
-import { startToolSequenceModel } from './m2-completion-model.js';
+import { test, expect } from './fixture';
+import { chooseConversationModel, openUserSettings, chooseOption } from './ui-controls';
+import { configureTestProvider } from './model-fixtures';
+import { startToolSequenceModel } from './m2-completion-model';
 import {
   PluginDetailSchema,
   SessionSnapshotSchema,

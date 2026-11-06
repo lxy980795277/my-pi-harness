@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { type Static, Type } from 'typebox';
 import { Value } from 'typebox/value';
 import { afterEach, describe, expect, it } from 'vitest';
-import { openProfileStore, type ProfileStore } from '../src/index.js';
+import { openProfileStore, type ProfileStore } from '../src/index';
 
 const require = createRequire(import.meta.url);
 const fixturePath = fileURLToPath(new URL('./fixtures/profile-owner.ts', import.meta.url));

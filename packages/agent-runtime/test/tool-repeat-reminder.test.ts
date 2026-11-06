@@ -1,16 +1,16 @@
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fauxAssistantMessage, type TranscriptContext } from '@earendil-works/pi-ai';
-import { observeNativeTool } from './support/native-tool.js';
+import { observeNativeTool } from './support/native-tool';
 import { StoredToolResultSchema } from '@my-pi-harness/protocol';
 import { openProfileStore } from '@my-pi-harness/storage';
 import { ArrayOptions } from 'typebox/type';
 import { describe, expect, it } from 'vitest';
-import { decodeContextMessage } from '../src/context/codec.js';
-import { RepeatToolReminder } from '../src/tools/repeat-reminder.js';
-import { agentFixture, agentsIdle, firstTask } from './support/agent-fixture.js';
-import { hasResult, waitForResults } from './support/agent-tools.js';
-import { call, fixture, idle } from './support/work-fixture.js';
+import { decodeContextMessage } from '../src/context/codec';
+import { RepeatToolReminder } from '../src/tools/repeat-reminder';
+import { agentFixture, agentsIdle, firstTask } from './support/agent-fixture';
+import { hasResult, waitForResults } from './support/agent-tools';
+import { call, fixture, idle } from './support/work-fixture';
 
 describe('consecutive tool-use reminders', () => {
   it('advises on the third, fifth and eighth exact call without exposing arguments', () => {

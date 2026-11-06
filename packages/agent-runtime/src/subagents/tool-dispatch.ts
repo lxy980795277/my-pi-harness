@@ -6,9 +6,9 @@ import type {
   AgentTaskSummary,
 } from '@my-pi-harness/protocol';
 import type { AgentToolHandlers, SpawnAgentInput } from '@my-pi-harness/tools';
-import type { SubagentNode, SubagentTaskNode } from './types.js';
-import type { SubagentStore } from './ports.js';
-import { RuntimeError } from '../errors.js';
+import type { SubagentNode, SubagentTaskNode } from './types';
+import type { SubagentStore } from './ports';
+import { RuntimeError } from '../errors';
 
 /** Operations used by the model-facing delegation controls. */
 export interface SubagentToolHost {

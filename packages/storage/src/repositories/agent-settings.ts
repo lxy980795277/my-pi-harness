@@ -7,9 +7,9 @@ import {
   type AgentSettings,
   type AgentSettingsInput,
 } from '@my-pi-harness/protocol';
-import { StorageError } from '../shared/errors.js';
-import { checked } from '../shared/validation.js';
-import * as schema from '../sqlite/schema.js';
+import { StorageError } from '../shared/errors';
+import { checked } from '../shared/validation';
+import * as schema from '../sqlite/schema';
 
 /** Independent user configuration; session projection rebuild never clears agent preferences. */
 export class AgentSettingsRepository {

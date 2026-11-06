@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { Value } from 'typebox/value';
 import { nativeTool, nativeTools } from '@my-pi-harness/tools';
-import { selectRunTools } from '../src/tools/selection.js';
-import { RunToolset } from '../src/tools/toolset.js';
-import { allowedTaskTool } from '../src/subagents/policy.js';
-import { estimateContextUsage } from '../src/context/budget.js';
+import { selectRunTools } from '../src/tools/selection';
+import { RunToolset } from '../src/tools/toolset';
+import { allowedTaskTool } from '../src/subagents/policy';
+import { estimateContextUsage } from '../src/context/budget';
 
 describe('default declarations and accepted deferred capabilities', () => {
   it('provides a complete delegation entry path and only adds the Skill loader when a directory exists', () => {

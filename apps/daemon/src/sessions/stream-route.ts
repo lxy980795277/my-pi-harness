@@ -2,8 +2,8 @@ import type { ServerResponse } from 'node:http';
 import type { SessionRuntime } from '@my-pi-harness/agent-runtime';
 import type { FastifyInstance } from 'fastify';
 import { Type } from 'typebox';
-import type { LocalAuth } from '../auth/local-auth.js';
-import { startSessionStream } from './stream-connection.js';
+import type { LocalAuth } from '../auth/local-auth';
+import { startSessionStream } from './stream-connection';
 
 /** Registers private SSE connections; each connection starts from a fresh committed baseline. */
 export const registerSessionStreamRoute = (

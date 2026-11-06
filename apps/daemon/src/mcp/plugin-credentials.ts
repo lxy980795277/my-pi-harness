@@ -6,7 +6,7 @@ import type {
   StoredPlugin,
   StoredRemoteMcpServer,
 } from '@my-pi-harness/storage';
-import { pluginAppConfiguration, pluginEndpointMatches } from '../plugins/app-catalog.js';
+import { pluginAppConfiguration, pluginEndpointMatches } from '../plugins/app-catalog';
 
 export interface ServiceCredentialAuthority {
   accessEpoch: number;

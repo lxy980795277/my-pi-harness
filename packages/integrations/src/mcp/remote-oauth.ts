@@ -1,4 +1,4 @@
-import { NetworkError } from '../network/errors.js';
+import { NetworkError } from '../network/errors';
 import {
   auth,
   type OAuthClientProvider,
@@ -13,8 +13,8 @@ import {
 import { Type, type Static } from 'typebox';
 import { Value } from 'typebox/value';
 import { randomBytes } from 'node:crypto';
-import { McpError } from './errors.js';
-import { createRemoteFetch, parseRemoteUrl } from '../network/remote-fetch.js';
+import { McpError } from './errors';
+import { createRemoteFetch, parseRemoteUrl } from '../network/remote-fetch';
 
 type Credential = Static<typeof CredentialSchema>;
 

@@ -1,7 +1,7 @@
 import { fauxAssistantMessage, type ToolCall } from '@earendil-works/pi-ai';
 import { describe, expect, it } from 'vitest';
-import { agentFixture, agentsIdle, firstTask } from './support/agent-fixture.js';
-import { delegate, hasResult, resultCount, waitForResults } from './support/agent-tools.js';
+import { agentFixture, agentsIdle, firstTask } from './support/agent-fixture';
+import { delegate, hasResult, resultCount, waitForResults } from './support/agent-tools';
 
 describe('Agent loop completion through real Pi and temporary journals', () => {
   it.each([false, true])(

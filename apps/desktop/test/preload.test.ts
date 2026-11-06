@@ -14,7 +14,7 @@ vi.mock('electron', () => ({
 }));
 
 async function desktopBridge(): Promise<DesktopBridge> {
-  await import('../src/preload/index.js');
+  await import('../src/preload/index');
   const bridge = mocks.expose.mock.calls.at(-1)?.[1];
   if (!bridge) throw new Error('Desktop bridge was not exposed');
   return bridge;

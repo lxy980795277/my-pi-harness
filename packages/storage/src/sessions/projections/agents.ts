@@ -1,9 +1,9 @@
 import { and, eq } from 'drizzle-orm';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import { RunViewSchema, type HarnessEvent, type RunView } from '@my-pi-harness/protocol';
-import { checked } from '../../shared/validation.js';
-import { StorageError } from '../../shared/errors.js';
-import * as schema from '../../sqlite/schema.js';
+import { checked } from '../../shared/validation';
+import { StorageError } from '../../shared/errors';
+import * as schema from '../../sqlite/schema';
 import {
   TaskClosedSchema,
   TaskCreatedSchema,
@@ -11,8 +11,8 @@ import {
   TaskMessageQueuedSchema,
   TaskMessageUndeliveredSchema,
   TaskWaitingSchema,
-} from '../event-validation.js';
-import { AgentTaskQuery } from '../agent-tasks.js';
+} from '../event-validation';
+import { AgentTaskQuery } from '../agent-tasks';
 
 /** Validates task relations and projects their small lifecycle facts in the session transaction. */
 export class AgentTaskProjection {

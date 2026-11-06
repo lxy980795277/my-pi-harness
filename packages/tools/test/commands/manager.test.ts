@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promi
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, expect, it } from 'vitest';
-import { CommandManager, type CommandToolHandlers, type ToolOwner } from '../../src/index.js';
+import { CommandManager, type CommandToolHandlers, type ToolOwner } from '../../src/index';
 
 interface Page {
   commandId: string;

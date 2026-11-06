@@ -1,4 +1,4 @@
-import { RuntimeError } from '../errors.js';
+import { RuntimeError } from '../errors';
 
 export type RunFailure =
   | { kind: 'owned'; cause: unknown }

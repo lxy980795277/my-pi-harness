@@ -1,8 +1,8 @@
 import { decodeMcpCatalog, encodeMcpCatalog, type McpCatalog } from '@my-pi-harness/integrations';
 import type { McpDirectoryRepository } from '@my-pi-harness/storage';
 import type { ToolDiscoveryDiagnostic } from '@my-pi-harness/protocol';
-import { catalogFailure } from './catalog-failure.js';
-import { waitForPreparation } from './preparation-wait.js';
+import { catalogFailure } from './catalog-failure';
+import { waitForPreparation } from './preparation-wait';
 
 export interface CatalogEntry {
   authority: string;

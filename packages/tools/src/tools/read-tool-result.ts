@@ -1,9 +1,9 @@
 import { Type } from 'typebox';
 
-import { completeToolRegistration, strictObjectSchema } from '../lib/tool-registry.js';
-import { textResult } from '../lib/tool-result.js';
+import { completeToolRegistration, strictObjectSchema } from '../lib/tool-registry';
+import { textResult } from '../lib/tool-result';
 
-import { requireWorkHandlers } from '../lib/tool-context.js';
+import { requireWorkHandlers } from '../lib/tool-context';
 
 export type ToolResultReadHandler = (id: string, offset: number, maximum: number) => string;
 

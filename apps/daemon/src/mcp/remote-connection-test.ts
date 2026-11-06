@@ -7,7 +7,7 @@ import {
   type RemoteMcpManager,
 } from '@my-pi-harness/integrations';
 import type { RemoteMcpDraftTestInput, RemoteMcpDraftTestResult } from '@my-pi-harness/protocol';
-import { validateRemoteHeader } from './remote-configuration.js';
+import { validateRemoteHeader } from './remote-configuration';
 
 /** One explicit probe owns transient headers and a fresh SDK lease, with no persistent authority. */
 export async function testRemoteMcpDraft(

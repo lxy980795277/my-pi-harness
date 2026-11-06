@@ -1,4 +1,4 @@
-import { ToolRegistry, type ToolRegistration } from './lib/tool-registry.js';
+import { ToolRegistry, type ToolRegistration } from './lib/tool-registry';
 import {
   readFileTool,
   listFilesTool,
@@ -27,7 +27,7 @@ import {
   readDocumentTool,
   viewImageTool,
   viewPdfPageTool,
-} from './tools/index.js';
+} from './tools/index';
 
 /** The native catalog composes complete tools without duplicating their definitions or policies. */
 export const NATIVE_TOOL_REGISTRATIONS: readonly ToolRegistration[] = [

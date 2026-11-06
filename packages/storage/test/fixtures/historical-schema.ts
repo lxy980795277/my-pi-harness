@@ -1,13 +1,13 @@
 import { createHash } from 'node:crypto';
 import type Database from 'better-sqlite3';
-import { FOUNDATION_SQL } from '../../src/sqlite/migrations/0001-foundation.js';
-import { APPLICATION_LOGIN_SQL } from '../../src/sqlite/migrations/0002-application-login.js';
-import { MCP_SQL } from '../../src/sqlite/migrations/0003-mcp.js';
-import { EXTENSIONS_SQL } from '../../src/sqlite/migrations/0004-extensions.js';
-import { REMOTE_MCP_SQL } from '../../src/sqlite/migrations/0005-remote-mcp.js';
-import { CONNECTIONS_SQL } from '../../src/sqlite/migrations/0006-connections.js';
-import { PLUGIN_ACCOUNTS_SQL } from '../../src/sqlite/migrations/0007-plugin-accounts.js';
-import { MCP_CATALOGS_SQL } from '../../src/sqlite/migrations/0008-mcp-catalogs.js';
+import { FOUNDATION_SQL } from '../../src/sqlite/migrations/0001-foundation';
+import { APPLICATION_LOGIN_SQL } from '../../src/sqlite/migrations/0002-application-login';
+import { MCP_SQL } from '../../src/sqlite/migrations/0003-mcp';
+import { EXTENSIONS_SQL } from '../../src/sqlite/migrations/0004-extensions';
+import { REMOTE_MCP_SQL } from '../../src/sqlite/migrations/0005-remote-mcp';
+import { CONNECTIONS_SQL } from '../../src/sqlite/migrations/0006-connections';
+import { PLUGIN_ACCOUNTS_SQL } from '../../src/sqlite/migrations/0007-plugin-accounts';
+import { MCP_CATALOGS_SQL } from '../../src/sqlite/migrations/0008-mcp-catalogs';
 
 type HistoricalSchemaVersion = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 

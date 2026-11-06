@@ -1,7 +1,7 @@
 import type { AuthOperationOptions, Credential, CredentialStore } from '@earendil-works/pi-ai';
 import { Type } from 'typebox';
 import { Value } from 'typebox/value';
-import { RuntimeError } from '../errors.js';
+import { RuntimeError } from '../errors';
 
 /** Host-owned secret storage; modify serializes the entire asynchronous refresh. */
 export interface SecretStore {

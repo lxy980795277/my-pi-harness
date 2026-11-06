@@ -7,7 +7,7 @@ import type {
   VerifiedIdentity,
 } from '@my-pi-harness/storage';
 import type { FastifyRequest } from 'fastify';
-import { LoginError } from './errors.js';
+import { LoginError } from './errors';
 
 /** Private bootstrap and persistent application authorization for one local profile. */
 export interface LocalAuthOptions {

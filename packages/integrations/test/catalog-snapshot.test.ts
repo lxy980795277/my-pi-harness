@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
 import { Value } from 'typebox/value';
-import { decodeMcpCatalog, encodeMcpCatalog } from '../src/index.js';
+import { decodeMcpCatalog, encodeMcpCatalog } from '../src/index';
 
 const tool = {
   name: 'read',

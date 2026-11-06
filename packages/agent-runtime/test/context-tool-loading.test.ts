@@ -2,8 +2,8 @@ import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fauxAssistantMessage, type TranscriptContext } from '@earendil-works/pi-ai';
 import { describe, expect, it, vi } from 'vitest';
-import { estimateContextUsage } from '../src/context/budget.js';
-import { call, fixture, idle, todo } from './support/work-fixture.js';
+import { estimateContextUsage } from '../src/context/budget';
+import { call, fixture, idle, todo } from './support/work-fixture';
 
 function definitions(context: TranscriptContext) {
   return context.messages.flatMap((message) =>

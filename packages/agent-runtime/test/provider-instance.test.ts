@@ -12,10 +12,10 @@ import { openAICompletionsApi } from '@earendil-works/pi-ai/api/openai-completio
 import type { ModelDefinition, ProviderConfig } from '@my-pi-harness/protocol';
 import { createMemoryCredentialStore, openProfileStore } from '@my-pi-harness/storage';
 import { describe, expect, it } from 'vitest';
-import { ModelGateway } from '../src/models/gateway.js';
-import { createProviderInstance } from '../src/models/provider-instance.js';
-import { loadBuiltinProvider } from '../src/models/providers.js';
-import { SessionRuntime } from '../src/sessions/runtime.js';
+import { ModelGateway } from '../src/models/gateway';
+import { createProviderInstance } from '../src/models/provider-instance';
+import { loadBuiltinProvider } from '../src/models/providers';
+import { SessionRuntime } from '../src/sessions/runtime';
 
 const definition: ModelDefinition = {
   id: 'fixture-model',

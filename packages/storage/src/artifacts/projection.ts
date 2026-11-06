@@ -6,9 +6,9 @@ import {
   ToolCallRecordSchema,
   type HarnessEvent,
 } from '@my-pi-harness/protocol';
-import * as schema from '../sqlite/schema.js';
-import { checked } from '../shared/validation.js';
-import { StorageError } from '../shared/errors.js';
+import * as schema from '../sqlite/schema';
+import { checked } from '../shared/validation';
+import { StorageError } from '../shared/errors';
 
 /** Publication provenance is checked against the owning tool and Run before indexing the committed fact. */
 export function projectArtifact(

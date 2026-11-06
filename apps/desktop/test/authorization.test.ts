@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createServer, type IncomingMessage, type Server } from 'node:http';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createDesktopAuthorization } from '../src/main/authorization.js';
+import { createDesktopAuthorization } from '../src/main/authorization';
 
 const desktop = vi.hoisted(() => ({
   getCookies:

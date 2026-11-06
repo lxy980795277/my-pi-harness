@@ -7,12 +7,8 @@ import {
 } from '@my-pi-harness/protocol';
 import type { FastifyInstance } from 'fastify';
 import { Type } from 'typebox';
-import {
-  clearLoginCallbackCookie,
-  loginCallbackNonce,
-  type LoginService,
-} from './login-service.js';
-import type { LocalAuth } from './local-auth.js';
+import { clearLoginCallbackCookie, loginCallbackNonce, type LoginService } from './login-service';
+import type { LocalAuth } from './local-auth';
 
 const EmptySchema = Type.Object({}, { additionalProperties: false });
 const IdParams = Type.Object(

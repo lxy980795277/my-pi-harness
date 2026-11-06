@@ -1,9 +1,9 @@
 import { join } from 'node:path';
 import type { PluginSkillPreview } from '@my-pi-harness/protocol';
-import { PluginError } from './errors.js';
-import { checkedSkillDirectory, readSkillFile } from '../skills/files.js';
-import { parseSkill } from '../skills/parser.js';
-import { BUILTIN_PLUGINS, BUILTIN_PLUGIN_RESOURCE_DIRECTORY } from './catalog.js';
+import { PluginError } from './errors';
+import { checkedSkillDirectory, readSkillFile } from '../skills/files';
+import { parseSkill } from '../skills/parser';
+import { BUILTIN_PLUGINS, BUILTIN_PLUGIN_RESOURCE_DIRECTORY } from './catalog';
 
 /** Reads only manifest-owned SKILL.md files; no snapshot, installation or external request occurs. */
 export async function previewBuiltinPluginSkills(

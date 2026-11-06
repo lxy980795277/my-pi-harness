@@ -1,10 +1,10 @@
 import { createHash } from 'node:crypto';
 import type { TSchema } from 'typebox';
 import { Value } from 'typebox/value';
-import { RuntimeError } from '../errors.js';
-import { canonicalToolJson } from './identity.js';
+import { RuntimeError } from '../errors';
+import { canonicalToolJson } from './identity';
 import type { ToolSource } from '@my-pi-harness/protocol';
-import type { FrozenMcpTool } from './external.js';
+import type { FrozenMcpTool } from './external';
 
 export interface RunToolDefinition {
   readonly name: string;

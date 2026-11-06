@@ -1,4 +1,4 @@
-import { pluginConnectionDefinition } from './definitions.js';
+import { pluginConnectionDefinition } from './definitions';
 import {
   PluginError,
   beginPluginOAuth,

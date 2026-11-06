@@ -2,10 +2,10 @@ import { createHash } from 'node:crypto';
 import { startConnectionUpstream } from './connection-upstream.mjs';
 import { BrowserPluginMcpManager, startPluginMcpUpstream } from './plugin-mcp-upstream.mjs';
 import { createMemoryCredentialStore } from '@my-pi-harness/storage';
-import { loadDaemonConfig } from '../../apps/daemon/src/application/config.js';
-import { createApplicationServices } from '../../apps/daemon/src/application/services.js';
-import { createDaemonApplication } from '../../apps/daemon/src/http/server.js';
-import { clearAmbientModelEnvironment } from '../../apps/daemon/src/application/model-environment.js';
+import { loadDaemonConfig } from '../../apps/daemon/src/application/config';
+import { createApplicationServices } from '../../apps/daemon/src/application/services';
+import { createDaemonApplication } from '../../apps/daemon/src/http/server';
+import { clearAmbientModelEnvironment } from '../../apps/daemon/src/application/model-environment';
 
 // Tests explicitly inject synthetic credentials; the shipped bootstrap always uses the OS store.
 const config = loadDaemonConfig();

@@ -1,5 +1,5 @@
 import MiniSearch from 'minisearch';
-import type { ToolDefinition } from '../lib/tool-registry.js';
+import type { ToolDefinition } from '../lib/tool-registry';
 
 /** The host owns model files and inference; retrieval never receives service credentials. */
 export interface ToolSearchEmbedder {

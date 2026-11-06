@@ -9,18 +9,14 @@ import {
   type HarnessEvent,
   type ToolCallView,
 } from '@my-pi-harness/protocol';
-import { StorageError } from '../../shared/errors.js';
-import * as schema from '../../sqlite/schema.js';
-import { checked } from '../../shared/validation.js';
-import { activeTool } from './tool-batch.js';
-import {
-  assistantToolIntents,
-  storedToolCallId,
-  isRetainableToolArguments,
-} from './tool-intents.js';
-import { recoverToolEvents } from './tool-recovery.js';
-import type { EventInput } from '../types.js';
-import { ToolContextEventSchema, ToolEventSchema } from '../event-validation.js';
+import { StorageError } from '../../shared/errors';
+import * as schema from '../../sqlite/schema';
+import { checked } from '../../shared/validation';
+import { activeTool } from './tool-batch';
+import { assistantToolIntents, storedToolCallId, isRetainableToolArguments } from './tool-intents';
+import { recoverToolEvents } from './tool-recovery';
+import type { EventInput } from '../types';
+import { ToolContextEventSchema, ToolEventSchema } from '../event-validation';
 
 /** Tool cards and private results are projected within their session event transaction. */
 export class ToolProjection {

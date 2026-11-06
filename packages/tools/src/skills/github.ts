@@ -1,9 +1,9 @@
 import { createHash } from 'node:crypto';
 import { Type } from 'typebox';
 import { Value } from 'typebox/value';
-import { SkillError } from './errors.js';
-import { skillResourcePath } from './files.js';
-import type { GitHubSkillSource, SkillDownloadFile } from './types.js';
+import { SkillError } from './errors';
+import { skillResourcePath } from './files';
+import type { GitHubSkillSource, SkillDownloadFile } from './types';
 
 const CommitSchema = Type.Object({ sha: Type.String({ pattern: '^[a-f0-9]{40}$' }) });
 const TreeSchema = Type.Object({

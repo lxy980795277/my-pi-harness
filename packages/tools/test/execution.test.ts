@@ -5,9 +5,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   executeRegistered as executeTool,
   describeRegistered as describeTool,
-} from './support/registered.js';
-import type { WorkspaceToolContext as ExecutionContext } from '../src/index.js';
-import { hashBytes } from '../src/lib/filesystem.js';
+} from './support/registered';
+import type { WorkspaceToolContext as ExecutionContext } from '../src/index';
+import { hashBytes } from '../src/lib/filesystem';
 
 let directory: string;
 let context: ExecutionContext;

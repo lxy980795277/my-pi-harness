@@ -1,6 +1,6 @@
 import type { Message } from '@earendil-works/pi-ai';
 import type { ContextUsage } from '@my-pi-harness/protocol';
-import { RuntimeError } from '../errors.js';
+import { RuntimeError } from '../errors';
 
 export interface ContextToolDefinition {
   name: string;

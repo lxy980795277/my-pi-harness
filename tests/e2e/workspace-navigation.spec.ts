@@ -12,11 +12,11 @@ import {
 import type { Page } from '@playwright/test';
 import { Type } from 'typebox';
 import { Value } from 'typebox/value';
-import { test, expect } from './fixture.js';
-import { configureTestProvider } from './model-fixtures.js';
-import { startTestModel } from './model-server.js';
-import { chooseConversationModel } from './ui-controls.js';
-import { registerTestWorkspace } from './workspace-fixtures.js';
+import { test, expect } from './fixture';
+import { configureTestProvider } from './model-fixtures';
+import { startTestModel } from './model-server';
+import { chooseConversationModel } from './ui-controls';
+import { registerTestWorkspace } from './workspace-fixtures';
 
 async function readSessions(page: Page, origin: string): Promise<SessionSummary[]> {
   const response = await page.request.get(`${origin}/api/sessions`);

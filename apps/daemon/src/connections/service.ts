@@ -27,7 +27,7 @@ import type {
   ConnectionRepository,
   StoredConnection,
 } from '@my-pi-harness/storage';
-import { pluginEndpointComponent } from '../plugins/app-catalog.js';
+import { pluginEndpointComponent } from '../plugins/app-catalog';
 
 interface PendingFlow {
   connectionId: string;

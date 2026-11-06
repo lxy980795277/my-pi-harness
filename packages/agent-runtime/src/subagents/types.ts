@@ -5,8 +5,8 @@ import type {
   RunView,
   SessionSummary,
 } from '@my-pi-harness/protocol';
-import type { RunExecution } from '../runs/execution.js';
-import type { AgentRequestScheduler } from './request-scheduler.js';
+import type { RunExecution } from '../runs/execution';
+import type { AgentRequestScheduler } from './request-scheduler';
 
 export interface SubagentTree {
   rootRunId: string;

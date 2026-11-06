@@ -11,14 +11,14 @@ import {
   type MessageView,
   type SessionSummary,
 } from '@my-pi-harness/protocol';
-import { StorageError } from '../../shared/errors.js';
-import { projectArtifact } from '../../artifacts/projection.js';
-import { ToolProjection } from './tools.js';
-import { WorkRepository } from './work.js';
-import { AgentTaskProjection } from './agents.js';
-import { projectCapabilityLoad } from './capabilities.js';
-import * as schema from '../../sqlite/schema.js';
-import { checked } from '../../shared/validation.js';
+import { StorageError } from '../../shared/errors';
+import { projectArtifact } from '../../artifacts/projection';
+import { ToolProjection } from './tools';
+import { WorkRepository } from './work';
+import { AgentTaskProjection } from './agents';
+import { projectCapabilityLoad } from './capabilities';
+import * as schema from '../../sqlite/schema';
+import { checked } from '../../shared/validation';
 import {
   BranchSelectionSchema,
   InputIdSchema,
@@ -26,7 +26,7 @@ import {
   QueueRequestSchema,
   RunAcceptedSchema,
   RunFinishedSchema,
-} from '../event-validation.js';
+} from '../event-validation';
 
 /** Updates reconstructable projections inside the event append transaction. */
 export class ProjectionWriter {

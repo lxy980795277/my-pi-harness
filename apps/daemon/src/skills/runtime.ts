@@ -1,5 +1,5 @@
 import type { SkillsPort } from '@my-pi-harness/agent-runtime';
-import type { SkillsService } from './service.js';
+import type { SkillsService } from './service';
 
 /** Adapt frozen Skill resources into model content without granting execution permissions. */
 export function createSkillsPort(skills: SkillsService): SkillsPort {

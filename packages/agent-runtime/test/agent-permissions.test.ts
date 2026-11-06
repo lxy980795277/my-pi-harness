@@ -1,13 +1,13 @@
 import { fauxAssistantMessage } from '@earendil-works/pi-ai';
-import { observeNativeTool } from './support/native-tool.js';
+import { observeNativeTool } from './support/native-tool';
 import type { FrozenSkill } from '@my-pi-harness/protocol';
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
-import type { FrozenMcpTool } from '../src/tools/external.js';
-import { agentChanged, agentFixture, agentsIdle, firstTask } from './support/agent-fixture.js';
-import { delegate, hasResult, resultCount, waitForResults } from './support/agent-tools.js';
-import { call } from './support/work-fixture.js';
-import { skillCandidate } from './support/skill-candidate.js';
+import type { FrozenMcpTool } from '../src/tools/external';
+import { agentChanged, agentFixture, agentsIdle, firstTask } from './support/agent-fixture';
+import { delegate, hasResult, resultCount, waitForResults } from './support/agent-tools';
+import { call } from './support/work-fixture';
+import { skillCandidate } from './support/skill-candidate';
 
 describe('task read-only capabilities and inherited approval policy', () => {
   it.each(['full-access', 'ask', 'auto'] as const)(

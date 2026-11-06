@@ -1,7 +1,7 @@
 import { Type } from 'typebox';
 import { workspacePath } from '@my-pi-harness/sandbox';
-import { walkWorkspace } from '../lib/filesystem.js';
-import { completeToolRegistration, strictObjectSchema } from '../lib/tool-registry.js';
+import { walkWorkspace } from '../lib/filesystem';
+import { completeToolRegistration, strictObjectSchema } from '../lib/tool-registry';
 
 const parameters = strictObjectSchema({
   path: Type.Optional(Type.String({ minLength: 1, maxLength: 2048 })),

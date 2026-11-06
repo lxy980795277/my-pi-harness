@@ -1,13 +1,13 @@
 import { Agent } from '@earendil-works/pi-agent-core';
 import type { Message, UserMessage } from '@earendil-works/pi-ai';
-import { activeSkillContext } from '../capabilities/context.js';
-import { RuntimeError } from '../errors.js';
-import type { ToolRuntime } from '../tools/runtime.js';
-import type { ToolRunContext } from '../tools/types.js';
-import type { RunToolset } from '../tools/toolset.js';
-import type { RunAgentHost, RunExecutionOptions } from './types.js';
-import type { RunHooks } from './ports.js';
-import type { ResolvedModel } from '../models/gateway.js';
+import { activeSkillContext } from '../capabilities/context';
+import { RuntimeError } from '../errors';
+import type { ToolRuntime } from '../tools/runtime';
+import type { ToolRunContext } from '../tools/types';
+import type { RunToolset } from '../tools/toolset';
+import type { RunAgentHost, RunExecutionOptions } from './types';
+import type { RunHooks } from './ports';
+import type { ResolvedModel } from '../models/gateway';
 
 /** Current definitions advance only through the capability owner's durable visibility barrier. */
 export function currentToolset(options: RunExecutionOptions): RunToolset {

@@ -1,9 +1,9 @@
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
-import type { FrozenMcpTool } from '../src/tools/external.js';
-import { RunToolset } from '../src/tools/toolset.js';
-import { allowedTaskCandidates, allowedTaskTool } from '../src/subagents/policy.js';
-import { selectRunTools } from '../src/tools/selection.js';
+import type { FrozenMcpTool } from '../src/tools/external';
+import { RunToolset } from '../src/tools/toolset';
+import { allowedTaskCandidates, allowedTaskTool } from '../src/subagents/policy';
+import { selectRunTools } from '../src/tools/selection';
 
 function childTools(parent: RunToolset, access: 'read-only' | 'write'): RunToolset {
   return selectRunTools({

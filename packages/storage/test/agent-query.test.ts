@@ -3,15 +3,15 @@ import { join } from 'node:path';
 import Database from 'better-sqlite3';
 import { initialWorkState, type MessageView, type ToolCallRecord } from '@my-pi-harness/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { ProfileStore } from '../src/index.js';
-import { storedToolCallId } from '../src/sessions/projections/tool-intents.js';
+import type { ProfileStore } from '../src/index';
+import { storedToolCallId } from '../src/sessions/projections/tool-intents';
 import {
   createAgentSession,
   event,
   spawn,
   user,
   type AgentSessionFixture,
-} from './fixtures/agent-session.js';
+} from './fixtures/agent-session';
 
 interface TaskToolFixture {
   message: MessageView;

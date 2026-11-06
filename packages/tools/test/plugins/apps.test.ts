@@ -9,7 +9,7 @@ import {
   loadBuiltinPluginApps,
   parseBuiltinPluginApps,
   type BuiltinPluginApp,
-} from '../../src/plugins/index.js';
+} from '../../src/plugins/index';
 
 const roots: string[] = [];
 afterEach(async () => {

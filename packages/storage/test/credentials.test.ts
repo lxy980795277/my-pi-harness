@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createCredentialStore, createMemoryCredentialStore } from '../src/index.js';
+import { createCredentialStore, createMemoryCredentialStore } from '../src/index';
 
 function gate(): { promise: Promise<void>; release: () => void } {
   let release = (): void => {

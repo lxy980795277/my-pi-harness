@@ -1,6 +1,6 @@
 import type { FrozenSkill, SkillCandidate, ToolDiscoveryDiagnostic } from '@my-pi-harness/protocol';
-import type { FrozenMcpTool } from '../tools/external.js';
-import type { SkillContextDiagnostic } from './skill-history.js';
+import type { FrozenMcpTool } from '../tools/external';
+import type { SkillContextDiagnostic } from './skill-history';
 
 /** Freeze descriptive metadata into the accepted system context without activating its instructions. */
 export function capabilityContext(input: {

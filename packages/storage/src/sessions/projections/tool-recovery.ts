@@ -4,15 +4,11 @@ import {
   type ToolCallRecord,
   type StoredToolResult,
 } from '@my-pi-harness/protocol';
-import type { EventInput } from '../types.js';
-import {
-  assistantToolIntents,
-  storedToolCallId,
-  isRetainableToolArguments,
-} from './tool-intents.js';
-import { activeTool } from './tool-batch.js';
-import { checked } from '../../shared/validation.js';
-import { StorageError } from '../../shared/errors.js';
+import type { EventInput } from '../types';
+import { assistantToolIntents, storedToolCallId, isRetainableToolArguments } from './tool-intents';
+import { activeTool } from './tool-batch';
+import { checked } from '../../shared/validation';
+import { StorageError } from '../../shared/errors';
 
 export interface RecoveryAssistant {
   message: MessageView;

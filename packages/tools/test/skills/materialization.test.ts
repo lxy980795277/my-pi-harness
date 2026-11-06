@@ -7,7 +7,7 @@ import {
   installSkillFiles,
   type AssertSkillAuthorized,
   type SkillRoot,
-} from '../../src/skills/index.js';
+} from '../../src/skills/index';
 
 const directories: string[] = [];
 const signal = new AbortController().signal;

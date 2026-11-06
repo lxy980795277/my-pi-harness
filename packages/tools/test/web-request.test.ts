@@ -60,7 +60,7 @@ vi.mock('node:http', async (original) => ({
 }));
 vi.mock('node:https', () => ({ request }));
 
-const { executeRegistered: executeTool } = await import('./support/registered.js');
+const { executeRegistered: executeTool } = await import('./support/registered');
 const context = {
   workspaceRoot: '/unused',
   profileDirectory: '/unused',

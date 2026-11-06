@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { text as streamText } from 'node:stream/consumers';
 import { fauxAssistantMessage, type TranscriptContext } from '@earendil-works/pi-ai';
 import { describe, expect, it, vi } from 'vitest';
-import { call, fixture, idle, observe, questionArgs } from './support/work-fixture.js';
+import { call, fixture, idle, observe, questionArgs } from './support/work-fixture';
 
 function resultText(context: TranscriptContext, name: string): string {
   const message = [...context.messages]

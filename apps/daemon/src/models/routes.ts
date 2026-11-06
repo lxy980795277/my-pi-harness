@@ -13,7 +13,7 @@ import {
 import type { ModelGateway } from '@my-pi-harness/agent-runtime';
 import type { FastifyInstance } from 'fastify';
 import { Type } from 'typebox';
-import type { ProviderAuthInput } from './types.js';
+import type { ProviderAuthInput } from './types';
 
 const IdParams = Type.Object(
   { id: Type.String({ minLength: 1, maxLength: 160 }) },

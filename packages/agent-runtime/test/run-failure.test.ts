@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { RuntimeError } from '../src/errors.js';
-import { runFailureMessage } from '../src/runs/failure.js';
+import { RuntimeError } from '../src/errors';
+import { runFailureMessage } from '../src/runs/failure';
 
 describe('public model failure messages', () => {
   it.each([

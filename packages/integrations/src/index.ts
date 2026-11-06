@@ -1,33 +1,33 @@
-export { McpConnectionManager } from './mcp/manager.js';
-export type { McpConnectionManagerOptions } from './mcp/manager.js';
-export { McpError } from './mcp/errors.js';
-export { NetworkError } from './network/errors.js';
-export { PluginError } from './plugins/errors.js';
-export { compileMcpInputSchema } from './mcp/schema.js';
-export { encodeMcpCatalog, decodeMcpCatalog } from './mcp/catalog-snapshot.js';
+export { McpConnectionManager } from './mcp/manager';
+export type { McpConnectionManagerOptions } from './mcp/manager';
+export { McpError } from './mcp/errors';
+export { NetworkError } from './network/errors';
+export { PluginError } from './plugins/errors';
+export { compileMcpInputSchema } from './mcp/schema';
+export { encodeMcpCatalog, decodeMcpCatalog } from './mcp/catalog-snapshot';
 export {
   RemoteMcpManager,
   type RemoteMcpBinding,
   type RemoteMcpManagerOptions,
-} from './mcp/remote.js';
+} from './mcp/remote';
 export {
   RemoteOAuthSession,
   type RemoteOAuthStore,
   type RemoteOAuthOptions,
-} from './mcp/remote-oauth.js';
-export { createRemoteFetch } from './network/remote-fetch.js';
-export { parseRemoteUrl } from './network/remote-fetch.js';
-export { parsePluginConnectionManifest } from './plugins/connections.js';
+} from './mcp/remote-oauth';
+export { createRemoteFetch } from './network/remote-fetch';
+export { parseRemoteUrl } from './network/remote-fetch';
+export { parsePluginConnectionManifest } from './plugins/connections';
 export type {
   PluginConnectionDefinition,
   PluginOAuthClient,
   PluginOAuthClients,
   PluginOAuthProfile,
-} from './plugins/connections.js';
-export { beginPluginOAuth, refreshPluginOAuth, pluginOAuthFetch } from './plugins/oauth.js';
-export type { PluginOAuthTokens, PluginOAuthFlow, PluginOAuthFetch } from './plugins/oauth.js';
-export { PluginOAuthError } from './plugins/oauth-errors.js';
-export type { PluginOAuthPhase, PluginOAuthFailureReason } from './plugins/oauth-errors.js';
+} from './plugins/connections';
+export { beginPluginOAuth, refreshPluginOAuth, pluginOAuthFetch } from './plugins/oauth';
+export type { PluginOAuthTokens, PluginOAuthFlow, PluginOAuthFetch } from './plugins/oauth';
+export { PluginOAuthError } from './plugins/oauth-errors';
+export type { PluginOAuthPhase, PluginOAuthFailureReason } from './plugins/oauth-errors';
 export type {
   McpCallInput,
   McpCallOutcome,
@@ -39,9 +39,9 @@ export type {
   McpLease,
   McpResultContent,
   McpSecretDescriptor,
-} from './mcp/types.js';
+} from './mcp/types';
 
-export { CONNECTION_PROVIDERS, connectionProvider } from './connections/providers.js';
+export { CONNECTION_PROVIDERS, connectionProvider } from './connections/providers';
 export {
   beginConnectionOAuth,
   refreshConnectionOAuth,
@@ -49,6 +49,6 @@ export {
   connectionFetch,
   type ConnectionCredential,
   type ConnectionOAuthFlow,
-} from './connections/oauth.js';
-export { LocalToolSearchEmbedder } from './search/local-embedder.js';
-export type { LocalToolSearchEmbedderOptions } from './search/local-embedder.js';
+} from './connections/oauth';
+export { LocalToolSearchEmbedder } from './search/local-embedder';
+export type { LocalToolSearchEmbedderOptions } from './search/local-embedder';

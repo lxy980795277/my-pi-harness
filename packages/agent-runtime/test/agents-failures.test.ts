@@ -9,9 +9,9 @@ import {
   agentsIdle,
   firstTask,
   waitAtGate,
-} from './support/agent-fixture.js';
-import { delegate, hasResult, resultCount, waitForResults } from './support/agent-tools.js';
-import { call, withinDeadline } from './support/work-fixture.js';
+} from './support/agent-fixture';
+import { delegate, hasResult, resultCount, waitForResults } from './support/agent-tools';
+import { call, withinDeadline } from './support/work-fixture';
 
 function containsFailure(error: unknown, expected: Error): boolean {
   if (error === expected) return true;

@@ -1,7 +1,7 @@
 import { PluginError } from '@my-pi-harness/tools';
-import type { RemoteMcpService } from '../mcp/remote-service.js';
-import type { PluginAppPort } from './service.js';
-import { pluginAppConfiguration } from './app-catalog.js';
+import type { RemoteMcpService } from '../mcp/remote-service';
+import type { PluginAppPort } from './service';
+import { pluginAppConfiguration } from './app-catalog';
 
 /** Persistent ownership is checked by IDs, including rollback before a plugin record exists. */
 export function createPluginAppPort(remote: RemoteMcpService): PluginAppPort {

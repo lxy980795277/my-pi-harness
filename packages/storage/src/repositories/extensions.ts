@@ -1,8 +1,8 @@
 import type Database from 'better-sqlite3';
 import { Type, type Static, type TSchema } from 'typebox';
 import { SkillScopeSchema, PluginComponentSchema } from '@my-pi-harness/protocol';
-import { StorageError } from '../shared/errors.js';
-import { checked } from '../shared/validation.js';
+import { StorageError } from '../shared/errors';
+import { checked } from '../shared/validation';
 
 export type StoredSkill = Static<typeof SkillRecordSchema>;
 export type StoredPlugin = Static<typeof PluginRecordSchema>;

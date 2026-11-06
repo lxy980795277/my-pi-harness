@@ -4,8 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { initialWorkState } from '@my-pi-harness/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
-import { buildSystemContext } from '../src/context/system-context.js';
-import { loadWorkspaceRules } from '../src/context/rules.js';
+import { buildSystemContext } from '../src/context/system-context';
+import { loadWorkspaceRules } from '../src/context/rules';
 
 const directories: string[] = [];
 

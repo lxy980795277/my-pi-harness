@@ -8,8 +8,8 @@ import {
 } from '@my-pi-harness/protocol';
 import type { FastifyInstance } from 'fastify';
 import { Type } from 'typebox';
-import type { AttachmentService } from './service.js';
-import { requestOperation } from '../http/request-operation.js';
+import type { AttachmentService } from './service';
+import { requestOperation } from '../http/request-operation';
 
 const Params = Type.Object(
   { attachmentId: Type.String({ minLength: 1, maxLength: 160 }) },

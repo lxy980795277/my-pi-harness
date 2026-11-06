@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { Type, type Static } from 'typebox';
 import { Value } from 'typebox/value';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { startDaemon } from '../src/main/daemon.js';
+import { startDaemon } from '../src/main/daemon';
 
 vi.mock('electron', () => ({ app: { isPackaged: true, getPath: () => '/temporary-profile' } }));
 

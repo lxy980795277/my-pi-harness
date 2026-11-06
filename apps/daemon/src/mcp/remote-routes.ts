@@ -21,8 +21,8 @@ import {
   type McpRevisionInput,
   type McpSecretInput,
 } from '@my-pi-harness/protocol';
-import type { RemoteMcpService } from './remote-service.js';
-import { requestOperation } from '../http/request-operation.js';
+import type { RemoteMcpService } from './remote-service';
+import { requestOperation } from '../http/request-operation';
 const Params = Type.Object(
   { id: Type.String({ minLength: 1, maxLength: 160 }) },
   { additionalProperties: false },

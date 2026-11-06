@@ -9,7 +9,7 @@ import type {
   AgentTaskSummary,
   SessionSnapshot,
 } from '@my-pi-harness/protocol';
-import type { RuntimeStore } from '../sessions/ports.js';
+import type { RuntimeStore } from '../sessions/ports';
 
 /** Task facts share the session journal; configuration remains an independent SQLite fact. */
 export interface SubagentStore extends RuntimeStore {

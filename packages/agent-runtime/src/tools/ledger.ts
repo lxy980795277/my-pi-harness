@@ -1,12 +1,12 @@
 import { createHash } from 'node:crypto';
 import type { ToolContent } from '@my-pi-harness/tools';
 import type { StoredToolResult, ToolCallRecord } from '@my-pi-harness/protocol';
-import { encodeToolResult } from '../context/codec.js';
-import { RuntimeError } from '../errors.js';
-import type { EventInput } from '../sessions/ports.js';
-import type { RunToolRecord } from './toolset.js';
-import type { ToolPolicy } from './policy.js';
-import type { ToolExecutionResult, ToolRunContext } from './types.js';
+import { encodeToolResult } from '../context/codec';
+import { RuntimeError } from '../errors';
+import type { EventInput } from '../sessions/ports';
+import type { RunToolRecord } from './toolset';
+import type { ToolPolicy } from './policy';
+import type { ToolExecutionResult, ToolRunContext } from './types';
 
 type ToolEventType = 'tool.requested' | 'tool.updated';
 

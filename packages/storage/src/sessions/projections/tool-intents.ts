@@ -2,8 +2,8 @@ import { createHash } from 'node:crypto';
 import { Type } from 'typebox';
 import { StoredToolIntentSchema, type StoredToolIntent } from '@my-pi-harness/protocol';
 import { Value } from 'typebox/value';
-import { StorageError } from '../../shared/errors.js';
-import { checked } from '../../shared/validation.js';
+import { StorageError } from '../../shared/errors';
+import { checked } from '../../shared/validation';
 
 const AssistantCallsSchema = Type.Object({
   codecVersion: Type.Literal(1),

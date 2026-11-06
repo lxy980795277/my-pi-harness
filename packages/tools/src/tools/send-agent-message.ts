@@ -4,10 +4,10 @@ import {
   completeToolRegistration,
   strictObjectSchema,
   type ToolInvocation,
-} from '../lib/tool-registry.js';
-import { textResult } from '../lib/tool-result.js';
+} from '../lib/tool-registry';
+import { textResult } from '../lib/tool-result';
 
-import { requireAgentHandlers } from '../lib/tool-context.js';
+import { requireAgentHandlers } from '../lib/tool-context';
 
 export type SendAgentInput = Static<typeof SendAgentMessageParameters>;
 export type SendAgentMessageHandler = (

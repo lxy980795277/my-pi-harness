@@ -2,7 +2,7 @@
 
 本页规定桌面实现与发布必须满足的要求；当前已实现范围以 [架构](../01_ARCHITECTURE/overview.md) 和所属功能验证为准。后续要求不表示能力已经实现。Web Renderer复用浏览器页面，桌面专有能力通过有限协议接入。
 
-main/preload与构建工具使用strict TypeScript及Bundler解析；包内ESM导入保留`.js`，不将Web的无后缀或UI风格规则强施宿主代码。通用类型、外部解析、错误、日志与持久化见 [后端规范](backend.md)，Renderer见 [前端规范](frontend.md)。
+main/preload与构建工具使用strict TypeScript及Bundler解析；TS模块导入遵循[统一无后缀约定](source-layout.md#模块导入)，实际进程/构建入口和JS/CJS产物保留文件扩展。通用类型、外部解析、错误、日志与持久化见 [后端规范](backend.md)，Renderer见 [前端规范](frontend.md)。
 
 ## 进程职责
 

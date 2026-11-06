@@ -10,11 +10,11 @@ import {
   type ConnectionView,
   type ConnectionServiceId,
 } from '@my-pi-harness/protocol';
-import { loadDaemonConfig } from '../src/application/config.js';
-import { createApplicationServices } from '../src/application/services.js';
-import { createDaemonApplication } from '../src/http/server.js';
-import { loginFixture } from './support/login.js';
-import { connectionUpstream } from './support/connections.js';
+import { loadDaemonConfig } from '../src/application/config';
+import { createApplicationServices } from '../src/application/services';
+import { createDaemonApplication } from '../src/http/server';
+import { loginFixture } from './support/login';
+import { connectionUpstream } from './support/connections';
 
 const cleanups: (() => Promise<void>)[] = [];
 afterEach(async () => {

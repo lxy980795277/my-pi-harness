@@ -19,17 +19,17 @@ import {
   type WorkSnapshot,
   type WorkState,
 } from '@my-pi-harness/protocol';
-import { RuntimeError } from '../errors.js';
-import type { WorkRuntimeOptions, WorkScope } from './ports.js';
-import type { ResolvedModel } from '../models/gateway.js';
-import type { EventInput } from '../sessions/ports.js';
-import { decodeContextMessage } from '../context/codec.js';
-import { WorkContext } from '../context/request-context.js';
-import { WorkInteractions } from './interactions.js';
-import { completeToolHistory } from '../context/tool-history.js';
-import { buildSystemContext } from '../context/system-context.js';
-import { loadWorkspaceRules } from '../context/rules.js';
-import { userWithAttachments } from '../context/attachments.js';
+import { RuntimeError } from '../errors';
+import type { WorkRuntimeOptions, WorkScope } from './ports';
+import type { ResolvedModel } from '../models/gateway';
+import type { EventInput } from '../sessions/ports';
+import { decodeContextMessage } from '../context/codec';
+import { WorkContext } from '../context/request-context';
+import { WorkInteractions } from './interactions';
+import { completeToolHistory } from '../context/tool-history';
+import { buildSystemContext } from '../context/system-context';
+import { loadWorkspaceRules } from '../context/rules';
+import { userWithAttachments } from '../context/attachments';
 
 interface PreparedWork {
   state: WorkState;

@@ -5,9 +5,9 @@ import { join } from 'node:path';
 import Fastify from 'fastify';
 import { openProfileStore, type VerifiedIdentity } from '@my-pi-harness/storage';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { IdentityChallenge, IdentityProvider } from '../src/auth/identity-provider.js';
-import { LocalAuth } from '../src/auth/local-auth.js';
-import { LoginService, loginCallbackNonce } from '../src/auth/login-service.js';
+import type { IdentityChallenge, IdentityProvider } from '../src/auth/identity-provider';
+import { LocalAuth } from '../src/auth/local-auth';
+import { LoginService, loginCallbackNonce } from '../src/auth/login-service';
 
 const identity: VerifiedIdentity = {
   providerId: 'github',

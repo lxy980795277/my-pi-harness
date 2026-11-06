@@ -1,7 +1,7 @@
 import { app, type BrowserWindow } from 'electron';
-import { startDaemon, type ManagedDaemon } from './daemon.js';
-import { resolveRendererUrl, waitForRenderer } from './renderer.js';
-import { createMainWindow } from './window.js';
+import { startDaemon, type ManagedDaemon } from './daemon';
+import { resolveRendererUrl, waitForRenderer } from './renderer';
+import { createMainWindow } from './window';
 
 /** Owns startup, the application window and daemon cleanup through desktop shutdown. */
 export class DesktopApplication {

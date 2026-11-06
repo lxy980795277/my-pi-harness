@@ -13,9 +13,9 @@ import { Value } from 'typebox/value';
 import type { FastifyBaseLogger } from 'fastify';
 import pino from 'pino';
 import { afterEach, describe, expect, it } from 'vitest';
-import { loadDaemonConfig } from '../src/application/config.js';
-import { createDaemonApplication, type DaemonApplication } from '../src/http/server.js';
-import { readSseRecord } from './support/sse.js';
+import { loadDaemonConfig } from '../src/application/config';
+import { createDaemonApplication, type DaemonApplication } from '../src/http/server';
+import { readSseRecord } from './support/sse';
 
 const applications: DaemonApplication[] = [];
 const temporaryDirectories: string[] = [];

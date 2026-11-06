@@ -88,7 +88,7 @@ main/preload 只开放明确列举的桌面能力，校验调用来源与输入�
 
 TypeScript使用ESNext与Bundler解析并执行noEmit检查。Web、宿主、浏览器测试各自声明编译面与ambient类型；E2E提供DOM类型以检查page.evaluate回调。根宿主程序不通过测试入口追入Renderer源码，ESLint和typecheck覆盖这些实际编译面。
 
-后端宿主与共享包的相对导入继续保留`.js`，由tsx或构建器解析对应源码；Web模块导入无后缀，资源保留实际扩展。开发与生产daemon均由独立Node通过生产依赖tsx运行`src/bootstrap.ts`，不依赖开发服务器、用户工具链或根工作区。Web与Electron main/preload继续构建；普通Electron进程只加载JS/CJS产物，协议源码及必要依赖在构建时打入main/preload。
+前后端TS/TSX模块导入统一无后缀，由tsx或构建器解析对应源码；真实JS脚本和静态资源保留实际扩展。普通Node脚本仍采用原生文件解析；已明确由tsx加载的辅助入口对TS目标遵循同一无后缀规则，具体约定见[源码规范](../05_CONSTRAINTS/source-layout.md#模块导入)。开发与生产daemon均由独立Node通过生产依赖tsx运行`src/bootstrap.ts`，不依赖开发服务器、用户工具链或根工作区。Web与Electron main/preload继续构建；普通Electron进程只加载JS/CJS产物，协议源码及必要依赖在构建时打入main/preload。
 
 桌面资源同时包含独立 Node、daemon及其生产依赖、Web构建产物。`scripts/node-runtime.mjs`按 `.node-version` 下载官方发行包，在独立目录校验SHA-256并解压完成后原子发布缓存manifest；开发聚合入口与桌面资源准备共用该运行时。产品版本的唯一来源和同步规则见 [发布规范](../06_RELEASES/overview.md)。
 

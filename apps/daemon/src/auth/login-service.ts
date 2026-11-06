@@ -5,8 +5,8 @@ import type {
   IdentityChallenge,
   IdentityProvider,
   WebIdentityChallenge,
-} from './identity-provider.js';
-import { LoginError } from './errors.js';
+} from './identity-provider';
+import { LoginError } from './errors';
 
 interface PendingLogin {
   clientId: string;

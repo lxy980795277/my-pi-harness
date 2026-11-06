@@ -2,11 +2,11 @@ import { nativeTool } from '@my-pi-harness/tools';
 import { Value } from 'typebox/value';
 import { Type } from 'typebox';
 import { describe, expect, it } from 'vitest';
-import type { FrozenMcpTool } from '../src/tools/external.js';
-import { RunCapabilities } from '../src/capabilities/run.js';
-import { RunToolset } from '../src/tools/toolset.js';
+import type { FrozenMcpTool } from '../src/tools/external';
+import { RunCapabilities } from '../src/capabilities/run';
+import { RunToolset } from '../src/tools/toolset';
 import { ToolCatalogSearch } from '@my-pi-harness/tools';
-import type { EventInput } from '../src/sessions/ports.js';
+import type { EventInput } from '../src/sessions/ports';
 import type { ToolContent } from '@my-pi-harness/tools';
 
 function candidate(index: number): FrozenMcpTool {

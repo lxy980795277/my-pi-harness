@@ -1,8 +1,8 @@
-export { resolveProcess } from './resolve.js';
-export { startProcess } from './persistent.js';
-export { collectProcess } from './collect.js';
-export { isAllowedProcessEnvironmentName } from './environment.js';
-export type { CollectedProcess } from './collect.js';
+export { resolveProcess } from './resolve';
+export { startProcess } from './persistent';
+export { collectProcess } from './collect';
+export { isAllowedProcessEnvironmentName } from './environment';
+export type { CollectedProcess } from './collect';
 export type {
   ProcessAccess,
   ProcessScope,
@@ -12,5 +12,5 @@ export type {
   ProcessExit,
   ProcessObserver,
   ManagedProcess,
-} from './types.js';
-export { SandboxError, checkCancelled } from '../errors.js';
+} from './types';
+export { SandboxError, checkCancelled } from '../errors';

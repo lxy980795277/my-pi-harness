@@ -5,11 +5,11 @@ import type {
   SessionSummary,
   ToolDiscoveryDiagnostic,
 } from '@my-pi-harness/protocol';
-import type { ResolvedModel } from '../models/gateway.js';
-import type { EventInput } from '../sessions/ports.js';
-import type { RunToolRecord, RunToolset } from '../tools/toolset.js';
-import type { FrozenMcpTool } from '../tools/external.js';
-import { snapshotPrivateData } from '../context/codec.js';
+import type { ResolvedModel } from '../models/gateway';
+import type { EventInput } from '../sessions/ports';
+import type { RunToolRecord, RunToolset } from '../tools/toolset';
+import type { FrozenMcpTool } from '../tools/external';
+import { snapshotPrivateData } from '../context/codec';
 
 interface RunAcceptance {
   run: RunView;

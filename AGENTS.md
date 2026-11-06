@@ -23,7 +23,7 @@
 
 ## 质量与交付
 
-- TypeScript 使用 strict；包间用 `@my-pi-harness/*`。Web 模块无后缀，后端宿主相对导入保留 `.js`；类型与外部校验见对应规范。
+- TypeScript 使用 strict；包间用 `@my-pi-harness/*`。TS/TSX模块导入统一无后缀，真实脚本和静态资源保留实际扩展，细则见[源码规范](docs/05_CONSTRAINTS/source-layout.md#模块导入)；类型与外部校验见对应规范。
 - 前端、daemon、Electron和测试分别遵守 [前端](docs/05_CONSTRAINTS/frontend.md)、[后端](docs/05_CONSTRAINTS/backend.md)、[桌面](docs/05_CONSTRAINTS/desktop.md)、[测试](docs/05_CONSTRAINTS/testing.md)；交付证据与硬规则检查统一见测试规范。
 - 存量代码按[代码治理](docs/10_GOVERNANCE/code.md)审查领域类型命名、业务联合、弃用API、空值可读性及真实死代码；不机械禁用所有空值语法或删除动态入口。
 - 变更同步更新实际受影响的架构、协议、约束或功能文档；一个事实保留一个权威位置，其他文档链接引用。

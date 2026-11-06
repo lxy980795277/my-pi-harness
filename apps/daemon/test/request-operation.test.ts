@@ -1,7 +1,7 @@
 import { IncomingMessage, ServerResponse } from 'node:http';
 import { Socket } from 'node:net';
 import { afterEach, expect, it, vi } from 'vitest';
-import { requestOperation } from '../src/http/request-operation.js';
+import { requestOperation } from '../src/http/request-operation';
 
 const sockets: Socket[] = [];
 afterEach(() => {

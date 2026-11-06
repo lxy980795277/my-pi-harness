@@ -6,7 +6,7 @@ import {
   messageTokens,
   textTokens,
   type ContextToolDefinition,
-} from './budget.js';
+} from './budget';
 
 export interface RetainedToolText {
   id: string;

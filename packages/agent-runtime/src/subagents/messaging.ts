@@ -6,11 +6,11 @@ import type {
   AgentTaskDetail,
   AgentTaskSummary,
 } from '@my-pi-harness/protocol';
-import type { EventInput } from '../sessions/ports.js';
-import { RuntimeError } from '../errors.js';
-import { agentMessageId } from './message-key.js';
-import type { SubagentStore } from './ports.js';
-import type { SubagentNode, SubagentTaskNode } from './types.js';
+import type { EventInput } from '../sessions/ports';
+import { RuntimeError } from '../errors';
+import { agentMessageId } from './message-key';
+import type { SubagentStore } from './ports';
+import type { SubagentNode, SubagentTaskNode } from './types';
 
 interface MessagingHost {
   readonly store: Pick<SubagentStore, 'listAgentMessages'>;

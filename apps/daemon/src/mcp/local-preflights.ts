@@ -1,5 +1,5 @@
 import { RuntimeError } from '@my-pi-harness/agent-runtime';
-import { waitForPreparation } from './preparation-wait.js';
+import { waitForPreparation } from './preparation-wait';
 
 /** Local file inspections remain owned until completion even after a caller stops waiting. */
 export class LocalPreflights {

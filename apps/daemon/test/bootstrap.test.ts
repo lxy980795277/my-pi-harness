@@ -11,7 +11,7 @@ import {
 } from '@my-pi-harness/protocol';
 import { Value } from 'typebox/value';
 import { afterEach, describe, expect, it } from 'vitest';
-import { readSseRecord } from './support/sse.js';
+import { readSseRecord } from './support/sse';
 
 interface ExitOutcome {
   code: number | null;

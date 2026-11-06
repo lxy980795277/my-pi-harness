@@ -1,16 +1,16 @@
-import type { ToolOutcome } from './outcome.js';
-import type { ToolCallLedger } from './ledger.js';
-import { dispatchMcpTool } from './mcp-dispatch.js';
+import type { ToolOutcome } from './outcome';
+import type { ToolCallLedger } from './ledger';
+import { dispatchMcpTool } from './mcp-dispatch';
 import {
   nativeTool,
   type ToolRegistry,
   type ToolContext,
   type ToolResult,
 } from '@my-pi-harness/tools';
-import { RuntimeError } from '../errors.js';
-import { createWorkToolHandlers } from '../work/tool-port.js';
-import type { ToolRunContext, ToolRuntimeOptions } from './types.js';
-import type { RunToolRecord } from './toolset.js';
+import { RuntimeError } from '../errors';
+import { createWorkToolHandlers } from '../work/tool-port';
+import type { ToolRunContext, ToolRuntimeOptions } from './types';
+import type { RunToolRecord } from './toolset';
 
 /** An accepted operation owns its dispatch closure independently of public source metadata. */
 export type BoundToolExecutor = (

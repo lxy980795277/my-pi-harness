@@ -2,17 +2,17 @@ import { createHash } from 'node:crypto';
 import type Database from 'better-sqlite3';
 import { Type } from 'typebox';
 import { Value } from 'typebox/value';
-import { StorageError } from '../../shared/errors.js';
-import { FOUNDATION_SQL } from './0001-foundation.js';
-import { APPLICATION_LOGIN_SQL } from './0002-application-login.js';
-import { MCP_SQL } from './0003-mcp.js';
-import { EXTENSIONS_SQL } from './0004-extensions.js';
-import { REMOTE_MCP_SQL } from './0005-remote-mcp.js';
-import { CONNECTIONS_SQL } from './0006-connections.js';
-import { PLUGIN_ACCOUNTS_SQL } from './0007-plugin-accounts.js';
-import { MCP_CATALOGS_SQL } from './0008-mcp-catalogs.js';
-import { AGENT_TASKS_SQL } from './0009-agent-tasks.js';
-import { ARTIFACTS_SQL } from './0010-artifacts.js';
+import { StorageError } from '../../shared/errors';
+import { FOUNDATION_SQL } from './0001-foundation';
+import { APPLICATION_LOGIN_SQL } from './0002-application-login';
+import { MCP_SQL } from './0003-mcp';
+import { EXTENSIONS_SQL } from './0004-extensions';
+import { REMOTE_MCP_SQL } from './0005-remote-mcp';
+import { CONNECTIONS_SQL } from './0006-connections';
+import { PLUGIN_ACCOUNTS_SQL } from './0007-plugin-accounts';
+import { MCP_CATALOGS_SQL } from './0008-mcp-catalogs';
+import { AGENT_TASKS_SQL } from './0009-agent-tasks';
+import { ARTIFACTS_SQL } from './0010-artifacts';
 const MigrationRowSchema = Type.Object({ version: Type.Integer(), checksum: Type.String() });
 
 /** Highest installed schema version understood by this build. */

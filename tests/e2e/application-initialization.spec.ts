@@ -1,6 +1,6 @@
 import { PROTOCOL_VERSION } from '@my-pi-harness/protocol';
 import type { Page, Route } from '@playwright/test';
-import { test, expect } from './fixture.js';
+import { test, expect } from './fixture';
 
 const requiredPaths = ['/api/workspaces', '/api/sessions', '/api/providers', '/api/settings'];
 

@@ -1,10 +1,10 @@
 import { and, eq } from 'drizzle-orm';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
-import { StorageError } from '../shared/errors.js';
-import { checked } from '../shared/validation.js';
-import * as schema from '../sqlite/schema.js';
-import type { EventInput } from './types.js';
-import { TaskMessageConsumedSchema, TaskMessageQueuedSchema } from './event-validation.js';
+import { StorageError } from '../shared/errors';
+import { checked } from '../shared/validation';
+import * as schema from '../sqlite/schema';
+import type { EventInput } from './types';
+import { TaskMessageConsumedSchema, TaskMessageQueuedSchema } from './event-validation';
 
 /** A consumed communication and the exact model-visible input commit in one journal batch. */
 export function validateAgentBatch(

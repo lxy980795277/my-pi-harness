@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isAllowedProcessEnvironmentName } from '../src/index.js';
+import { isAllowedProcessEnvironmentName } from '../src/index';
 
 describe('explicit process environment names', () => {
   it.each(['API_TOKEN', 'PUBLIC_MODE', 'FIXTURE_DIRECTORY', '_PRIVATE2', 'NODE', 'GITHUB_TOKEN'])(

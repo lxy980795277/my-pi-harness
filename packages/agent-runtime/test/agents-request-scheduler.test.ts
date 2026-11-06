@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { AgentRequestScheduler } from '../src/subagents/request-scheduler.js';
+import { AgentRequestScheduler } from '../src/subagents/request-scheduler';
 
 describe('agent model request scheduling', () => {
   it('admits only the configured number of requests and wakes waiters in order', async () => {

@@ -10,8 +10,8 @@ import {
   type LocalClient,
   type ProfileStore,
   type VerifiedIdentity,
-} from '../src/index.js';
-import { FOUNDATION_SQL } from '../src/sqlite/migrations/0001-foundation.js';
+} from '../src/index';
+import { FOUNDATION_SQL } from '../src/sqlite/migrations/0001-foundation';
 
 interface Fixture {
   directory: string;

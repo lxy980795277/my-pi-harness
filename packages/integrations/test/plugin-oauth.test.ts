@@ -1,6 +1,6 @@
-import { pluginConnectionDefinition } from './plugin-definition.js';
+import { pluginConnectionDefinition } from './plugin-definition';
 import { expect, it } from 'vitest';
-import { beginPluginOAuth, refreshPluginOAuth, type PluginOAuthFetch } from '../src/index.js';
+import { beginPluginOAuth, refreshPluginOAuth, type PluginOAuthFetch } from '../src/index';
 
 const signal = new AbortController().signal;
 const client = {

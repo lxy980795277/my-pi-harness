@@ -12,8 +12,8 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { readStableFile } from '../src/filesystem/read-file.js';
-import * as paths from '../src/filesystem/workspace-path.js';
+import { readStableFile } from '../src/filesystem/read-file';
+import * as paths from '../src/filesystem/workspace-path';
 
 const directories: string[] = [];
 

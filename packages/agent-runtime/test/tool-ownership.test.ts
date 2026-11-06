@@ -4,14 +4,14 @@ import { join } from 'node:path';
 import type { SessionSummary } from '@my-pi-harness/protocol';
 import { Type } from 'typebox';
 import { describe, expect, it, vi } from 'vitest';
-import { observeNativeTool } from './support/native-tool.js';
-import { RuntimeError } from '../src/errors.js';
-import type { EventInput } from '../src/sessions/ports.js';
-import { ToolRuntime } from '../src/tools/runtime.js';
-import { recordHostToolOutcome, toolCallRecordId } from '../src/tools/ledger.js';
-import { RunToolset } from '../src/tools/toolset.js';
+import { observeNativeTool } from './support/native-tool';
+import { RuntimeError } from '../src/errors';
+import type { EventInput } from '../src/sessions/ports';
+import { ToolRuntime } from '../src/tools/runtime';
+import { recordHostToolOutcome, toolCallRecordId } from '../src/tools/ledger';
+import { RunToolset } from '../src/tools/toolset';
 import { nativeTools } from '@my-pi-harness/tools';
-import type { ToolRunContext } from '../src/tools/types.js';
+import type { ToolRunContext } from '../src/tools/types';
 
 async function fixture() {
   const temporary = await realpath(await mkdtemp(join(tmpdir(), 'my-pi-tool-owner-')));

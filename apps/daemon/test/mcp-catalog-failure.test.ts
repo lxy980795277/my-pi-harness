@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest';
 import { RuntimeError } from '@my-pi-harness/agent-runtime';
 import { McpError, NetworkError } from '@my-pi-harness/integrations';
-import { catalogFailure } from '../src/mcp/catalog-failure.js';
+import { catalogFailure } from '../src/mcp/catalog-failure';
 
 it.each([
   [

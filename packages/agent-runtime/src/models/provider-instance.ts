@@ -9,8 +9,8 @@ import { openAICompletionsApi } from '@earendil-works/pi-ai/api/openai-completio
 import { openAIResponsesApi } from '@earendil-works/pi-ai/api/openai-responses.lazy';
 import { anthropicMessagesApi } from '@earendil-works/pi-ai/api/anthropic-messages.lazy';
 import type { CustomProtocol, ProviderConfig } from '@my-pi-harness/protocol';
-import { RuntimeError } from '../errors.js';
-import { isKnownBuiltinProvider } from './providers.js';
+import { RuntimeError } from '../errors';
+import { isKnownBuiltinProvider } from './providers';
 
 /** Select the configured custom protocol after provider validation. */
 function customProviderApi(protocol: CustomProtocol) {

@@ -2,9 +2,9 @@ import { Resolver } from 'node:dns/promises';
 import { request as httpRequest, type IncomingMessage } from 'node:http';
 import { request as httpsRequest } from 'node:https';
 import { isIP } from 'node:net';
-import { ToolError } from './tool-registry.js';
+import { ToolError } from './tool-registry';
 import { checkCancelled, isPublicAddress } from '@my-pi-harness/sandbox';
-import type { WebFetchGatewayAccess } from './tool-context.js';
+import type { WebFetchGatewayAccess } from './tool-context';
 
 interface WebResponse {
   status: number;

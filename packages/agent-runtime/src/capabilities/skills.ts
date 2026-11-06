@@ -2,8 +2,8 @@ import type { SkillResourceLease, CommandResourceLease } from '@my-pi-harness/to
 import { Value } from 'typebox/value';
 import type { ToolContent } from '@my-pi-harness/tools';
 import type { FrozenSkill, SkillCandidate } from '@my-pi-harness/protocol';
-import { RuntimeError } from '../errors.js';
-import type { SkillsPort } from './ports.js';
+import { RuntimeError } from '../errors';
+import type { SkillsPort } from './ports';
 
 interface RunSkillsOptions {
   workspaceId: string | null;

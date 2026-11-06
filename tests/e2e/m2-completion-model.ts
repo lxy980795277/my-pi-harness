@@ -1,5 +1,5 @@
 import { createServer } from 'node:http';
-import type { ModelRequest, TestModelServer } from './model-server.js';
+import type { ModelRequest, TestModelServer } from './model-server';
 
 export interface ToolSequenceStep {
   name: string;

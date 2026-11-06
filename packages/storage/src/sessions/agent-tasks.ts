@@ -24,10 +24,10 @@ import {
   type SessionSnapshot,
   type WorkState,
 } from '@my-pi-harness/protocol';
-import { StorageError } from '../shared/errors.js';
-import { checked } from '../shared/validation.js';
-import * as schema from '../sqlite/schema.js';
-import { WorkRepository } from './projections/work.js';
+import { StorageError } from '../shared/errors';
+import { checked } from '../shared/validation';
+import * as schema from '../sqlite/schema';
+import { WorkRepository } from './projections/work';
 
 interface TaskMessagePage {
   messages: MessageView[];

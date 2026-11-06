@@ -15,9 +15,9 @@ import type { CustomProtocol, ProviderInput } from '@my-pi-harness/protocol';
 import { APP_VERSION } from '@my-pi-harness/protocol';
 import { createMemoryCredentialStore, openProfileStore } from '@my-pi-harness/storage';
 import { describe, expect, it } from 'vitest';
-import { ModelGateway } from '../src/models/gateway.js';
-import { decodeCredential } from '../src/models/credentials.js';
-import { SessionRuntime } from '../src/sessions/runtime.js';
+import { ModelGateway } from '../src/models/gateway';
+import { decodeCredential } from '../src/models/credentials';
+import { SessionRuntime } from '../src/sessions/runtime';
 
 function sendEvent(response: ServerResponse, type: string, data: unknown): void {
   response.write(`event: ${type}\ndata: ${JSON.stringify(data)}\n\n`);

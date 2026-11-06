@@ -1,10 +1,10 @@
 import { specTypeSchemas } from '@modelcontextprotocol/client';
 import { Type } from 'typebox';
 import { Value } from 'typebox/value';
-import { discovered } from './catalog.js';
-import { deepFreeze } from './fingerprint.js';
-import { McpError } from './errors.js';
-import type { McpCatalog } from './types.js';
+import { discovered } from './catalog';
+import { deepFreeze } from './fingerprint';
+import { McpError } from './errors';
+import type { McpCatalog } from './types';
 
 const Snapshot = Type.Object(
   {

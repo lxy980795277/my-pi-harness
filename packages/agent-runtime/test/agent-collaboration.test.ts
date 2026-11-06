@@ -9,15 +9,15 @@ import {
   agentsIdle,
   firstTask,
   waitAtGate,
-} from './support/agent-fixture.js';
+} from './support/agent-fixture';
 import {
   delegate,
   hasResult,
   resultCount,
   taskResults,
   waitForResults,
-} from './support/agent-tools.js';
-import { call, withinDeadline } from './support/work-fixture.js';
+} from './support/agent-tools';
+import { call, withinDeadline } from './support/work-fixture';
 
 describe('Agent task collaboration through real Pi', () => {
   it('delivers child-to-parent communication at the parent input boundary exactly once', async () => {

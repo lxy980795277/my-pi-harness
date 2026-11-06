@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { AuthEvent, AuthPrompt, AuthType, MutableModels } from '@earendil-works/pi-ai';
 import type { AuthFlow } from '@my-pi-harness/protocol';
-import { abortError, RuntimeError } from '../errors.js';
+import { abortError, RuntimeError } from '../errors';
 
 interface PendingPrompt {
   id: string;

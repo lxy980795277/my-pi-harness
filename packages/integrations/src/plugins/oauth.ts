@@ -1,14 +1,14 @@
 import * as oauth from 'oauth4webapi';
 import type { SkillConnectionAccount } from '@my-pi-harness/protocol';
-import { PluginError } from './errors.js';
-import { createRemoteFetch } from '../network/remote-fetch.js';
-import type { PluginConnectionDefinition, PluginOAuthClient } from './connections.js';
+import { PluginError } from './errors';
+import { createRemoteFetch } from '../network/remote-fetch';
+import type { PluginConnectionDefinition, PluginOAuthClient } from './connections';
 import {
   PluginOAuthError,
   pluginOAuthNetworkFailure,
   pluginOAuthProviderFailure,
   type PluginOAuthPhase,
-} from './oauth-errors.js';
+} from './oauth-errors';
 
 export interface PluginOAuthTokens {
   accessToken: string;

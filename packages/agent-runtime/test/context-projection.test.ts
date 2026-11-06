@@ -1,6 +1,6 @@
 import type { ToolResultMessage } from '@earendil-works/pi-ai';
 import { describe, expect, it } from 'vitest';
-import { pruneContext } from '../src/context/projection.js';
+import { pruneContext } from '../src/context/projection';
 
 function result(text: string): ToolResultMessage {
   return {

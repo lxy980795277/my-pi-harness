@@ -9,10 +9,10 @@ import {
   sessionLogDirectory,
   type EventInput,
   type ProfileStore,
-} from '../src/index.js';
-import { storedToolCallId } from '../src/sessions/projections/tool-intents.js';
-import { ArtifactBlobs } from '../src/artifacts/blobs.js';
-import { PrivateSessionFiles } from '../src/sessions/private-files.js';
+} from '../src/index';
+import { storedToolCallId } from '../src/sessions/projections/tool-intents';
+import { ArtifactBlobs } from '../src/artifacts/blobs';
+import { PrivateSessionFiles } from '../src/sessions/private-files';
 
 const owned: { directory: string; store: ProfileStore }[] = [];
 afterEach(async () => {

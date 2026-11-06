@@ -1,7 +1,7 @@
 import type { UserMessage } from '@earendil-works/pi-ai';
 import type { InputRequest } from '@my-pi-harness/protocol';
-import { RuntimeError } from '../errors.js';
-import type { WorkStore } from '../work/ports.js';
+import { RuntimeError } from '../errors';
+import type { WorkStore } from '../work/ports';
 
 /** Freeze explicit attachment bytes into the same private user message used for replay. */
 export function userWithAttachments(

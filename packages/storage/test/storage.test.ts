@@ -11,7 +11,7 @@ import type {
   QueueInput,
   RunView,
 } from '@my-pi-harness/protocol';
-import { openProfileStore, type EventInput, type ProfileStore } from '../src/index.js';
+import { openProfileStore, type EventInput, type ProfileStore } from '../src/index';
 
 const fixtures: { directory: string; store: ProfileStore }[] = [];
 const provider: ProviderConfig = {
@@ -487,7 +487,7 @@ describe('provider metadata and migrations', () => {
       else connection.prepare('UPDATE schema_migrations SET checksum = ?').run('modified');
       connection.close();
       await expect(openProfileStore(value.directory)).rejects.toThrow(/version|migration/);
-      const lock = await import('../src/profile/profile-lock.js');
+      const lock = await import('../src/profile/profile-lock');
       const acquired = await lock.acquireProfileLock(value.directory);
       acquired.release();
     },

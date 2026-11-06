@@ -11,8 +11,8 @@ import {
   type McpToolControlInput,
   type McpReadOnlyGrantInput,
 } from '@my-pi-harness/protocol';
-import type { McpService } from './service.js';
-import type { RemoteMcpService } from './remote-service.js';
+import type { McpService } from './service';
+import type { RemoteMcpService } from './remote-service';
 const Params = Type.Object(
   { id: Type.String({ minLength: 1, maxLength: 160 }) },
   { additionalProperties: false },

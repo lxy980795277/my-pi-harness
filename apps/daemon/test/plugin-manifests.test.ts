@@ -2,7 +2,7 @@ import { BUILTIN_PLUGINS } from '@my-pi-harness/tools';
 import {
   PLUGIN_CONNECTION_DEFINITIONS,
   pluginConnectionDefinition,
-} from '../src/plugin-connections/definitions.js';
+} from '../src/plugin-connections/definitions';
 import { expect, it } from 'vitest';
 import {
   parsePluginConnectionManifest,

@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { basename, isAbsolute, join, relative, resolve, sep } from 'node:path';
-import { StorageError } from '../shared/errors.js';
-import type { ArtifactLimits } from '../artifacts/blobs.js';
+import { StorageError } from '../shared/errors';
+import type { ArtifactLimits } from '../artifacts/blobs';
 
 /** Optional log placement never relocates the SQLite profile or its credentials. */
 export interface ProfileStoreOptions {

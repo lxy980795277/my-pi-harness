@@ -1,5 +1,5 @@
 import { createServer } from 'node:http';
-import type { TestModelServer, ModelRequest } from './model-server.js';
+import type { TestModelServer, ModelRequest } from './model-server';
 
 /** Emits one real OpenAI tool call, then observes Pi's HTTP tool result before answering. */
 export async function startToolModel(): Promise<TestModelServer> {

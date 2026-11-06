@@ -15,15 +15,15 @@ import { join } from 'node:path';
 import type { Readable } from 'node:stream';
 import { Type, type Static } from 'typebox';
 import { HarnessEventSchema } from '@my-pi-harness/protocol';
-import { StorageError } from '../shared/errors.js';
-import type { PrivateSessionFiles } from './private-files.js';
-import { checked } from '../shared/validation.js';
-import { assertPersistentEvent } from './event-persistence.js';
+import { StorageError } from '../shared/errors';
+import type { PrivateSessionFiles } from './private-files';
+import { checked } from '../shared/validation';
+import { assertPersistentEvent } from './event-persistence';
 import {
   decodeJournalRecords,
   encodeJournalRecords,
   type JournalCodecState,
-} from './journal-codec.js';
+} from './journal-codec';
 
 /** One command's complete public envelopes and private replay material. */
 export type StoredSessionEvent = Static<typeof StoredEventSchema>;

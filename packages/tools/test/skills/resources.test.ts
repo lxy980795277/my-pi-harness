@@ -3,13 +3,13 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
 import { afterEach, expect, it } from 'vitest';
-import { BUILTIN_PLUGIN_RESOURCE_DIRECTORY } from '../../src/plugins/index.js';
+import { BUILTIN_PLUGIN_RESOURCE_DIRECTORY } from '../../src/plugins/index';
 import {
   SkillCatalog,
   installSkillFiles,
   parseSkillResourceManifest,
   type SkillRoot,
-} from '../../src/skills/index.js';
+} from '../../src/skills/index';
 
 const directories: string[] = [];
 const signal = new AbortController().signal;

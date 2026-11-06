@@ -1,6 +1,6 @@
 import { app, dialog } from 'electron';
-import { DesktopApplication } from './application.js';
-import type { QuitState } from './types.js';
+import { DesktopApplication } from './application';
+import type { QuitState } from './types';
 
 const application = new DesktopApplication();
 let quitState: QuitState = 'running';

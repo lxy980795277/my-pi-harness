@@ -1,15 +1,15 @@
 import { fileURLToPath } from 'node:url';
 import { Type, type Static } from 'typebox';
 import { Value } from 'typebox/value';
-import { SkillError } from './errors.js';
+import { SkillError } from './errors';
 import {
   checkedSkillDirectory,
   readSkillFile,
   readSkillTree,
   skillHash,
   skillResourcePath,
-} from './files.js';
-import type { SkillDownloadFile } from './types.js';
+} from './files';
+import type { SkillDownloadFile } from './types';
 
 export type SkillResourceManifest = Static<typeof manifestSchema>;
 

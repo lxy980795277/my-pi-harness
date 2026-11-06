@@ -21,8 +21,8 @@ import {
   type QuestionAnswer,
   type AgentTaskQuery,
 } from '@my-pi-harness/protocol';
-import type { ApplicationServices } from '../application/services.js';
-import { startAgentChangeStream } from './change-stream.js';
+import type { ApplicationServices } from '../application/services';
+import { startAgentChangeStream } from './change-stream';
 
 interface SessionParams {
   sessionId: string;

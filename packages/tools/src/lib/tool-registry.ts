@@ -1,6 +1,6 @@
 import { Type, type Static, type TSchema } from 'typebox';
 import type { Artifact, ToolSource } from '@my-pi-harness/protocol';
-import type { ToolContext } from './tool-context.js';
+import type { ToolContext } from './tool-context';
 
 export type ToolContent =
   | { type: 'text'; text: string }

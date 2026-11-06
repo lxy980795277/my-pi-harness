@@ -1,11 +1,11 @@
 import { Client } from '@modelcontextprotocol/client';
 import { resolveProcess } from '@my-pi-harness/sandbox/process';
 import { Value } from 'typebox/value';
-import { discoverCatalog } from './catalog.js';
-import { McpError } from './errors.js';
-import { deepFreeze, fingerprint } from './fingerprint.js';
-import { projectMcpResult } from './result.js';
-import { CALL_META_KEY, SupervisedStdioTransport } from './stdio.js';
+import { discoverCatalog } from './catalog';
+import { McpError } from './errors';
+import { deepFreeze, fingerprint } from './fingerprint';
+import { projectMcpResult } from './result';
+import { CALL_META_KEY, SupervisedStdioTransport } from './stdio';
 import type {
   McpCallInput,
   McpCallOutcome,
@@ -14,7 +14,7 @@ import type {
   McpLaunchInput,
   McpLaunchPreview,
   McpLease,
-} from './types.js';
+} from './types';
 
 interface Connection {
   binding: McpConnectionBinding;

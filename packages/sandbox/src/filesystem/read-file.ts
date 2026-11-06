@@ -1,6 +1,6 @@
 import { lstat, realpath } from 'node:fs/promises';
-import { SandboxError, checkCancelled } from '../errors.js';
-import { openRegular } from './workspace-path.js';
+import { SandboxError, checkCancelled } from '../errors';
+import { openRegular } from './workspace-path';
 
 /**
  * Read bounded bytes from an already resolved file and reject observed changes.

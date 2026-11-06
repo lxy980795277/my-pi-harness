@@ -1,4 +1,4 @@
-import { RuntimeError } from '../errors.js';
+import { RuntimeError } from '../errors';
 
 interface RequestWaiter {
   scopes: readonly AgentRequestScope[];

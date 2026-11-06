@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
-import { SandboxError } from '../errors.js';
+import { SandboxError } from '../errors';
 
 function signalGroup(group: number, signal: NodeJS.Signals): void {
   try {

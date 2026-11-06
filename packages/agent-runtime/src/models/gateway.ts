@@ -23,14 +23,14 @@ import type {
   ProviderConfig,
   ProviderInput,
 } from '@my-pi-harness/protocol';
-import { AuthFlows } from './auth-flows.js';
-import { createPiCredentialStore, type SecretStore } from './credentials.js';
-import { RuntimeError } from '../errors.js';
-import { BUILTIN_PROVIDER_IDS, loadBuiltinProvider } from './providers.js';
-import type { ProviderStore } from './ports.js';
-import { createProviderInstance } from './provider-instance.js';
-import { keylessStream } from './keyless-transport.js';
-import { applicationStream } from './identity.js';
+import { AuthFlows } from './auth-flows';
+import { createPiCredentialStore, type SecretStore } from './credentials';
+import { RuntimeError } from '../errors';
+import { BUILTIN_PROVIDER_IDS, loadBuiltinProvider } from './providers';
+import type { ProviderStore } from './ports';
+import { createProviderInstance } from './provider-instance';
+import { keylessStream } from './keyless-transport';
+import { applicationStream } from './identity';
 
 export interface ResolvedModel {
   model: Model<Api>;

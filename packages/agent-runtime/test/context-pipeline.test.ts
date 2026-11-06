@@ -11,7 +11,7 @@ import {
   sendTurn,
   summary,
   todo,
-} from './support/work-fixture.js';
+} from './support/work-fixture';
 
 function system(context: TranscriptContext): string {
   return context.messages

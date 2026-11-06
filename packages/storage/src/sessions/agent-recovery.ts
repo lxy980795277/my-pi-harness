@@ -1,12 +1,12 @@
 import { asc, eq, sql } from 'drizzle-orm';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import { ToolCallRecordSchema, type SessionSummary } from '@my-pi-harness/protocol';
-import type { EventInput } from './types.js';
-import * as schema from '../sqlite/schema.js';
-import { checked } from '../shared/validation.js';
-import { interruptionEvents } from './interruption.js';
-import { ToolProjection } from './projections/tools.js';
-import { WorkRepository } from './projections/work.js';
+import type { EventInput } from './types';
+import * as schema from '../sqlite/schema';
+import { checked } from '../shared/validation';
+import { interruptionEvents } from './interruption';
+import { ToolProjection } from './projections/tools';
+import { WorkRepository } from './projections/work';
 
 /** Settle abandoned trees from the leaves upward without repeating model or tool effects. */
 export function agentInterruptionEvents(

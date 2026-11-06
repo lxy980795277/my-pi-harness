@@ -5,11 +5,8 @@ import {
 } from '@my-pi-harness/protocol';
 import { Value } from 'typebox/value';
 import { describe, expect, it } from 'vitest';
-import {
-  sessionProjection,
-  projectionMessage,
-} from '../../../tests/fixtures/session-projection.js';
-import { createSessionUpdate } from '../src/sessions/stream-update.js';
+import { sessionProjection, projectionMessage } from '../../../tests/fixtures/session-projection';
+import { createSessionUpdate } from '../src/sessions/stream-update';
 
 const patch = (update: SessionStreamUpdate | undefined) => {
   if (!update || update.kind !== 'patch') throw new Error('Expected projection patch');

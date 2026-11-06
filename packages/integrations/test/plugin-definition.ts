@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import {
   parsePluginConnectionManifest,
   type PluginConnectionDefinition,
-} from '../src/plugins/connections.js';
+} from '../src/plugins/connections';
 
 /** OAuth protocol fixtures do not load installed or bundled plugin directories. */
 export function pluginConnectionDefinition(id: string): PluginConnectionDefinition {

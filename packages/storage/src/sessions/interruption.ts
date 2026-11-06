@@ -1,6 +1,6 @@
 import { ToolCallRecordSchema, type SessionSummary, type WorkState } from '@my-pi-harness/protocol';
-import type { EventInput } from './types.js';
-import { checked } from '../shared/validation.js';
+import type { EventInput } from './types';
+import { checked } from '../shared/validation';
 
 /** Build terminal facts for resources abandoned by the previous daemon; no work is executed. */
 export function interruptionEvents(

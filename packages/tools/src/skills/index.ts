@@ -1,11 +1,11 @@
-export { SkillCatalog } from './catalog.js';
-export { SkillError } from './errors.js';
-export { downloadGitHubSkill } from './github.js';
-export { installSkillFiles } from './install.js';
-export { readSkillTree, syncSkillDirectory } from './files.js';
-export { parseSkill } from './parser.js';
-export { parseSkillResourceManifest, BUNDLED_SKILL_RESOURCE_DIRECTORY } from './resources.js';
-export type { SkillResourceManifest } from './resources.js';
+export { SkillCatalog } from './catalog';
+export { SkillError } from './errors';
+export { downloadGitHubSkill } from './github';
+export { installSkillFiles } from './install';
+export { readSkillTree, syncSkillDirectory } from './files';
+export { parseSkill } from './parser';
+export { parseSkillResourceManifest, BUNDLED_SKILL_RESOURCE_DIRECTORY } from './resources';
+export type { SkillResourceManifest } from './resources';
 export type {
   AssertSkillAuthorized,
   DiscoveredSkill,
@@ -20,4 +20,4 @@ export type {
   SkillResourceLease,
   SkillRoot,
   SkillScope,
-} from './types.js';
+} from './types';

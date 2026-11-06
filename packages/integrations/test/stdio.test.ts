@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { resolveProcess } from '@my-pi-harness/sandbox/process';
-import { SupervisedStdioTransport } from '../src/mcp/stdio.js';
+import { SupervisedStdioTransport } from '../src/mcp/stdio';
 
 const roots: string[] = [];
 const transports: SupervisedStdioTransport[] = [];

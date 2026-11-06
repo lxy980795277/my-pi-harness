@@ -6,10 +6,10 @@ import { Type } from 'typebox';
 import { Value } from 'typebox/value';
 import { checkCancelled } from '@my-pi-harness/sandbox';
 import { resolveProcess, startProcess } from '@my-pi-harness/sandbox/process';
-import { resolvePythonRuntime } from '../lib/python-runtime.js';
-import { DocumentError } from '../utils/document-text.js';
-import { readDocumentInput } from '../lib/document-input.js';
-import { completeToolRegistration } from '../lib/tool-registry.js';
+import { resolvePythonRuntime } from '../lib/python-runtime';
+import { DocumentError } from '../utils/document-text';
+import { readDocumentInput } from '../lib/document-input';
+import { completeToolRegistration } from '../lib/tool-registry';
 
 const parameters = Type.Object(
   {

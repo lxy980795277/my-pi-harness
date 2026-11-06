@@ -11,10 +11,10 @@ import {
   encodeJournalRecords,
   type JournalCodecState,
   type JournalRecord,
-} from '../src/sessions/journal-codec.js';
-import { PrivateSessionFiles } from '../src/sessions/private-files.js';
-import { SessionJournal, SessionBatchSchema } from '../src/sessions/session-jsonl.js';
-import { checked } from '../src/shared/validation.js';
+} from '../src/sessions/journal-codec';
+import { PrivateSessionFiles } from '../src/sessions/private-files';
+import { SessionJournal, SessionBatchSchema } from '../src/sessions/session-jsonl';
+import { checked } from '../src/shared/validation';
 
 const resources: { directory: string; files: PrivateSessionFiles }[] = [];
 const objectSchema = Type.Record(Type.String(), Type.Unknown());

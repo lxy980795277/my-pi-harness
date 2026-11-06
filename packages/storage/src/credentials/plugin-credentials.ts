@@ -4,8 +4,8 @@ import { basename, dirname, join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { Type, type Static } from 'typebox';
 import { SkillConnectionAccountSchema } from '@my-pi-harness/protocol';
-import { checked } from '../shared/validation.js';
-import { StorageError } from '../shared/errors.js';
+import { checked } from '../shared/validation';
+import { StorageError } from '../shared/errors';
 
 export type PluginOAuthCredential = Static<typeof CredentialSchema>;
 

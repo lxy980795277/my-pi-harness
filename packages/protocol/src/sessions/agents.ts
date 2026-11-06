@@ -1,8 +1,8 @@
 import { Type, type Static } from 'typebox';
-import { ThinkingLevelSchema } from '../application/models.js';
-import { WorkStateSchema } from './context.js';
-import { MessageUsageSchema, MessageViewSchema, RunViewSchema } from './sessions.js';
-import { ToolCallViewSchema } from '../tools/tools.js';
+import { ThinkingLevelSchema } from '../application/models';
+import { WorkStateSchema } from './context';
+import { MessageUsageSchema, MessageViewSchema, RunViewSchema } from './sessions';
+import { ToolCallViewSchema } from '../tools/tools';
 
 export type AgentLimits = Static<typeof AgentLimitsSchema>;
 export type AgentRole = Static<typeof AgentRoleSchema>;

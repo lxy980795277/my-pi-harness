@@ -1,7 +1,7 @@
-import { test, expect } from './fixture.js';
-import { startToolSequenceModel } from './m2-completion-model.js';
-import { configureTestProvider } from './model-fixtures.js';
-import { chooseConversationModel } from './ui-controls.js';
+import { test, expect } from './fixture';
+import { startToolSequenceModel } from './m2-completion-model';
+import { configureTestProvider } from './model-fixtures';
+import { chooseConversationModel } from './ui-controls';
 
 test('回答结束后收起完整过程，展开保留阅读位置、最终思考与内部工具选择', async ({
   page,

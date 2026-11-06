@@ -12,10 +12,10 @@ import {
   type FrozenSkill,
   type SkillCandidate,
 } from '@my-pi-harness/protocol';
-import { checked } from '../../shared/validation.js';
-import { StorageError } from '../../shared/errors.js';
-import * as schema from '../../sqlite/schema.js';
-import { CapabilityLoadSchema, InputIdSchema, QueueRequestSchema } from '../event-validation.js';
+import { checked } from '../../shared/validation';
+import { StorageError } from '../../shared/errors';
+import * as schema from '../../sqlite/schema';
+import { CapabilityLoadSchema, InputIdSchema, QueueRequestSchema } from '../event-validation';
 
 const definition = Type.Object({
   name: Type.String({ minLength: 1, maxLength: 100 }),

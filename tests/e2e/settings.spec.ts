@@ -1,9 +1,9 @@
 import { type AuthFlow, ProviderConfigSchema } from '@my-pi-harness/protocol';
 import { Type } from 'typebox';
 import { Value } from 'typebox/value';
-import { test, expect } from './fixture.js';
-import { startTestModel } from './model-server.js';
-import { chooseOption, openUserSettings } from './ui-controls.js';
+import { test, expect } from './fixture';
+import { startTestModel } from './model-server';
+import { chooseOption, openUserSettings } from './ui-controls';
 
 test('用户卡片只打开向上菜单，关闭回焦且设置接管弹窗焦点', async ({ page, daemon }, testInfo) => {
   await page.goto(daemon.origin);

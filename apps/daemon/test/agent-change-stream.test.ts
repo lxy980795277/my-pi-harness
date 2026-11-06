@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { startAgentChangeStream } from '../src/agents/change-stream.js';
+import { startAgentChangeStream } from '../src/agents/change-stream';
 
 class ResponseFixture extends EventEmitter {
   destroyed = false;

@@ -18,14 +18,14 @@ import type {
   Todo,
 } from '@my-pi-harness/protocol';
 import { openProfileStore } from '@my-pi-harness/storage';
-import { RuntimeError } from '../../src/errors.js';
-import { SessionRuntime } from '../../src/sessions/runtime.js';
-import { ToolRuntime } from '../../src/tools/runtime.js';
-import type { ToolRuntimeOptions } from '../../src/tools/types.js';
-import type { ExternalTools } from '../../src/tools/external.js';
+import { RuntimeError } from '../../src/errors';
+import { SessionRuntime } from '../../src/sessions/runtime';
+import { ToolRuntime } from '../../src/tools/runtime';
+import type { ToolRuntimeOptions } from '../../src/tools/types';
+import type { ExternalTools } from '../../src/tools/external';
 import type { WebFetchGatewayAccess } from '@my-pi-harness/tools';
-import type { SkillsPort, ToolDiscoveryPort } from '../../src/capabilities/ports.js';
-import { WorkRuntime } from '../../src/work/runtime.js';
+import type { SkillsPort, ToolDiscoveryPort } from '../../src/capabilities/ports';
+import { WorkRuntime } from '../../src/work/runtime';
 
 interface WorkFixture {
   directory: string;

@@ -1,5 +1,5 @@
-import { test, expect } from './fixture.js';
-import { openUserSettings, openMcpAdvancedSettings } from './ui-controls.js';
+import { test, expect } from './fixture';
+import { openUserSettings, openMcpAdvancedSettings } from './ui-controls';
 
 test('远程 MCP JSON、秘密、授权与脱敏配置交换', async ({ page, daemon }, testInfo) => {
   await page.goto(daemon.origin);

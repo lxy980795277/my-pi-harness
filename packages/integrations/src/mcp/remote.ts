@@ -1,4 +1,4 @@
-import { NetworkError } from '../network/errors.js';
+import { NetworkError } from '../network/errors';
 import {
   Client,
   StreamableHTTPClientTransport,
@@ -12,12 +12,12 @@ import {
 import { Value } from 'typebox/value';
 import { Type } from 'typebox';
 import type { RemoteMcpTransport } from '@my-pi-harness/protocol';
-import { discoverCatalog } from './catalog.js';
-import { McpError } from './errors.js';
-import { fingerprint } from './fingerprint.js';
-import { projectMcpResult } from './result.js';
-import { createRemoteFetch, parseRemoteUrl } from '../network/remote-fetch.js';
-import type { McpCallInput, McpCallOutcome, McpCatalog, McpLease } from './types.js';
+import { discoverCatalog } from './catalog';
+import { McpError } from './errors';
+import { fingerprint } from './fingerprint';
+import { projectMcpResult } from './result';
+import { createRemoteFetch, parseRemoteUrl } from '../network/remote-fetch';
+import type { McpCallInput, McpCallOutcome, McpCatalog, McpLease } from './types';
 
 export interface RemoteMcpBinding {
   serverId: string;

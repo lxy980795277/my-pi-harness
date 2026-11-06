@@ -9,7 +9,7 @@ import {
   type ProfileStore,
   type EventInput,
   type CreateSessionInput,
-} from '../src/index.js';
+} from '../src/index';
 
 const fixtures: { directory: string; store: ProfileStore }[] = [];
 async function fixture(): Promise<{ directory: string; store: ProfileStore }> {

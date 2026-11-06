@@ -8,8 +8,8 @@ import type {
   WorkState,
   Workspace,
 } from '@my-pi-harness/protocol';
-import type { RuntimeStore, EventInput } from '../sessions/ports.js';
-import type { ModelGateway } from '../models/gateway.js';
+import type { RuntimeStore, EventInput } from '../sessions/ports';
+import type { ModelGateway } from '../models/gateway';
 
 /** Host storage adds branch-local work and private attachment bytes to the existing event store. */
 export interface WorkStore extends RuntimeStore {

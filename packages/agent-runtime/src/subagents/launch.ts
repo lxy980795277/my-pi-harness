@@ -1,18 +1,18 @@
 import type { InputRequest } from '@my-pi-harness/protocol';
-import type { SubagentCoordinator } from './coordinator.js';
-import type { SubagentNode } from './types.js';
-import type { ResolvedModel } from '../models/gateway.js';
-import { RuntimeError } from '../errors.js';
-import { RunExecution } from '../runs/execution.js';
-import { prepareRun, resolveRunModel } from '../runs/prepare.js';
-import { decodeContextMessage } from '../context/codec.js';
-import { completeToolHistory } from '../context/tool-history.js';
-import { RunCapabilities } from '../capabilities/run.js';
-import { allowedTaskCandidates, allowedTaskTool } from './policy.js';
-import { selectRunTools } from '../tools/selection.js';
-import { capabilityContext } from '../capabilities/context.js';
-import { agentContext } from './definitions.js';
-import { createSubagentRunAdapter } from './run-adapter.js';
+import type { SubagentCoordinator } from './coordinator';
+import type { SubagentNode } from './types';
+import type { ResolvedModel } from '../models/gateway';
+import { RuntimeError } from '../errors';
+import { RunExecution } from '../runs/execution';
+import { prepareRun, resolveRunModel } from '../runs/prepare';
+import { decodeContextMessage } from '../context/codec';
+import { completeToolHistory } from '../context/tool-history';
+import { RunCapabilities } from '../capabilities/run';
+import { allowedTaskCandidates, allowedTaskTool } from './policy';
+import { selectRunTools } from '../tools/selection';
+import { capabilityContext } from '../capabilities/context';
+import { agentContext } from './definitions';
+import { createSubagentRunAdapter } from './run-adapter';
 
 /** A child uses the same RunExecution and durable acceptance as a root conversation. */
 export async function launchAgentRun(

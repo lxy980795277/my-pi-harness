@@ -3,11 +3,11 @@ import { join } from 'node:path';
 import { fauxAssistantMessage, type TranscriptContext } from '@earendil-works/pi-ai';
 import { nativeTools } from '@my-pi-harness/tools';
 import { describe, expect, it, vi } from 'vitest';
-import { decodeContextMessage } from '../src/context/codec.js';
-import { estimateContextUsage } from '../src/context/budget.js';
-import { RunToolset, type RunToolDefinition, type RunToolSelection } from '../src/tools/toolset.js';
-import { call, fixture, idle } from './support/work-fixture.js';
-import { acceptedTools, loadedTools } from './support/session-audit.js';
+import { decodeContextMessage } from '../src/context/codec';
+import { estimateContextUsage } from '../src/context/budget';
+import { RunToolset, type RunToolDefinition, type RunToolSelection } from '../src/tools/toolset';
+import { call, fixture, idle } from './support/work-fixture';
+import { acceptedTools, loadedTools } from './support/session-audit';
 
 function declarations(context: TranscriptContext): RunToolDefinition[] {
   return context.messages.flatMap((message) => {

@@ -11,14 +11,11 @@ import {
 import { createMemoryCredentialStore } from '@my-pi-harness/storage';
 import { Value } from 'typebox/value';
 import { afterEach, describe, expect, it } from 'vitest';
-import { loadDaemonConfig } from '../src/application/config.js';
-import {
-  createApplicationServices,
-  type ApplicationServices,
-} from '../src/application/services.js';
-import { createDaemonApplication, type DaemonApplication } from '../src/http/server.js';
-import { pairFixture, type FixtureAuthorization } from './support/login.js';
-import { readSseRecord } from './support/sse.js';
+import { loadDaemonConfig } from '../src/application/config';
+import { createApplicationServices, type ApplicationServices } from '../src/application/services';
+import { createDaemonApplication, type DaemonApplication } from '../src/http/server';
+import { pairFixture, type FixtureAuthorization } from './support/login';
+import { readSseRecord } from './support/sse';
 
 const OWNER_SECRET = 'login-api-test-owner-000000000000000000000000000000';
 class GitHubFixture {

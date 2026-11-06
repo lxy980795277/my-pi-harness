@@ -1,8 +1,8 @@
 import * as oauth from 'oauth4webapi';
 import { Type, type Static } from 'typebox';
 import { Value } from 'typebox/value';
-import type { ConnectionProvider } from './providers.js';
-import { createRemoteFetch } from '../network/remote-fetch.js';
+import type { ConnectionProvider } from './providers';
+import { createRemoteFetch } from '../network/remote-fetch';
 
 export type ConnectionCredential = Static<typeof ConnectionCredentialSchema>;
 

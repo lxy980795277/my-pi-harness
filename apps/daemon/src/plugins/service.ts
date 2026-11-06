@@ -19,9 +19,9 @@ import type {
   PluginView,
 } from '@my-pi-harness/protocol';
 import type { ExtensionRepository, StoredPlugin } from '@my-pi-harness/storage';
-import type { SkillsService } from '../skills/service.js';
-import { syncPluginSkills } from './sync.js';
-import { installedPluginDirectory, pluginSkillsCurrent } from './resources.js';
+import type { SkillsService } from '../skills/service';
+import { syncPluginSkills } from './sync';
+import { installedPluginDirectory, pluginSkillsCurrent } from './resources';
 
 export interface PluginAppPort {
   install(

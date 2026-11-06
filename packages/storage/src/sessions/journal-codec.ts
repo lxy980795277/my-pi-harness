@@ -1,13 +1,13 @@
 import { Type } from 'typebox';
 import { StoredToolResultSchema, type HarnessEvent } from '@my-pi-harness/protocol';
-import { StorageError } from '../shared/errors.js';
-import { checked } from '../shared/validation.js';
+import { StorageError } from '../shared/errors';
+import { checked } from '../shared/validation';
 import {
   PreparedPrivateSchema,
   PreparedEventSchema,
   ToolContextEventSchema,
-} from './event-validation.js';
-import { projectStoredEvent } from './stored-event.js';
+} from './event-validation';
+import { projectStoredEvent } from './stored-event';
 
 /** Complete host records after disk references have been resolved. */
 export interface JournalRecord {

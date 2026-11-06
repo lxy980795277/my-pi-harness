@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto';
-import { RuntimeError } from '../errors.js';
-import type { ExternalTools } from './external.js';
-import type { ToolOutcome } from './outcome.js';
-import type { ToolCallLedger } from './ledger.js';
-import type { RunToolRecord } from './toolset.js';
+import { RuntimeError } from '../errors';
+import type { ExternalTools } from './external';
+import type { ToolOutcome } from './outcome';
+import type { ToolCallLedger } from './ledger';
+import type { RunToolRecord } from './toolset';
 
 /** A single external attempt must persist its dispatch barrier before any server write. */
 export async function dispatchMcpTool(

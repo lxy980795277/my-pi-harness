@@ -2,9 +2,9 @@ import { and, asc, eq, gt, inArray, sql } from 'drizzle-orm';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import { Type } from 'typebox';
 import { FrozenSkillSchema, MessageViewSchema, type FrozenSkill } from '@my-pi-harness/protocol';
-import { StorageError } from '../shared/errors.js';
-import { checked } from '../shared/validation.js';
-import * as schema from '../sqlite/schema.js';
+import { StorageError } from '../shared/errors';
+import { checked } from '../shared/validation';
+import * as schema from '../sqlite/schema';
 
 const Anchor = Type.Pick(MessageViewSchema, ['id', 'role', 'status', 'stopReason']);
 const Payload = Type.Object({

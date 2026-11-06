@@ -1,5 +1,5 @@
 import type { HarnessEvent, SessionSnapshot } from '@my-pi-harness/protocol';
-import { createSessionUpdate } from './stream-update.js';
+import { createSessionUpdate } from './stream-update';
 
 interface StreamResponse {
   readonly destroyed: boolean;

@@ -2,8 +2,8 @@ import { constants } from 'node:fs';
 import { access, lstat, open, realpath, stat, type FileHandle } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { isAbsolute, parse, posix, relative, resolve, sep, win32 } from 'node:path';
-import { SandboxError, checkCancelled, isMissing } from '../errors.js';
-import { isSensitiveName } from '../policy/protected-paths.js';
+import { SandboxError, checkCancelled, isMissing } from '../errors';
+import { isSensitiveName } from '../policy/protected-paths';
 
 export type WorkspacePathPlatform = 'posix' | 'win32';
 
@@ -190,4 +190,4 @@ export async function openRegular(path: string, maximum: number): Promise<FileHa
   }
 }
 
-export { isSensitiveName } from '../policy/protected-paths.js';
+export { isSensitiveName } from '../policy/protected-paths';

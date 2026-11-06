@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { openProfileStore } from '../src/index.js';
+import { openProfileStore } from '../src/index';
 
 describe('SQLite-owned application settings', () => {
   it('creates explicit defaults and preserves changed defaults across session projection rebuilds', async () => {

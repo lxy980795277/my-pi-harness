@@ -9,8 +9,8 @@ import {
   type ToolCallRecord,
   type ApprovalMode,
 } from '@my-pi-harness/protocol';
-import { openProfileStore, type EventInput, type ProfileStore } from '../../src/index.js';
-import { storedToolCallId } from '../../src/sessions/projections/tool-intents.js';
+import { openProfileStore, type EventInput, type ProfileStore } from '../../src/index';
+import { storedToolCallId } from '../../src/sessions/projections/tool-intents';
 
 export interface AgentSessionFixture {
   directory: string;

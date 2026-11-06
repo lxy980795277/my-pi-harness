@@ -1,22 +1,18 @@
-export * from './sessions/context.js';
-export * from './sessions/live.js';
-export * from './extensions/mcp.js';
-export * from './tools/tool-results.js';
-export * from './extensions/skills.js';
-export * from './extensions/plugins.js';
-export * from './extensions/skill-connections.js';
-export * from './tools/artifacts.js';
+export * from './sessions/context';
+export * from './sessions/live';
+export * from './extensions/mcp';
+export * from './tools/tool-results';
+export * from './extensions/skills';
+export * from './extensions/plugins';
+export * from './extensions/skill-connections';
+export * from './tools/artifacts';
 export {
   SessionChangeSchema,
   SessionPatchSchema,
   SessionStreamUpdateSchema,
-} from './sessions/session-stream.js';
-export type {
-  SessionChange,
-  SessionPatch,
-  SessionStreamUpdate,
-} from './sessions/session-stream.js';
-export { parseExternalUrl } from './host/external-links.js';
+} from './sessions/session-stream';
+export type { SessionChange, SessionPatch, SessionStreamUpdate } from './sessions/session-stream';
+export { parseExternalUrl } from './host/external-links';
 
 export {
   CustomProtocolSchema,
@@ -31,7 +27,7 @@ export {
   ProviderInputSchema,
   NativeProviderInfoSchema,
   ConnectionResultSchema,
-} from './application/models.js';
+} from './application/models';
 export type {
   CustomProtocol,
   ThinkingLevel,
@@ -45,7 +41,7 @@ export type {
   ProviderInput,
   NativeProviderInfo,
   ConnectionResult,
-} from './application/models.js';
+} from './application/models';
 export {
   SessionSummarySchema,
   MessageUsageSchema,
@@ -61,7 +57,7 @@ export {
   InputRequestSchema,
   EditInputSchema,
   QueuePatchInputSchema,
-} from './sessions/sessions.js';
+} from './sessions/sessions';
 export type {
   SessionSummary,
   MessageUsage,
@@ -77,7 +73,7 @@ export type {
   InputRequest,
   EditInput,
   QueuePatchInput,
-} from './sessions/sessions.js';
+} from './sessions/sessions';
 export {
   AppUserSchema,
   LoginMethodSchema,
@@ -88,7 +84,7 @@ export {
   AuthStatusSchema,
   AuthFlowSchema,
   PairingCodeResponseSchema,
-} from './application/auth.js';
+} from './application/auth';
 export type {
   AppUser,
   LoginMethod,
@@ -99,22 +95,22 @@ export type {
   AuthStatus,
   AuthFlow,
   PairingCodeResponse,
-} from './application/auth.js';
+} from './application/auth';
 
-export { APP_VERSION } from './version.js';
+export { APP_VERSION } from './version';
 export {
   WORKSPACE_ICONS,
   WorkspaceIconSchema,
   WorkspaceSchema,
   WorkspaceCreateInputSchema,
   WorkspaceRenameInputSchema,
-} from './application/workspaces.js';
+} from './application/workspaces';
 export type {
   WorkspaceIcon,
   Workspace,
   WorkspaceCreateInput,
   WorkspaceRenameInput,
-} from './application/workspaces.js';
+} from './application/workspaces';
 export {
   ApprovalModeSchema,
   ToolApprovalSchema,
@@ -124,7 +120,7 @@ export {
   ToolSourceSchema,
   ToolBindingSchema,
   ToolDispatchSchema,
-} from './tools/tools.js';
+} from './tools/tools';
 export type {
   ApprovalMode,
   ToolApproval,
@@ -134,21 +130,21 @@ export type {
   ToolSource,
   ToolBinding,
   ToolDispatch,
-} from './tools/tools.js';
+} from './tools/tools';
 
-export { PROTOCOL_VERSION, HealthResponseSchema, RuntimeReadyEventSchema } from './host/runtime.js';
-export type { HealthResponse, RuntimeReadyEvent } from './host/runtime.js';
+export { PROTOCOL_VERSION, HealthResponseSchema, RuntimeReadyEventSchema } from './host/runtime';
+export type { HealthResponse, RuntimeReadyEvent } from './host/runtime';
 export {
   DaemonReadyRecordSchema,
   DaemonControlMessageSchema,
   DesktopInfoSchema,
-} from './host/desktop.js';
+} from './host/desktop';
 export type {
   DaemonReadyRecord,
   DaemonControlMessage,
   DesktopInfo,
   DesktopBridge,
-} from './host/desktop.js';
-export * from './extensions/connections.js';
-export * from './tools/frozen-tools.js';
-export * from './sessions/agents.js';
+} from './host/desktop';
+export * from './extensions/connections';
+export * from './tools/frozen-tools';
+export * from './sessions/agents';

@@ -6,15 +6,15 @@ import {
   agentsIdle,
   firstTask,
   waitAtGate,
-} from './support/agent-fixture.js';
+} from './support/agent-fixture';
 import {
   delegate,
   hasResult,
   resultCount,
   taskResults,
   waitForResults,
-} from './support/agent-tools.js';
-import { call, withinDeadline } from './support/work-fixture.js';
+} from './support/agent-tools';
+import { call, withinDeadline } from './support/work-fixture';
 
 describe('Subagent output recovery through real Pi and temporary journals', () => {
   it.each(['failed', 'bounded', 'length'] as const)(
