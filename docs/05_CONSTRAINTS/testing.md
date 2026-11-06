@@ -30,6 +30,8 @@ CI桌面打包步骤显式提供合成GitHub Client ID，验证资源装配与�
 
 ## 机械规则与审查
 
+ESLint根入口加载scripts/eslint中的本地配置与规则，相关依赖位于根devDependencies；规则/覆盖回归位于tests/unit，workspace执行继续使用同一根配置。
+
 - 类型感知no-deprecated拒绝实际弃用使用，源码gate拒绝types目录冗余-view文件名；合法/非法fixture必须实际运行。
 - ESLint 对所有 TS/TSX/CTS/MTS 配置明确编译面，no-floating-promises/no-misused-promises 保持类型感知；JS/MJS/CJS 也执行实际规则。测试和构建配置不排除在检查外。
 - Web 全禁三目、void 运算符和 then/catch/finally 调用；检查 TSX Service/Query 编排、裸交互控件、内联事件、组件声明、Hook 与 Store 选择器。唯一 use-async-event.ts 启动豁免由源码 gate 限定路径、单条说明和对应调用，不开放全局 Promise 例外。

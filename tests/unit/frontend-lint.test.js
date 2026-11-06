@@ -1,7 +1,7 @@
 import { fileURLToPath } from 'node:url';
 
-import { createConfig } from '@my-pi-harness/eslint-config';
-import { frontendPlugin } from '@my-pi-harness/eslint-config/frontend-rules';
+import { createConfig } from '../../scripts/eslint/config.js';
+import { frontendPlugin } from '../../scripts/eslint/frontend-rules.js';
 import { ESLint, Linter } from 'eslint';
 import { describe, expect, it } from 'vitest';
 

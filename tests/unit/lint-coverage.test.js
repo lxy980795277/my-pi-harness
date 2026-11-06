@@ -96,7 +96,8 @@ describe('real ESLint configuration coverage', () => {
 
   it.each([
     'eslint.config.js',
-    'packages/eslint-config/index.js',
+    'scripts/eslint/config.js',
+    'scripts/eslint/frontend-rules.js',
     'scripts/dev.mjs',
     'tests/unit/lint-coverage.test.js',
     'apps/desktop/electron-builder.config.cjs',
@@ -128,6 +129,30 @@ describe('real ESLint configuration coverage', () => {
     ]) {
       expect(severity(config.rules[rule]), `${path}: ${rule}`).toBe(2);
     }
+  });
+
+  it.each([
+    ['apps/web', 'apps/web/src/app/index.tsx'],
+    ['packages/tools', 'packages/tools/src/index.ts'],
+  ])('inherits the root configuration when ESLint runs from %s', async (cwd, path) => {
+    const eslint = new ESLint({ cwd: join(root, cwd) });
+    const file = join(root, path);
+    expect(await eslint.isPathIgnored(file)).toBe(false);
+    const config = await eslint.calculateConfigForFile(file);
+    expectTypedConfig(config, path);
+    if (cwd === 'apps/web') {
+      expect(severity(config.rules['react-hooks/rules-of-hooks'])).toBe(2);
+      expect(severity(config.rules['project-react/component-declaration'])).toBe(2);
+    } else {
+      expect(config.rules['project-react/component-declaration']).toBeUndefined();
+    }
+    const rejected = await eslint.lintText(
+      'export const launch = (): void => { Promise.resolve(); };',
+      { filePath: file },
+    );
+    expect(rejected[0].messages).toEqual([
+      expect.objectContaining({ ruleId: '@typescript-eslint/no-floating-promises', severity: 2 }),
+    ]);
   });
 
   it('includes the independent Bundler test program', async () => {

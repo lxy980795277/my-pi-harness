@@ -33,10 +33,11 @@
 | `packages/integrations`  | MCP传输/目录/租约、远端服务OAuth、凭据消费与本地向量适配             | 数据库、启动授权决策、Pi Loop、HTTP与页面 |
 | `packages/storage`       | JSONL批日志、SQLite配置/投影、附件和产物blob、profile锁与凭据        | 模型调用和页面状态                        |
 | `packages/protocol`      | 跨端DTO、schema、协议版本、公开桌面桥                                | Node imports、业务服务、环境配置或密钥    |
-| `packages/eslint-config` | 共享静态检查配置                                                     | 业务实现                                  |
 | `packages/tsconfig`      | 明确的TypeScript编译配置                                             | 运行时代码                                |
 
 `agent-runtime`通过明确RuntimeStore/ProviderStore与SecretStore接口接入宿主，ToolRuntime按冻结策略逐次确认、调用独立ModelApprovalReviewer或使用用户明确选择的full-access，再调用tools注册项为当前Run绑定的领域端口；daemon提供工作区、命令、Skill和产物服务及复核资料，Renderer只消费公开工具事件。`storage`拥有JSONL会话事实、不可变附件及产物字节，以及SQLite配置/会话投影；完整批次校验后先写日志并fsync，再提交SQLite投影，Runtime随后发布公开SSE。文本/思考片段通过独立发布入口更新内存覆盖层，不写日志或SQLite；公开快照合并当前片段，持久seq与实时修订分别追踪。失败冻结持久写入，重启从日志重建并中断在途运行，不恢复未持久片段或重执行副作用。其他package在真实职责出现时创建，避免无边界共享工具包。跨包导入使用`@my-pi-harness/*`；相对导入仅留在同一app/package，源码检查拒绝跨workspace私有源码引用。
+
+仓库级ESLint配置与项目自定义规则由`scripts/eslint`拥有，根`eslint.config.js`是唯一入口；开发依赖归根devDependencies，各workspace复用根配置，不为本仓专用规则建立独立package。
 
 ## 源码模块组织
 

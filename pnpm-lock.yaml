@@ -218,15 +218,15 @@ importers:
 
   .:
     devDependencies:
+      '@eslint/js':
+        specifier: 'catalog:'
+        version: 10.0.1(eslint@10.11.0(jiti@2.7.0))
       '@modelcontextprotocol/node':
         specifier: 'catalog:'
         version: 2.1.1(@modelcontextprotocol/server@2.3.1)
       '@modelcontextprotocol/server':
         specifier: 'catalog:'
         version: 2.3.1
-      '@my-pi-harness/eslint-config':
-        specifier: workspace:*
-        version: link:packages/eslint-config
       '@my-pi-harness/integrations':
         specifier: workspace:*
         version: link:packages/integrations
@@ -245,6 +245,12 @@ importers:
       eslint:
         specifier: 'catalog:'
         version: 10.11.0(jiti@2.7.0)
+      eslint-plugin-react-hooks:
+        specifier: 'catalog:'
+        version: 7.1.1(eslint@10.11.0(jiti@2.7.0))
+      globals:
+        specifier: 'catalog:'
+        version: 17.13.0
       husky:
         specifier: 'catalog:'
         version: 9.1.7
@@ -272,6 +278,9 @@ importers:
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
+      typescript-eslint:
+        specifier: 'catalog:'
+        version: 8.70.1(eslint@10.11.0(jiti@2.7.0))(typescript@6.0.3)
       vite:
         specifier: 'catalog:'
         version: 7.3.7(@types/node@24.19.2)(jiti@2.7.0)(lightningcss@1.33.0)(tsx@4.23.15)(yaml@2.9.1)
@@ -504,25 +513,6 @@ importers:
       vitest:
         specifier: 'catalog:'
         version: 4.1.11(@types/node@24.19.2)(vite@7.3.7(@types/node@24.19.2)(jiti@2.7.0)(lightningcss@1.33.0)(tsx@4.23.15)(yaml@2.9.1))
-
-  packages/eslint-config:
-    dependencies:
-      '@eslint/js':
-        specifier: 'catalog:'
-        version: 10.0.1(eslint@10.11.0(jiti@2.7.0))
-      eslint-plugin-react-hooks:
-        specifier: 'catalog:'
-        version: 7.1.1(eslint@10.11.0(jiti@2.7.0))
-      globals:
-        specifier: 'catalog:'
-        version: 17.13.0
-      typescript-eslint:
-        specifier: 'catalog:'
-        version: 8.70.1(eslint@10.11.0(jiti@2.7.0))(typescript@6.0.3)
-    devDependencies:
-      eslint:
-        specifier: 'catalog:'
-        version: 10.11.0(jiti@2.7.0)
 
   packages/integrations:
     dependencies:
