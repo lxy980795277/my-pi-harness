@@ -47,7 +47,7 @@ describe('compact tool presentation', () => {
 
   it('normalizes only the visible command preview and preserves exact multiline arguments', () => {
     const command = 'printf first\n\n  printf second';
-    const shell = tool({ name: 'shell', arguments: { command }, status: 'running' });
+    const shell = tool({ name: 'run_command', arguments: { command }, status: 'running' });
     expect(toolPresentation(shell)).toMatchObject({
       name: '执行命令',
       summary: 'printf first printf second',

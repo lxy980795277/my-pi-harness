@@ -5,7 +5,7 @@ export * from './tools/tool-results.js';
 export * from './extensions/skills.js';
 export * from './extensions/plugins.js';
 export * from './extensions/skill-connections.js';
-export * from './tools/office.js';
+export * from './tools/artifacts.js';
 export {
   SessionChangeSchema,
   SessionPatchSchema,

@@ -5,10 +5,10 @@ import {
   type Transport,
 } from '@modelcontextprotocol/client';
 import {
-  startPersistentProcess,
-  type PersistentProcess,
-  type PersistentProcessLaunch,
-} from '@my-pi-harness/execution';
+  startProcess,
+  type ManagedProcess,
+  type ProcessLaunch,
+} from '@my-pi-harness/sandbox/process';
 import { McpError } from './errors.js';
 import { fingerprint } from './fingerprint.js';
 import type { McpCallInput } from './types.js';
@@ -33,7 +33,8 @@ export class SupervisedStdioTransport implements Transport {
   public onclose: Transport['onclose'];
   public onerror: Transport['onerror'];
   public onmessage: Transport['onmessage'];
-  #process: PersistentProcess | undefined;
+  #process: ManagedProcess | undefined;
+  #starting: Promise<ManagedProcess> | undefined;
   #buffer = Buffer.alloc(0);
   #controller = new AbortController();
   #attempts = new Map<string, DispatchAttempt>();
@@ -45,7 +46,7 @@ export class SupervisedStdioTransport implements Transport {
   #frameCount = 0;
   #failed = false;
   public constructor(
-    private readonly launch: PersistentProcessLaunch,
+    private readonly launch: ProcessLaunch,
     private readonly secrets: readonly string[],
     private readonly onFault: () => void,
   ) {}
@@ -54,7 +55,7 @@ export class SupervisedStdioTransport implements Transport {
     if (this.#started)
       throw new McpError('ALREADY_STARTED', 'The local connection already started');
     this.#started = true;
-    this.#process = await startPersistentProcess(
+    this.#starting = startProcess(
       this.launch,
       {
         stdout: (chunk) => {
@@ -63,6 +64,7 @@ export class SupervisedStdioTransport implements Transport {
         stdoutEnd: () => {
           if (this.#buffer.length !== 0)
             this.fail('INCOMPLETE_FRAME', 'Local tool stdout ended within a protocol frame');
+          else this.fail('CONNECTION_LOST', 'Local tool stdout closed unexpectedly');
         },
         fault: () => {
           this.fail('CONNECTION_LOST', 'The local tool connection closed unexpectedly');
@@ -71,6 +73,24 @@ export class SupervisedStdioTransport implements Transport {
       this.#controller.signal,
       this.secrets,
     );
+    this.#process = await this.#starting;
+    // A natural exit can precede its last protocol frame; drain all pipes before reporting loss.
+    this.#process.closed
+      .then(
+        () => {
+          this.fail('CONNECTION_LOST', 'The local tool program exited');
+        },
+        () => {
+          this.fail(
+            'PROCESS_CLEANUP_FAILED',
+            'The local tool process could not be fully cleaned up',
+          );
+        },
+      )
+      .catch(() => {
+        // SDK callbacks have already been notified; their exception cannot leave owned work running.
+        this.#controller.abort();
+      });
     if (this.#controller.signal.aborted) await this.#process.close();
   }
 
@@ -222,7 +242,8 @@ export class SupervisedStdioTransport implements Transport {
     for (const attempt of this.#attempts.values()) attempt.revoked = true;
     this.onclose?.();
     this.#closed = (async () => {
-      if (this.#process) await this.#process.close();
+      const owned = this.#process ?? (await this.#starting?.catch(() => undefined));
+      if (owned) await owned.close();
     })();
     return this.#closed;
   }

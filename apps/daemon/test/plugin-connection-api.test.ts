@@ -5,7 +5,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import type { FastifyBaseLogger } from 'fastify';
 import pino from 'pino';
 import { PluginOAuthError } from '@my-pi-harness/integrations';
-import { TOOL_DEFINITIONS } from '@my-pi-harness/execution';
+import { nativeTools } from '@my-pi-harness/tools';
 import { Value } from 'typebox/value';
 import {
   SkillConnectionStatusSchema,
@@ -396,7 +396,9 @@ it('only daemon ToolRuntime web_fetch can enter the read gateway, which attaches
       throw new Error(message);
     },
   };
-  const definition = TOOL_DEFINITIONS.find(({ name }) => name === 'web_fetch');
+  const definition = nativeTools().find(
+    ({ definition }) => definition.name === 'web_fetch',
+  )?.definition;
   if (!definition) throw new Error('Missing web_fetch definition');
   const toolset = new RunToolset([{ definition, source: { kind: 'session' } }]);
   const tool = f.services.tools

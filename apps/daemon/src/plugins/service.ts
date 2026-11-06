@@ -2,7 +2,7 @@ import { lstat, mkdir, realpath, rename, rm } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import {
-  BUILTIN_PLUGINS,
+  PluginCatalog,
   BUILTIN_PLUGIN_RESOURCE_DIRECTORY,
   PluginError,
   SkillCatalog,
@@ -11,7 +11,7 @@ import {
   syncSkillDirectory,
   previewBuiltinPluginSkills,
   previewPluginSkills,
-} from '@my-pi-harness/integrations';
+} from '@my-pi-harness/tools';
 import type {
   PluginComponent,
   PluginDetail,
@@ -60,13 +60,12 @@ export class PluginService {
   private readonly settlements = new Set<Promise<void>>();
   private stopped = false;
   public constructor(private readonly options: PluginServiceOptions) {}
+  private readonly catalog = new PluginCatalog();
   private manifest(id: string): PluginManifest {
-    const manifest = BUILTIN_PLUGINS.find((entry) => entry.id === id);
-    if (!manifest) throw new PluginError('PLUGIN_NOT_FOUND', 'Unknown built-in plugin');
-    return manifest;
+    return this.catalog.get(id);
   }
   public list(): PluginView[] {
-    return BUILTIN_PLUGINS.map((manifest) => {
+    return this.catalog.list().map((manifest) => {
       const installed = this.options.repository.plugins().find((entry) => entry.id === manifest.id);
       if (installed === undefined)
         return { manifest, installed: false, enabled: false, revision: 0, components: [] };

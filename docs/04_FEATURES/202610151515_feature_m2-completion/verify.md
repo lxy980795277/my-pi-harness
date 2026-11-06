@@ -39,6 +39,6 @@
 
 ## 保留限制与用户入口
 
-专用`MY_PI_HARNESS_TEST_API_KEY`、`MY_PI_HARNESS_TEST_BASE_URL`和`MY_PI_HARNESS_TEST_MODEL`均未配置，未发起真实供应商请求或读取用户Keychain。Windows/Linux实机、Windows Shell和用户体验为Not verified；应用仍未签名、公证，也未生成正式安装器。既有文件竞态、恶意进程组逃逸和PDF隔离限制继续以[execution说明](../../../packages/execution/README.md)为准。
+专用`MY_PI_HARNESS_TEST_API_KEY`、`MY_PI_HARNESS_TEST_BASE_URL`和`MY_PI_HARNESS_TEST_MODEL`均未配置，未发起真实供应商请求或读取用户Keychain。Windows/Linux实机、Windows Shell和用户体验为Not verified；应用仍未签名、公证，也未生成正式安装器。既有文件竞态、恶意进程组逃逸和PDF隔离限制继续以[execution说明](../../../packages/tools/README.md)为准。
 
 运行`pnpm dev:desktop`，或打开`release/mac-arm64/My Pi Harness.app`进行验收。建议使用临时测试目录，依次体验目录选择、工作区会话树、读取/搜索、编辑批准或拒绝、Diff、只读策略及刷新/重启历史；操作说明见[用户指南](../../07_USER_GUIDE/workspace-execution.md)。

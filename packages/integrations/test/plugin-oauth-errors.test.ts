@@ -1,12 +1,11 @@
+import { pluginConnectionDefinition } from './plugin-definition.js';
 import { expect, it } from 'vitest';
 import {
   beginPluginOAuth,
   refreshPluginOAuth,
-  pluginConnectionDefinition,
   PluginOAuthError,
   NetworkError,
   PluginError,
-  SkillError,
   type PluginOAuthFetch,
   type PluginOAuthFailureReason,
 } from '../src/index.js';
@@ -20,7 +19,6 @@ const client = {
 const signal = new AbortController().signal;
 function safe(error: PluginOAuthError): void {
   expect(error).toBeInstanceOf(PluginError);
-  expect(error).not.toBeInstanceOf(SkillError);
   expect(JSON.stringify({ ...error, message: error.message, stack: error.stack })).not.toContain(
     SECRET,
   );

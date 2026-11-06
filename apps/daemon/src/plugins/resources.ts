@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readdir, realpath } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
-import { readSkillTree, SkillCatalog, PluginError } from '@my-pi-harness/integrations';
+import { readSkillTree, SkillCatalog, PluginError } from '@my-pi-harness/tools';
 import type { PluginManifest } from '@my-pi-harness/protocol';
 import type { StoredPlugin } from '@my-pi-harness/storage';
 

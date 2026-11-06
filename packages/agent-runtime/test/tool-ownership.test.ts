@@ -4,13 +4,13 @@ import { join } from 'node:path';
 import type { SessionSummary } from '@my-pi-harness/protocol';
 import { Type } from 'typebox';
 import { describe, expect, it, vi } from 'vitest';
-import * as execution from '@my-pi-harness/execution';
+import { observeNativeTool } from './support/native-tool.js';
 import { RuntimeError } from '../src/errors.js';
 import type { EventInput } from '../src/sessions/ports.js';
 import { ToolRuntime } from '../src/tools/runtime.js';
 import { recordHostToolOutcome, toolCallRecordId } from '../src/tools/ledger.js';
 import { RunToolset } from '../src/tools/toolset.js';
-import { nativeTools } from '../src/tools/catalog.js';
+import { nativeTools } from '@my-pi-harness/tools';
 import type { ToolRunContext } from '../src/tools/types.js';
 
 async function fixture() {
@@ -85,7 +85,6 @@ async function fixture() {
 describe('task tool ownership', () => {
   it.each([
     { name: 'write_file', args: { path: 'blocked.txt', content: 'blocked', expectedHash: null } },
-    { name: 'shell', args: { command: 'touch blocked.txt' } },
     {
       name: 'web_fetch',
       args: { url: 'https://fixture.invalid/', method: 'POST', body: 'blocked' },
@@ -94,9 +93,8 @@ describe('task tool ownership', () => {
     'denies read-only $name before approval, writer admission or execution',
     async ({ name, args }) => {
       const f = await fixture();
-      const fetch = vi
-        .spyOn(execution, 'executeWebFetch')
-        .mockRejectedValue(new Error('Web execution must not start'));
+      const observed = observeNativeTool('web_fetch');
+      const fetch = observed.execute.mockRejectedValue(new Error('Web execution must not start'));
       let admissions = 0;
       const context: ToolRunContext = {
         ...f.context,
@@ -126,7 +124,7 @@ describe('task tool ownership', () => {
         );
         expect(records).not.toContainEqual(expect.objectContaining({ status: 'reviewing' }));
       } finally {
-        fetch.mockRestore();
+        observed.restore();
         await f.close();
       }
     },
@@ -200,9 +198,12 @@ describe('task tool ownership', () => {
         });
       };
       f.context.agents = {
-        has: (name) => name === 'spawn_agent',
-        execute: (_name, _args, toolCallId) => {
-          calls.push(toolCallId);
+        status: () => Promise.resolve({}),
+        wait: () => Promise.resolve({}),
+        send: () => Promise.resolve({}),
+        stop: () => Promise.resolve({}),
+        spawn: (_args, invocation) => {
+          calls.push(invocation.toolCallId);
           expect(f.events.at(-1)?.type).toBe('tool.requested');
           return Promise.reject(new RuntimeError('TASK_LIMIT', 'Task limit reached'));
         },
@@ -228,14 +229,14 @@ describe('task tool ownership', () => {
     }
   });
 
-  it('routes the 28 catalog declarations and rejects mismatched or unknown sources', async () => {
+  it('routes the registered catalog declarations and rejects mismatched or unknown sources', async () => {
     const f = await fixture();
     try {
       const full = f.toolset;
       expect(f.runtime.createTools(f.context, full).map(({ name }) => name)).toEqual(
         full.definitions.map(({ name }) => name),
       );
-      expect(new Set(full.definitions.map(({ name }) => name)).size).toBe(28);
+      expect(new Set(full.definitions.map(({ name }) => name)).size).toBe(nativeTools().length);
       for (const selection of [
         {
           source: { kind: 'session' as const },
@@ -267,12 +268,12 @@ describe('task tool ownership', () => {
         if (!executable) throw new Error('Missing accepted definition');
         expect(executable.name).toBe(selection.definition.name);
         const result = executable.execute(selection.definition.name, {});
-        if (selection.source.kind === 'workspace') await expect(result).rejects.toThrow();
-        else expect((await result).isError).toBe(true);
+        expect((await result).isError).toBe(true);
       }
-      expect(f.events.filter(({ type }) => type === 'tool.context')).toHaveLength(2);
+      expect(f.events.filter(({ type }) => type === 'tool.context')).toHaveLength(3);
       expect(f.events.filter(({ type }) => type === 'tool.requested')).toMatchObject([
         { data: { tool: { name: 'read_file', binding: { kind: 'accepted' } } } },
+        { data: { tool: { name: 'ask_user', binding: { kind: 'accepted' } } } },
         { data: { tool: { name: 'unknown_control', binding: { kind: 'accepted' } } } },
       ]);
     } finally {
@@ -284,7 +285,13 @@ describe('task tool ownership', () => {
     const f = await fixture();
     const wrongRoute = vi.fn(() => Promise.reject(new Error('Wrong controller family')));
     try {
-      f.context.agents = { has: () => true, execute: wrongRoute };
+      f.context.agents = {
+        spawn: wrongRoute,
+        status: wrongRoute,
+        wait: wrongRoute,
+        send: wrongRoute,
+        stop: wrongRoute,
+      };
       await writeFile(join(f.directory, 'observed.txt'), 'actual file');
       const read = f.runtime
         .createTools(f.context, f.toolset)
@@ -394,7 +401,7 @@ describe('task tool ownership', () => {
           description: 'No longer registered',
           parameters: Type.Object({}, { additionalProperties: false }),
         };
-        f.context.controls = { has: () => true, execute };
+        f.context.controls = { search: execute, loadSkill: execute, readResource: execute };
         const tool = f.runtime.createTools(
           f.context,
           new RunToolset([{ definition, source: { kind: 'session' } }]),

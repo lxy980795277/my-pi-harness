@@ -65,13 +65,14 @@ export async function launchAgentRun(
     const canSpawn =
       settings.enabled && node.depth < Math.min(node.limits.maxDepth, settings.limits.maxDepth);
     const selection = selectRunTools({
+      registrations: owner.options.tools.registrations,
       workspaceId: session.workspaceId,
       work: owner.options.tools.supportsWorkTools,
       skills: owner.options.skills !== undefined,
       skillDirectory: skillCandidates.length > 0 || skills.length > 0,
       agents: true,
       canSpawn,
-      allows: (tool) => allowedTaskTool(tool, task.role.access),
+      allows: (tool) => allowedTaskTool(tool, task.role.access, owner.options.tools.registrations),
       required: ['send_agent_message'],
       inherited: current,
       activeSkills: skills,
@@ -200,7 +201,7 @@ export async function launchAgentRun(
     await execution.start();
   } catch (error) {
     if (accepted && !started) {
-      execution?.disposeUnstarted();
+      await execution?.disposeUnstarted();
       if (execution) execution.outcome = 'failed';
       owner.commit(node.session.id, [
         {
@@ -218,7 +219,7 @@ export async function launchAgentRun(
     throw error;
   } finally {
     clearTimeout(timer);
-    capabilities?.close();
+    await capabilities?.close();
     resolved?.release();
     owner.returnWriter(node);
   }

@@ -119,6 +119,9 @@ export function createRunAgent(options: RunExecutionOptions, host: RunAgentHost)
     toolExecution: 'sequential',
     prepareRequest: async ({ context }, signal) => {
       host.assertKnownOutcome();
+      await options.capabilities?.prepareResources(
+        signal ? AbortSignal.any([signal, host.signal]) : host.signal,
+      );
       let advanced = false;
       const resolveTools = (requirements: readonly string[]) => {
         try {

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { basename } from 'node:path';
 import { RuntimeError } from '@my-pi-harness/agent-runtime';
-import { ExecutionError, resolveWorkspaceRoot } from '@my-pi-harness/execution';
+import { SandboxError, resolveWorkspaceRoot } from '@my-pi-harness/sandbox';
 import { WorkspaceSchema } from '@my-pi-harness/protocol';
 import type {
   SessionCreateInput,
@@ -54,7 +54,7 @@ export class WorkspaceService {
     try {
       return await resolveWorkspaceRoot({ rootPath, profileDirectory: this.profileDirectory });
     } catch (error: unknown) {
-      if (!(error instanceof ExecutionError)) throw error;
+      if (!(error instanceof SandboxError)) throw error;
       if (error.code === 'PROTECTED_PATH')
         throw new RuntimeError(
           'WORKSPACE_PATH_PROTECTED',

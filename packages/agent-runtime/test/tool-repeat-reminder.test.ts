@@ -1,11 +1,11 @@
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fauxAssistantMessage, type TranscriptContext } from '@earendil-works/pi-ai';
-import * as execution from '@my-pi-harness/execution';
+import { observeNativeTool } from './support/native-tool.js';
 import { StoredToolResultSchema } from '@my-pi-harness/protocol';
 import { openProfileStore } from '@my-pi-harness/storage';
 import { ArrayOptions } from 'typebox/type';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { decodeContextMessage } from '../src/context/codec.js';
 import { RepeatToolReminder } from '../src/tools/repeat-reminder.js';
 import { agentFixture, agentsIdle, firstTask } from './support/agent-fixture.js';
@@ -277,7 +277,8 @@ describe('consecutive tool-use reminders', () => {
       text: `Original block ${String(index)}`,
     }));
     const f = await fixture(true);
-    const execute = vi.spyOn(execution, 'executeTool').mockResolvedValue({
+    const observed = observeNativeTool('read_file');
+    const execute = observed.execute.mockResolvedValue({
       content: original,
       summary: 'All original blocks returned.',
     });
@@ -322,7 +323,7 @@ describe('consecutive tool-use reminders', () => {
       expect(retained.map(({ content }) => content)).toEqual([original, original, original]);
       expect(f.errors).toEqual([]);
     } finally {
-      execute.mockRestore();
+      observed.restore();
       await f.close();
     }
   });

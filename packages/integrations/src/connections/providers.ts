@@ -1,5 +1,4 @@
 import type { ConnectionServiceId } from '@my-pi-harness/protocol';
-import { loadBuiltinPluginApps } from '../plugins/apps.js';
 
 export type ClientAuthentication = 'basic' | 'post';
 export interface ConnectionProvider {
@@ -13,8 +12,6 @@ export interface ConnectionProvider {
   profileEndpoint: string;
   defaultScopes: readonly string[];
   allowedScopes: readonly string[];
-  mcpEndpoints: readonly string[];
-  apps: readonly string[];
 }
 const googleScopes = [
   'https://www.googleapis.com/auth/userinfo.profile',
@@ -28,7 +25,7 @@ const googleScopes = [
   'https://www.googleapis.com/auth/calendar.events.freebusy',
 ];
 
-const providers: readonly Omit<ConnectionProvider, 'mcpEndpoints' | 'apps'>[] = [
+export const CONNECTION_PROVIDERS: readonly ConnectionProvider[] = [
   {
     serviceId: 'github',
     name: 'GitHub',
@@ -97,16 +94,6 @@ const providers: readonly Omit<ConnectionProvider, 'mcpEndpoints' | 'apps'>[] = 
     allowedScopes: [],
   },
 ];
-
-/** Official MCP targets and App labels come from the same bundled declarations as plugin installation. */
-export const CONNECTION_PROVIDERS: readonly ConnectionProvider[] = providers.map((provider) => {
-  const apps = loadBuiltinPluginApps(provider.serviceId);
-  return {
-    ...provider,
-    mcpEndpoints: apps.map((app) => app.endpoint),
-    apps: apps.map((app) => app.name),
-  };
-});
 
 export function connectionProvider(id: ConnectionServiceId): ConnectionProvider {
   const provider = CONNECTION_PROVIDERS.find((item) => item.serviceId === id);

@@ -19,12 +19,12 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "minisearch": "catalog:",
     "@earendil-works/pi-agent-core": "catalog:",
     "@earendil-works/pi-ai": "catalog:",
     "@my-pi-harness/protocol": "workspace:*",
     "typebox": "catalog:",
-    "@my-pi-harness/execution": "workspace:*"
+    "@my-pi-harness/sandbox": "workspace:*",
+    "@my-pi-harness/tools": "workspace:*"
   },
   "devDependencies": {
     "@my-pi-harness/storage": "workspace:*",

@@ -7,7 +7,9 @@ import {
   installSkillFiles,
   type SkillRoot,
   type SkillResourceContent,
-} from '@my-pi-harness/integrations';
+  type SkillResourceLease,
+} from '@my-pi-harness/tools';
+import { createRemoteFetch } from '@my-pi-harness/integrations';
 import type {
   FrozenSkill,
   SkillCandidate,
@@ -38,6 +40,7 @@ export class SkillsService {
   public constructor(private readonly options: SkillsServiceOptions) {
     this.catalog = new SkillCatalog({
       snapshotDirectory: join(options.profileDirectory, 'skill-versions'),
+      protectedDirectories: [options.profileDirectory],
     });
   }
   private async roots(workspaceId: string | null): Promise<SkillRoot[]> {
@@ -281,6 +284,16 @@ export class SkillsService {
       }
     }
   }
+  public async materializeBindings(
+    skills: readonly FrozenSkill[],
+    signal: AbortSignal,
+  ): Promise<SkillResourceLease> {
+    return this.catalog.materializeBindings(skills, signal, (skill, current) => {
+      current.throwIfAborted();
+      this.assertBindingsCurrent([skill]);
+      return Promise.resolve();
+    });
+  }
   public retainBindings(skills: readonly FrozenSkill[]): () => void {
     this.assertBindingsCurrent(skills);
     return this.catalog.retainBindings(skills);
@@ -400,7 +413,7 @@ export class SkillsService {
       const downloaded = await downloadGitHubSkill(
         input,
         operationSignal,
-        this.options.githubFetch,
+        this.options.githubFetch ?? createRemoteFetch(),
       );
       const directory = await installSkillFiles(
         root,
@@ -519,6 +532,7 @@ export class SkillsService {
   }
   public stopAccepting(): void {
     this.stopped = true;
+    this.catalog.close();
     for (const controller of this.operations) controller.abort();
   }
   public async close(): Promise<void> {

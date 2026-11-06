@@ -12,6 +12,7 @@ import {
   type SessionSummary,
 } from '@my-pi-harness/protocol';
 import { StorageError } from '../../shared/errors.js';
+import { projectArtifact } from '../../artifacts/projection.js';
 import { ToolProjection } from './tools.js';
 import { WorkRepository } from './work.js';
 import { AgentTaskProjection } from './agents.js';
@@ -339,6 +340,9 @@ export class ProjectionWriter {
    */
   public apply(event: HarnessEvent, privateData?: Record<string, unknown>): void {
     switch (event.type) {
+      case 'artifact.published':
+        projectArtifact(this.db, event);
+        break;
       case 'task.created':
         this.agents.create(event);
         break;

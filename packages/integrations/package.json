@@ -4,8 +4,7 @@
   "private": true,
   "type": "module",
   "files": [
-    "dist",
-    "resources"
+    "dist"
   ],
   "exports": {
     ".": {
@@ -22,7 +21,7 @@
   "dependencies": {
     "@huggingface/transformers": "catalog:",
     "@modelcontextprotocol/client": "catalog:",
-    "@my-pi-harness/execution": "workspace:*",
+    "@my-pi-harness/sandbox": "workspace:*",
     "typebox": "catalog:",
     "yaml": "catalog:",
     "oauth4webapi": "catalog:",

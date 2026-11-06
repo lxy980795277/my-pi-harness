@@ -1,5 +1,6 @@
+import type { CommandResourceLease } from '@my-pi-harness/tools';
 import { Value } from 'typebox/value';
-import type { ExecutionContent } from '@my-pi-harness/execution';
+import type { ToolContent } from '@my-pi-harness/tools';
 import type { FrozenSkill, SkillCandidate, ToolDiscoveryDiagnostic } from '@my-pi-harness/protocol';
 import type { FrozenMcpTool } from '../tools/external.js';
 import type { EventInput } from '../sessions/ports.js';
@@ -7,15 +8,12 @@ import { RuntimeError } from '../errors.js';
 import { RunToolset, type RunToolRecord, type RunToolSelection } from '../tools/toolset.js';
 import type { RunControls, SkillsPort } from './ports.js';
 import { snapshotPrivateData } from '../context/codec.js';
-import { DISCOVERY_TOOL_DEFINITIONS, SKILL_TOOL_DEFINITIONS } from './definitions.js';
 import { RunSkills } from './skills.js';
 import {
-  DEFAULT_TOOL_SEARCH_LIMIT,
-  MAX_TOOL_SEARCH_RESULTS,
   MAX_VISIBLE_TOOLS,
   ToolCatalogSearch,
   type ToolSearchDocument,
-} from './search.js';
+} from '@my-pi-harness/tools';
 
 interface RunCapabilitiesOptions {
   runId: string;
@@ -38,13 +36,13 @@ export class RunCapabilities implements RunControls {
   private readonly pendingNames = new Set<string>();
   private readonly candidates = new Map<string, RunToolSelection>();
   private readonly skillState: RunSkills;
-  private readonly search: ToolCatalogSearch;
+  private readonly catalogSearch: ToolCatalogSearch;
   private readonly diagnostics: readonly ToolDiscoveryDiagnostic[];
   private closed = false;
 
   public constructor(private readonly options: RunCapabilitiesOptions) {
     this.active = options.initial;
-    this.search = options.search ?? new ToolCatalogSearch();
+    this.catalogSearch = options.search ?? new ToolCatalogSearch();
     this.diagnostics = Value.Clone(options.diagnostics ?? []);
     if (this.active.records.length > MAX_VISIBLE_TOOLS)
       throw new RuntimeError('TOOL_LIMIT', '本次运行最多同时提供64个工具。');
@@ -80,15 +78,19 @@ export class RunCapabilities implements RunControls {
     return this.skillState.skills();
   }
 
-  public has(name: string): boolean {
-    return [...DISCOVERY_TOOL_DEFINITIONS, ...SKILL_TOOL_DEFINITIONS].some(
-      (tool) => tool.name === name,
-    );
-  }
-
   /** Request preparation may expose only operations present in this accepted catalog. */
   public canProvide(name: string): boolean {
     return this.candidates.has(name);
+  }
+
+  public async retainCommandResources(signal: AbortSignal): Promise<CommandResourceLease> {
+    this.assertOpen();
+    return this.skillState.retainCommandResources(signal);
+  }
+
+  public async prepareResources(signal: AbortSignal): Promise<void> {
+    this.assertOpen();
+    await this.skillState.prepareResources(signal);
   }
 
   public assertCurrent(): void {
@@ -123,50 +125,39 @@ export class RunCapabilities implements RunControls {
     return [...new Set(names)];
   }
 
-  public async execute(
-    name: string,
-    args: Record<string, unknown>,
-    signal: AbortSignal,
-  ): Promise<ExecutionContent[]> {
+  public async readResource(id: string, path: string, signal: AbortSignal): Promise<ToolContent[]> {
     signal.throwIfAborted();
     this.assertOpen();
-    if (name === 'read_skill_resource')
-      return await this.skillState.readResource(
-        String(args['skillId']),
-        String(args['path']),
-        signal,
-      );
-    if (name === 'load_skill') {
-      const skill = await this.skillState.resolve(String(args['id']), signal);
-      signal.throwIfAborted();
-      this.stageSkills([skill]);
-      return [
-        {
-          type: 'text',
-          text: JSON.stringify({ id: skill.selection.id, availableFrom: 'next-model-request' }),
-        },
-      ];
-    }
-    if (name !== 'tool_search') throw new RuntimeError('TOOL_NOT_AVAILABLE', '控制工具不存在。');
-    const query = args['query'];
-    const limit = args['limit'] ?? DEFAULT_TOOL_SEARCH_LIMIT;
-    if (
-      typeof query !== 'string' ||
-      query.trim().length === 0 ||
-      query.length > 200 ||
-      typeof limit !== 'number' ||
-      !Number.isInteger(limit) ||
-      limit < 1 ||
-      limit > MAX_TOOL_SEARCH_RESULTS
-    )
-      throw new RuntimeError('TOOL_ARGUMENTS_INVALID', '搜索内容不能为空，limit须为1到10的整数。');
+    return this.skillState.readResource(id, path, signal);
+  }
+  public async loadSkill(id: string, signal: AbortSignal): Promise<ToolContent[]> {
+    signal.throwIfAborted();
+    this.assertOpen();
+    const skill = await this.skillState.resolve(id, signal);
+    signal.throwIfAborted();
+    this.stageSkills([skill]);
+    const resourceDirectory = await this.skillState.resourceDirectory(skill, signal);
+    return [
+      {
+        type: 'text',
+        text: JSON.stringify({
+          id: skill.selection.id,
+          resourceDirectory,
+          availableFrom: 'next-model-request',
+        }),
+      },
+    ];
+  }
+  public async search(query: string, limit: number, signal: AbortSignal): Promise<ToolContent[]> {
+    signal.throwIfAborted();
+    this.assertOpen();
     const documents: ToolSearchDocument[] = [...this.candidates.values()].map((tool) => ({
       definition: tool.definition,
       label: tool.external?.displayName ?? tool.definition.name,
       source: tool.source.kind,
       originalName: tool.external?.selection.remoteToolName ?? tool.definition.name,
     }));
-    const matches = await this.search.search(documents, query, signal);
+    const matches = await this.catalogSearch.search(documents, query, signal);
     signal.throwIfAborted();
     this.assertOpen();
     const visible = this.visibleNames();
@@ -232,7 +223,12 @@ export class RunCapabilities implements RunControls {
   /** Persist before publishing to Pi, context budgeting or execution. */
   public advance(): boolean {
     this.assertOpen();
-    if (this.pendingNames.size === 0 && this.skillState.pending().length === 0) return false;
+    if (
+      this.pendingNames.size === 0 &&
+      this.skillState.pending().length === 0 &&
+      !this.skillState.resourcesChanged
+    )
+      return false;
     const records: RunToolSelection[] = [...this.active.records];
     for (const name of this.pendingNames) {
       const record = this.candidates.get(name);
@@ -274,10 +270,10 @@ export class RunCapabilities implements RunControls {
     return true;
   }
 
-  public close(): void {
+  public async close(): Promise<void> {
     if (this.closed) return;
     this.closed = true;
-    this.skillState.close();
+    await this.skillState.close();
     this.pendingNames.clear();
   }
 }

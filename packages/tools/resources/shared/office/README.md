@@ -1,0 +1,7 @@
+# Shared format helpers
+
+These are this project's existing OOXML and PDF implementations, now composed by independent plugin Skill scripts. Each Skill declares the precise helper files and hashes in its resource manifest; activation copies them into that Skill's immutable `scripts/` directory. Modules do not dispatch on model tool names.
+
+`common.py` validates bounded ZIP/XML and package relationships. `documents.py` and `word_layout.py` preserve unrelated DOCX parts while supporting layout, real revisions, comments, notes, fields and restricted merges. `pdfs.py`, `pdf_forms.py` and `pdf_layout.py` retain PDF page, appearance and pagination checks; PDF parsing restrictions are shared with the generic page viewer through `shared/document-view/pdf_safety.py`. `spreadsheets.py` checks formulas and caches independently. `presentations.py` checks native objects, bounds, template part names and dimensions.
+
+`cli_support.py` checks optional dependencies and publishes create-only outputs. `convert_pdf.py` uses an installed LibreOffice with a private user directory; it does not download a converter. The spreadsheet CLI separately verifies actual recalculation before publishing its output. Normal Python workflows can call these specific functions or maintained public libraries from workspace scripts. General shell permissions still govern those scripts; helper validation does not constrain arbitrary authorized shell code.

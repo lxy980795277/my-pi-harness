@@ -1,6 +1,6 @@
 import { isAbsolute } from 'node:path';
 import { RuntimeError } from '@my-pi-harness/agent-runtime';
-import { isAllowedProcessEnvironmentName } from '@my-pi-harness/execution';
+import { isAllowedProcessEnvironmentName } from '@my-pi-harness/sandbox';
 import type { McpServerInput } from '@my-pi-harness/protocol';
 
 const MAX_ENVIRONMENT_VARIABLES = 64;

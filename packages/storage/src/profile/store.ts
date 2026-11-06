@@ -33,6 +33,9 @@ import {
   type AgentSettingsInput,
   type LiveMessageDelta,
   type ToolCallView,
+  ArtifactSchema,
+  ArtifactPublishedSchema,
+  type Artifact,
 } from '@my-pi-harness/protocol';
 import { StorageError } from '../shared/errors.js';
 import { AuthRepository } from '../repositories/auth.js';
@@ -68,6 +71,7 @@ import { QueueRequestSchema, SessionCreatedSchema } from '../sessions/event-vali
 import { SessionEventCommit } from '../sessions/event-commit.js';
 import { assertPersistentEvent } from '../sessions/event-persistence.js';
 import { LiveMessages } from '../sessions/live-messages.js';
+import { ArtifactBlobs, type ArtifactDownload, type ArtifactBlob } from '../artifacts/blobs.js';
 
 /** JSONL session facts, immutable attachments and SQLite configuration/projections for one daemon. */
 export class ProfileStore {
@@ -91,6 +95,7 @@ export class ProfileStore {
   private readonly files: PrivateSessionFiles;
   private readonly journal: SessionJournal;
   private readonly blobs: AttachmentBlobs;
+  private readonly artifactBlobs: ArtifactBlobs;
   private pendingRecords: StoredSessionEvent[] = [];
   private transactionDepth = 0;
   private writeFailure: StorageError | undefined;
@@ -125,6 +130,7 @@ export class ProfileStore {
     this.files = new PrivateSessionFiles(lock.directory, options.sessionLogRoot);
     this.journal = new SessionJournal(this.files);
     this.blobs = new AttachmentBlobs(this.files);
+    this.artifactBlobs = new ArtifactBlobs(this.files, options.artifactLimits);
     try {
       this.rebuildProjections();
     } catch (error) {
@@ -188,6 +194,7 @@ export class ProfileStore {
           schema.agentMessages,
           schema.agentTasks,
           schema.toolContexts,
+          schema.artifacts,
           schema.toolCalls,
           schema.branchMessages,
           schema.workStates,
@@ -235,6 +242,11 @@ export class ProfileStore {
             }
           }
         }
+        for (const { data } of this.db
+          .select({ data: schema.artifacts.data })
+          .from(schema.artifacts)
+          .all())
+          this.artifactBlobs.read(checked(ArtifactSchema, data));
         for (const { id } of previousIds)
           if (
             !this.db
@@ -350,6 +362,7 @@ export class ProfileStore {
     if (this.closed) return;
     this.closed = true;
     this.live.clear();
+    this.artifactBlobs.close();
     try {
       try {
         this.files.close();
@@ -570,6 +583,87 @@ export class ProfileStore {
     }, true);
   }
 
+  /** Freeze exact host-read bytes before their metadata enters the session journal. */
+  public putArtifactBytes(bytes: Uint8Array): ArtifactBlob {
+    this.assertOpen();
+    if (this.writeFailure) throw this.writeFailure;
+    return this.artifactBlobs.put(bytes);
+  }
+
+  /** Only committed, currently visible root or child publications are downloadable. */
+  public getArtifact(sessionId: string, artifactId: string): Artifact | undefined {
+    return this.transaction(() => {
+      const row = this.db
+        .select()
+        .from(schema.artifacts)
+        .where(and(eq(schema.artifacts.id, artifactId), eq(schema.artifacts.sessionId, sessionId)))
+        .get();
+      if (row === undefined) return undefined;
+      const artifact = checked(ArtifactSchema, row.data);
+      if (
+        artifact.id !== row.id ||
+        artifact.sessionId !== row.sessionId ||
+        artifact.runId !== row.runId ||
+        artifact.toolCallId !== row.toolCallId ||
+        artifact.sha256 !== row.sha256
+      )
+        throw new StorageError('INVALID_RECORD', 'Artifact index does not match its publication');
+      const tool = this.getVisibleTool(sessionId, artifact.toolCallId);
+      if (tool === undefined) return undefined;
+      if (
+        tool.status !== 'completed' ||
+        tool.runId !== artifact.runId ||
+        tool.artifacts?.some(
+          (entry) => entry.id === artifact.id && JSON.stringify(entry) === JSON.stringify(artifact),
+        ) !== true
+      )
+        throw new StorageError(
+          'INVALID_RECORD',
+          'Artifact metadata does not match its completed tool',
+        );
+      return artifact;
+    }, true);
+  }
+
+  public listArtifacts(sessionId: string): Artifact[] {
+    this.assertOpen();
+    return this.db
+      .select({ id: schema.artifacts.id })
+      .from(schema.artifacts)
+      .where(eq(schema.artifacts.sessionId, sessionId))
+      .all()
+      .flatMap(({ id }) => {
+        const artifact = this.getArtifact(sessionId, id);
+        return artifact === undefined ? [] : [artifact];
+      });
+  }
+
+  public acquireArtifactDownload(sessionId: string, artifactId: string): ArtifactDownload {
+    const artifact = this.getArtifact(sessionId, artifactId);
+    if (artifact === undefined)
+      throw new StorageError('INVALID_RECORD', 'Artifact is not available in this session');
+    return this.artifactBlobs.acquire(artifact);
+  }
+
+  /** Failed publications remain unreferenced; their bytes can be reclaimed after the operation settles. */
+  public abandonArtifactPublication(hash: string): void {
+    this.assertOpen();
+    this.artifactBlobs.abandon(hash);
+  }
+
+  /** Archive and branch changes keep references; only uncommitted or explicitly unreferenced blobs are reclaimed. */
+  public collectUnreferencedArtifacts(): number {
+    this.assertOpen();
+    const referenced = new Set(
+      this.db
+        .select({ hash: schema.artifacts.sha256 })
+        .from(schema.artifacts)
+        .all()
+        .map(({ hash }) => hash),
+    );
+    return this.artifactBlobs.collectUnreferenced(referenced);
+  }
+
   /** Read the selected branch's durable work state, or the empty revision-zero state. */
   public getWorkState(sessionId: string, branchId?: string): WorkState {
     this.assertOpen();
@@ -732,8 +826,18 @@ export class ProfileStore {
 
   /** Append durable facts; transient output uses its separate process-local entry point. */
   public append(sessionId: string, inputs: readonly EventInput[]): HarnessEvent[] {
-    for (const input of inputs) assertPersistentEvent(input.type);
-    return this.transaction(() => this.eventCommit.append(sessionId, inputs));
+    for (const input of inputs) {
+      assertPersistentEvent(input.type);
+      if (input.type === 'artifact.published')
+        this.artifactBlobs.read(checked(ArtifactPublishedSchema, input.data).artifact);
+    }
+    const events = this.transaction(() => this.eventCommit.append(sessionId, inputs));
+    this.artifactBlobs.committed(
+      events
+        .filter((event) => event.type === 'artifact.published')
+        .map((event) => checked(ArtifactSchema, event.data.artifact).sha256),
+    );
+    return events;
   }
 
   /** Append live output without a SQLite transaction, durable cursor advance or journal write. */

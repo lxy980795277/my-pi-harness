@@ -1,12 +1,10 @@
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fauxAssistantMessage, type TranscriptContext } from '@earendil-works/pi-ai';
-import { TOOL_DEFINITIONS } from '@my-pi-harness/execution';
+import { nativeTools } from '@my-pi-harness/tools';
 import { describe, expect, it, vi } from 'vitest';
 import { decodeContextMessage } from '../src/context/codec.js';
 import { estimateContextUsage } from '../src/context/budget.js';
-import { DISCOVERY_TOOL_DEFINITIONS } from '../src/capabilities/definitions.js';
-import { SESSION_TOOL_DEFINITIONS } from '../src/work/tools.js';
 import { RunToolset, type RunToolDefinition, type RunToolSelection } from '../src/tools/toolset.js';
 import { call, fixture, idle } from './support/work-fixture.js';
 import { acceptedTools, loadedTools } from './support/session-audit.js';
@@ -23,14 +21,23 @@ function initialDefinitions(input: {
   files: boolean;
   session: boolean;
 }): RunToolDefinition[] {
-  const definitions = TOOL_DEFINITIONS.filter(({ name }) => {
-    if (name === 'web_fetch') return input.network;
-    return input.files && (name !== 'shell' || process.platform === 'darwin');
-  });
-  if (input.session)
-    definitions.push(...SESSION_TOOL_DEFINITIONS.filter(({ name }) => name === 'ask_user'));
-  if (input.network) definitions.push(...DISCOVERY_TOOL_DEFINITIONS);
-  return definitions;
+  return nativeTools()
+    .filter(
+      (entry) =>
+        entry.loading === 'default' &&
+        entry.available({
+          workspace: input.files,
+          work: input.session,
+          skills: false,
+          skillDirectory: false,
+          agents: false,
+          canSpawn: false,
+          images: true,
+          platform: process.platform,
+        }) &&
+        input.network,
+    )
+    .map((entry) => entry.definition);
 }
 
 describe('accepted tools through Pi requests, budgets and durable execution', () => {

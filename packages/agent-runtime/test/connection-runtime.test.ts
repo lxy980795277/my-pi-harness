@@ -134,7 +134,7 @@ describe('plugin gateway instructions through the actual model and durable input
         ) ?? [];
       expect(offered).toContain('web_fetch');
       expect(offered).not.toContain('read_file');
-      expect(offered).not.toContain('shell');
+      expect(offered).not.toContain('run_command');
       expect(f.runtime.getSnapshot(f.session.id).tools[0]).toMatchObject({
         name: 'web_fetch',
         status: 'completed',

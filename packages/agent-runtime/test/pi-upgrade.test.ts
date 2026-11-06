@@ -209,7 +209,7 @@ describe('Pi adapter upgrade behavior over HTTP/SSE', () => {
   it('sends a nonblank tool-result placeholder without modifying the retained whitespace result', async () => {
     const call: AssistantMessage = {
       ...fauxAssistantMessage(
-        [{ type: 'toolCall', id: 'empty-call', name: 'shell', arguments: {} }],
+        [{ type: 'toolCall', id: 'empty-call', name: 'run_command', arguments: {} }],
         { stopReason: 'toolUse' },
       ),
       api: 'openai-completions',
@@ -219,7 +219,7 @@ describe('Pi adapter upgrade behavior over HTTP/SSE', () => {
     const result: Message = {
       role: 'toolResult',
       toolCallId: 'empty-call',
-      toolName: 'shell',
+      toolName: 'run_command',
       content: [{ type: 'text', text: '\r\n\t ' }],
       isError: false,
       timestamp: 2,

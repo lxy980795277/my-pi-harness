@@ -1,5 +1,5 @@
 import type { Tool, Resource, Prompt } from '@modelcontextprotocol/client';
-import type { PersistentProcessLaunch, ProcessScope } from '@my-pi-harness/execution';
+import type { ProcessLaunch, ProcessScope } from '@my-pi-harness/sandbox/process';
 import type { TSchema } from 'typebox';
 
 export interface McpSecretDescriptor {
@@ -21,7 +21,7 @@ export interface McpLaunchInput {
 }
 
 export interface McpLaunchPreview {
-  launch: PersistentProcessLaunch;
+  launch: ProcessLaunch;
   startupFingerprint: string;
 }
 

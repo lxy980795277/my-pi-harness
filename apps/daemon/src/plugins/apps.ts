@@ -1,4 +1,4 @@
-import { PluginError } from '@my-pi-harness/integrations';
+import { PluginError } from '@my-pi-harness/tools';
 import type { RemoteMcpService } from '../mcp/remote-service.js';
 import type { PluginAppPort } from './service.js';
 import { pluginAppConfiguration } from './app-catalog.js';

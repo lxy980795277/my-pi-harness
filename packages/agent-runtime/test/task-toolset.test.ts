@@ -48,7 +48,7 @@ function candidate(name: string, readOnly: boolean): FrozenMcpTool {
 
 function parentToolset(candidates: FrozenMcpTool[]): RunToolset {
   return new RunToolset([
-    ...['read_file', 'write_file', 'shell'].map((name) => ({
+    ...['read_file', 'write_file', 'run_command'].map((name) => ({
       source: { kind: 'workspace' as const },
       definition: { name, description: name, parameters: Type.Object({}) },
     })),
@@ -104,14 +104,13 @@ describe('task role capability selection', () => {
     );
     for (const name of [
       'write_file',
-      'shell',
       'unknown_control',
       'restore_context_checkpoint',
       'unknown_operation',
     ])
       expect(child.definitions.map((tool) => tool.name)).not.toContain(name);
     expect(allowedTaskCandidates(candidates, 'read-only')).toEqual([candidates[0]]);
-    expect(parent.definitions.some(({ name }) => name === 'shell')).toBe(true);
+    expect(parent.definitions.some(({ name }) => name === 'run_command')).toBe(true);
     expect(parent.definitions.some(({ name }) => name === 'unknown_operation')).toBe(true);
   });
 
@@ -122,7 +121,7 @@ describe('task role capability selection', () => {
       expect.arrayContaining([
         'read_file',
         'write_file',
-        'shell',
+        ...(process.platform === 'darwin' ? ['run_command'] : []),
         'spawn_agent',
         'ask_user',
         'read_tool_result',

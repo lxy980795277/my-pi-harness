@@ -6,7 +6,12 @@ import type {
   SkillView,
   ToolDiscoveryDiagnostic,
 } from '@my-pi-harness/protocol';
-import type { ExecutionContent } from '@my-pi-harness/execution';
+import type { ToolContent } from '@my-pi-harness/tools';
+import type {
+  CapabilityToolHandlers,
+  CommandResourceLease,
+  SkillResourceLease,
+} from '@my-pi-harness/tools';
 import type { FrozenMcpTool } from '../tools/external.js';
 
 /** Host-authorized discovery prepares catalogs before freezing their non-secret metadata. */
@@ -43,15 +48,13 @@ export interface SkillsPort {
   validateBindings(skills: readonly FrozenSkill[], signal: AbortSignal): Promise<void>;
   assertBindingsCurrent(skills: readonly FrozenSkill[]): void;
   retainBindings(skills: readonly FrozenSkill[]): () => void;
-  loadResource(skill: FrozenSkill, path: string, signal: AbortSignal): Promise<ExecutionContent[]>;
+  materializeBindings?(
+    skills: readonly FrozenSkill[],
+    signal: AbortSignal,
+  ): Promise<SkillResourceLease>;
+  loadResource(skill: FrozenSkill, path: string, signal: AbortSignal): Promise<ToolContent[]>;
 }
 
-/** Controller tools can stage next-turn changes, but cannot replace the current assistant's tool map. */
-export interface RunControls {
-  has(name: string): boolean;
-  execute(
-    name: string,
-    args: Record<string, unknown>,
-    signal: AbortSignal,
-  ): Promise<ExecutionContent[]>;
+export interface RunControls extends CapabilityToolHandlers {
+  retainCommandResources?(signal: AbortSignal): Promise<CommandResourceLease>;
 }

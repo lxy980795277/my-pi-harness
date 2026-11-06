@@ -1,9 +1,11 @@
 import type { FrozenSkill, WorkState } from '@my-pi-harness/protocol';
-import { nativeTools } from './catalog.js';
+import { nativeTools, type ToolRegistration } from '@my-pi-harness/tools';
 import type { FrozenMcpTool } from './external.js';
 import { RunToolset, type RunToolRecord, type RunToolSelection } from './toolset.js';
 
 export interface ToolSelectionInput {
+  registrations?: readonly ToolRegistration[];
+  images?: boolean;
   workspaceId: string | null;
   work: boolean;
   skills: boolean;
@@ -34,19 +36,19 @@ export function selectRunTools(input: ToolSelectionInput): {
   initial: RunToolset;
   nativeCandidates: readonly RunToolRecord[];
 } {
-  const candidates = nativeTools().filter((entry) => {
-    if (entry.source.kind === 'workspace' && input.workspaceId === null) return false;
-    if (entry.definition.name === 'shell' && process.platform !== 'darwin') return false;
-    if (entry.family === 'work' && !input.work) return false;
-    if (entry.family === 'agent' && !input.agents) return false;
-    if (entry.definition.name === 'spawn_agent' && input.canSpawn === false) return false;
-    if (
-      (entry.definition.name === 'load_skill' || entry.definition.name === 'read_skill_resource') &&
-      !input.skills
-    )
-      return false;
-    return input.allows?.(entry) ?? true;
-  });
+  const availability = {
+    workspace: input.workspaceId !== null,
+    work: input.work,
+    skills: input.skills,
+    skillDirectory: input.skillDirectory,
+    agents: input.agents,
+    canSpawn: input.canSpawn !== false,
+    images: input.images ?? true,
+    platform: process.platform,
+  };
+  const candidates = (input.registrations ?? nativeTools()).filter(
+    (entry) => entry.available(availability) && (input.allows?.(entry) ?? true),
+  );
   const required = new Set([
     ...(input.required ?? []),
     ...(input.state ? workToolRequirements(input.state) : []),
@@ -62,10 +64,7 @@ export function selectRunTools(input: ToolSelectionInput): {
         required.add(name);
   }
   const records: RunToolSelection[] = candidates.filter(
-    (entry) =>
-      (entry.loading === 'default' &&
-        (entry.definition.name !== 'load_skill' || input.skillDirectory)) ||
-      required.has(entry.definition.name),
+    (entry) => entry.loading === 'default' || required.has(entry.definition.name),
   );
   for (const inherited of input.inherited?.records ?? []) {
     if (input.allows && !input.allows(inherited)) continue;

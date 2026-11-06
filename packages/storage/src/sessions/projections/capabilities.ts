@@ -248,7 +248,18 @@ export function projectCapabilityLoad(
       throw new StorageError('INVALID_EVENT', 'Loading cannot silently remove a visible tool');
   const previousSkills = previousPayload?.skills ?? frozen.skills ?? [];
   for (const skill of previousSkills)
-    if (!payload.skills.some((item) => JSON.stringify(item) === JSON.stringify(skill)))
+    if (
+      !payload.skills.some((item) => {
+        const { resourceDirectory: previousDirectory, ...previousContent } = skill;
+        const { resourceDirectory: nextDirectory, ...nextContent } = item;
+        return (
+          isDeepStrictEqual(previousContent, nextContent) &&
+          (previousPayload === undefined ||
+            previousDirectory === undefined ||
+            previousDirectory === nextDirectory)
+        );
+      })
+    )
       throw new StorageError(
         'INVALID_EVENT',
         'Loading cannot replace frozen Skill instructions or authority',

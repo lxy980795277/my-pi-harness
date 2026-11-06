@@ -16,6 +16,7 @@ import type {
   AgentTask,
   AgentMessage,
   AgentSettings,
+  Artifact,
 } from '@my-pi-harness/protocol';
 
 /** Private SQLite columns never serve as HTTP responses without protocol validation. */
@@ -210,6 +211,15 @@ export const workStates = sqliteTable(
 export const attachments = sqliteTable('attachments', {
   id: text('id').primaryKey(),
   data: text('data', { mode: 'json' }).$type<Attachment>().notNull(),
+});
+
+export const artifacts = sqliteTable('artifacts', {
+  id: text('id').primaryKey(),
+  sessionId: text('session_id').notNull(),
+  runId: text('run_id').notNull(),
+  toolCallId: text('tool_call_id').notNull(),
+  sha256: text('sha256').notNull(),
+  data: text('data', { mode: 'json' }).$type<Artifact>().notNull(),
 });
 
 export const checkpoints = sqliteTable('checkpoints', {

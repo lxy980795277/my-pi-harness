@@ -6,9 +6,9 @@ import type {
 } from '@my-pi-harness/protocol';
 import type { FrozenMcpTool } from '../tools/external.js';
 import type { RunToolSelection } from '../tools/toolset.js';
-import { nativeTool } from '../tools/catalog.js';
+import { nativeTool, type ToolRegistration } from '@my-pi-harness/tools';
 import { RuntimeError } from '../errors.js';
-import type { SpawnAgentInput } from './definitions.js';
+import type { SpawnAgentInput } from '@my-pi-harness/tools';
 import type { SubagentNode } from './types.js';
 
 interface DelegationPolicy {
@@ -84,12 +84,18 @@ export function allowedTaskCandidates(
 }
 
 /** A task inherits only known native operations or external bindings allowed by its role. */
-export function allowedTaskTool(record: RunToolSelection, access: AgentRole['access']): boolean {
+export function allowedTaskTool(
+  record: RunToolSelection,
+  access: AgentRole['access'],
+  registrations?: readonly ToolRegistration[],
+): boolean {
   if (record.source.kind === 'mcp')
     return access === 'write' || record.external?.authorization.readOnlyGrantId !== undefined;
-  const entry = nativeTool(record.definition.name);
+  const entry = registrations
+    ? registrations.find((entry) => entry.definition.name === record.definition.name)
+    : nativeTool(record.definition.name);
   if (entry?.source.kind !== record.source.kind) return false;
-  return record.source.kind === 'session' || access === 'write' || entry.readOnly;
+  return access === 'write' || entry.readOnly;
 }
 
 /** Lineage membership follows the actual live parent chain, not a task-id prefix. */

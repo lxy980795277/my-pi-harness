@@ -1,7 +1,7 @@
+import { pluginConnectionDefinition } from './definitions.js';
 import {
   PluginError,
   beginPluginOAuth,
-  pluginConnectionDefinition,
   pluginOAuthFetch,
   refreshPluginOAuth,
   type PluginConnectionDefinition,

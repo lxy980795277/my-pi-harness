@@ -1,5 +1,12 @@
-import type { ExecutionContent, WebFetchGatewayAccess } from '@my-pi-harness/execution';
-import type { RunView, SessionSummary, Workspace } from '@my-pi-harness/protocol';
+import type { ToolRegistry } from '@my-pi-harness/tools';
+import type {
+  ToolContent,
+  WebFetchGatewayAccess,
+  AgentToolHandlers,
+  CommandManager,
+  ArtifactToolHandlers,
+} from '@my-pi-harness/tools';
+import type { Artifact, RunView, SessionSummary, Workspace } from '@my-pi-harness/protocol';
 import type { ApprovalReviewer } from './approval-review.js';
 import type { EventInput } from '../sessions/ports.js';
 import type { WorkRuntime } from '../work/runtime.js';
@@ -7,22 +14,11 @@ import type { ExternalTools } from './external.js';
 import type { RunControls } from '../capabilities/ports.js';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 
-/** Task controller calls retain the durable tool ID that accepted the operation. */
-export interface AgentToolControls {
-  has(name: string): boolean;
-  execute(
-    name: string,
-    args: Record<string, unknown>,
-    toolCallId: string,
-    signal: AbortSignal,
-  ): Promise<ExecutionContent[]>;
-}
-
 export interface ToolRunContext {
   controls?: RunControls;
-  agents?: AgentToolControls;
+  agents?: AgentToolHandlers;
   modelStream?: StreamFn;
-  beforeTool?(mutating: boolean, signal: AbortSignal): Promise<() => void>;
+  beforeTool?(this: void, mutating: boolean, signal: AbortSignal): Promise<() => void>;
   session: SessionSummary;
   run: RunView;
   /** Effective capability ceiling, independent of how allowed calls receive approval. */
@@ -39,6 +35,7 @@ export interface ToolRunContext {
 }
 
 export interface ToolRuntimeOptions {
+  registry?: ToolRegistry;
   profileDirectory: string;
   resolveWorkspace(id: string): Promise<Workspace>;
   approvalTimeoutMs?: number;
@@ -46,11 +43,14 @@ export interface ToolRuntimeOptions {
   reviewer?: ApprovalReviewer;
   externalTools?: ExternalTools;
   skillGateway?: WebFetchGatewayAccess;
-  officePythonPath?: string;
+  pythonPath?: string;
+  commands?: CommandManager;
+  artifacts?(context: ToolRunContext): ArtifactToolHandlers;
 }
 
 export interface ToolExecutionResult {
-  content: ExecutionContent[];
+  content: ToolContent[];
   details: undefined;
   isError?: boolean;
+  artifacts?: Artifact[];
 }

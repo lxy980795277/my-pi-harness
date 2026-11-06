@@ -1,3 +1,4 @@
+import { pluginConnectionDefinition } from './definitions.js';
 import { Type } from 'typebox';
 import { Value } from 'typebox/value';
 import {
@@ -10,7 +11,7 @@ import type { ApplicationServices } from '../application/services.js';
 import { requestOperation } from '../http/request-operation.js';
 import { requestPluginGateway } from './gateway.js';
 import { describePluginOAuthFailure } from './failure.js';
-import { PluginError, pluginConnectionDefinition } from '@my-pi-harness/integrations';
+import { PluginError } from '@my-pi-harness/integrations';
 
 const Params = Type.Object(
   { collectionId: Type.String({ pattern: '^[a-z][a-z0-9-]{0,63}$' }) },

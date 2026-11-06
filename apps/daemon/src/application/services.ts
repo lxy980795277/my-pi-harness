@@ -1,3 +1,6 @@
+import { PLUGIN_CONNECTION_DEFINITIONS } from '../plugin-connections/definitions.js';
+import { CommandManager, type ToolSearchEmbedder } from '@my-pi-harness/tools';
+import { ArtifactService } from '../artifacts/service.js';
 import { createSkillsPort } from '../skills/runtime.js';
 import { approvalContext } from '../tools/approval-context.js';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
@@ -9,7 +12,6 @@ import {
   SessionRuntime,
   ToolRuntime,
   WorkRuntime,
-  type ToolSearchEmbedder,
 } from '@my-pi-harness/agent-runtime';
 import {
   createSystemCredentialStore,
@@ -34,11 +36,7 @@ import { createPluginAppPort } from '../plugins/apps.js';
 import { ConnectionService } from '../connections/service.js';
 import { PluginConnectionService } from '../plugin-connections/service.js';
 import { OAuthLaunchTickets } from '../http/oauth-launch-tickets.js';
-import {
-  PLUGIN_CONNECTION_DEFINITIONS,
-  LocalToolSearchEmbedder,
-  type RemoteMcpManager,
-} from '@my-pi-harness/integrations';
+import { LocalToolSearchEmbedder, type RemoteMcpManager } from '@my-pi-harness/integrations';
 
 /** Resources have one daemon owner and close in dependency order. */
 export interface ApplicationServices {
@@ -88,6 +86,8 @@ export async function createApplicationServices(
   const store = await openProfileStore(config.profileDirectory, {
     sessionLogRoot: config.sessionLogRoot,
   });
+  let commands: CommandManager | undefined;
+  let artifacts: ArtifactService | undefined;
   let gateway: ModelGateway | undefined;
   let attachments: AttachmentService | undefined;
   let work: WorkRuntime | undefined;
@@ -248,8 +248,36 @@ export async function createApplicationServices(
       commit: (id, events) => sessionRuntime().record(id, events),
     });
     attachments = new AttachmentService(store, workspaces, config.profileDirectory);
+    commands = new CommandManager();
+    const ownedCommands = commands;
+    artifacts = new ArtifactService(store, workspaces, profileDirectory);
+    const ownedArtifacts = artifacts;
     const tools = new ToolRuntime({
-      ...(config.officePythonPath ? { officePythonPath: config.officePythonPath } : {}),
+      commands,
+      artifacts: (context) => ({
+        publish: (input, invocation) => {
+          if (context.session.workspaceId === null) throw new Error('Workspace required');
+          if (input.producerCommandId)
+            ownedCommands.assertSuccessfulProducer(
+              {
+                sessionId: context.session.id,
+                runId: context.run.id,
+                taskId: context.run.taskId ?? null,
+              },
+              input.producerCommandId,
+            );
+          return ownedArtifacts.publish(input, {
+            ...invocation,
+            owner: {
+              sessionId: context.session.id,
+              runId: context.run.id,
+              taskId: context.run.taskId ?? null,
+            },
+            workspaceId: context.session.workspaceId,
+          });
+        },
+      }),
+      ...(config.pythonPath ? { pythonPath: config.pythonPath } : {}),
       profileDirectory,
       resolveWorkspace: (id) => workspaces.requireAvailable(id),
       work,
@@ -349,6 +377,8 @@ export async function createApplicationServices(
             () => ownedPluginConnections.close(),
             () => ownedAttachments.close(),
             () => runtime.close(),
+            () => tools.close(),
+            () => ownedArtifacts.close(),
             async () => await toolSearchEmbedder?.close(),
             () => ownedMcp.close(),
             () => ownedRemoteMcp.close(),
@@ -378,6 +408,8 @@ export async function createApplicationServices(
     const failures: unknown[] = [error];
     for (const dispose of [
       () => work?.close(),
+      async () => await commands?.close(),
+      async () => await artifacts?.close(),
       async () => await attachments?.close(),
       async () => await pluginConnections?.close(),
       async () => await toolSearchEmbedder?.close(),

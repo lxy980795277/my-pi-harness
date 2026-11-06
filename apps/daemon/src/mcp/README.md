@@ -12,6 +12,6 @@ GET列表、详情和缓存工具目录不启动进程或网络连接。用户�
 
 普通配置和秘密轮换拒绝活动租约，写入新ref后CAS保存，冲突或写入失败回滚新ref。停用、撤销和凭据删除先持久封禁旧授权，再回收连接；重新信任不会复活原Run或队列绑定。浏览器退出登录保留profile级授权和已接受Run；显式profile身份撤销使用独立identity epoch。
 
-`ExternalTools`适配接受输入时冻结的定义与非秘密授权。队列恢复先核对原授权，再从持久JSON schema恢复真实TypeBox元信息，不启动Server或重绑最新选择。实际调用取得新租约后核对完整工具定义指纹，在runtime派发屏障前后再次校验授权；审批、JSONL调用事实与unknown停止策略由agent-runtime拥有，连接和真实进程由integrations/execution拥有。
+`ExternalTools`适配接受输入时冻结的定义与非秘密授权。队列恢复先核对原授权，再从持久JSON schema恢复真实TypeBox元信息，不启动Server或重绑最新选择。实际调用取得新租约后核对完整工具定义指纹，在runtime派发屏障前后再次校验授权；审批、JSONL调用事实与unknown停止策略由agent-runtime拥有，连接和真实进程由integrations/sandbox拥有。
 
 服务关闭先拒绝新操作，由应用服务停止Run并结算结果，然后等待MCP连接关闭，最后关闭模型与存储。当前stdio正向验收限macOS；其他平台明确不提供受监管本地MCP执行。

@@ -1,5 +1,5 @@
 import { Client } from '@modelcontextprotocol/client';
-import { resolvePersistentProcess } from '@my-pi-harness/execution';
+import { resolveProcess } from '@my-pi-harness/sandbox/process';
 import { Value } from 'typebox/value';
 import { discoverCatalog } from './catalog.js';
 import { McpError } from './errors.js';
@@ -70,18 +70,22 @@ export class McpConnectionManager {
   }
 
   public async previewLaunch(input: McpLaunchInput): Promise<McpLaunchPreview> {
-    const launch = await resolvePersistentProcess(input);
+    const launch = await resolveProcess(input);
     const secretNames = new Set(input.secretDescriptors.map((entry) => entry.environmentName));
     const environment = Object.fromEntries(
       Object.entries(input.environment).filter(([key]) => !secretNames.has(key)),
     );
     const startupFingerprint = fingerprint({
       command: launch.command,
+      resolvedCommand: launch.resolvedCommand,
       args: launch.args,
       workspaceRoot: launch.workspaceRoot,
       profileDirectory: launch.profileDirectory,
       scope: launch.scope,
       programIdentity: launch.programIdentity,
+      workspaceIdentity: launch.workspaceIdentity,
+      processAccess: launch.access,
+      processLimits: launch.limits,
       argumentIdentities: launch.argumentIdentities,
       environment,
       secrets: input.secretDescriptors,

@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "dependencies": [
+    {
+      "source": "shared/office/common.py",
+      "target": "scripts/common.py",
+      "hash": "6039b92cd325c535c1af2f3ac0d9e4a82a79d61106cc73efbcda97b02317d7e1"
+    },
+    {
+      "source": "shared/office/spreadsheets.py",
+      "target": "scripts/spreadsheets.py",
+      "hash": "5ab9f949f4965ac614761891c0fafc7f9ffcc716a3c545da6d6e256d88886ad7"
+    },
+    {
+      "source": "shared/office/cli_support.py",
+      "target": "scripts/cli_support.py",
+      "hash": "702fb8d69fb12f06d4860fd4aa242257945a735d9352a168f41d3dea845a9060"
+    },
+    {
+      "source": "shared/office/convert_pdf.py",
+      "target": "scripts/convert_pdf.py",
+      "hash": "5723257b8a0cb38216bc052a276f7a5b40c7e05be434439448b74be1a623b6f0"
+    }
+  ]
+}

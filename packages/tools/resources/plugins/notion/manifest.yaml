@@ -1,0 +1,29 @@
+id: notion
+name: Notion
+apiUrl: https://api.notion.com
+oauth:
+  issuer: https://api.notion.com
+  authorizationEndpoint: https://api.notion.com/v1/oauth/authorize
+  tokenEndpoint: https://api.notion.com/v1/oauth/token
+  pkce: false
+  tokenAuth: basic
+  tokenFormat: json
+  scopes: []
+  authorizationParams:
+    owner: user
+  profile:
+    source: token
+    idField: bot_id
+    usernameField: workspace_id
+    displayNameField: workspace_name
+    avatarUrlField: workspace_icon
+gateway:
+  allowedPaths:
+    - ^/v1/search$
+    - ^/v1/(?:pages|blocks|databases|data_sources)/[^/]+/?$
+    - ^/v1/(?:blocks/[^/]+/children|pages/[^/]+/properties/[^/]+|data_sources/[^/]+/query)/?$
+  headers:
+    Notion-Version: 2026-03-11
+  queryJsonPostPaths:
+    - ^/v1/search$
+    - ^/v1/data_sources/[^/]+/query/?$

@@ -12,6 +12,7 @@ export function createSkillsPort(skills: SkillsService): SkillsPort {
       skills.freezeSelections(workspaceId, selections, signal),
     validateBindings: (frozen, signal) => skills.validateBindings(frozen, signal),
     assertBindingsCurrent: (frozen) => skills.assertBindingsCurrent(frozen),
+    materializeBindings: (frozen, signal) => skills.materializeBindings(frozen, signal),
     retainBindings: (frozen) => skills.retainBindings(frozen),
     async loadResource(skill, path, signal) {
       const content = await skills.loadResource(skill, path, signal);

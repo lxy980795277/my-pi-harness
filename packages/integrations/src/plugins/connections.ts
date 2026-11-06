@@ -1,11 +1,8 @@
-import { lstatSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { Type } from 'typebox';
 import { Value } from 'typebox/value';
 import { parseDocument } from 'yaml';
 import { PluginError } from './errors.js';
 import { parseRemoteUrl } from '../network/remote-fetch.js';
-import { BUILTIN_PLUGINS, BUILTIN_PLUGIN_RESOURCE_DIRECTORY } from './catalog.js';
 
 /** Deployment-owned OAuth clients override the declarative plugin's client fields. */
 export interface PluginOAuthClient {
@@ -120,15 +117,6 @@ const ManifestSchema = Type.Object(
   object,
 );
 
-/** The finite packaged resource set is read once; clients are merged privately by the daemon. */
-export const PLUGIN_CONNECTION_DEFINITIONS: readonly PluginConnectionDefinition[] =
-  BUILTIN_PLUGINS.filter((plugin) => plugin.category === 'services').map((plugin) => {
-    const path = join(BUILTIN_PLUGIN_RESOURCE_DIRECTORY, plugin.id, 'manifest.yaml');
-    const file = lstatSync(path);
-    if (!file.isFile() || file.isSymbolicLink() || file.size > 65536) return invalid();
-    return parsePluginConnectionManifest(readFileSync(path, 'utf8'), plugin.id);
-  });
-
 function invalid(): never {
   throw new PluginError('PLUGIN_MANIFEST_INVALID', '插件 OAuth 或网关配置无效。');
 }
@@ -227,11 +215,4 @@ export function parsePluginConnectionManifest(
     )
       return invalid();
   return value;
-}
-
-export function pluginConnectionDefinition(id: string): PluginConnectionDefinition {
-  const definition = PLUGIN_CONNECTION_DEFINITIONS.find((entry) => entry.id === id);
-  if (definition === undefined)
-    throw new PluginError('SKILL_COLLECTION_NOT_FOUND', '此插件不提供服务授权。');
-  return definition;
 }

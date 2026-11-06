@@ -2,7 +2,7 @@ import { mkdtemp, realpath, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { resolvePersistentProcess } from '@my-pi-harness/execution';
+import { resolveProcess } from '@my-pi-harness/sandbox/process';
 import { SupervisedStdioTransport } from '../src/mcp/stdio.js';
 
 const roots: string[] = [];
@@ -23,7 +23,7 @@ async function transport(code: string): Promise<SupervisedStdioTransport> {
   const workspaceRoot = await realpath(await mkdtemp(join(tmpdir(), 'mcp-stdio-workspace-')));
   const profileDirectory = await realpath(await mkdtemp(join(tmpdir(), 'mcp-stdio-profile-')));
   roots.push(workspaceRoot, profileDirectory);
-  const launch = await resolvePersistentProcess({
+  const launch = await resolveProcess({
     command: process.execPath,
     args: ['-e', code],
     workspaceRoot,
@@ -54,7 +54,33 @@ describe.skipIf(process.platform !== 'darwin')(
       expect(await response).toEqual({ jsonrpc: '2.0', id: 1, result: { text: '你好' } });
       await owned.close();
     });
+    it('delivers a complete final response before reporting natural process exit', async () => {
+      const owned = await transport(
+        "process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:1,result:{text:'final'}})+'\\n')",
+      );
+      const events: string[] = [];
+      let ended: () => void = () => {};
+      const fault = new Promise<void>((accept) => {
+        ended = accept;
+      });
+      owned.onmessage = () => {
+        events.push('message');
+      };
+      owned.onerror = () => {
+        events.push('fault');
+        ended();
+      };
+      await owned.start();
+      await fault;
+      expect(events).toEqual(['message', 'fault']);
+      await owned.close();
+    });
     it.each([
+      [
+        'complete EOF without process exit',
+        'process.stdout.end();process.stdin.resume();',
+        'CONNECTION_LOST',
+      ],
       [
         'partial EOF',
         'process.stdout.write(\'{\\"jsonrpc\\":\');process.stdout.end();process.stdin.resume();',

@@ -1,9 +1,6 @@
+import { pluginConnectionDefinition } from './plugin-definition.js';
 import { expect, it } from 'vitest';
-import {
-  beginPluginOAuth,
-  pluginConnectionDefinition,
-  type PluginOAuthFetch,
-} from '../src/index.js';
+import { beginPluginOAuth, type PluginOAuthFetch } from '../src/index.js';
 
 const client = {
   clientId: 'fixture-client',

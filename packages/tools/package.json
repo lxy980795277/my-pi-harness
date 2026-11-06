@@ -1,0 +1,49 @@
+{
+  "name": "@my-pi-harness/tools",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "files": [
+    "dist",
+    "resources"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./skills": {
+      "types": "./dist/skills/index.d.ts",
+      "import": "./dist/skills/index.js"
+    },
+    "./plugins": {
+      "types": "./dist/plugins/index.d.ts",
+      "import": "./dist/plugins/index.js"
+    },
+    "./document-text": {
+      "types": "./dist/utils/document-text.d.ts",
+      "import": "./dist/utils/document-text.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run --config vitest.config.ts"
+  },
+  "dependencies": {
+    "@my-pi-harness/sandbox": "workspace:*",
+    "@my-pi-harness/protocol": "workspace:*",
+    "diff": "catalog:",
+    "pdfjs-dist": "catalog:",
+    "officeparser": "catalog:",
+    "typebox": "catalog:",
+    "yaml": "catalog:",
+    "minisearch": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

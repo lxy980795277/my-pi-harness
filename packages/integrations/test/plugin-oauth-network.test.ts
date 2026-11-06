@@ -1,3 +1,4 @@
+import { pluginConnectionDefinition } from './plugin-definition.js';
 import { EventEmitter } from 'node:events';
 import { IncomingMessage, type RequestOptions } from 'node:http';
 import type * as Http from 'node:http';
@@ -57,7 +58,6 @@ vi.mock('node:http', async (original) => ({
 vi.mock('node:https', () => ({ request }));
 
 const { beginPluginOAuth, pluginOAuthFetch } = await import('../src/plugins/oauth.js');
-const { pluginConnectionDefinition } = await import('../src/plugins/connections.js');
 
 beforeEach(() => {
   network.ipv4 = ['100.12.0.13'];

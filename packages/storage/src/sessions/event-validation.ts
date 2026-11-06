@@ -19,6 +19,7 @@ import {
   AgentTaskOutcomeSchema,
   AgentTaskWaitingSchema,
   AgentMessageQueuedSchema,
+  ArtifactPublishedSchema,
 } from '@my-pi-harness/protocol';
 
 export const SessionCreatedSchema = Type.Object(
@@ -165,6 +166,7 @@ export const TaskMessageUndeliveredSchema = Type.Object(
 
 /** Public payload fields consumed by projections; unregistered audit events keep their data. */
 export const EVENT_DATA_SCHEMAS: ReadonlyMap<string, TSchema> = new Map<string, TSchema>([
+  ['artifact.published', ArtifactPublishedSchema],
   ['task.created', TaskCreatedSchema],
   ['task.closed', TaskClosedSchema],
   ['task.waiting', TaskWaitingSchema],

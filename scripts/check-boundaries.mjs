@@ -90,11 +90,22 @@ export function importViolation(file, specifier, repoRoot = root) {
 
   if (
     path.startsWith('packages/integrations/src/') &&
-    (/^@my-pi-harness\/(?:storage|agent-runtime|daemon)(?:\/|$)/.test(specifier) ||
+    (/^@my-pi-harness\/(?:tools|storage|agent-runtime|daemon)(?:\/|$)/.test(specifier) ||
       /^(?:fastify|react|react-dom|better-sqlite3|drizzle-orm)(?:\/|$)/.test(specifier))
   ) {
-    return 'Integrations 不能拥有数据库、Runtime、HTTP 或 Renderer';
+    return 'Integrations 不能拥有工具、数据库、Runtime、HTTP 或 Renderer';
   }
+
+  if (
+    path.startsWith('packages/tools/src/') &&
+    /^@my-pi-harness\/(?:agent-runtime|storage|integrations|daemon)(?:\/|$)/.test(specifier)
+  )
+    return 'Tools只能通过窄端口访问宿主领域';
+  if (
+    path.startsWith('packages/sandbox/src/') &&
+    (/^@my-pi-harness\//.test(specifier) || /^@earendil-works\//.test(specifier))
+  )
+    return 'Sandbox不能依赖业务或Agent包';
 
   if (
     path.startsWith('apps/desktop/src/') &&

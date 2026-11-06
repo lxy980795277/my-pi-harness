@@ -18,6 +18,7 @@ export type {
   SecretUpdate,
 } from './credentials/credentials.js';
 export type { CreateSessionInput, EventInput, RequestAcceptance } from './sessions/types.js';
+export type { ArtifactBlob, ArtifactDownload, ArtifactLimits } from './artifacts/blobs.js';
 
 export { sessionLogDirectory, type ProfileStoreOptions } from './sessions/session-log-directory.js';
 export {

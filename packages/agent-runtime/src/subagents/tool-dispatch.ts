@@ -1,4 +1,3 @@
-import { Value } from 'typebox/value';
 import type {
   AgentMessage,
   AgentMessageTarget,
@@ -6,17 +5,9 @@ import type {
   AgentTaskStop,
   AgentTaskSummary,
 } from '@my-pi-harness/protocol';
-import type { AgentToolControls } from '../tools/types.js';
+import type { AgentToolHandlers, SpawnAgentInput } from '@my-pi-harness/tools';
 import type { SubagentNode, SubagentTaskNode } from './types.js';
 import type { SubagentStore } from './ports.js';
-import {
-  AgentIdInputSchema,
-  SendAgentInputSchema,
-  SpawnAgentInputSchema,
-  WaitAgentsInputSchema,
-  isAgentTool,
-  type SpawnAgentInput,
-} from './definitions.js';
 import { RuntimeError } from '../errors.js';
 
 /** Operations used by the model-facing delegation controls. */
@@ -75,52 +66,54 @@ function waitForNodes(
   });
 }
 
-/** Dispatch audited delegation tools without owning request streaming or task state. */
+/** Bind delegation operations to the caller's execution tree. */
 export function createSubagentToolControls(
   owner: SubagentToolHost,
   node: SubagentNode,
-): AgentToolControls {
+): AgentToolHandlers {
   return {
-    has: isAgentTool,
-    async execute(name, args, toolCallId, signal) {
-      signal.throwIfAborted();
-      let result: unknown;
-      if (name === 'spawn_agent' && Value.Check(SpawnAgentInputSchema, args)) {
-        const task = owner.spawn(node, toolCallId, args);
-        result = {
-          id: task.id,
-          title: task.title,
-          roleId: task.role.id,
-          status: task.status,
-          runId: task.latestRunId,
-        };
-      } else if (name === 'get_agent_status' && Value.Check(AgentIdInputSchema, args))
-        result = owner.result(node, args.taskId);
-      else if (name === 'wait_agents' && Value.Check(WaitAgentsInputSchema, args)) {
-        const targets = owner.descendants(node, args.taskIds);
-        owner.waiting(node, 'children');
-        try {
-          await waitForNodes(targets, args.mode === 'any', args.timeoutMs ?? 60_000, signal);
-        } finally {
-          owner.waiting(node, null);
-        }
-        result = targets.map((target) => owner.result(node, target.task.id, target.run.id));
-      } else if (name === 'stop_agent' && Value.Check(AgentIdInputSchema, args)) {
-        owner.descendants(node, [args.taskId]);
-        const task = owner.options.store.getAgentTask(node.session.id, args.taskId);
-        if (!task) throw new RuntimeError('AGENT_NOT_FOUND', '任务不存在。');
-        await owner.stop(node.session.id, args.taskId, { expectedRunId: task.latestRunId });
-        result = owner.result(node, args.taskId);
-      } else if (name === 'send_agent_message' && Value.Check(SendAgentInputSchema, args)) {
-        const target =
-          args.target.kind === 'parent'
-            ? { kind: 'run' as const, runId: node.parent?.run.id ?? '' }
-            : args.target;
-        if (target.kind === 'run' && !target.runId)
-          throw new RuntimeError('AGENT_SCOPE', '根 Agent 没有父任务。');
-        result = owner.messaging.send(node, target, args.text, toolCallId, args.continue === true);
-      } else throw new RuntimeError('AGENT_ARGUMENTS_INVALID', '子 Agent 工具参数无效。');
-      return [{ type: 'text', text: JSON.stringify(result) }];
+    spawn(input, i) {
+      i.signal.throwIfAborted();
+      const task = owner.spawn(node, i.toolCallId, input);
+      return Promise.resolve({
+        id: task.id,
+        title: task.title,
+        roleId: task.role.id,
+        status: task.status,
+        runId: task.latestRunId,
+      });
+    },
+    status(taskId) {
+      return Promise.resolve(owner.result(node, taskId));
+    },
+    async wait(input, signal) {
+      const targets = owner.descendants(node, input.taskIds);
+      owner.waiting(node, 'children');
+      try {
+        await waitForNodes(targets, input.mode === 'any', input.timeoutMs ?? 60_000, signal);
+      } finally {
+        owner.waiting(node, null);
+      }
+      return targets.map((target) => owner.result(node, target.task.id, target.run.id));
+    },
+    async stop(taskId) {
+      owner.descendants(node, [taskId]);
+      const task = owner.options.store.getAgentTask(node.session.id, taskId);
+      if (!task) throw new RuntimeError('AGENT_NOT_FOUND', '任务不存在。');
+      await owner.stop(node.session.id, taskId, { expectedRunId: task.latestRunId });
+      return owner.result(node, taskId);
+    },
+    send(input, i) {
+      i.signal.throwIfAborted();
+      const target =
+        input.target.kind === 'parent'
+          ? { kind: 'run' as const, runId: node.parent?.run.id ?? '' }
+          : input.target;
+      if (target.kind === 'run' && !target.runId)
+        throw new RuntimeError('AGENT_SCOPE', '根 Agent 没有父任务。');
+      return Promise.resolve(
+        owner.messaging.send(node, target, input.text, i.toolCallId, input.continue === true),
+      );
     },
   };
 }

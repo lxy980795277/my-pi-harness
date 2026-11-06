@@ -7,7 +7,7 @@ import {
   installSkillFiles,
   readSkillTree,
   syncSkillDirectory,
-} from '@my-pi-harness/integrations';
+} from '@my-pi-harness/tools';
 import type { PluginManifest, PluginComponent } from '@my-pi-harness/protocol';
 import type { ExtensionRepository, StoredPlugin } from '@my-pi-harness/storage';
 import type { SkillsService } from '../skills/service.js';

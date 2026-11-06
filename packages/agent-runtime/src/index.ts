@@ -18,7 +18,6 @@ export {
   type RunToolRecord,
 } from './tools/toolset.js';
 export type { SkillsPort, ToolDiscoveryPort } from './capabilities/ports.js';
-export type { ToolSearchEmbedder } from './capabilities/search.js';
 export type { ToolRuntimeOptions } from './tools/types.js';
 export type {
   ExternalTools,
@@ -36,7 +35,6 @@ export type {
 export type { ProviderStore } from './models/ports.js';
 export { WorkRuntime } from './work/runtime.js';
 export type { WorkRuntimeOptions, WorkStore } from './work/ports.js';
-export { SESSION_TOOL_DEFINITIONS } from './work/tools.js';
 export { ModelApprovalReviewer } from './tools/approval-review.js';
 export type {
   ApprovalReviewer,

@@ -1,4 +1,5 @@
 import { type Static, Type } from 'typebox';
+import { ArtifactSchema } from './artifacts.js';
 
 export type ApprovalMode = Static<typeof ApprovalModeSchema>;
 export type ToolApproval = Static<typeof ToolApprovalSchema>;
@@ -98,6 +99,7 @@ export const ToolCallRecordSchema = Type.Object(
     summary: Type.String({ maxLength: 4000 }),
     result: Type.Union([Type.String({ maxLength: 128_000 }), Type.Null()]),
     diff: Type.Union([Type.String({ maxLength: 128_000 }), Type.Null()]),
+    artifacts: Type.Optional(Type.Array(ArtifactSchema, { maxItems: 32 })),
     createdAt: Type.Integer({ minimum: 0 }),
     updatedAt: Type.Integer({ minimum: 0 }),
   },

@@ -4,7 +4,7 @@ import {
   ToolCatalogSearch,
   type ToolSearchDocument,
   type ToolSearchEmbedder,
-} from '../src/capabilities/search.js';
+} from '@my-pi-harness/tools';
 
 function document(
   name: string,

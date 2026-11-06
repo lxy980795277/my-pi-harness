@@ -38,7 +38,7 @@ test('完整工具链复用 SDK 调用ID，逐次审批、真实编辑与受限�
           expectedHash: originalHash,
         },
       },
-      { name: 'shell', arguments: { command: "printf 'm2-shell-ok\\n'", timeoutMs: 5000 } },
+      { name: 'run_command', arguments: { command: "printf 'm2-shell-ok\\n'", yieldTimeMs: 5000 } },
       { name: 'web_fetch', arguments: { url: 'http://127.0.0.1/blocked-private-resource' } },
     ],
     finalText,
@@ -119,7 +119,7 @@ test('完整工具链复用 SDK 调用ID，逐次审批、真实编辑与受限�
         'search_files:completed',
         'read_file:completed',
         'edit_file:completed',
-        'shell:awaiting_approval',
+        'run_command:awaiting_approval',
       ]);
     expect(await readFile(join(directory, 'note.txt'), 'utf8')).toBe(edited);
     expect(model.requests).toHaveLength(5);
@@ -131,7 +131,7 @@ test('完整工具链复用 SDK 调用ID，逐次审批、真实编辑与受限�
     await expect(result.locator('pre')).toBeVisible();
     await expect(result.locator('pre')).toContainText('SHA-256:');
     await page
-      .getByLabel('shell 工具调用', { exact: true })
+      .getByLabel('run_command 工具调用', { exact: true })
       .getByRole('button', { name: '允许本次操作', exact: true })
       .click();
     let shellStatus = 'failed';
@@ -143,12 +143,12 @@ test('完整工具链复用 SDK 调用ID，逐次审批、真实编辑与受限�
         'search_files:completed',
         'read_file:completed',
         'edit_file:completed',
-        `shell:${shellStatus}`,
+        `run_command:${shellStatus}`,
         'web_fetch:awaiting_approval',
       ]);
     const afterShell = await snapshot();
-    const shell = afterShell.tools.find((tool) => tool.name === 'shell');
-    if (process.platform === 'darwin') expect(shell?.result?.trim()).toBe('m2-shell-ok');
+    const shell = afterShell.tools.find((tool) => tool.name === 'run_command');
+    if (process.platform === 'darwin') expect(shell?.result).toContain('m2-shell-ok');
     else
       expect(shell?.result).toContain('A verified shell sandbox is not available on this platform');
     expect(model.requests).toHaveLength(6);
@@ -181,7 +181,7 @@ test('完整工具链复用 SDK 调用ID，逐次审批、真实编辑与受限�
       'search_files',
       'read_file',
       'edit_file',
-      'shell',
+      'run_command',
       'web_fetch',
     ])
       expect(history).toContain(`"name":"${name}"`);

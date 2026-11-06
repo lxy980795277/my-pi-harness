@@ -1,8 +1,8 @@
 import { fauxAssistantMessage } from '@earendil-works/pi-ai';
-import * as execution from '@my-pi-harness/execution';
+import { observeNativeTool } from './support/native-tool.js';
 import type { FrozenSkill } from '@my-pi-harness/protocol';
 import { Type } from 'typebox';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import type { FrozenMcpTool } from '../src/tools/external.js';
 import { agentChanged, agentFixture, agentsIdle, firstTask } from './support/agent-fixture.js';
 import { delegate, hasResult, resultCount, waitForResults } from './support/agent-tools.js';
@@ -13,7 +13,8 @@ describe('task read-only capabilities and inherited approval policy', () => {
   it.each(['full-access', 'ask', 'auto'] as const)(
     'keeps a researcher GET read-only under parent %s and never dispatches its POST',
     async (approvalMode) => {
-      const fetch = vi.spyOn(execution, 'executeWebFetch').mockResolvedValue({
+      const observed = observeNativeTool('web_fetch');
+      const fetch = observed.execute.mockResolvedValue({
         content: [{ type: 'text', text: 'Observed weather' }],
         summary: 'Observed weather',
       });
@@ -86,7 +87,7 @@ describe('task read-only capabilities and inherited approval policy', () => {
         }
         await agentsIdle(f);
         expect(fetch).toHaveBeenCalledTimes(1);
-        expect(fetch.mock.calls[0]?.[1].readOnly).toBe(true);
+        expect(fetch.mock.calls[0]?.[2].readOnly).toBe(true);
         const child = f.store.getTaskSnapshot(f.session.id, task.id);
         expect(child.tools.filter((tool) => tool.name === 'web_fetch')).toMatchObject([
           {
@@ -103,7 +104,7 @@ describe('task read-only capabilities and inherited approval policy', () => {
         expect(f.runtime.getSnapshot(f.session.id).session.approvalMode).toBe(approvalMode);
       } finally {
         await f.close();
-        fetch.mockRestore();
+        observed.restore();
       }
     },
   );
@@ -157,7 +158,7 @@ describe('task read-only capabilities and inherited approval policy', () => {
       source: '/synthetic/readonly',
       content: 'Inspect the supplied source.',
       resources: [],
-      allowedTools: ['write_file', 'shell', 'office_create', 'mcp_write'],
+      allowedTools: ['write_file', 'edit_file', 'mcp_write'],
     };
     let grantValid = true;
     let calls = 0;
@@ -202,7 +203,7 @@ describe('task read-only capabilities and inherited approval policy', () => {
         const visible = context.messages.flatMap((message) =>
           message.role === 'system' ? (message.toolsAdded ?? []).map((tool) => tool.name) : [],
         );
-        for (const name of ['write_file', 'shell', 'office_create', 'mcp_write'])
+        for (const name of ['write_file', 'edit_file', 'mcp_write'])
           expect(visible).not.toContain(name);
         if (!hasResult(context, 'load_skill'))
           return call('load_skill', { id: skill.selection.id }, 'skill');

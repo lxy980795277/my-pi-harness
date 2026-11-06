@@ -36,7 +36,7 @@ import { RunCapabilities } from '../capabilities/run.js';
 import { selectRunTools } from '../tools/selection.js';
 import type { SkillsPort, ToolDiscoveryPort } from '../capabilities/ports.js';
 import { capabilityContext } from '../capabilities/context.js';
-import { ToolCatalogSearch, type ToolSearchEmbedder } from '../capabilities/search.js';
+import { ToolCatalogSearch, type ToolSearchEmbedder } from '@my-pi-harness/tools';
 import { freezeSkillMentions } from '../capabilities/skill-mentions.js';
 import { availableSkillHistory, skillHistoryIds } from '../capabilities/skill-history.js';
 import { SubagentCoordinator } from '../subagents/coordinator.js';
@@ -116,10 +116,11 @@ export class SessionRuntime {
     return this.options.store.listSessions();
   }
   public deleteSession(sessionId: string): Promise<void> {
-    return this.serialize(sessionId, () => {
+    return this.serialize(sessionId, async () => {
       this.requireSession(sessionId);
       if (this.active.has(sessionId))
         throw new RuntimeError('SESSION_BUSY', 'Stop the active run before archiving the session');
+      await this.options.tools?.closeSession(sessionId);
       this.commit(sessionId, [{ type: 'session.deleted', runId: null, at: Date.now(), data: {} }]);
     });
   }
@@ -266,6 +267,7 @@ export class SessionRuntime {
     });
     // Waiting outside command serialization lets duplicate stops observe the same run.
     await running?.task;
+    await this.options.tools?.closeSession(sessionId);
     return this.getSnapshot(sessionId);
   }
 
@@ -509,6 +511,7 @@ export class SessionRuntime {
       const agentSettings = this.subagentCoordinator?.settings();
       const selection = this.options.tools
         ? selectRunTools({
+            registrations: this.options.tools.registrations,
             workspaceId: session.workspaceId,
             work: this.options.tools.supportsWorkTools,
             skills: this.options.skills !== undefined,
@@ -641,7 +644,7 @@ export class SessionRuntime {
         this.active.set(session.id, execution);
         execution.rebuildQueue();
       } catch (error) {
-        execution?.disposeUnstarted();
+        await execution?.disposeUnstarted();
         this.subagentCoordinator?.releaseRoot(run.id);
         this.active.delete(session.id);
         this.disabled.add(session.id);
@@ -686,7 +689,7 @@ export class SessionRuntime {
       return { sessionId: session.id, runId: run.id, inputId: null, queued: false };
     } finally {
       if (!transferred) {
-        capabilities?.close();
+        await capabilities?.close();
         resolved.release();
       }
     }
@@ -898,6 +901,11 @@ export class SessionRuntime {
     const settled = await Promise.allSettled([...this.active.values()].map(({ task }) => task));
     for (const result of settled) if (result.status === 'rejected') failures.push(result.reason);
     await agentClosing;
+    try {
+      await this.options.tools?.close();
+    } catch (error) {
+      failures.push(error);
+    }
     this.listeners.clear();
     if (failures.length > 0) throw new AggregateError(failures, 'Runtime shutdown failed');
   }

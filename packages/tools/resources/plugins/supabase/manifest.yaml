@@ -1,0 +1,16 @@
+id: supabase
+name: Supabase
+apiUrl: https://api.supabase.com
+oauth:
+  issuer: https://api.supabase.com
+  authorizationEndpoint: https://api.supabase.com/v1/oauth/authorize
+  tokenEndpoint: https://api.supabase.com/v1/oauth/token
+  pkce: true
+  tokenAuth: basic
+  tokenFormat: form
+  scopes: []
+gateway:
+  allowedPaths:
+    - ^/v1/(?:profile|organizations|projects)/?$
+    - ^/v1/organizations/[^/]+(?:/projects)?/?$
+    - ^/v1/projects/[^/]+(?:/health|/database/openapi|/config/database/(?:postgres|pooler|pgbouncer)|/readonly)?/?$

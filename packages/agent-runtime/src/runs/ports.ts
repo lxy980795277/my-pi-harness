@@ -1,6 +1,7 @@
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import type { AssistantMessage, UserMessage } from '@earendil-works/pi-ai';
-import type { AgentToolControls, ToolRunContext } from '../tools/types.js';
+import type { ToolRunContext } from '../tools/types.js';
+import type { AgentToolHandlers } from '@my-pi-harness/tools';
 import type { EventInput } from '../sessions/ports.js';
 import type { RuntimeError } from '../errors.js';
 
@@ -13,7 +14,7 @@ export interface RunInjectedInput {
 /** Optional execution hooks supply host policy, scheduling and coordinated settlement. */
 export interface RunHooks {
   readonly readOnly: boolean;
-  controls: AgentToolControls;
+  controls: AgentToolHandlers;
   beforeTool: NonNullable<ToolRunContext['beforeTool']>;
   stream: StreamFn;
   outputTokens(modelMaximum: number): number;

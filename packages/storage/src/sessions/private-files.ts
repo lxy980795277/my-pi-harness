@@ -32,6 +32,7 @@ function requireOwner(entry: Stats): void {
 export class PrivateSessionFiles {
   public readonly directory: string;
   public readonly attachmentDirectory: string;
+  public readonly artifactDirectory: string;
   private readonly directories: OwnedDirectory[] = [];
   private closed = false;
 
@@ -51,10 +52,17 @@ export class PrivateSessionFiles {
     const root = join(canonicalParent, basename(requestedRoot));
     this.directory = sessionLogDirectory(profileDirectory, root);
     this.attachmentDirectory = join(this.directory, 'attachments');
+    this.artifactDirectory = join(this.directory, 'artifacts');
     try {
       this.holdDirectory(profileDirectory);
       this.holdDirectory(canonicalParent);
-      for (const path of [root, join(root, 'sessions'), this.directory, this.attachmentDirectory]) {
+      for (const path of [
+        root,
+        join(root, 'sessions'),
+        this.directory,
+        this.attachmentDirectory,
+        this.artifactDirectory,
+      ]) {
         this.checkDirectories();
         try {
           mkdirSync(path, { mode: 0o700 });

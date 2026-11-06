@@ -1,4 +1,4 @@
-import { BUILTIN_PLUGIN_APPS, PluginError } from '@my-pi-harness/integrations';
+import { BUILTIN_PLUGIN_APPS, PluginError } from '@my-pi-harness/tools';
 import type {
   ConnectionServiceId,
   PluginManifest,

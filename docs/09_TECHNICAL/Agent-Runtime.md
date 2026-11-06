@@ -39,7 +39,8 @@ flowchart TD
   Pi --> Stream[Pi ai Provider / streamFn]
   Pi --> Tools[ToolRuntime]
   Tools --> Work[WorkRuntime / WorkInteractions]
-  Tools --> Execution[execution 文件与 Shell 工具]
+  Tools --> Native[tools 每Run领域绑定]
+  Native --> Sandbox[sandbox 文件网络与受监管进程]
   Tools --> External[ExternalTools / daemon MCP宿主]
   External --> MCP[integrations / 官方SDK与连接租约]
   Run --> Context[WorkContext 每次请求投影]
@@ -195,7 +196,7 @@ sequenceDiagram
 
 ### 6.1 工具调用由 Run 约束
 
-`tools/catalog`统一原生工具定义引用、执行族和默认策略；`selectRunTools()`在接受Run前根据工作区、实际执行器能力和角色生成初始`RunToolset`及`nativeCandidates`。工作状态工具是否可执行由`ToolRuntime.supportsWorkTools`决定，不能用是否装配上下文投影代替。定义和来源深拷贝后冻结，接受审计、Pi声明、预算与执行共用当前集合；来源和指纹不混入模型schema。没有工作区时仍可提问、按需规划及读取托管Skill资源，不获得文件或Shell工具。
+tools的`ToolRegistration`统一模型定义、来源、加载方式、可用条件、参数效果策略与执行绑定；`selectRunTools()`在接受Run前根据工作区、实际执行器能力和角色生成初始`RunToolset`及`nativeCandidates`。工作状态工具是否可执行由`ToolRuntime.supportsWorkTools`决定，不能用是否装配上下文投影代替。定义和来源深拷贝后冻结，接受审计、Pi声明、预算与执行共用当前集合；来源和指纹不混入模型schema。没有工作区时仍可提问、按需规划及读取托管Skill资源，不获得文件或Shell工具。
 
 默认集合保持创建/等待委派闭环，有Skill目录时直接提供正文loader；非必备工具先保留摘要，模型经`tool_search`命中后自动暂存。`RunCapabilities`在下一请求前提交加载变化，当前工作状态、资源和长结果所需入口也经过相同屏障，然后按最终声明计算预算。同一assistant工具批次保持原快照，压缩不卸载本Run已加载项；结束后释放，新Run重新选择。具体数量、候选字段和输出状态由[运行时能力协议](../03_API/capability-runtime.md)维护。
 
@@ -281,12 +282,12 @@ ToolRuntime按ToolRunContext隔离连续调用状态，动态工具集重建继�
 | [`model-gateway.ts`](../../packages/agent-runtime/src/models/gateway.ts)               | 模型选择、Provider与认证lease              |
 | [`provider-instance.ts`](../../packages/agent-runtime/src/models/provider-instance.ts) | Pi公开Provider工厂与自定义API装配          |
 | [`tool-runtime.ts`](../../packages/agent-runtime/src/tools/runtime.ts)                 | 单次工具记录、策略、审批和执行             |
-| [`catalog.ts`](../../packages/agent-runtime/src/tools/catalog.ts)                      | 原生定义、来源、执行族与默认策略           |
+| [`workspace-tool-registry.ts`](../../packages/tools/src/workspace-tool-registry.ts)    | 原生注册声明与默认/按需加载                |
 | [`selection.ts`](../../packages/agent-runtime/src/tools/selection.ts)                  | 主子Run初始集合与获准候选选择              |
 | [`capabilities/run.ts`](../../packages/agent-runtime/src/capabilities/run.ts)          | 暂存和请求前持久化工具集合                 |
 | [`capabilities/skills.ts`](../../packages/agent-runtime/src/capabilities/skills.ts)    | Skill正文/资源及活动绑定租约               |
 | [`work-interactions.ts`](../../packages/agent-runtime/src/work/interactions.ts)        | 同Run提问、计划审核与取消等待              |
-| [`session-tools.ts`](../../packages/agent-runtime/src/work/tools.ts)                   | 模型工具参数及Plan/Todos操作               |
+| [`tool-port.ts`](../../packages/agent-runtime/src/work/tool-port.ts)                   | 绑定当前Run的Work交互、计划及Todos操作     |
 | [`external-tools.ts`](../../packages/agent-runtime/src/tools/external.ts)              | 冻结外部定义/授权、恢复与执行端口          |
 | [`tool-history.ts`](../../packages/agent-runtime/src/context/tool-history.ts)          | 工具调用/结果配对检查                      |
 | [`services.ts`](../../apps/daemon/src/application/services.ts)                         | daemon资源装配和关闭顺序                   |

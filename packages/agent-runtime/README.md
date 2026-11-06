@@ -1,6 +1,6 @@
 # Agent Runtime
 
-Node端的模型接入与持久会话运行层，使用精确固定的Pi core/ai 1.4.0公开接口。HTTP、SQLite、OS凭据和页面由宿主提供；本包不导入Fastify、Electron、React或SQL驱动。源码测试通过paths消费protocol/storage，生产仅导出dist。
+Node端的模型接入与持久会话运行层，使用精确固定的Pi core/ai 1.4.0公开接口。HTTP、SQLite、OS凭据和页面由宿主提供；本包不导入Fastify、Electron、React或SQL驱动。源码检查通过paths消费protocol、tools与sandbox等工作区源码，生产通过真实exports读取dist。
 
 ## 源码职责
 
@@ -10,7 +10,7 @@ Node端的模型接入与持久会话运行层，使用精确固定的Pi core/ai
 | `sessions/`     | 单会话命令串行、队列、分支、持久事实发布与宿主存储端口               |
 | `runs/`         | 主子Run公共准备、单次Pi生命周期、通用执行接口、输入投递与SDK事件记录 |
 | `subagents/`    | 子任务树、角色、模型请求并发调度、通信、写入拥有者与后代结算         |
-| `tools/`        | 原生工具目录与选择、冻结集合、工具族路由、审批与canonical结果记录    |
+| `tools/`        | 候选选择、冻结集合、每Run领域绑定、审批与canonical结果记录           |
 | `capabilities/` | 冻结候选、发现与请求前激活；Skill候选绑定、正文、资源与租约          |
 | `work/`         | Plan、Todos、用户提问、检查点和相应会话工具                          |
 | `context/`      | 消息codec、附件输入、规则、预算、摘要及每次请求的上下文投影          |
@@ -19,9 +19,9 @@ Node端的模型接入与持久会话运行层，使用精确固定的Pi core/ai
 
 `runs/execution.ts`拥有单次执行的取消、失败、终态及扩展工作结算；`agent.ts`装配Pi Agent和每次请求的能力/上下文钩子，`inputs.ts`投递队列与`RunInjectedInput`，`messages.ts`拥有SDK事件记录和未执行工具的结算，`prepare.ts`共用主子Run的模型检查与输入接受准备。`runs/ports.ts`声明可选`RunHooks`和注入输入接口，执行器只调用这些接口，不导入subagents，运行中输入投递不负责通信领域校验。注入输入在实际消费时提供整批持久记录，仍由Run统一提交；持久化失败由执行器中止整个Run。输入准备仍使用共享协议中的AgentMessage表达续作来源，不为消除该DTO引用增加新的消息格式或适配框架。
 
-`subagents/coordinator.ts`唯一拥有活动节点索引、任务树、计时器、写入拥有者及子树创建/停止/收束；`policy.ts`解析角色、限额、附件范围和工具访问约束，`messaging.ts`拥有通信幂等、路由与续作准入，读取协调器的节点索引并通过回调启动续作。`definitions.ts`声明五个委派工具及角色上下文，`tool-dispatch.ts`适配工具调用与等待，`run-adapter.ts`实现RunHooks，将请求并发、写入仲裁、通信消费及收束接入Run。`launch.ts`准备子模型、工具与上下文并启动共享RunExecution。生命周期继续由协调器拥有，不单独增加另一份任务状态或生命周期服务。
+`subagents/coordinator.ts`唯一拥有活动节点索引、任务树、计时器、写入拥有者及子树创建/停止/收束；`policy.ts`解析角色、限额、附件范围和工具访问约束，`messaging.ts`拥有通信幂等、路由与续作准入，读取协调器的节点索引并通过回调启动续作。tools包声明五个委派工具的模型schema，`tool-dispatch.ts`适配工具调用与等待，`run-adapter.ts`实现RunHooks，将请求并发、写入仲裁、通信消费及收束接入Run。`launch.ts`准备子模型、工具与上下文并启动共享RunExecution。生命周期继续由协调器拥有，不单独增加另一份任务状态或生命周期服务。
 
-`tools/catalog.ts`引用各领域schema，统一原生来源、执行族、默认策略与只读能力；`selection.ts`按实际执行器能力、工作区和调用者提供的访问约束选择初始集合和候选，不解释子任务角色。`runtime.ts`编排一次调用的校验、策略、执行和结果，`families.ts`消费同一目录派发工作区、Web、工作状态、能力、任务与MCP工具；`policy.ts`拥有逐次审批，`mcp-dispatch.ts`拥有外部派发屏障和未知结果处理，`ledger.ts`拥有工具记录及canonical结果。SDK拒绝与未派发调用复用ledger的宿主终态入口，不另建工具执行循环。
+tools包的ToolRegistration拥有模型schema、来源、默认/按需加载、可用条件、参数效果策略与绑定入口；`tools/selection.ts`按实际领域端口、工作区、平台、模型能力和调用者访问约束选择初始集合与候选。`bindings.ts`为每个主子Run分别绑定Work、Task、能力、命令和产物端口；`runtime.ts`编排校验、审批与执行，`policy.ts`拥有逐次审批，`mcp-dispatch.ts`拥有外部派发屏障和未知结果，`ledger.ts`拥有工具记录及canonical结果。执行函数只留在内存，日志冻结模型可见定义及授权来源。SDK拒绝与未派发调用复用ledger的宿主终态入口。
 
 ## 模型与会话运行
 
@@ -57,7 +57,7 @@ Run失败沿用error字段记录安全原因，主/子执行共用同一入口�
 
 统一工具适配器通过Pi公开`prepareArguments`在SDK参数转换前按冻结schema严格校验原始模型JSON，execute入口复用同一校验。当前assistant工具批次的完整调用提供Pi参数解析错误；畸形最终JSON先以有界原始错误反馈模型，不进入审批或执行。fractional整数参数、数字字符串或非nullable位置的null不能静默转换；拒绝结果保留原始调用参数，执行和审计继续与持久assistant intent精确一致。
 
-`ToolRuntime`按接受Run时冻结的approvalMode执行：ask逐次询问，auto调用`ModelApprovalReviewer`，full-access自动批准并显式选择macOS无沙箱Shell；旧read-only继续阻止变更。文件工具仍以工作区为根。独立复核使用当前Run的Provider/model、用户请求与冻结规则，没有执行工具、共享主会话或多轮重试；只接受allow/deny/ask结构化结果，模型/认证失败、超预算、无效结果或30秒超时均转人工。停止中止复核并等待SDK结算后释放模型lease。审计请求和决定先持久化，存储失败直接传播，不当成模型失败转人工；公开事件只有工具/模型ID及决定/理由，完整复核请求仅保存在privateData。工具卡最终来源区分user/ai/full-access，先前AI转人工记录仍保留在事件历史。
+`ToolRuntime`按接受Run时冻结的approvalMode执行：ask逐次询问，auto调用`ModelApprovalReviewer`，full-access自动批准并显式选择macOS无沙箱Shell；角色只读及内部read-only继续阻止工作区变更，命令采用OS禁止工作区写入的范围。文件工具仍以工作区为根。独立复核使用当前Run的Provider/model、用户请求与冻结规则，没有执行工具、共享主会话或多轮重试；只接受allow/deny/ask结构化结果，模型/认证失败、超预算、无效结果或30秒超时均转人工。停止中止复核并等待SDK结算后释放模型lease。审计请求和决定先持久化，存储失败直接传播，不当成模型失败转人工；公开事件只有工具/模型ID及决定/理由，完整复核请求仅保存在privateData。工具卡最终来源区分user/ai/full-access，先前AI转人工记录仍保留在事件历史。
 
 运行中的follow-up/steer输入先进入持久队列，再交Pi对应队列消费；文本更新与删除重建其内存投影。每个Run只投递当次允许的输入集合，普通发送与编辑不会激活旧暂停队列。取消、失败与重启保留未消费输入，恢复收费请求需显式resume，且原始分支必须与所选分支相符；同一恢复Run只激活相同Provider/model、MCP工具选择和授权绑定的输入。排队时即冻结定义与原始授权，编辑保留接受请求ID；恢复先校验原始授权并重建TypeBox元数据，撤销后重新信任不会复活旧输入。编辑用户消息追加分支与新输入，保留旧分支并排除其后续回复。session.deleted归档会话，保留事件，不是彻底删除私人数据。
 
@@ -69,7 +69,7 @@ RuntimeStore拥有会话日志与投影。公开MessageView与宿主模型codec�
 
 JSONL批记录是会话执行事实来源，完整批次fsync后才更新SQLite投影和发布事件；SQLite继续保存产品配置及可重建查询投影。宿主私有模型输入与公开事件分开保存，HTTP/SSE不暴露privateData。附件内容由宿主独立冻结保存，日志引用不等于附件文件备份。记录格式、回放及索引修复由[storage](../storage/README.md)拥有。
 
-`context`模块在每次Run开始时读取工作区根`AGENTS.md`及显式引用文件祖先目录中的规则，按目录深度及路径确定顺序，不扫描其他目录。已冻结的引用不依赖源文件继续存在；仍存在的祖先目录继续检查，缺失目录不提供规则。规则保存工作区相对来源、原始字节SHA-256与文本；下次Run重新读取，旧快照保持原样。最多16个文件、合计64 KiB，非UTF-8、符号/硬链接、敏感路径、越界及取消均拒绝；读取复用execution的真实路径检查和`readStableFile`有界字节读取，context拥有文本解码、总预算及领域错误。父目录并发改名仍受底层文件策略与OS隔离限制。项目规则只影响所属目录，不能覆盖应用策略或扩大工具权限。Plan、Todos和历史摘要按明确标识的工作数据加入模型上下文。
+`context`模块在每次Run开始时读取工作区根`AGENTS.md`及显式引用文件祖先目录中的规则，按目录深度及路径确定顺序，不扫描其他目录。已冻结的引用不依赖源文件继续存在；仍存在的祖先目录继续检查，缺失目录不提供规则。规则保存工作区相对来源、原始字节SHA-256与文本；下次Run重新读取，旧快照保持原样。最多16个文件、合计64 KiB，非UTF-8、符号/硬链接、敏感路径、越界及取消均拒绝；读取复用sandbox/filesystem的真实路径检查和`readStableFile`有界字节读取，context拥有文本解码、总预算及领域错误。父目录并发改名仍受底层文件策略与OS隔离限制。项目规则只影响所属目录，不能覆盖应用策略或扩大工具权限。Plan、Todos和历史摘要按明确标识的工作数据加入模型上下文。
 
 `WorkContext`在每次模型请求前重建当前工作状态与冻结规则对应的system内容。估算覆盖system、规则、工具定义、消息、附件、摘要和工作状态；ASCII/Unicode UTF-8启发式及每张图片4096 token均是估算。前次实际请求与后续assistant的input/cacheRead/cacheWrite共同校准下一次总量；摘要或上下文起点改变时基线失效，类别拆分始终保持估算。模型输出空间完整预留，最终仍超限则拒绝请求。
 
@@ -93,7 +93,7 @@ pnpm --filter @my-pi-harness/agent-runtime test
 
 ## M4渐进能力
 
-`InputCapabilityResolver`冻结显式MCP、目录诊断、Skill候选元数据和已选择正文/授权，排队保留原requestId与接受绑定。`RunCapabilities`拥有获准的原生/MCP候选、暂存和可见集合，`RunSkills`单独拥有正文、资源及活动租约；候选目录不占活动Skill租约。内置定义共28项，默认集合、按需类别及数量限制由[运行时能力协议](../../docs/03_API/capability-runtime.md)维护。
+`InputCapabilityResolver`冻结显式MCP、目录诊断、Skill候选元数据和已选择正文/授权，排队保留原requestId与接受绑定。`RunCapabilities`拥有获准的原生/MCP候选、暂存和可见集合，`RunSkills`单独拥有正文、资源及活动租约；候选目录不占活动Skill租约。原生注册的默认集合、按需类别及数量限制由[运行时能力协议](../../docs/03_API/capability-runtime.md)维护。
 
 `tool_search`同时检索可用原生和MCP候选，复用词法与可选本地向量；精确名字优先，语义失败或截止时保留词法结果。命中新增项自动暂存，已可用项明确标记且不重复加载；MCP关闭不影响内置发现。搜索、Skill加载和宿主已知依赖统一经过`run.tools_loaded`屏障，再更新下一请求声明、预算与执行。同批旧assistant不能调用新增工具，压缩不卸载当前集合；Run结束释放，下一Run重新选择，不从历史自动恢复全部动态工具。
 
@@ -101,9 +101,17 @@ pnpm --filter @my-pi-harness/agent-runtime test
 
 用户文字中的独立`$skill-name`明确调用会冻结并激活相应启用Skill，未安装、禁用及被遮蔽的名称不激活。文字调用与picker显式选择分别保存，合并后仍受16项和同一内容/授权版本限制；队列私有`mentionedSkillBindings`保存当次正文，恢复不会改读磁盘新版本，撤销则拒绝恢复并保留队列。活跃Run后续输入中的新调用先随队列接受事实持久化，消息实际消费后才暂存，随后通过每次模型请求前的`prepareRequest`屏障提交`run.tools_loaded`，包括直接续接的follow-up；它不创建工具授权或本地目录权限。
 
-后续Run从当前分支有效消息所对应的已提交接受/加载事实继承最近16个Skill冻结正文，自动压缩不清除该来源；编辑分支、上下文重置和检查点选择只使用保留范围。正文不会因picker空选择、模型历史裁剪或磁盘更新而丢失或换成新版。继承前逐项重验当前启停、版本及插件授权；失效项排除，并在已记录system上下文的`unavailablePreviousSkills`中说明，普通聊天继续，显式新选择仍严格校验。队列私有`inheritedSkillBindings`保留原版本，恢复可排除已失效的继承；正文继承不自动继承MCP可执行集合。动态Skill依赖只从已获准工作区候选选择，附加资源索引非空时同时激活resource reader；没有工作区不提供Office文件工具，任意MCP名字不随Skill声明加载。
+后续Run从当前分支有效消息所对应的已提交接受/加载事实继承最近16个Skill冻结正文，自动压缩不清除该来源；编辑分支、上下文重置和检查点选择只使用保留范围。正文不会因picker空选择、模型历史裁剪或磁盘更新而丢失或换成新版。继承前逐项重验当前启停、版本及插件授权；失效项排除，并在已记录system上下文的`unavailablePreviousSkills`中说明，普通聊天继续，显式新选择仍严格校验。队列私有`inheritedSkillBindings`保留原版本，恢复可排除已失效的继承；正文继承不自动继承MCP可执行集合。动态Skill依赖只从已获准工作区候选选择，附加资源索引非空时同时激活resource reader；没有工作区不提供本地文档、文件或命令工具，任意MCP名字不随Skill声明加载。
 
 Skill没有额外的工具grant状态，真实执行继续使用统一策略与逐次审批。服务插件通过冻结Skill中的`gatewayUrl`提供只读HTTP入口，模型使用会话级`web_fetch`访问允许路径，不要求工作区或授予文件/Shell能力；公网与网关访问继续执行现有网络校验、只读限制和审批。网关地址随接受输入与`context.prepared`保存，私有访问能力只在宿主执行请求时添加，不进入模型或会话日志。MCP写操作继续使用实际加载工具、独立信任与当前审批策略，接口见[运行时能力协议](../../docs/03_API/capability-runtime.md)。
+
+## 命令资源与产物
+
+初始激活Skill在首次模型请求前经宿主物化，以run.tools_loaded记录同一正文、资源与授权及当前resourceDirectory；load_skill也返回这个精确目录。接受事实可保留历史目录，但本Run首次加载后目录固定；后续能力追加不能替换已记录路径、正文或授权。共享依赖由tools资源清单按hash冻结，profile和插件安装根不成为命令的读取范围。
+
+命令服务由daemon持有，Run绑定提供session/run/task归属、工作区和有效执行范围。run_command、wait_command和stop_command的短等待与进程总生存期分开，参数由[能力协议](../../docs/03_API/capability-runtime.md#受管理命令)拥有。成功根Run结束保留后台命令，子任务终态、显式取消和会话关闭收束所属命令。每个命令独立retain已激活Skill资源，每秒验证当前授权和hash，撤销后停止；释放Run引用不提前回收命令资源。当前进程正向支持macOS，物理关闭由sandbox拥有。
+
+publish_artifact通过宿主端口注册稳定工作区字节，带producerCommandId时核对同任务命令成功终止。工具返回的artifacts随成功ToolCallRecord及artifact.published、canonical结果在同一批提交，MCP或普通stdout不能伪造注册事实。宿主下载按artifact ID读取不可变blob，字节、配额及下载租约由storage拥有。未成功提交的blob保留为不可公开的无引用文件，提交结果未知时不因异常重复生产命令。
 
 ## 执行循环与部分结果
 

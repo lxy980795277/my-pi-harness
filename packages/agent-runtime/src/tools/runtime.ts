@@ -8,7 +8,9 @@ import { Type, type TSchema } from 'typebox';
 import { ArrayOptions } from 'typebox/type';
 import { Value } from 'typebox/value';
 import { RuntimeError } from '../errors.js';
-import { applyFamilyOutcome, executeToolFamily, toolFamily } from './families.js';
+import { nativeTools, type ToolRegistration } from '@my-pi-harness/tools';
+import { applyToolOutcome } from './outcome.js';
+import { createToolContext, bindRunTool, type BoundToolExecutor } from './bindings.js';
 import { ToolCallLedger } from './ledger.js';
 import { invocationPolicy, ToolApprovals } from './policy.js';
 import { RepeatToolReminder } from './repeat-reminder.js';
@@ -28,9 +30,10 @@ function validateToolInput(definition: RunToolDefinition, input: unknown): Recor
   return input;
 }
 
-/** Compose frozen selection, family dispatch, approval ownership and canonical tool accounting. */
+/** Compose accepted registrations, approval ownership and canonical tool accounting. */
 export class ToolRuntime {
   private readonly approvals: ToolApprovals;
+  private readonly nativeBindings = new WeakMap<ToolRunContext, Map<string, BoundToolExecutor>>();
   private readonly repetitions = new WeakMap<ToolRunContext, RepeatToolReminder>();
   public constructor(private readonly options: ToolRuntimeOptions) {
     this.approvals = new ToolApprovals(options);
@@ -41,6 +44,26 @@ export class ToolRuntime {
     return this.options.work !== undefined;
   }
 
+  public get registrations(): readonly ToolRegistration[] {
+    return this.options.registry?.list() ?? nativeTools();
+  }
+
+  public async finishRun(
+    sessionId: string,
+    runId: string,
+    taskId: string | null,
+    failed: boolean,
+  ): Promise<void> {
+    if (taskId !== null) await this.options.commands?.closeTask(sessionId, taskId);
+    else if (failed) await this.options.commands?.closeRun({ sessionId, runId });
+  }
+  public async closeSession(sessionId: string): Promise<void> {
+    await this.options.commands?.closeSession(sessionId);
+  }
+  public async close(): Promise<void> {
+    await this.options.commands?.close();
+  }
+
   public decide(sessionId: string, id: string, input: ToolDecisionInput): void {
     this.approvals.decide(sessionId, id, input);
   }
@@ -49,8 +72,16 @@ export class ToolRuntime {
     context: ToolRunContext,
     toolset: RunToolset,
   ): AgentTool<TSchema, undefined>[] {
+    const ports = createToolContext(context, this.options);
+    let bindings = this.nativeBindings.get(context);
+    if (!bindings) {
+      bindings = new Map();
+      this.nativeBindings.set(context, bindings);
+    }
+    const bound = bindings;
     return toolset.definitions.map((definition): AgentTool<TSchema, undefined> => {
       const selected = toolset.require(definition.name);
+      const bindingKey = JSON.stringify([selected.definition.name, selected.fingerprint]);
       return {
         ...definition,
         label: definition.name,
@@ -75,6 +106,14 @@ export class ToolRuntime {
             providerCallId,
             validateToolInput(definition, input),
             signal,
+            (ledger, currentSignal) => {
+              let executor = bound.get(bindingKey);
+              if (!executor) {
+                executor = bindRunTool(selected, ports, this.options);
+                bound.set(bindingKey, executor);
+              }
+              return executor(ledger, currentSignal);
+            },
           ),
       };
     });
@@ -85,11 +124,12 @@ export class ToolRuntime {
     selected: RunToolRecord,
     providerCallId: string,
     args: Record<string, unknown>,
-    sdkSignal?: AbortSignal,
+    sdkSignal: AbortSignal | undefined,
+    executeTool: BoundToolExecutor,
   ): Promise<ToolExecutionResult> {
     const signal = sdkSignal ? AbortSignal.any([sdkSignal, context.signal]) : context.signal;
     signal.throwIfAborted();
-    const policy = invocationPolicy(selected, args, this.options);
+    const policy = invocationPolicy(selected, args, this.options, context.readOnly);
     const ledger = new ToolCallLedger(
       context,
       {
@@ -127,29 +167,24 @@ export class ToolRuntime {
         tool.status = 'denied';
         throw new RuntimeError('TOOL_READ_ONLY', '当前运行仅允许只读操作。');
       }
+      if (policy.mutating)
+        this.options.commands?.assertWriteAvailable({
+          sessionId: context.session.id,
+          runId: context.run.id,
+          taskId: context.run.taskId ?? null,
+        });
       if (context.beforeTool) releaseTool = await context.beforeTool(policy.mutating, signal);
       signal.throwIfAborted();
       if (policy.approvalRequired) await this.approvals.approve(context, ledger, signal);
-      const outcome = await executeToolFamily(
-        toolFamily(selected),
-        context,
-        selected,
-        ledger,
-        this.options,
-        signal,
-      );
-      applyFamilyOutcome(tool, outcome);
+      const outcome = await executeTool(ledger, signal);
+      applyToolOutcome(tool, outcome);
       const result = finish(outcome.result, outcome.origin);
       if (outcome.status === 'unknown') context.outcomeUnknown(tool.result ?? '结果未知。');
       return result;
     } catch (error: unknown) {
       if (ledger.persistenceFailed || ledger.finished) throw error;
       const message = error instanceof Error ? error.message : '工具执行失败。';
-      if (
-        selected.source.kind === 'mcp' &&
-        tool.dispatch.state === 'may_have_started' &&
-        !tool.dispatch.confirmedNotWritten
-      ) {
+      if (tool.dispatch.state === 'may_have_started' && !tool.dispatch.confirmedNotWritten) {
         tool.status = 'unknown';
         tool.result = '结果未知，操作可能已生效，需要核验。';
         const result = finish(
@@ -172,7 +207,7 @@ export class ToolRuntime {
           details: undefined,
           isError: true,
         },
-        selected.source.kind === 'mcp' ? 'host' : 'tool',
+        selected.external ? 'host' : 'tool',
       );
     } finally {
       releaseTool();

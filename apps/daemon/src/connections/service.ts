@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { Value } from 'typebox/value';
 import { Type } from 'typebox';
 import { RuntimeError } from '@my-pi-harness/agent-runtime';
+import { BUILTIN_PLUGIN_APPS } from '@my-pi-harness/tools';
 import {
   CONNECTION_PROVIDERS,
   connectionProvider,
@@ -141,8 +142,12 @@ export class ConnectionService {
       serviceId: provider.serviceId,
       name: provider.name,
       defaultScopes: [...provider.defaultScopes],
-      mcpEndpoints: [...provider.mcpEndpoints],
-      apps: [...provider.apps],
+      mcpEndpoints: BUILTIN_PLUGIN_APPS.filter((app) => app.provider === provider.serviceId).map(
+        (app) => app.endpoint,
+      ),
+      apps: BUILTIN_PLUGIN_APPS.filter((app) => app.provider === provider.serviceId).map(
+        (app) => app.name,
+      ),
     }));
   }
   public list(): ConnectionView[] {

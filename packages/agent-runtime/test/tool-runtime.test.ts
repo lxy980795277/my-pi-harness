@@ -9,7 +9,7 @@ import {
   type TranscriptContext,
 } from '@earendil-works/pi-ai';
 import { openProfileStore } from '@my-pi-harness/storage';
-import * as execution from '@my-pi-harness/execution';
+import { observeNativeTool } from './support/native-tool.js';
 import { describe, expect, it, vi } from 'vitest';
 import { ToolRuntime } from '../src/tools/runtime.js';
 import { SessionRuntime } from '../src/sessions/runtime.js';
@@ -102,7 +102,8 @@ function writeCall() {
 describe('durable Pi tool execution', () => {
   it('returns bounded parser errors before approval or effects and keeps later calls independent', async () => {
     const f = await workFixture(true);
-    const execute = vi.spyOn(execution, 'executeTool');
+    const observed = observeNativeTool('read_file');
+    const execute = observed.execute;
     const ask = vi.spyOn(f.work, 'ask');
     const raw = 'Invalid JSON. Received arguments: {"path":"blocked.txt"';
     const longError = `second parser error ${'x'.repeat(10_000)} discarded tail`;
@@ -162,7 +163,7 @@ describe('durable Pi tool execution', () => {
         true,
       );
       expect(execute).toHaveBeenCalledTimes(1);
-      expect(execute.mock.calls[0]?.[0]).toBe('read_file');
+      expect(execute.mock.calls[0]?.[0]).toEqual({ path: 'source.txt' });
       expect(ask).not.toHaveBeenCalled();
       await expect(readFile(join(f.root, 'blocked.txt'))).rejects.toMatchObject({ code: 'ENOENT' });
       const nextResults = requests[0]?.messages.filter((message) => message.role === 'toolResult');
@@ -188,12 +189,12 @@ describe('durable Pi tool execution', () => {
       expect(f.errors).toEqual([]);
     } finally {
       ask.mockRestore();
-      execute.mockRestore();
+      observed.restore();
       await f.close();
     }
   });
 
-  it('retains the work-family result limit failure instead of silently truncating its public fact', async () => {
+  it('bounds the public work result while retaining its complete canonical text and later pages', async () => {
     const f = await workFixture(true);
     const search = vi.spyOn(f.work, 'searchHistory').mockReturnValue('x'.repeat(128_001));
     let requests = 0;
@@ -226,7 +227,7 @@ describe('durable Pi tool execution', () => {
         },
         () => {
           requests += 1;
-          return fauxAssistantMessage('Must not continue after the invalid public result');
+          return fauxAssistantMessage('Continued after retaining the full canonical result.');
         },
       ]);
       await f.runtime.send(f.session.id, {
@@ -234,20 +235,26 @@ describe('durable Pi tool execution', () => {
         mode: 'send',
         requestId: 'work-result-limit',
       });
-      await until(() => f.errors.length > 0);
-      await f.runtime.close();
-      expect(requests).toBe(1);
-      expect(
-        f.store
-          .getSnapshot(f.session.id)
-          .tools.find((tool) => tool.name === 'search_session_history')?.status,
-      ).not.toBe('completed');
-      expect(
-        f.store.readEvents(f.session.id, 0, 1000).filter(({ type }) => type === 'tool.context'),
-      ).toHaveLength(1);
-      expect(() => f.runtime.getSnapshot(f.session.id)).toThrow(
-        expect.objectContaining({ code: 'SESSION_UNAVAILABLE' }),
-      );
+      await until(() => f.runtime.getSnapshot(f.session.id).session.activeRunId === null);
+      expect(requests).toBe(2);
+      const snapshot = f.runtime.getSnapshot(f.session.id);
+      const history = snapshot.tools.find((tool) => tool.name === 'search_session_history');
+      expect(snapshot.runs[0]?.status).toBe('completed');
+      expect(history?.status).toBe('completed');
+      expect(history?.result).toHaveLength(128_000);
+      const canonical = f.store
+        .getModelContext(f.session.id, snapshot.session.activeBranchId)
+        .map(decodeContextMessage)
+        .find(
+          (message) =>
+            message.role === 'toolResult' && message.toolName === 'search_session_history',
+        );
+      if (!canonical || canonical.role !== 'toolResult')
+        throw new Error('Missing canonical history result');
+      expect(canonical.content[0]).toEqual({ type: 'text', text: 'x'.repeat(128_001) });
+      if (!history) throw new Error('Missing public history result');
+      expect(f.work.readToolResult(f.session.id, history.id, 128_000, 6000)).toContain('x');
+      expect(f.errors).toEqual([]);
     } finally {
       search.mockRestore();
       await f.close();
@@ -256,7 +263,8 @@ describe('durable Pi tool execution', () => {
 
   it('rejects raw numeric coercions before dispatch, preserves original intents and keeps the session usable', async () => {
     const f = await fixture();
-    const execute = vi.spyOn(execution, 'executeTool');
+    const observed = observeNativeTool('read_file');
+    const execute = observed.execute;
     const invalid = [
       { path: 'source.txt', startLine: 1.5 },
       { path: 'source.txt', startLine: '1' },
@@ -294,7 +302,7 @@ describe('durable Pi tool execution', () => {
       ).toBe(true);
       expect(snapshot.tools.at(-1)).toMatchObject({ status: 'completed', arguments: valid });
       expect(execute).toHaveBeenCalledTimes(1);
-      expect(execute.mock.calls[0]?.slice(0, 2)).toEqual(['read_file', valid]);
+      expect(execute.mock.calls[0]?.[0]).toEqual(valid);
       const storedCalls = f.store
         .getModelContext(f.session.id, f.session.activeBranchId)
         .map(decodeContextMessage)
@@ -319,7 +327,7 @@ describe('durable Pi tool execution', () => {
       ]);
       expect(f.errors).toEqual([]);
     } finally {
-      execute.mockRestore();
+      observed.restore();
       await f.close();
     }
   });

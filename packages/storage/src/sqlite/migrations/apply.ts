@@ -12,10 +12,11 @@ import { CONNECTIONS_SQL } from './0006-connections.js';
 import { PLUGIN_ACCOUNTS_SQL } from './0007-plugin-accounts.js';
 import { MCP_CATALOGS_SQL } from './0008-mcp-catalogs.js';
 import { AGENT_TASKS_SQL } from './0009-agent-tasks.js';
+import { ARTIFACTS_SQL } from './0010-artifacts.js';
 const MigrationRowSchema = Type.Object({ version: Type.Integer(), checksum: Type.String() });
 
 /** Highest installed schema version understood by this build. */
-export const SCHEMA_VERSION = 9;
+export const SCHEMA_VERSION = 10;
 const migrations = [
   { version: 1, sql: FOUNDATION_SQL },
   { version: 2, sql: APPLICATION_LOGIN_SQL },
@@ -26,6 +27,7 @@ const migrations = [
   { version: 7, sql: PLUGIN_ACCOUNTS_SQL },
   { version: 8, sql: MCP_CATALOGS_SQL },
   { version: 9, sql: AGENT_TASKS_SQL },
+  { version: 10, sql: ARTIFACTS_SQL },
 ];
 
 /**

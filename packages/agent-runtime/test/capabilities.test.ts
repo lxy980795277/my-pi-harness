@@ -95,7 +95,7 @@ function skills() {
     source: '/registered/test',
     content: 'FROZEN_SKILL_BODY: inspect the result before reporting completion.',
     resources: [],
-    allowedTools: ['office_inspect'],
+    allowedTools: ['read_document'],
   };
   const current = (): void => {
     if (!enabled) throw new Error('Skill disabled');
@@ -303,11 +303,11 @@ describe('progressive Run capabilities through real Pi requests and SQLite/JSONL
   );
 
   it.each([true, false])(
-    'loads only declared local Office candidates alongside dynamic Skill instructions, workspace=%s',
+    'loads only declared document readers alongside dynamic Skill instructions, workspace=%s',
     async (withWorkspace) => {
       const s = skills();
       const c = catalog();
-      s.frozen.allowedTools = ['office_inspect', 'mcp_echo'];
+      s.frozen.allowedTools = ['read_document', 'mcp_echo'];
       const f = await fixture(withWorkspace, {
         skills: s.port,
         discovery: c.discovery,
@@ -317,35 +317,35 @@ describe('progressive Run capabilities through real Pi requests and SQLite/JSONL
       try {
         await writeFile(
           join(f.root, 'input.txt'),
-          'This file deliberately has an unsupported Office extension.',
+          'This file deliberately has an unsupported document extension.',
         );
         f.faux.setResponses([
           call('load_skill', { id: s.frozen.selection.id }),
           (context) => {
             afterLoad = context;
             return withWorkspace
-              ? call('office_inspect', { source: 'input.txt' })
+              ? call('read_document', { path: 'input.txt' })
               : fauxAssistantMessage('No filesystem capability');
           },
           fauxAssistantMessage('Reported the inspection limit'),
         ]);
         await f.runtime.send(f.session.id, {
-          text: 'Use local Office instructions',
+          text: 'Use local document instructions',
           mode: 'send',
-          requestId: `dynamic-office-${String(withWorkspace)}`,
+          requestId: `dynamic-document-${String(withWorkspace)}`,
         });
         await idle(f);
-        expect(names(afterLoad).includes('office_inspect')).toBe(withWorkspace);
+        expect(names(afterLoad).includes('read_document')).toBe(withWorkspace);
         expect(names(afterLoad)).not.toContain('mcp_echo');
         if (withWorkspace) {
           const inspection = f.runtime
             .getSnapshot(f.session.id)
-            .tools.find((tool) => tool.name === 'office_inspect');
+            .tools.find((tool) => tool.name === 'read_document');
           expect(inspection?.binding).toMatchObject({
             kind: 'accepted',
             source: { kind: 'workspace' },
           });
-          expect(inspection?.result).toContain('Use a DOCX, PDF, XLSX or PPTX file');
+          expect(inspection?.result).toContain('Use a PDF, Office, OpenDocument or EPUB document');
         }
         expect(c.invoke).not.toHaveBeenCalled();
         expect(f.errors).toEqual([]);
@@ -673,7 +673,7 @@ describe('progressive Run capabilities through real Pi requests and SQLite/JSONL
     }
   });
 
-  it('freezes Skill instructions and exposes only its declared native Office tools initially', async () => {
+  it('freezes Skill instructions and exposes only its declared document readers initially', async () => {
     const s = skills();
     const c = catalog();
     const f = await fixture(true, {
@@ -701,8 +701,8 @@ describe('progressive Run capabilities through real Pi requests and SQLite/JSONL
       });
       await entered.promise;
       expect(s.leases()).toBe(1);
-      expect(names(request)).toContain('office_inspect');
-      expect(names(request)).not.toContain('office_docx');
+      expect(names(request)).toContain('read_document');
+      expect(names(request)).not.toContain('view_pdf_page');
       expect(JSON.stringify(request)).toContain('FROZEN_SKILL_BODY');
       s.frozen.content = 'MUTATED_CATALOG_BODY';
       const accepted = (await records(f)).find(({ event }) => event.type === 'run.accepted');

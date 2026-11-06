@@ -6,8 +6,14 @@
       "@my-pi-harness/protocol": ["./packages/protocol/src/index.ts"],
       "@my-pi-harness/storage": ["./packages/storage/src/index.ts"],
       "@my-pi-harness/agent-runtime": ["./packages/agent-runtime/src/index.ts"],
-      "@my-pi-harness/execution": ["./packages/execution/src/index.ts"],
-      "@my-pi-harness/integrations": ["./packages/integrations/src/index.ts"]
+      "@my-pi-harness/integrations": ["./packages/integrations/src/index.ts"],
+      "@my-pi-harness/tools": ["./packages/tools/src/index.ts"],
+      "@my-pi-harness/tools/document-text": ["./packages/tools/src/utils/document-text.ts"],
+      "@my-pi-harness/sandbox": ["./packages/sandbox/src/index.ts"],
+      "@my-pi-harness/sandbox/filesystem": ["./packages/sandbox/src/filesystem/index.ts"],
+      "@my-pi-harness/sandbox/network": ["./packages/sandbox/src/network/index.ts"],
+      "@my-pi-harness/sandbox/process": ["./packages/sandbox/src/process/index.ts"],
+      "@my-pi-harness/sandbox/policy": ["./packages/sandbox/src/policy/index.ts"]
     }
   },
   "include": ["*.config.ts", "tests/unit/**/*.ts", "tests/fixtures/**/*.ts"]

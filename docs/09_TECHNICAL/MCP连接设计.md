@@ -1,25 +1,25 @@
 # MCP连接设计
 
-日期：2026-10-28。模块：daemon/mcp、integrations/mcp、execution/process、agent-runtime与storage。实现锚点：[McpService](../../apps/daemon/src/mcp/service.ts)、[RemoteMcpService](../../apps/daemon/src/mcp/remote-service.ts)、[本地连接管理器](../../packages/integrations/src/mcp/manager.ts)、[远端连接管理器](../../packages/integrations/src/mcp/remote.ts)、[ExternalTools](../../apps/daemon/src/mcp/external-tools.ts)。本地受监管stdio的正向支持限macOS；HTTP/SSE、OAuth和调用链有本机fixture证据，真实第三方账号及其他平台不能由fixture代替。
+日期：2026-10-28。模块：daemon/mcp、integrations/mcp、sandbox/process、agent-runtime与storage。实现锚点：[McpService](../../apps/daemon/src/mcp/service.ts)、[RemoteMcpService](../../apps/daemon/src/mcp/remote-service.ts)、[本地连接管理器](../../packages/integrations/src/mcp/manager.ts)、[远端连接管理器](../../packages/integrations/src/mcp/remote.ts)、[ExternalTools](../../apps/daemon/src/mcp/external-tools.ts)。本地受监管stdio的正向支持限macOS；HTTP/SSE、OAuth和调用链有本机fixture证据，真实第三方账号及其他平台不能由fixture代替。
 
 ## 连接不等于执行授权
 
 MCP负责获取外部工具定义并调用工具，但连接成功不能同时表示用户信任了启动程序、模型看到了工具、或某次操作获得批准。本实现分别管理配置、凭据、启动信任、目录、Run冻结和逐次执行。
 
-配置和授权由daemon/storage持有，官方SDK与字节传输由integrations持有，真实本地进程由execution持有，模型循环与审批由agent-runtime持有。Renderer只操作安全DTO，不持有SDK Client、进程、凭据引用或Token。
+配置和授权由daemon/storage持有，官方SDK与字节传输由integrations持有，真实本地进程由sandbox持有，模型循环与审批由agent-runtime持有。Renderer只操作安全DTO，不持有SDK Client、进程、凭据引用或Token。
 
 | 所有者               | 主要职责                                                      |
 | -------------------- | ------------------------------------------------------------- |
 | daemon/mcp           | 配置用例、信任、秘密引用、OAuth、目录准备和精确App归属        |
 | integrations/mcp     | 官方SDK适配、定义校验、目录指纹、连接与调用租约               |
 | integrations/network | 远端DNS、来源、重定向、正文及时间限制                         |
-| execution/process    | 本地持久双向进程、隔离、管道和所属资源回收                    |
+| sandbox/process      | 本地持久双向进程、隔离、管道和所属资源回收                    |
 | agent-runtime        | 冻结候选、可见版本、参数校验、审批、派发屏障和终态            |
 | storage              | SQLite配置及可重建目录快照，JSONL接受与调用事实，秘密存储适配 |
 
 ## 本地与远端两种连接模型
 
-本地Server使用stdio，绑定已注册工作区，保存绝对程序、独立参数、公开环境和秘密槽位。启动不经过隐式Shell，也不继承宿主全部环境。execution拥有环境变量名称规则，daemon在配置保存和导入预览时复用，公开环境与秘密槽位均不得覆盖宿主启动控制变量；执行前继续按同一规则检查，各入口另行拒绝值中的NUL。预览解析真实工作根、程序及显式文件入口身份，构造包含参数、环境、秘密引用/epoch、隔离和资源策略的指纹，秘密字节不进入指纹或DTO。
+本地Server使用stdio，绑定已注册工作区，保存绝对程序、独立参数、公开环境和秘密槽位。启动不经过隐式Shell，也不继承宿主全部环境。sandbox拥有环境变量名称规则，daemon在配置保存和导入预览时复用，公开环境与秘密槽位均不得覆盖宿主启动控制变量；执行前继续按同一规则检查，各入口另行拒绝值中的NUL。预览解析真实工作根、程序及显式文件入口身份，构造包含参数、环境、秘密引用/epoch、隔离和资源策略的指纹，秘密字节不进入指纹或DTO。
 
 `sandboxed`和`full-access`分别授信；用户批准一组确切启动配置后才启用Server。信任只允许启动，不替代每次工具调用审批；精确参数的只读授权也不能从Server自报的`readOnlyHint`推断。当前Windows/Linux不提供受监管本地执行，不自动退回宿主执行。
 

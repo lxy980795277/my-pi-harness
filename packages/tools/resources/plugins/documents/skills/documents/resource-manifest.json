@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "dependencies": [
+    {
+      "source": "shared/office/common.py",
+      "target": "scripts/common.py",
+      "hash": "6039b92cd325c535c1af2f3ac0d9e4a82a79d61106cc73efbcda97b02317d7e1"
+    },
+    {
+      "source": "shared/office/documents.py",
+      "target": "scripts/documents.py",
+      "hash": "5f6657bc78f5afcf5287924b994dc87cbd80f5df4e1e79a2b1c4d8938e50e01a"
+    },
+    {
+      "source": "shared/office/word_layout.py",
+      "target": "scripts/word_layout.py",
+      "hash": "e5c4c6843037903d77102f25dc840d89485849e737ac16e526a73f392be13637"
+    },
+    {
+      "source": "shared/office/cli_support.py",
+      "target": "scripts/cli_support.py",
+      "hash": "702fb8d69fb12f06d4860fd4aa242257945a735d9352a168f41d3dea845a9060"
+    },
+    {
+      "source": "shared/office/convert_pdf.py",
+      "target": "scripts/convert_pdf.py",
+      "hash": "5723257b8a0cb38216bc052a276f7a5b40c7e05be434439448b74be1a623b6f0"
+    }
+  ]
+}

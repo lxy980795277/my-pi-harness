@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { RuntimeError } from '../errors.js';
 import type { ExternalTools } from './external.js';
-import type { FamilyOutcome } from './families.js';
+import type { ToolOutcome } from './outcome.js';
 import type { ToolCallLedger } from './ledger.js';
 import type { RunToolRecord } from './toolset.js';
 
@@ -11,9 +11,16 @@ export async function dispatchMcpTool(
   ledger: ToolCallLedger,
   port: ExternalTools | undefined,
   signal: AbortSignal,
-): Promise<FamilyOutcome> {
+): Promise<ToolOutcome> {
   if (!port || !selected.external)
     throw new RuntimeError('MCP_UNAVAILABLE', '外部工具运行时不可用。');
+  if (
+    selected.source.kind !== 'mcp' ||
+    selected.source.serverId !== selected.external.selection.serverId ||
+    selected.source.serverRevision !== selected.external.selection.serverRevision ||
+    selected.source.remoteToolName !== selected.external.selection.remoteToolName
+  )
+    throw new RuntimeError('TOOL_NOT_AVAILABLE', 'MCP来源与接受的执行绑定不匹配。');
   const tool = ledger.tool;
   const callAttemptId = randomUUID();
   const outcome = await port.call({

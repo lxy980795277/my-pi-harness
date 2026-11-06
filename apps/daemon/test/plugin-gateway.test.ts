@@ -1,7 +1,5 @@
-import {
-  pluginConnectionDefinition,
-  type PluginConnectionDefinition,
-} from '@my-pi-harness/integrations';
+import { pluginConnectionDefinition } from '../src/plugin-connections/definitions.js';
+import { type PluginConnectionDefinition } from '@my-pi-harness/integrations';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { requestPluginGateway } from '../src/plugin-connections/gateway.js';
 

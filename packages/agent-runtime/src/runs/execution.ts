@@ -118,12 +118,12 @@ export class RunExecution {
   }
 
   /** Release an accepted run that failed before its first SDK request. */
-  public disposeUnstarted(): void {
+  public async disposeUnstarted(): Promise<void> {
     if (this.started)
       throw new RuntimeError('RUN_ALREADY_STARTED', 'Started runs must settle through their owner');
     this.unsubscribe();
     this.options.work?.context.release(this.options.run.id);
-    this.options.capabilities?.close();
+    await this.options.capabilities?.close();
     this.toolAbort.abort();
     this.agent.clearAllQueues();
     this.agent.abort();
@@ -150,7 +150,27 @@ export class RunExecution {
       this.options.hooks?.fault(error);
       this.options.onError(error);
     } finally {
-      this.options.capabilities?.close();
+      try {
+        const successful =
+          this.messages.final?.stopReason === 'stop' ||
+          this.messages.final?.stopReason === 'length';
+        await this.options.tools?.finishRun(
+          this.options.session.id,
+          this.options.run.id,
+          this.options.run.taskId ?? null,
+          this.cancelled || this.failure !== undefined || !successful,
+        );
+      } catch (error) {
+        this.failure ??= error;
+        this.options.onError(error);
+      } finally {
+        try {
+          await this.options.capabilities?.close();
+        } catch (error) {
+          this.failure ??= error;
+          this.options.onError(error);
+        }
+      }
     }
     if (this.persistenceFailed) return;
     this.messages.recordUnstartedCalls();

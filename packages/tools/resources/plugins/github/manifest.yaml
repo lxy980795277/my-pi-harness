@@ -1,0 +1,28 @@
+id: github
+name: GitHub
+apiUrl: https://api.github.com
+oauth:
+  issuer: https://github.com/login/oauth
+  authorizationEndpoint: https://github.com/login/oauth/authorize
+  tokenEndpoint: https://github.com/login/oauth/access_token
+  pkce: true
+  tokenAuth: body
+  tokenFormat: form
+  scopes:
+    - repo
+    - user
+  profile:
+    source: userinfo
+    idField: id
+    usernameField: login
+    displayNameField: name
+    avatarUrlField: avatar_url
+    path: /user
+gateway:
+  allowedPaths:
+    - ^/user(?:/repos)?/?$
+    - ^/users/[^/]+(?:/repos)?/?$
+    - ^/search/(?:repositories|issues|users|code|commits|topics|labels)/?$
+    - ^/repos/[^/]+/[^/]+(?:/.*)?$
+  headers:
+    Accept: application/vnd.github+json

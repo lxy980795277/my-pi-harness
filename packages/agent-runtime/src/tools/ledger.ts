@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { ExecutionContent } from '@my-pi-harness/execution';
+import type { ToolContent } from '@my-pi-harness/tools';
 import type { StoredToolResult, ToolCallRecord } from '@my-pi-harness/protocol';
 import { encodeToolResult } from '../context/codec.js';
 import { RuntimeError } from '../errors.js';
@@ -31,7 +31,7 @@ export function toolCallRecordId(
 }
 
 /** Public results are bounded text; canonical tool content retains images and original blocks. */
-export function toolResultText(content: readonly ExecutionContent[]): string {
+export function toolResultText(content: readonly ToolContent[]): string {
   return content
     .filter((part) => part.type === 'text')
     .map((part) => part.text)
@@ -81,6 +81,12 @@ function terminalEvents(
         origin,
       }),
     },
+    ...(tool.artifacts ?? []).map((artifact) => ({
+      type: 'artifact.published',
+      runId: context.run.id,
+      at: tool.updatedAt,
+      data: { artifact },
+    })),
   ];
 }
 
@@ -88,7 +94,7 @@ function terminalEvents(
 export function recordHostToolOutcome(
   context: LedgerContext,
   call: ToolCallIdentity,
-  outcome: { status: 'failed' | 'interrupted'; reason: string; content: ExecutionContent[] },
+  outcome: { status: 'failed' | 'interrupted'; reason: string; content: ToolContent[] },
 ): boolean {
   const id = toolCallRecordId(context.run.id, call.assistantMessageId, call.providerCallId);
   if (context.recorded.has(id)) return false;
@@ -189,6 +195,7 @@ export class ToolCallLedger {
   ): ToolExecutionResult {
     if (this.finished) throw new RuntimeError('TOOL_OUTCOME_INVALID', '工具终态已经记录。');
     this.tool.updatedAt = Date.now();
+    if (result.artifacts?.length) this.tool.artifacts = result.artifacts;
     this.persist(() =>
       terminalEvents(this.context, this.call, this.tool, result, origin, 'tool.updated'),
     );

@@ -1,4 +1,4 @@
-import type { ExecutionContent } from '@my-pi-harness/execution';
+import type { ToolContent } from '@my-pi-harness/tools';
 import type { ApprovalMode, McpToolSelection } from '@my-pi-harness/protocol';
 import type { ExternalToolAuthorization } from '@my-pi-harness/protocol';
 import type { RunToolDefinition } from './toolset.js';
@@ -11,7 +11,7 @@ export interface FrozenMcpTool {
 }
 
 export type ExternalToolOutcome =
-  | { kind: 'known'; isError: boolean; content: ExecutionContent[]; summary: string }
+  | { kind: 'known'; isError: boolean; content: ToolContent[]; summary: string }
   | { kind: 'not-dispatched'; cancelled: boolean; message: string }
   | { kind: 'unknown'; message: string };
 

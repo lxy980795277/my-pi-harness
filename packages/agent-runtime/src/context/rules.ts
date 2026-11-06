@@ -2,13 +2,13 @@ import { createHash } from 'node:crypto';
 import { lstat } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import {
-  ExecutionError,
+  SandboxError,
   readStableFile,
   parseWorkspaceRelativePath,
   resolveWorkspaceRoot,
   toWorkspaceRelativePath,
   workspacePath,
-} from '@my-pi-harness/execution';
+} from '@my-pi-harness/sandbox';
 import type { RuleSource } from '@my-pi-harness/protocol';
 import { abortError, RuntimeError } from '../errors.js';
 
@@ -49,7 +49,7 @@ async function readRule(
   try {
     bytes = await readStableFile(path, signal, remainingBytes);
   } catch (cause) {
-    if (cause instanceof ExecutionError) {
+    if (cause instanceof SandboxError) {
       if (cause.code === 'CANCELLED') throw abortError();
       if (cause.code === 'FILE_CHANGED')
         throw new RuntimeError('RULE_CHANGED', 'AGENTS.md在读取期间发生变化，请重试。', { cause });
@@ -121,7 +121,7 @@ export async function loadWorkspaceRules(input: WorkspaceRulesInput): Promise<Ru
     try {
       rule = await readRule(root, path, MAXIMUM_RULE_BYTES - byteLength, input.signal);
     } catch (cause) {
-      if (cause instanceof ExecutionError && cause.code === 'FILE_TOO_LARGE')
+      if (cause instanceof SandboxError && cause.code === 'FILE_TOO_LARGE')
         throw new RuntimeError('RULE_LIMIT', '项目规则总量超过64 KiB，请缩短AGENTS.md。', {
           cause,
         });

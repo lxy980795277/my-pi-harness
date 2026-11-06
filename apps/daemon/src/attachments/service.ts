@@ -1,17 +1,16 @@
+import { extractDocument, extractPdf } from '@my-pi-harness/tools/document-text';
 import { randomUUID } from 'node:crypto';
 import { opendir } from 'node:fs/promises';
 import { basename, isAbsolute, relative, resolve, sep } from 'node:path';
 import { RuntimeError } from '@my-pi-harness/agent-runtime';
 import {
-  ExecutionError,
-  extractPdf,
-  extractDocument,
+  SandboxError,
   isPortableFileName,
   isSensitiveName,
   openRegular,
   toWorkspaceRelativePath,
   workspacePath,
-} from '@my-pi-harness/execution';
+} from '@my-pi-harness/sandbox';
 import type {
   Attachment,
   AttachmentContent,
@@ -228,7 +227,7 @@ export class AttachmentService {
       );
     } catch (cause) {
       if (cause instanceof RuntimeError) throw cause;
-      if (cause instanceof ExecutionError)
+      if (cause instanceof SandboxError)
         throw new RuntimeError('ATTACHMENT_PATH', cause.message, { cause });
       throw new RuntimeError('ATTACHMENT_PATH', '无法读取工作区引用文件。', { cause });
     }

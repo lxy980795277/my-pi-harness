@@ -8,7 +8,16 @@ export interface ToolSequenceStep {
   thinking?: string;
 }
 
+export type ToolSequenceEntry = ToolSequenceStep | ((request: ModelRequest) => ToolSequenceStep);
+
+interface ToolSequenceRoute {
+  key: string;
+  steps: readonly ToolSequenceEntry[];
+  finalText: string;
+}
+
 interface ToolSequenceOptions {
+  route?(request: ModelRequest): ToolSequenceRoute;
   finalThinking?: string;
   pauseBeforeFinish?: boolean;
 }
@@ -19,11 +28,12 @@ interface ToolSequenceModel extends TestModelServer {
 
 /** Every assistant round reuses call_0; public call identity must be owned by the runtime. */
 export async function startToolSequenceModel(
-  steps: readonly ToolSequenceStep[],
+  steps: readonly ToolSequenceEntry[],
   finalText: string,
   options: ToolSequenceOptions = {},
 ): Promise<ToolSequenceModel> {
   const requests: ModelRequest[] = [];
+  const cursors = new Map<string, number>();
   let finish = (): void => undefined;
   const finishGate = new Promise<void>((resolve) => {
     finish = resolve;
@@ -37,12 +47,17 @@ export async function startToolSequenceModel(
       if (typeof input !== 'object' || input === null || Array.isArray(input))
         throw new Error('Invalid fixture request');
       const body = input as Record<string, unknown>;
-      const step = steps[requests.length];
-      requests.push({
+      const recorded = {
         path: request.url ?? '',
         authorization: request.headers.authorization,
         body,
-      });
+      };
+      const sequence = options.route?.(recorded);
+      const cursor = sequence ? (cursors.get(sequence.key) ?? 0) : requests.length;
+      if (sequence) cursors.set(sequence.key, cursor + 1);
+      const entry = (sequence?.steps ?? steps)[cursor];
+      const step = typeof entry === 'function' ? entry(recorded) : entry;
+      requests.push(recorded);
       response.writeHead(200, { 'Content-Type': 'text/event-stream' });
       const send = (delta: Record<string, unknown>, finish: string | null = null): void => {
         response.write(
@@ -66,7 +81,7 @@ export async function startToolSequenceModel(
         send({}, 'tool_calls');
       } else {
         if (options.finalThinking !== undefined) send({ reasoning_content: options.finalThinking });
-        send({ content: finalText });
+        send({ content: sequence?.finalText ?? finalText });
         await finishGate;
         if (response.destroyed) return;
         send({}, 'stop');

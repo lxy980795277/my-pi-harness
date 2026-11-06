@@ -1,5 +1,10 @@
 import { Type } from 'typebox';
-import { StoredToolResultSchema, type ToolCallRecord } from '@my-pi-harness/protocol';
+import {
+  ArtifactPublishedSchema,
+  StoredToolResultSchema,
+  type ToolCallRecord,
+  type Artifact,
+} from '@my-pi-harness/protocol';
 import { checked } from '../../shared/validation.js';
 import { StorageError } from '../../shared/errors.js';
 import { ToolContextEventSchema, ToolEventSchema } from '../event-validation.js';
@@ -22,9 +27,16 @@ export function activeTool(status: ToolCallRecord['status']): boolean {
 export function validateToolBatch(records: readonly BatchRecord[]): void {
   const terminals = new Set<string>();
   const contexts = new Set<string>();
+  const artifactTools = new Map<string, ToolCallRecord>();
+  const artifacts = new Map<string, Artifact>();
   for (const record of records) {
     if (record.type === 'tool.updated' || record.type === 'tool.requested') {
       const { tool } = checked(ToolEventSchema, record.data);
+      if ((tool.artifacts?.length ?? 0) > 0) {
+        if (tool.status !== 'completed')
+          throw new StorageError('INVALID_EVENT', 'Artifact metadata requires a completed tool');
+        artifactTools.set(tool.id, tool);
+      }
       if (!activeTool(tool.status)) {
         if (terminals.has(tool.id))
           throw new StorageError(
@@ -33,6 +45,12 @@ export function validateToolBatch(records: readonly BatchRecord[]): void {
           );
         terminals.add(tool.id);
       }
+    }
+    if (record.type === 'artifact.published') {
+      const { artifact } = checked(ArtifactPublishedSchema, record.data);
+      if (artifacts.has(artifact.id))
+        throw new StorageError('INVALID_EVENT', 'Artifact publication is duplicated');
+      artifacts.set(artifact.id, artifact);
     }
     if (record.type !== 'tool.context') continue;
     const { toolCallId } = checked(ContextSchema, record.data);
@@ -55,4 +73,26 @@ export function validateToolBatch(records: readonly BatchRecord[]): void {
         'INVALID_EVENT',
         'Tool result requires its terminal outcome in the same batch',
       );
+  const expectedArtifacts = new Set<string>();
+  for (const tool of artifactTools.values()) {
+    for (const artifact of tool.artifacts ?? []) {
+      if (
+        expectedArtifacts.has(artifact.id) ||
+        artifact.sessionId !== tool.sessionId ||
+        artifact.runId !== tool.runId ||
+        artifact.toolCallId !== tool.id ||
+        JSON.stringify(artifacts.get(artifact.id)) !== JSON.stringify(artifact)
+      )
+        throw new StorageError(
+          'INVALID_EVENT',
+          'Artifact fact and completed tool must be committed together',
+        );
+      expectedArtifacts.add(artifact.id);
+    }
+  }
+  if (expectedArtifacts.size !== artifacts.size)
+    throw new StorageError(
+      'INVALID_EVENT',
+      'Artifact publication requires its completed tool in the same batch',
+    );
 }

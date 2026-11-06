@@ -6,7 +6,7 @@ import { registerAuthRoutes } from '../auth/routes.js';
 import { registerModelRoutes } from '../models/routes.js';
 import { registerSessionRoutes } from '../sessions/routes.js';
 import { registerSessionLogRoute } from '../sessions/log-route.js';
-import { registerOfficeArtifactRoute } from '../sessions/artifact-route.js';
+import { registerArtifactRoute } from '../sessions/artifact-route.js';
 import { registerWorkspaceRoutes } from '../workspaces/routes.js';
 import { registerToolRoutes } from '../tools/routes.js';
 import { registerWorkRoutes } from '../work/routes.js';
@@ -39,7 +39,7 @@ export function registerApplicationRoutes(
   registerModelRoutes(server, gateway);
   registerSessionRoutes(server, runtime, auth, gateway, services.workspaces);
   registerSessionLogRoute(server, services.store);
-  registerOfficeArtifactRoute(server, runtime, services.store, services.workspaces);
+  registerArtifactRoute(server, runtime, services.store);
   registerWorkspaceRoutes(server, services.workspaces);
   registerToolRoutes(server, services.tools);
   registerWorkRoutes(server, services.work);

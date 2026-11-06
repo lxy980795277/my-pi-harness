@@ -1,4 +1,4 @@
-import { describeTool } from '@my-pi-harness/execution';
+import { nativeTool } from '@my-pi-harness/tools';
 import type { ToolDecisionInput } from '@my-pi-harness/protocol';
 import { RuntimeError } from '../errors.js';
 import type { ApprovalReviewResult } from './approval-review.js';
@@ -22,13 +22,21 @@ export function invocationPolicy(
   selected: RunToolRecord,
   args: Record<string, unknown>,
   options: ToolRuntimeOptions,
+  readOnly = false,
 ): ToolPolicy {
   const name = selected.definition.name;
   let policy = { approvalRequired: false, mutating: false, summary: name };
-  if (selected.source.kind === 'workspace' || name === 'web_fetch')
-    policy = describeTool(name, args);
-  if (selected.source.kind === 'mcp')
-    policy = { approvalRequired: true, mutating: true, summary: selected.source.remoteToolName };
+  if (selected.source.kind !== 'mcp') {
+    const registration = options.registry ? options.registry.get(name) : nativeTool(name);
+    if (registration?.source.kind === selected.source.kind)
+      policy = registration.policy(args, readOnly);
+  }
+  if (selected.external)
+    policy = {
+      approvalRequired: true,
+      mutating: true,
+      summary: selected.external.selection.remoteToolName,
+    };
   if (selected.external && options.externalTools?.isReadOnlyAuthorized?.(selected.external, args))
     policy = { ...policy, approvalRequired: false, mutating: false };
   return policy;

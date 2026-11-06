@@ -73,6 +73,7 @@ async function fixture(
   nativeCandidates: readonly NativeCandidate[] = [],
   skillCandidates: readonly SkillCandidate[] = [],
   initial: readonly NativeCandidate[] = [],
+  initialSkills: readonly FrozenSkill[] = [],
 ) {
   const directory = await mkdtemp(join(tmpdir(), 'capability-loading-'));
   const store = await openProfileStore(directory);
@@ -102,7 +103,7 @@ async function fixture(
         })),
         nativeCandidates,
         skillCandidates,
-        skills: [],
+        skills: initialSkills,
       },
     ),
   ]);
@@ -201,6 +202,71 @@ it('loads a Skill only with the accepted content and plugin binding', async () =
   expect(entry.store.readEvents('session').at(-1)?.data).toMatchObject({
     skills: [instructions.selection],
   });
+});
+
+it('records a materialized directory for an accepted Skill and retains it after reopening', async () => {
+  const entry = await fixture([], [], [], [instructions]);
+  const materialized = { ...instructions, resourceDirectory: '/owned/resources/current' };
+  entry.store.append('session', [load([], [materialized])]);
+  entry.store.append('session', [load([], [materialized], 3)]);
+  entry.store.close();
+  entry.store = await openProfileStore(entry.directory);
+  expect(
+    entry.store.readEvents('session').filter((value) => value.type === 'run.tools_loaded'),
+  ).toHaveLength(2);
+});
+
+it('rebinds a historical accepted directory on first load and permits a first directory on a later load', async () => {
+  const historical = { ...instructions, resourceDirectory: '/owned/resources/old-run' };
+  const entry = await fixture([], [], [], [historical]);
+  entry.store.append('session', [
+    load([], [{ ...historical, resourceDirectory: '/owned/resources/new-run' }]),
+  ]);
+  const delayed = await fixture([], [], [], [instructions]);
+  delayed.store.append('session', [load([], [instructions])]);
+  delayed.store.append('session', [
+    load([], [{ ...instructions, resourceDirectory: '/owned/resources/late' }], 3),
+  ]);
+});
+
+it.each(['directory', 'removed-directory', 'content', 'authorization', 'resources'])(
+  'refuses a later Skill load that changes its recorded %s',
+  async (change) => {
+    const entry = await fixture([], [], [], [instructions]);
+    const materialized = { ...instructions, resourceDirectory: '/owned/resources/current' };
+    entry.store.append('session', [load([], [materialized])]);
+    const altered: FrozenSkill = structuredClone(materialized);
+    if (change === 'directory') altered.resourceDirectory = '/owned/resources/replacement';
+    if (change === 'removed-directory') delete altered.resourceDirectory;
+    if (change === 'content') altered.content = 'Changed instructions';
+    if (change === 'authorization') altered.authorization.skillEpoch += 1;
+    if (change === 'resources')
+      altered.resources.push({
+        path: 'changed.py',
+        hash: 'e'.repeat(64),
+        size: 1,
+        mediaType: 'text/plain',
+      });
+    expect(() => entry.store.append('session', [load([], [altered], 3)])).toThrow(
+      'instructions or authority',
+    );
+    expect(
+      entry.store.readEvents('session').filter((value) => value.type === 'run.tools_loaded'),
+    ).toHaveLength(1);
+  },
+);
+
+it('freezes instructions and authorization while rebinding a historical accepted directory', async () => {
+  const historical = { ...instructions, resourceDirectory: '/owned/resources/old-run' };
+  const entry = await fixture([], [], [], [historical]);
+  expect(() =>
+    entry.store.append('session', [
+      load(
+        [],
+        [{ ...historical, content: 'replacement', resourceDirectory: '/owned/resources/new-run' }],
+      ),
+    ]),
+  ).toThrow('instructions or authority');
 });
 
 it('rejects duplicate active identities instead of choosing one Skill version', async () => {

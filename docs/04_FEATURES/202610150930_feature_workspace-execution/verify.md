@@ -43,7 +43,7 @@
 
 Windows/Linux的实际应用、文件工具、原生模块与生命周期未在实机执行；Shell明确不可用。真实供应商API/OAuth与用户最终体验为Not verified；本轮不代替用户验收。应用尚未签名、公证或生成正式安装器。
 
-执行隔离的具体范围由[execution说明](../../../packages/execution/README.md)拥有：Node文件API不能彻底消除恶意并发替换父目录的竞态；进程组回收不覆盖主动setsid/setpgid逃逸的恶意后代；PDF worker限制资源而非OS级恶意库隔离。工具批准显示参数，Diff在执行后提供，当前没有执行前Diff预览。
+执行隔离的具体范围由[execution说明](../../../packages/tools/README.md)拥有：Node文件API不能彻底消除恶意并发替换父目录的竞态；进程组回收不覆盖主动setsid/setpgid逃逸的恶意后代；PDF worker限制资源而非OS级恶意库隔离。工具批准显示参数，Diff在执行后提供，当前没有执行前Diff预览。
 
 本地截图为`output/playwright/m2-home-light.png`、`m2-home-dark.png`、`m2-home-compact.png`及`m2-tool-conversation.png`。浏览器和合成daemon已关闭，临时profile、工作区与配对状态已清理；截图保留为本地验证产物。
 

@@ -47,7 +47,7 @@ describe('source file conventions', () => {
     ['let current = true;\nconst enabled = true;', '模块级非函数 const 必须集中'],
     ['function read() {}\nlet current = true;', '模块级 let/var 状态必须集中'],
   ])('rejects interleaved module declarations: %s', async (content, message) => {
-    const root = await fixture({ 'packages/execution/src/service.ts': content });
+    const root = await fixture({ 'packages/tools/src/service.ts': content });
     await expect(checkSourceConventions(root)).rejects.toThrow(message);
   });
 
@@ -57,7 +57,7 @@ describe('source file conventions', () => {
       'const example = 1;',
       'type Example = typeof example;',
     ].join('\n');
-    const root = await fixture({ 'packages/execution/test/service.test.ts': content });
+    const root = await fixture({ 'packages/tools/test/service.test.ts': content });
     await expect(checkSourceConventions(root)).resolves.toBe(1);
   });
 

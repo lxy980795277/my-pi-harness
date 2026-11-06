@@ -2,6 +2,12 @@
 
 本页管理功能范围与里程碑顺序，详细验收由各里程碑 Spec 承担。`规划` 不表示能力已经可用；只有实现与必要验证都完成后才能调整状态。
 
+2026-11-06完成同专题的[配套源码组织对齐](../04_FEATURES/202611041712_refactor_tools-skills-sandbox/verify.md#配套源码组织对齐2026-11-06)：删除tools/src中的documents、ports、registry目录，正文提取与检索归utils，注册契约与公共上下文归lib，原生装配归根文件；专属输入和回调类型随工具定义。318项聚焦回归、全workspace类型/静态/构建及独立生产部署通过，旧叶出口明确拒绝，27个序列化工具声明保持不变。属于M0及既有M2–M5维护，协议24、SQLite10和原有外部验收缺口不变，M6继续暂缓。
+
+2026-11-05按用户追加要求完成[工具文件与目录职责整理](../04_FEATURES/202611041712_refactor_tools-skills-sandbox/spec.md)：27个工具按名称平铺，各自拥有参数、策略和执行；共享机制、领域服务、窄端口和目录装配各有明确拥有者，删除旧工具组及冗余出口。验证覆盖工具声明与加载顺序不变、主子调用、文件/Web/文档和独立生产部署，详见同专题[验证记录](../04_FEATURES/202611041712_refactor_tools-skills-sandbox/verify.md#单工具文件整理2026-11-05)。属于M0与既有M2–M5维护，M6及原有外部验收缺口保持原状态。
+
+2026-11-04按用户确定方向形成[工具、Skill、插件与沙箱分层重构方案](../04_FEATURES/202611041712_refactor_tools-skills-sandbox/spec.md)：独立tools与sandbox，工具目录使用tools/，办公能力Skill化，职责迁移后删除execution；[详细设计](../04_FEATURES/202611041712_refactor_tools-skills-sandbox/design.md)与[阶段任务](../04_FEATURES/202611041712_refactor_tools-skills-sandbox/tasks.md)明确注册、主子Run绑定、命令/资源/产物闭环和现有能力迁移。本轮已按授权完成实现及[本机验证](../04_FEATURES/202611041712_refactor_tools-skills-sandbox/verify.md)：独立tools/sandbox、领域端口、办公Skill、命令及产物闭环已落地，协议24、SQLite10，属于M0及M2–M5维护；M6按用户要求暂缓，已有规划与未实现状态保留，现有平台/账号/Office质量缺口不据此关闭。
+
 2026-11-03按用户确认完成[配置装配与条件表达式治理](../04_FEATURES/202611031551_refactor_configuration-readability/spec.md)的本机工程检查，属于M0及既有M1–M5维护：保留配置整体，覆盖七个package，整理真实重复与复杂业务策略；[验证记录](../04_FEATURES/202611031551_refactor_configuration-readability/verify.md)区分各包的修改和保留，包级1258项通过、1项平台条件跳过，全workspace类型检查通过。本轮按用户后续授权收口为[0.17.1](../06_RELEASES/0.17.1.md)本地提交，仅同步产品版本与发布记录；协议23、SQLite9保持。M6与既有验收缺口保持原状态。
 
 2026-11-03按用户确认完成[Agent循环终止与结果回收调整](../04_FEATURES/202611031525_refactor_agent-loop-policy/spec.md)，属于M0及既有M1/M5维护：移除固定请求/工具总数截断，增加精确重复提醒及失败部分输出回收；保留权限、并发、深度、时限与单次输出策略。本轮与子Agent模块整理按用户授权一起记录为[0.17.0](../06_RELEASES/0.17.0.md)本地提交；公开协议23，SQLite9不变；[本机验证](../04_FEATURES/202611031525_refactor_agent-loop-policy/verify.md)覆盖长循环、部分成果、提醒及持久回放和原M5浏览器链路。M6及既有验收缺口保持原状态。

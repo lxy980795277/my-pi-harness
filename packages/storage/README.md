@@ -1,6 +1,6 @@
 # storage
 
-Node 24 宿主使用的同步存储。JSONL保存会话执行事实，独立不可变文件保存冻结附件，better-sqlite3/Drizzle保存应用配置和会话查询投影。Renderer不得导入本包。
+Node 24 宿主使用的同步存储。JSONL保存会话执行事实，独立不可变文件保存冻结附件和产物字节，better-sqlite3/Drizzle保存应用配置和会话查询投影。Renderer不得导入本包。
 
 ## 源码职责
 
@@ -12,21 +12,29 @@ AgentSettingsRepository读取持久JSON时只投影当前AgentSettingsSchema字�
 
 ## 数据所有权
 
-| 数据                                                                      | 权威位置             | SQLite职责                           |
-| ------------------------------------------------------------------------- | -------------------- | ------------------------------------ |
-| 会话创建、标题、归档、消息、Run、工具、队列、分支、工作状态、子任务与通信 | 每会话JSONL          | 可重建查询投影及事件分页             |
-| 模型消息codec、冻结请求与队列幂等元数据                                   | JSONL中的privateData | 仅宿主读取的恢复投影                 |
-| 附件元数据、冻结文本和图片内容                                            | checksummed附件文件  | 可重建元数据索引，不保存正文         |
-| Provider配置、厂商绑定、工作区、应用设置                                  | SQLite               | 权威配置，不能从会话日志恢复         |
-| 子Agent角色、启停、模型选择与执行限制                                     | SQLite               | 独立配置，投影重建不删除             |
-| 用户、外部身份、profile归属、本机客户端和应用登录会话                     | SQLite               | 权威认证事实，投影重建不删除         |
-| MCP Server配置、秘密引用、作用域启动授权及profile身份epoch                | SQLite               | 权威配置，独立于浏览器登录与会话投影 |
-| 模型 Key、高级账户和独立 MCP OAuth Token                                  | 系统凭据库           | 只保存引用，不保存秘密               |
-| 插件共享 OAuth Token 与账号                                               | profile 私有 JSON    | 不保存 Token 或账户桥接记录          |
+| 数据                                                                      | 权威位置                      | SQLite职责                           |
+| ------------------------------------------------------------------------- | ----------------------------- | ------------------------------------ |
+| 会话创建、标题、归档、消息、Run、工具、队列、分支、工作状态、子任务与通信 | 每会话JSONL                   | 可重建查询投影及事件分页             |
+| 模型消息codec、冻结请求与队列幂等元数据                                   | JSONL中的privateData          | 仅宿主读取的恢复投影                 |
+| 附件元数据、冻结文本和图片内容                                            | checksummed附件文件           | 可重建元数据索引，不保存正文         |
+| 产物归属、来源与注册元数据                                                | JSONL的artifact.published事件 | 可重建产物索引及工具卡片元数据       |
+| 产物注册时的精确字节                                                      | 私有content-addressed blob    | 不保存文件正文                       |
+| Provider配置、厂商绑定、工作区、应用设置                                  | SQLite                        | 权威配置，不能从会话日志恢复         |
+| 子Agent角色、启停、模型选择与执行限制                                     | SQLite                        | 独立配置，投影重建不删除             |
+| 用户、外部身份、profile归属、本机客户端和应用登录会话                     | SQLite                        | 权威认证事实，投影重建不删除         |
+| MCP Server配置、秘密引用、作用域启动授权及profile身份epoch                | SQLite                        | 权威配置，独立于浏览器登录与会话投影 |
+| 模型 Key、高级账户和独立 MCP OAuth Token                                  | 系统凭据库                    | 只保存引用，不保存秘密               |
+| 插件共享 OAuth Token 与账号                                               | profile 私有 JSON             | 不保存 Token 或账户桥接记录          |
 
 JSONL是宿主私有数据，包含模型恢复所需的完整codec和工具结果。普通HTTP/SSE通过`readEvents()`选择公开envelope或`getSnapshot()`返回公开投影；用户明确下载日志时，由受保护的[会话日志接口](../../docs/03_API/model-session.md#事件快照与断线)读取原始已提交JSONL前缀，保留全部分支和恢复数据。图片base64仅在受保护附件内容接口按需提供。上下文中用户主动提供的正文和工具结果可能包含敏感信息，宿主日志不等于脱敏导出。
 
 ## 打开、提交与恢复
+
+`artifacts/`拥有不可变产物文件、配额和下载租约。宿主先稳定读取工作区文件，经`putArtifactBytes`将完整字节以SHA-256命名写入私有blob；之后把`artifact.published`、带有相同`artifacts`元数据的成功工具终态与canonical工具结果写入同一日志批次。提交核对会话、Run、Task、工作区和工具归属，拒绝外部MCP结果自报产物以及缺失或不匹配的blob。原文件修改或删除不改变下载字节；读取和启动恢复重新校验blob大小与hash，损坏或缺失明确失败。
+
+默认产物上限为单文件32MiB、每profile 512MiB，可通过`ProfileStoreOptions.artifactLimits`配置更小的部署限额。未引用blob和崩溃遗留临时文件同样占用配额，超限拒绝新增，不淘汰有事实引用的文件。发布中的临时引用在成功提交后转为持久事实；明确失败的调用方用`abandonArtifactPublication`释放临时引用。提交结果未知时保留引用至重启，避免误删可能已提交的文件。
+
+`getArtifact`核对当前分支中可见的根工具或子任务委派锚点；`acquireArtifactDownload`返回校验后的注册字节及独立释放函数。`collectUnreferencedArtifacts`只回收没有持久事实、发布引用或下载租约的文件。归档、分支切换与投影重建保留所有历史事实引用，均不删除blob；本入口不提供删除已提交产物事实的操作。
 
 `openProfileStore(profileDirectory, { sessionLogRoot })`先获取独立`owner.sqlite`的SQLite VFS排他事务，再校验fresh schema、初始化文件目录和重建会话投影。`data.sqlite`使用WAL和FULL同步。所有权随OS释放，不按PID或时间猜测陈旧锁；`close()`先释放业务资源再释放所有权，重复调用安全。仅支持本机文件系统。
 
@@ -58,6 +66,7 @@ SQLite的private_data列使用JSON对象映射，字段与表版本不变。完�
 <sessionLogRoot>/sessions/<SHA256(canonicalProfilePath)>/
   <sessionId>.jsonl
   attachments/<attachmentId>.json
+  artifacts/<SHA256(fileBytes)>.blob
 ```
 
 不同profile共享根时按canonical路径摘要隔离。根、sessions、profile摘要和附件目录0700，文件0600。保存并检查打开目录的身份；拒绝符号链接、多硬链接、非普通文件、越界ID、目录替换和非当前用户拥有的数据。每次写入检查文件身份，运行中的日志发生外部变化则拒绝追加。构造或恢复失败释放全部fd和profile所有权。

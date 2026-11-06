@@ -226,6 +226,8 @@ describe('workspace source imports', () => {
 
 describe('MCP integration ownership', () => {
   it.each([
+    '@my-pi-harness/tools',
+    '@my-pi-harness/tools/skills',
     '@my-pi-harness/storage',
     '@my-pi-harness/agent-runtime',
     '@my-pi-harness/daemon',
@@ -237,14 +239,73 @@ describe('MCP integration ownership', () => {
       'packages/integrations/src/adapter.ts': `import value from '${dependency}';`,
     });
     await expect(checkBoundaries(root)).rejects.toThrow(
-      'Integrations 不能拥有数据库、Runtime、HTTP 或 Renderer',
+      'Integrations 不能拥有工具、数据库、Runtime、HTTP 或 Renderer',
     );
   });
-  it('allows the public SDK, execution, schema and Node adapters', async () => {
+  it('allows the public SDK, sandbox, schema and Node adapters', async () => {
     const root = await fixture({
       'packages/integrations/src/adapter.ts':
-        "import { Client } from '@modelcontextprotocol/client'; import { startPersistentProcess } from '@my-pi-harness/execution'; import { Type } from 'typebox'; import { Buffer } from 'node:buffer';",
+        "import { Client } from '@modelcontextprotocol/client'; import { startProcess } from '@my-pi-harness/sandbox/process'; import { Type } from 'typebox'; import { Buffer } from 'node:buffer';",
     });
     await expect(checkBoundaries(root)).resolves.toBe(1);
+  });
+});
+
+describe('tool and sandbox ownership', () => {
+  it.each([
+    '@my-pi-harness/agent-runtime',
+    '@my-pi-harness/agent-runtime/tools',
+    '@my-pi-harness/storage',
+    '@my-pi-harness/integrations',
+    '@my-pi-harness/daemon',
+  ])('rejects host implementation %s from tools', async (dependency) => {
+    const root = await fixture({
+      'packages/tools/src/registration.ts': `import type { Host } from '${dependency}';`,
+    });
+    await expect(checkBoundaries(root)).rejects.toThrow('Tools只能通过窄端口访问宿主领域');
+  });
+
+  it.each([
+    '@my-pi-harness/tools',
+    '@my-pi-harness/tools/document-text',
+    '@my-pi-harness/integrations',
+    '@my-pi-harness/agent-runtime',
+    '@my-pi-harness/protocol',
+    '@my-pi-harness/storage',
+    '@my-pi-harness/daemon',
+    '@earendil-works/pi-ai',
+    '@earendil-works/pi-agent-core',
+  ])('rejects business or Agent dependency %s from sandbox', async (dependency) => {
+    const root = await fixture({
+      'packages/sandbox/src/process.ts': `const implementation = await import('${dependency}');`,
+    });
+    await expect(checkBoundaries(root)).rejects.toThrow('Sandbox不能依赖业务或Agent包');
+  });
+
+  it('allows tools to use explicit sandbox leaves, protocol DTOs and their own modules', async () => {
+    const root = await fixture({
+      'packages/tools/src/registration.ts': [
+        "import { startProcess } from '@my-pi-harness/sandbox/process';",
+        "import { workspacePath } from '@my-pi-harness/sandbox/filesystem';",
+        "import { isPublicAddress } from '@my-pi-harness/sandbox/network';",
+        "import type { ToolDefinition } from '@my-pi-harness/protocol';",
+        "import { Type } from 'typebox';",
+        "export { registration } from './local.js';",
+      ].join('\n'),
+      'packages/tools/src/local.ts': 'export const registration = {};',
+    });
+    await expect(checkBoundaries(root)).resolves.toBe(2);
+  });
+
+  it('allows sandbox to use Node primitives and its own modules', async () => {
+    const root = await fixture({
+      'packages/sandbox/src/process.ts': [
+        "import { spawn } from 'node:child_process';",
+        "import type { FileHandle } from 'node:fs/promises';",
+        "export { stop } from './cleanup.js';",
+      ].join('\n'),
+      'packages/sandbox/src/cleanup.ts': 'export function stop() {}',
+    });
+    await expect(checkBoundaries(root)).resolves.toBe(2);
   });
 });

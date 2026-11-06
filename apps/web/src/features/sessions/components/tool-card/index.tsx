@@ -5,7 +5,7 @@ import { ActivityRow } from '@/components/activity-row';
 import { Button } from '@/components/ui/button';
 import { Notice } from '@/components/ui/notice';
 import { ApprovalAudit } from '@/features/sessions/components/approval-audit';
-import { OfficeArtifact } from '@/features/office/components/office-artifact';
+import { ToolArtifacts } from '@/features/artifacts/components/artifact-card';
 import { useToolCard } from '@/features/sessions/hooks/use-tool-card';
 import { cn } from '@/utils/cn';
 
@@ -118,7 +118,7 @@ export const ToolCard: FC<ToolCardProps> = memo(({ tool, onDecide }) => {
               </pre>
             </section>
           )}
-          <OfficeArtifact tool={tool} />
+          <ToolArtifacts tool={tool} />
           <ApprovalAudit approval={tool.approval} />
           {state.needsApproval && (
             <div className="space-y-3 border-t border-border/60 pt-3">
