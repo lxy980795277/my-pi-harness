@@ -40,7 +40,7 @@ export interface SkillCatalogOptions {
   /** Host-managed resource copies must live outside every protected profile directory. */
   materializationDirectory?: string;
   protectedDirectories?: readonly string[];
-  /** Shared dependency sources are resolved relative to tools/resources by default. */
+  /** Shared dependency sources are resolved relative to tools/src by default. */
   bundledResourceDirectory?: string;
 }
 /** The host rechecks activation and current Skill/plugin epochs before each new dispatch. */

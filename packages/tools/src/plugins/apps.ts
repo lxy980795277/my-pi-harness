@@ -3,11 +3,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Type, type Static } from 'typebox';
 import { Value } from 'typebox/value';
-import {
-  ConnectionServiceIdSchema,
-  RemoteMcpTransportSchema,
-  type PluginManifest,
-} from '@my-pi-harness/protocol';
+import { ConnectionServiceIdSchema, RemoteMcpTransportSchema } from '@my-pi-harness/protocol';
 import { PluginError } from './errors.js';
 import { isIP } from 'node:net';
 import { isPublicAddress } from '@my-pi-harness/sandbox';
@@ -34,7 +30,7 @@ const AppSchema = Type.Object(
 );
 
 const AppsSchema = Type.Object({ apps: Type.Array(AppSchema, { maxItems: 32 }) }, object);
-const resourceDirectory = fileURLToPath(new URL('../../resources/plugins/', import.meta.url));
+const resourceDirectory = fileURLToPath(new URL('./', import.meta.url));
 
 function invalid(): never {
   throw new PluginError('PLUGIN_APPS_INVALID', '插件应用声明无效。');
@@ -82,7 +78,7 @@ export function parseBuiltinPluginApps(source: string, pluginId: string): Builti
   return value.apps;
 }
 
-/** Reads a bounded regular resource file from source, build or packaged tools resources. */
+/** Reads a bounded regular App declaration from the plugin's source directory. */
 export function loadBuiltinPluginApps(
   pluginId: string,
   directory = resourceDirectory,
@@ -98,15 +94,4 @@ export function loadBuiltinPluginApps(
     return invalid();
   }
   return parseBuiltinPluginApps(source, pluginId);
-}
-
-/** Public metadata deliberately excludes the transport target and every private credential field. */
-export function publicBuiltinPluginApps(pluginId: string): PluginManifest['apps'] {
-  return loadBuiltinPluginApps(pluginId).map((app) => ({
-    id: app.id,
-    provider: app.provider,
-    name: app.name,
-    description: app.description,
-    credentialSource: app.credentialSource,
-  }));
 }

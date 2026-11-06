@@ -1,30 +1,13 @@
 import { fileURLToPath } from 'node:url';
-import { join } from 'node:path';
-import { PluginManifestSchema, type PluginManifest } from '@my-pi-harness/protocol';
-import { Value } from 'typebox/value';
+import type { PluginManifest } from '@my-pi-harness/protocol';
 import { PluginError } from './errors.js';
-import type { SkillRoot } from '../skills/types.js';
-import {
-  loadBuiltinPluginApps,
-  publicBuiltinPluginApps,
-  type OwnedBuiltinPluginApp,
-} from './apps.js';
+import { loadBuiltinPluginApps, type OwnedBuiltinPluginApp } from './apps.js';
 
-/** A contribution identifies declarative plugin resources, independently of installation or activation. */
-export interface PluginContribution {
-  pluginId: string;
-  kind: 'skill' | 'app';
-  id: string;
-  referenceId: string;
-}
+/** Plugin assets are co-located with their source modules in every runtime. */
+export const BUILTIN_PLUGIN_RESOURCE_DIRECTORY = fileURLToPath(new URL('./', import.meta.url));
 
-/** Resource location works from source, built workspace and packaged runtime. */
-export const BUILTIN_PLUGIN_RESOURCE_DIRECTORY = fileURLToPath(
-  new URL('../../resources/plugins/', import.meta.url),
-);
-
-/** Built-in plugin identifiers and resource declarations are finite, independently authored data. */
-export const BUILTIN_PLUGINS = [
+/** Finite plugin declarations load each App resource once before deriving public metadata. */
+const builtinPlugins = [
   {
     id: 'github',
     name: 'GitHub',
@@ -32,7 +15,6 @@ export const BUILTIN_PLUGINS = [
     category: 'services' as const,
     version: '1.1.0',
     skills: ['github', 'github-reviews', 'github-actions', 'github-publish'],
-    apps: publicBuiltinPluginApps('github'),
   },
   {
     id: 'google',
@@ -48,7 +30,6 @@ export const BUILTIN_PLUGINS = [
       'google-slides',
       'google-calendar',
     ],
-    apps: publicBuiltinPluginApps('google'),
   },
   {
     id: 'vercel',
@@ -57,7 +38,6 @@ export const BUILTIN_PLUGINS = [
     category: 'services' as const,
     version: '1.0.0',
     skills: ['vercel'],
-    apps: publicBuiltinPluginApps('vercel'),
   },
   {
     id: 'notion',
@@ -66,7 +46,6 @@ export const BUILTIN_PLUGINS = [
     category: 'services' as const,
     version: '1.0.0',
     skills: ['notion'],
-    apps: publicBuiltinPluginApps('notion'),
   },
   {
     id: 'supabase',
@@ -75,7 +54,6 @@ export const BUILTIN_PLUGINS = [
     category: 'services' as const,
     version: '1.0.0',
     skills: ['supabase'],
-    apps: publicBuiltinPluginApps('supabase'),
   },
   {
     id: 'documents',
@@ -84,7 +62,6 @@ export const BUILTIN_PLUGINS = [
     category: 'office' as const,
     version: '1.1.0',
     skills: ['documents'],
-    apps: publicBuiltinPluginApps('documents'),
   },
   {
     id: 'pdf',
@@ -93,7 +70,6 @@ export const BUILTIN_PLUGINS = [
     category: 'office' as const,
     version: '1.1.0',
     skills: ['pdf'],
-    apps: publicBuiltinPluginApps('pdf'),
   },
   {
     id: 'spreadsheets',
@@ -102,7 +78,6 @@ export const BUILTIN_PLUGINS = [
     category: 'office' as const,
     version: '1.0.0',
     skills: ['spreadsheets'],
-    apps: publicBuiltinPluginApps('spreadsheets'),
   },
   {
     id: 'presentations',
@@ -111,33 +86,27 @@ export const BUILTIN_PLUGINS = [
     category: 'office' as const,
     version: '1.0.0',
     skills: ['presentations'],
-    apps: publicBuiltinPluginApps('presentations'),
   },
-];
+].map((plugin) => ({ ...plugin, apps: loadBuiltinPluginApps(plugin.id) }));
+
+/** Public metadata excludes transport targets and contains no runtime authorization state. */
+export const BUILTIN_PLUGINS: readonly PluginManifest[] = builtinPlugins.map((plugin) => ({
+  ...plugin,
+  apps: plugin.apps.map((app) => ({
+    id: app.id,
+    provider: app.provider,
+    name: app.name,
+    description: app.description,
+    credentialSource: app.credentialSource,
+  })),
+}));
 
 /** The same resource declarations supply public metadata and private, owner-bound MCP targets. */
-export const BUILTIN_PLUGIN_APPS: readonly OwnedBuiltinPluginApp[] = BUILTIN_PLUGINS.flatMap(
-  (plugin) => loadBuiltinPluginApps(plugin.id).map((app) => ({ ...app, pluginId: plugin.id })),
+export const BUILTIN_PLUGIN_APPS: readonly OwnedBuiltinPluginApp[] = builtinPlugins.flatMap(
+  (plugin) => plugin.apps.map((app) => ({ ...app, pluginId: plugin.id })),
 );
 
-/** Parse distributable public metadata without accepting credentials or executable entries. */
-export function parsePluginManifest(source: string): PluginManifest {
-  let value: unknown;
-  try {
-    if (Buffer.byteLength(source) > 65536) throw new Error('manifest limit');
-    value = JSON.parse(source);
-  } catch (cause) {
-    throw new PluginError('PLUGIN_MANIFEST', 'Plugin manifest must contain bounded JSON', {
-      cause,
-    });
-  }
-  if (!Value.Check(PluginManifestSchema, value))
-    throw new PluginError('PLUGIN_MANIFEST', 'Plugin manifest is invalid');
-  assertUniqueContributions(value);
-  return value;
-}
-
-/** Catalog owns manifests and contribution indexes; the daemon owns configuration and installation state. */
+/** Catalog owns public manifests; the daemon owns configuration and installation state. */
 export class PluginCatalog {
   private readonly manifests = new Map<string, PluginManifest>();
   public constructor(manifests: readonly PluginManifest[] = BUILTIN_PLUGINS) {
@@ -157,42 +126,6 @@ export class PluginCatalog {
     const manifest = this.manifests.get(pluginId);
     if (manifest === undefined) throw new PluginError('PLUGIN_NOT_FOUND', 'Unknown plugin');
     return structuredClone(manifest);
-  }
-
-  public contributions(pluginId: string): PluginContribution[] {
-    const manifest = this.get(pluginId);
-    return [
-      ...manifest.skills.map(
-        (name): PluginContribution => ({
-          pluginId,
-          kind: 'skill',
-          id: `skill:${name}`,
-          referenceId: name,
-        }),
-      ),
-      ...manifest.apps.map(
-        (app): PluginContribution => ({
-          pluginId,
-          kind: 'app',
-          id: `app:${app.id}`,
-          referenceId: app.id,
-        }),
-      ),
-    ];
-  }
-
-  public skillRoot(
-    pluginId: string,
-    resourceDirectory = BUILTIN_PLUGIN_RESOURCE_DIRECTORY,
-  ): SkillRoot {
-    const manifest = this.get(pluginId);
-    return {
-      path: join(resourceDirectory, manifest.id, 'skills'),
-      scope: 'plugin',
-      pluginId,
-      workspaceId: null,
-      managed: true,
-    };
   }
 }
 

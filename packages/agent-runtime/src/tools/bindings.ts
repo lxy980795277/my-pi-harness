@@ -48,7 +48,6 @@ export function createToolContext(
   return {
     owner,
     readOnly: context.readOnly,
-    supportsImages: context.supportsImages,
     workspace,
     ...(work ? { work: createWorkToolHandlers(work, context.session.id, context.run.id) } : {}),
     ...(context.agents ? { agents: context.agents } : {}),

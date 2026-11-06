@@ -1,6 +1,6 @@
 # 内置插件
 
-`PluginService` 装配 `tools/resources/plugins` 中独立编写的 Skill 资源和有限 manifest；每个插件的 `.app.json` 同时拥有公开 App 简介、授权来源以及仅宿主使用的 MCP 地址和传输，daemon 不维护第二份端点表。每个 App 保存精确 Server 引用，管理入口不按可改名称查找或删除配置。安装不授权第三方账号，不授予 MCP 启动信任。
+`PluginService` 装配 `tools/src/plugins` 中独立编写的 Skill 资源和有限 manifest；每个插件的 `.app.json` 同时拥有公开 App 简介、授权来源以及仅宿主使用的 MCP 地址和传输，daemon 不维护第二份端点表。每个 App 保存精确 Server 引用，管理入口不按可改名称查找或删除配置。安装不授权第三方账号，不授予 MCP 启动信任。
 
 插件具有独立安装 generation，组件以 `skill:<name>` 与 App ID 区分；整体开关批量控制所有组件，逐项开启会激活插件，最后一个组件关闭后插件停用；每次控制递增 revision。卸载先检查活动 Skill 租约、撤销当前代授权，再释放所属 App 和目录。手动 Server 及其他插件资源由各自所有者保留。每个插件只有一个管理操作，关闭拒绝新操作并取消、等待所属安装完成清理。
 

@@ -1,17 +1,4 @@
 {
   "extends": "../tsconfig/node.json",
-  "compilerOptions": {
-    "paths": {
-      "@my-pi-harness/protocol": ["../protocol/src/index.ts"],
-      "@my-pi-harness/storage": ["../storage/src/index.ts"],
-      "@my-pi-harness/tools": ["../tools/src/index.ts"],
-      "@my-pi-harness/tools/document-text": ["../tools/src/utils/document-text.ts"],
-      "@my-pi-harness/sandbox": ["../sandbox/src/index.ts"],
-      "@my-pi-harness/sandbox/filesystem": ["../sandbox/src/filesystem/index.ts"],
-      "@my-pi-harness/sandbox/network": ["../sandbox/src/network/index.ts"],
-      "@my-pi-harness/sandbox/process": ["../sandbox/src/process/index.ts"],
-      "@my-pi-harness/sandbox/policy": ["../sandbox/src/policy/index.ts"]
-    }
-  },
   "include": ["src/**/*.ts", "test/**/*.ts", "vitest.config.ts"]
 }

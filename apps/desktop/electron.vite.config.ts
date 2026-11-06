@@ -1,13 +1,11 @@
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'electron-vite';
 
-const protocol = fileURLToPath(new URL('../../packages/protocol/src/index.ts', import.meta.url));
-
 export default defineConfig({
   main: {
-    resolve: { alias: { '@my-pi-harness/protocol': protocol } },
     build: {
       outDir: 'dist/main',
+      externalizeDeps: { exclude: ['@my-pi-harness/protocol', 'typebox'] },
       lib: {
         entry: fileURLToPath(new URL('./src/main/index.ts', import.meta.url)),
         formats: ['es'],
@@ -15,7 +13,6 @@ export default defineConfig({
     },
   },
   preload: {
-    resolve: { alias: { '@my-pi-harness/protocol': protocol } },
     build: {
       outDir: 'dist/preload',
       lib: {

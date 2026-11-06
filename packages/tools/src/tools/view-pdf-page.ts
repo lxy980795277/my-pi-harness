@@ -58,7 +58,7 @@ export const viewPdfPageTool = completeToolRegistration({
       throw new DocumentError('PDF_FAILED', 'PDF header is missing');
     const python = await pythonProgram(context.pythonPath);
     const script = fileURLToPath(
-      new URL('../../resources/shared/document-view/render_pdf_pages.py', import.meta.url),
+      new URL('../utils/document-view/render_pdf_pages.py', import.meta.url),
     );
     const launch = await resolveProcess({
       command: python,

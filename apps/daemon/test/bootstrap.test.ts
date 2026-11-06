@@ -30,7 +30,7 @@ interface ManagedDaemon {
 
 const daemons: ManagedDaemon[] = [];
 const profiles: string[] = [];
-const CLI_PATH = fileURLToPath(new URL('../dist/bootstrap.js', import.meta.url));
+const CLI_PATH = fileURLToPath(new URL('../src/bootstrap.ts', import.meta.url));
 const PACKAGE_PATH = fileURLToPath(new URL('..', import.meta.url));
 
 async function withDeadline<T>(
@@ -76,7 +76,7 @@ function spawnDaemon(
   };
   delete environment.MY_PI_HARNESS_WEB_DIST_PATH;
   delete environment.NODE_OPTIONS;
-  const child = spawn(process.execPath, [CLI_PATH], {
+  const child = spawn(process.execPath, ['--import', 'tsx', CLI_PATH], {
     cwd: PACKAGE_PATH,
     env: environment,
     stdio: ['ignore', 'pipe', 'pipe', 'ipc'],

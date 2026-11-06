@@ -4,32 +4,16 @@
   "private": true,
   "type": "module",
   "files": [
-    "dist"
+    "src"
   ],
   "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
-    },
-    "./filesystem": {
-      "types": "./dist/filesystem/index.d.ts",
-      "import": "./dist/filesystem/index.js"
-    },
-    "./network": {
-      "types": "./dist/network/index.d.ts",
-      "import": "./dist/network/index.js"
-    },
-    "./process": {
-      "types": "./dist/process/index.d.ts",
-      "import": "./dist/process/index.js"
-    },
-    "./policy": {
-      "types": "./dist/policy/index.d.ts",
-      "import": "./dist/policy/index.js"
-    }
+    ".": "./src/index.ts",
+    "./filesystem": "./src/filesystem/index.ts",
+    "./network": "./src/network/index.ts",
+    "./process": "./src/process/index.ts",
+    "./policy": "./src/policy/index.ts"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint .",
     "test": "vitest run --config vitest.config.ts"

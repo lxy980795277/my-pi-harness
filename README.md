@@ -59,8 +59,8 @@ docs/              项目架构、开发范式、功能 Spec、约束与验证
 
 ```sh
 pnpm check                        # 格式、lint、源码 typecheck、Vitest
-pnpm build                        # 生成真实发布产物
-pnpm test:artifact                # 构建后的 daemon IPC/退出集成测试
+pnpm build                        # 构建Web和Electron main/preload
+pnpm test:artifact                # 源码daemon IPC/退出和生产部署检查
 pnpm exec playwright install chromium
 pnpm test:e2e                     # 构建后的浏览器完整链路
 pnpm test:m2                      # 先 build，再做M2源码与浏览器定向验收
@@ -70,7 +70,7 @@ pnpm package:desktop              # 当前平台未签名应用目录，输出 r
 pnpm smoke:desktop                # 启动应用目录，验证桥、隔离、服务和退出
 ```
 
-源码检查不要求预先 build。产物集成检查和浏览器 E2E 需要先 build；桌面 smoke 需要先 package。桌面截图输出到 `output/playwright/`，不提交构建、测试或下载缓存。
+源码检查不要求预先 build。daemon部署检查不要求后端build；浏览器E2E需要先构建Web，桌面smoke需要先package。桌面截图输出到 `output/playwright/`，不提交构建、测试或下载缓存。
 
 当前打包产出 `.app` 或 Windows 应用目录，正式安装器、签名、公证与自动更新尚未实现。macOS 与 Windows CI 已配置，实际平台执行情况以功能验证记录为准。
 

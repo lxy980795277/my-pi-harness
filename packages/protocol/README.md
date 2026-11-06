@@ -2,7 +2,7 @@
 
 跨 HTTP、SSE、所有者进程 IPC 与 preload 的 DTO 和 TypeBox schema。只依赖浏览器安全的 TypeBox；不加载 Node、Pi 或业务实现。
 
-产品应用版本由根 `package.json` 通过 `pnpm version:sync` 生成，协议版本独立控制。源码检查使用 TS paths，发布消费者通过包 exports 加载 `dist`。
+产品应用版本由根 `package.json` 通过 `pnpm version:sync` 生成，协议版本独立控制。源码检查和消费者通过包exports读取src；Node使用tsx加载，Web和Electron构建器将浏览器安全协议打入各自产物。
 
 协议18的会话创建和工作状态不包含执行/Plan模式参数。计划内容、审核、任务与人工提问仍由独立的上下文交互schema表达；输入的send/follow-up/steer继续表示发送与队列语义。
 

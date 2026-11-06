@@ -4,25 +4,21 @@
   "private": true,
   "type": "module",
   "files": [
-    "dist"
+    "src"
   ],
   "exports": {
-    ".": {
-      "types": "./dist/http/server.d.ts",
-      "import": "./dist/http/server.js"
-    }
+    ".": "./src/http/server.ts"
   },
   "engines": {
     "node": ">=24.0.0"
   },
   "scripts": {
     "dev": "tsx watch --env-file-if-exists=../../.env src/bootstrap.ts",
-    "start": "node --env-file-if-exists=../../.env dist/bootstrap.js",
-    "build": "tsc -p tsconfig.build.json",
+    "start": "node --env-file-if-exists=../../.env --import tsx src/bootstrap.ts",
     "lint": "eslint .",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
-    "test:built": "vitest run --config vitest.built.config.ts"
+    "test:deployment": "vitest run --config vitest.deployment.config.ts"
   },
   "dependencies": {
     "@fastify/static": "catalog:",
@@ -34,11 +30,11 @@
     "@my-pi-harness/agent-runtime": "workspace:*",
     "@my-pi-harness/integrations": "workspace:*",
     "@my-pi-harness/sandbox": "workspace:*",
-    "@my-pi-harness/tools": "workspace:*"
+    "@my-pi-harness/tools": "workspace:*",
+    "tsx": "catalog:"
   },
   "devDependencies": {
     "@types/node": "catalog:",
-    "tsx": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:",
     "vite": "catalog:"

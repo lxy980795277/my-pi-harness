@@ -12,10 +12,10 @@ import { collectProcess, resolveProcess } from '@my-pi-harness/sandbox/process';
 import { isPublicAddress } from '@my-pi-harness/sandbox/network';
 
 const officeScripts = [
-  ['documents', 'docx_edit.py'],
-  ['pdf', 'pdf_edit.py'],
-  ['spreadsheets', 'xlsx_check.py'],
-  ['presentations', 'pptx_check.py'],
+  ['documents', 'docx_edit.py', ['documents.py', 'word_layout.py']],
+  ['pdf', 'pdf_edit.py', ['pdfs.py', 'pdf_forms.py', 'pdf_layout.py']],
+  ['spreadsheets', 'xlsx_check.py', ['spreadsheets.py']],
+  ['presentations', 'pptx_check.py', ['presentations.py']],
 ];
 
 function samplePdf() {
@@ -48,6 +48,10 @@ async function main() {
   }
   for (const specifier of [
     '@my-pi-harness/daemon',
+    '@my-pi-harness/protocol',
+    '@my-pi-harness/storage',
+    '@my-pi-harness/agent-runtime',
+    '@my-pi-harness/integrations',
     '@my-pi-harness/tools',
     '@my-pi-harness/tools/skills',
     '@my-pi-harness/tools/plugins',
@@ -60,14 +64,16 @@ async function main() {
     const path = relative(deployment, resolved);
     assert(!isAbsolute(path) && !path.startsWith('..'), `${specifier} escaped the deployment`);
     assert(
-      path.startsWith('dist/') || path.includes('/dist/'),
-      `${specifier} did not resolve a build artifact`,
+      (path.startsWith('src/') || path.includes('/src/')) && path.endsWith('.ts'),
+      `${specifier} did not resolve deployed TypeScript source`,
     );
   }
   for (const resources of [BUILTIN_PLUGIN_RESOURCE_DIRECTORY, BUNDLED_SKILL_RESOURCE_DIRECTORY]) {
     const path = relative(deployment, await realpath(resources));
     assert(!isAbsolute(path) && !path.startsWith('..'), 'Bundled resources escaped the deployment');
   }
+  for (const helper of ['render_pdf_pages.py', 'pdf_safety.py'])
+    await access(join(BUNDLED_SKILL_RESOURCE_DIRECTORY, 'utils', 'document-view', helper));
   assert.equal(isPublicAddress('::ffff:127.0.0.1'), false);
   assert.equal(isPublicAddress('::ffff:8.8.8.8'), true);
   const workspaceRoot = join(fixture, 'workspace');
@@ -82,7 +88,6 @@ async function main() {
   const result = await readDocument.bind({
     owner: { sessionId: 'deployed-session', runId: 'deployed-run', taskId: null },
     readOnly: true,
-    supportsImages: false,
     workspace: async () => ({ workspaceRoot, profileDirectory, readOnly: true, signal }),
   })({ path: 'report.pdf' }, { toolCallId: 'deployed-read-document', signal });
   assert(
@@ -117,7 +122,7 @@ async function main() {
         skillEpoch: 1,
         pluginId: id,
         pluginEpoch: 1,
-        pluginGeneration: 'built-resource-fixture',
+        pluginGeneration: 'deployment-resource-fixture',
       }),
     );
   }
@@ -131,7 +136,7 @@ async function main() {
       ]),
     ];
     const reports = [];
-    for (const [index, [id, script]] of officeScripts.entries()) {
+    for (const [index, [id, script, modules]] of officeScripts.entries()) {
       const binding = lease.bindings[index];
       assert(binding, `Missing ${id} materialization`);
       assert.equal((await stat(binding.directory)).mode & 0o222, 0);
@@ -146,6 +151,7 @@ async function main() {
       }
       const program = join(binding.directory, 'scripts', script);
       await access(program);
+      for (const module of modules) await access(join(binding.directory, 'scripts', module));
       const launch = {
         command: python,
         workspaceRoot,
@@ -182,7 +188,7 @@ async function main() {
     }
     console.log(
       JSON.stringify({
-        packages: 'deployed-dist',
+        packages: 'deployed-source',
         pdfText: true,
         materializedSkills: frozen.length,
         office: reports,

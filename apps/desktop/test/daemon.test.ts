@@ -1,6 +1,7 @@
-import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { Type, type Static } from 'typebox';
 import { Value } from 'typebox/value';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -41,12 +42,18 @@ async function prepareFixture(mode: FixtureMode): Promise<Fixture> {
   vi.stubEnv('MY_PI_HARNESS_SESSION_LOG_ROOT', join(resources, '.my-pi-harness'));
   const nodeDirectory = join(resources, 'node');
   const daemonDirectory = join(resources, 'daemon');
-  const bootstrapDirectory = join(daemonDirectory, 'dist');
+  const bootstrapDirectory = join(daemonDirectory, 'src');
   await mkdir(nodeDirectory, { recursive: true });
   await mkdir(bootstrapDirectory, { recursive: true });
   await copyFile(
     process.execPath,
     join(nodeDirectory, process.platform === 'win32' ? 'node.exe' : 'node'),
+  );
+  await mkdir(join(daemonDirectory, 'node_modules'));
+  await symlink(
+    fileURLToPath(new URL('.', import.meta.resolve('tsx/package.json'))),
+    join(daemonDirectory, 'node_modules', 'tsx'),
+    'junction',
   );
   await writeFile(join(daemonDirectory, 'package.json'), '{"type":"module"}\n');
   await writeFile(
@@ -54,12 +61,12 @@ async function prepareFixture(mode: FixtureMode): Promise<Fixture> {
     'MY_PI_HARNESS_GITHUB_CLIENT_ID=fixture-packaged-client\n',
   );
   await writeFile(
-    join(bootstrapDirectory, 'bootstrap.js'),
+    join(bootstrapDirectory, 'bootstrap.ts'),
     `import { createServer } from 'node:http';
 import { renameSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-const mode = ${JSON.stringify(mode)};
+const mode: string = ${JSON.stringify(mode)};
 const statePath = fileURLToPath(new URL('../../fixture-state.json', import.meta.url));
 let shutdownCount = 0;
 let origin = '';

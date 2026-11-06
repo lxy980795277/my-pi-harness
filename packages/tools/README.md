@@ -4,17 +4,16 @@
 
 ## 公开入口与源码职责
 
-根index.ts组合公开API，skills、plugins和document-text提供对应叶入口，源码与发布exports保持同一职责。document-text直接导出utils/document-text.ts中的授权字节提取能力，不加载工具目录。NodeNext相对导入保留.js；源码检查使用src，发布使用dist及resources。
+根index.ts组合公开API，skills、plugins和document-text提供对应叶入口，源码与发布exports保持同一职责。document-text直接导出utils/document-text.ts中的授权字节提取能力，不加载工具目录。后端相对导入保留.js；开发、测试与生产均通过exports读取src，Node进程显式加载tsx。
 
-| 目录       | 负责的内容                                                         |
-| ---------- | ------------------------------------------------------------------ |
-| tools/     | 27个工具分别平铺为独立文件；各自拥有参数、描述、策略及执行入口     |
-| lib/       | 注册契约、执行上下文及多个工具实际复用的文件操作、输入与传输机制   |
-| utils/     | 工具目录检索及工具、附件共用的文档正文提取                         |
-| skills/    | YAML解析、发现优先级、安装文件、不可变快照、共享依赖及独立资源租约 |
-| plugins/   | 有限manifest、App声明、贡献索引与只读预览                          |
-| commands/  | 命令归属、短等待、输出游标、总生存期与命令资源引用                 |
-| resources/ | 随包插件Skill、CLI及按清单引用的shared支持库                       |
+| 目录      | 负责的内容                                                         |
+| --------- | ------------------------------------------------------------------ |
+| tools/    | 27个工具分别平铺为独立文件；各自拥有参数、描述、策略及执行入口     |
+| lib/      | 注册契约、执行上下文及多个工具实际复用的文件操作、输入与传输机制   |
+| utils/    | 工具目录检索及工具、附件共用的文档正文提取                         |
+| skills/   | YAML解析、发现优先级、安装文件、不可变快照、共享依赖及独立资源租约 |
+| plugins/  | 有限manifest、App声明、Skill/CLI资源与只读预览                     |
+| commands/ | 命令归属、短等待、输出游标、总生存期与命令资源引用                 |
 
 ## 工具注册和领域端口
 
@@ -32,7 +31,7 @@ bind接收当前Run的ToolContext，返回异步调用入口；注册工厂同�
 
 SkillCatalog发现注册根并按project、user、plugin、system排序，正文与资源索引共同生成contentHash。freeze重新读取源树验证相同内容，再发布不可变快照；loadResource只读取已接受路径并检查hash和大小。安装拒绝链接、隐藏资源、路径遍历、重复及超限文件，不执行源安装脚本。GitHub下载固定提交及blob身份，网络请求由宿主注入受控传输。
 
-resource-manifest.json的version为1，dependencies每项包含source、target和hash。source相对于tools/resources且限shared/，target是Skill内唯一相对路径；发现和冻结验证SHA-256，将依赖复制进快照，后续读取不依赖升级后的共享源文件。四个办公Skill的CLI和格式支持库通过这一清单组合。
+resource-manifest.json的version为1，dependencies每项包含source、target和hash。source相对于tools/src，仅接受plugins/shared/office中的common.py、cli_support.py、convert_pdf.py及utils/document-view/pdf_safety.py；target是Skill内唯一相对路径。发现和冻结验证SHA-256，将共享依赖复制进快照，后续读取不依赖升级后的源码；专属格式模块直接随各Skill保存。
 
 materializeBindings接收已接受FrozenSkill、取消信号及宿主assertAuthorized回调，复核授权和快照后在profile外生成只读副本。宿主用protectedDirectories传入profile根；文件0400、目录0500，sandbox接收精确readOnlyDirectories。返回租约包含bindings、readOnlyDirectories、verify、retain和release；每次新命令retain独立引用，最后引用释放才删除物化目录。revokeBindings及close拒绝新派发，宿主先收束仍在使用资源的进程再释放其引用。full-access保留宿主文件权限，资源校验不替代OS路径保护。
 
@@ -48,14 +47,13 @@ publish_artifact调用宿主注入的PublishArtifactHandler注册工作区文件
 
 ## 运行与验证
 
-生产资源位于tools/resources，源码、dist及独立桌面装配通过模块位置解析资源。Python、LibreOffice和字体等依赖按实际操作准备，缺失明确诊断；安装走显式授权的普通命令。当前受管理本地命令的正向OS后端限macOS，其他平台明确拒绝，不能从文件解析成功推导平台隔离可用。
+插件manifest、App声明和Skill位于src/plugins/<id>，专属脚本随Skill保存，共用办公支持位于src/plugins/shared/office；原生PDF页图支持位于src/utils/document-view。生产部署包含完整src，通过模块位置解析资源。Python、LibreOffice和字体等依赖按实际操作准备，缺失明确诊断；安装走显式授权的普通命令。当前受管理本地命令的正向OS后端限macOS，其他平台明确拒绝，不能从文件解析成功推导平台隔离可用。
 
 test覆盖注册调用、文件/Web、Skill快照和租约、插件声明、命令及正文读取；临时目录与受控fixture避免使用用户profile或凭据。办公结构、真实重算、视觉及独立桌面运行分别提供证据，范围见[工具体系与沙箱](../../docs/09_TECHNICAL/工具体系与沙箱.md)。
 
 ```sh
 pnpm --filter @my-pi-harness/tools typecheck
 pnpm --filter @my-pi-harness/tools test
-pnpm --filter @my-pi-harness/tools build
 ```
 
 命令服务最多同时持有16个尚未回收的命令，保留最近128个已结束命令；只淘汰结束后的内存查询数据，不限制会话累计调用次数，持久工具结果继续保留。进程期写入租约独立于本次工具等待，回收完进程、资源和写租约后才发布成功终态；其他Run的活跃写命令会阻止本Session新的写入，wait/stop及只读工作继续可用。

@@ -84,11 +84,11 @@ main/preload 只开放明确列举的桌面能力，校验调用来源与输入�
 
 ## 源码与发布产物
 
-lint、typecheck 和源码测试通过 TypeScript paths 解析工作区 `src`，必须能在没有旧构建产物时执行。发布 Node 解析真实 package exports，`packages/protocol`根入口导出`dist/index.js`，内部目录随源码编译至dist；发布验证使用构建产物，不能以源码路径别名代替。
+后端私有包通过package exports直接导出`src`中的TypeScript；lint、typecheck、源码测试和生产部署使用同一出口，不需要后端dist或源码覆盖别名。源码和静态资源一同部署到独立目录，生产验证检查真实出口及依赖，不能回退源码仓库。
 
-Web源码及其单测使用Bundler编译面；浏览器E2E使用单独的NodeNext测试配置，同时提供DOM类型以检查page.evaluate回调。根Node工具程序不通过测试入口追入Renderer源码，ESLint和typecheck覆盖这几个实际编译面。
+TypeScript使用ESNext与Bundler解析并执行noEmit检查。Web、宿主、浏览器测试各自声明编译面与ambient类型；E2E提供DOM类型以检查page.evaluate回调。根宿主程序不通过测试入口追入Renderer源码，ESLint和typecheck覆盖这些实际编译面。
 
-NodeNext宿主与共享包的本地相对导入写 `.js`，让编译后的ESM在Node中解析；Web源码及其测试使用Bundler编译面，模块导入无后缀，资源保留实际扩展。生产 daemon 运行编译后的 JavaScript，不依赖 tsx、开发服务器或根工作区源码。
+后端宿主与共享包的相对导入继续保留`.js`，由tsx或构建器解析对应源码；Web模块导入无后缀，资源保留实际扩展。开发与生产daemon均由独立Node通过生产依赖tsx运行`src/bootstrap.ts`，不依赖开发服务器、用户工具链或根工作区。Web与Electron main/preload继续构建；普通Electron进程只加载JS/CJS产物，协议源码及必要依赖在构建时打入main/preload。
 
 桌面资源同时包含独立 Node、daemon及其生产依赖、Web构建产物。`scripts/node-runtime.mjs`按 `.node-version` 下载官方发行包，在独立目录校验SHA-256并解压完成后原子发布缓存manifest；开发聚合入口与桌面资源准备共用该运行时。产品版本的唯一来源和同步规则见 [发布规范](../06_RELEASES/overview.md)。
 
@@ -124,4 +124,4 @@ MCP目录由宿主按当前身份、配置、凭据epoch和信任指纹保存至
 
 `RunCapabilities`管理真实session/workspace/MCP来源的候选与当前集合，搜索自动暂存命中，`run.tools_loaded`持久化后推进下一请求，结束释放且新Run重新选择。Skill候选元数据、显式正文及目录诊断进入可回放接受事实，模型按ID加载，由宿主解析预期内容与插件授权代次；正文继承独立于可执行工具集合。默认/按需策略及限额见[运行时能力协议](../03_API/capability-runtime.md)。daemon拥有懒加载的本地CPU向量Worker，缓存固定版本模型至profile的models目录，不继承供应商凭据环境；关闭时终止推理与下载，语义不可用时保留词法检索。插件只读API通过web_fetch访问允许网关，写入通过明确开启的MCP App和原有审批；不另建Skill工具grant。高级手动`ConnectionService`保持独立用途，办公Skill通过通用命令、文档/视觉读取和产物注册完成任务。
 
-生产package包含`tools/resources/plugins`与`tools/resources/shared`；共享依赖按Skill清单和hash冻结，运行资源物化到profile外受控目录。Python/LibreOffice等可选办公依赖按明确配置检测，准备依赖使用获准的普通命令。资源、Skills及账号授权见[插件体系设计](../09_TECHNICAL/插件体系设计.md)，协议传输、目录与调用见[MCP连接设计](../09_TECHNICAL/MCP连接设计.md)。
+生产package包含`tools/src`：插件manifest、App声明、Skill和专属脚本位于`plugins/<id>`，共用办公支持位于`plugins/shared/office`，原生PDF页图支持位于`utils/document-view`。共享依赖按Skill清单和hash冻结，运行资源物化到profile外受控目录。Python/LibreOffice等可选办公依赖按明确配置检测，准备依赖使用获准的普通命令。资源、Skills及账号授权见[插件体系设计](../09_TECHNICAL/插件体系设计.md)，协议传输、目录与调用见[MCP连接设计](../09_TECHNICAL/MCP连接设计.md)。

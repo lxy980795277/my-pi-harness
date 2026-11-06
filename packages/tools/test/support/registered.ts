@@ -32,7 +32,6 @@ export async function executeRegistered(
   return registration.bind({
     owner: { sessionId: 'session', runId: 'run', taskId: null },
     readOnly: context.readOnly,
-    supportsImages: true,
     ...(context.skillGateway ? { skillGateway: context.skillGateway } : {}),
     workspace: async () => ({ ...context, workspaceRoot: await canonicalWorkspace(context) }),
   })(args, { toolCallId: 'fixture', signal: context.signal });

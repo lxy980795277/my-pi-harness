@@ -100,7 +100,7 @@ pnpm --filter @my-pi-harness/web build
 
 构建输出为 `dist/` 静态文件。发布版由 daemon 托管这些文件与 `/api`，Electron 加载 daemon 的实际监听地址；浏览器也访问同一服务。Vite 是开发工具，不是发布服务。桌面资源装配由 `apps/desktop` 负责。
 
-浏览器源码和 Vite 配置分别使用 `tsconfig.json` 与 `tsconfig.node.json`；浏览器程序没有 Node ambient 类型。源码检查与 Vite 打包通过路径映射读取 protocol 源码，不依赖旧 `dist`；测试使用独立 `tsconfig.test.json`，不会通过 NodeNext 编译面追入 Renderer。
+浏览器源码和 Vite 配置分别使用 `tsconfig.json` 与 `tsconfig.node.json`；浏览器程序没有 Node ambient 类型。源码检查与 Vite 打包通过 protocol 的包出口读取源码，不依赖旧 `dist`；测试使用独立 `tsconfig.test.json`，不通过宿主编译面追入 Renderer。
 
 TSX 仅布局和绑定同步具名事件。状态转换、选项构建、请求与 Query 编排由 `.ts` Hook/函数拥有；不用三目、void 运算符和 Promise 链。`hooks/use-async-event.ts` 是唯一同步异步桥，处理异常、重复触发、取消与卸载；秘密不进入 mutation variables。业务使用 shadcn 控件，基础层才接触原生交互标签与 Radix。
 

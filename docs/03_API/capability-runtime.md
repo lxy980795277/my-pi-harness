@@ -39,7 +39,7 @@ run.tools_loaded先持久化递增revision、完整可调用定义/来源及激�
 
 FrozenSkill包含完整指令、资源索引、来源、授权代次及可选gatewayUrl、resourceDirectory。首次模型请求前，宿主将初始已激活Skill的快照物化到profile外受控目录，再以run.tools_loaded提交同一正文、资源和授权及当前resourceDirectory。历史接受记录中的目录可在本Run首次加载时重绑定；一旦本Run的run.tools_loaded记录目录，后续加载必须保持该目录及其余所有Skill字段。目录是本Run的宿主资源位置，不进入contentHash。
 
-load_skill返回文本JSON：`{id,resourceDirectory,availableFrom:"next-model-request"}`。新激活的正文及目录仍须经过请求前持久屏障，才能进入下一模型请求。命令仅取得已激活快照的精确只读根，不能通过加载Skill开放profile或安装根。共享依赖由resource-manifest.json声明相对于tools/resources的shared/来源、目标和hash，冻结后使用复制进快照的字节。
+load_skill返回文本JSON：`{id,resourceDirectory,availableFrom:"next-model-request"}`。新激活的正文及目录仍须经过请求前持久屏障，才能进入下一模型请求。命令仅取得已激活快照的精确只读根，不能通过加载Skill开放profile或安装根。共享依赖由resource-manifest.json声明随包共享源、目标和hash，冻结后使用复制进快照的字节；具体资源归属见[工具体系与沙箱](../09_TECHNICAL/工具体系与沙箱.md#skill资源如何供命令读取)。
 
 `$skill-name`显式提及按可用目录冻结正文，与picker合并激活，最多16项；公开输入skills表示picker选择，提及绑定留私有接受/队列事实。同Run新增选择不能替换已激活ID的内容或授权。当前分支的有效正文跨Run和压缩保留；继承失效项被省略并记录固定诊断，新的显式选择仍严格校验。reset或摘要选择继续限定可继承历史范围。
 

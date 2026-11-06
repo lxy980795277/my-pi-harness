@@ -11,9 +11,9 @@
 | `pnpm typecheck`       | 全 workspace 源码，包括 Web 独立 Bundler 测试面                   |
 | `pnpm test`            | Vitest 源码行为，不依赖 dist                                      |
 | `pnpm check`           | 上述四类，不包括 Playwright 或打包                                |
-| `pnpm build`           | 真实构建与版本生成                                                |
-| `pnpm test:artifact`   | 构建后的 daemon CLI、IPC、恢复及退出，先 build                    |
-| `pnpm test:e2e`        | 构建 Web/daemon 的 Playwright 用户场景，先 build                  |
+| `pnpm build`           | Web及Electron main/preload构建与版本生成                          |
+| `pnpm test:artifact`   | 源码daemon CLI、IPC、恢复、退出及隔离生产deploy，不要求后端build  |
+| `pnpm test:e2e`        | Playwright用户场景：先构建Web，daemon由Node/tsx启动               |
 | `pnpm test:m2`         | 工作区/工具/目录桥/时间线源码与M2浏览器链路，先 build             |
 | `pnpm test:m3`         | 上下文、附件、工作状态源码与M3浏览器链路，先 build                |
 | `pnpm test:provider`   | 显式专用 TEST_API_KEY/BASE_URL/MODEL 的真实 Provider；缺配置 skip |
@@ -21,6 +21,8 @@
 | `pnpm smoke:desktop`   | 实际桌面产物启动、隔离、桥及退出；前提见脚本                      |
 
 根 package.json 是可执行入口，命令变化同步本页。局部变更运行最小充分检查；里程碑整体验收可做工程范围检查。代码、环境及风险未变化时复用已有通过结果，不因 commit/push 重复全量。CI负责keyless全量和macOS/Windows矩阵，真实供应商与外部账户独立配置，不让普通测试依赖用户Key或产生费用。
+
+后端源码与部署检查解析实际package exports，不设置workspace源码覆盖别名。`daemon test:deployment`独立运行CLI/恢复与生产资源检查；隔离deploy必须包含源码和生产tsx，Node子进程不能引用仓库外部依赖。Web和Electron仍检查真实构建产物，旧后端dist不参与任何启动路径。
 
 全仓ESLint同时持有多个TypeScript程序，lint入口仅为该检查进程设置8GiB堆上限，避免默认堆耗尽；不改变规则或扫描范围，不设置影响开发服务与模型进程的全局NODE_OPTIONS。
 

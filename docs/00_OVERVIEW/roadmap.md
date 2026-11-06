@@ -2,6 +2,8 @@
 
 本页管理功能范围与里程碑顺序，详细验收由各里程碑 Spec 承担。`规划` 不表示能力已经可用；只有实现与必要验证都完成后才能调整状态。
 
+2026-11-06完成[源码运行与插件资源归并](../04_FEATURES/202611061105_refactor_source-runtime-plugin-assets/spec.md)：统一后端源码exports与随包Node/tsx执行，归并插件资源并清理确证冗余；全仓检查、2014项源码测试、隔离生产部署、四条浏览器链路及macOS arm64应用目录打包/smoke通过，见[验证记录](../04_FEATURES/202611061105_refactor_source-runtime-plugin-assets/verify.md)。属于M0及既有M2–M5维护，M6与原有平台、账号和办公质量缺口保持。
+
 2026-11-06完成同专题的[配套源码组织对齐](../04_FEATURES/202611041712_refactor_tools-skills-sandbox/verify.md#配套源码组织对齐2026-11-06)：删除tools/src中的documents、ports、registry目录，正文提取与检索归utils，注册契约与公共上下文归lib，原生装配归根文件；专属输入和回调类型随工具定义。318项聚焦回归、全workspace类型/静态/构建及独立生产部署通过，旧叶出口明确拒绝，27个序列化工具声明保持不变。属于M0及既有M2–M5维护，协议24、SQLite10和原有外部验收缺口不变，M6继续暂缓。
 
 2026-11-05按用户追加要求完成[工具文件与目录职责整理](../04_FEATURES/202611041712_refactor_tools-skills-sandbox/spec.md)：27个工具按名称平铺，各自拥有参数、策略和执行；共享机制、领域服务、窄端口和目录装配各有明确拥有者，删除旧工具组及冗余出口。验证覆盖工具声明与加载顺序不变、主子调用、文件/Web/文档和独立生产部署，详见同专题[验证记录](../04_FEATURES/202611041712_refactor_tools-skills-sandbox/verify.md#单工具文件整理2026-11-05)。属于M0与既有M2–M5维护，M6及原有外部验收缺口保持原状态。

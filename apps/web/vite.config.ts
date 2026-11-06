@@ -44,9 +44,6 @@ export default defineConfig(({ command, mode }) => {
     resolve: {
       alias: {
         '@': fileURLToPath(new URL('./src', import.meta.url)),
-        '@my-pi-harness/protocol': fileURLToPath(
-          new URL('../../packages/protocol/src/index.ts', import.meta.url),
-        ),
       },
     },
     server: {

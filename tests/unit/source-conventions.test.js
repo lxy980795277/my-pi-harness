@@ -74,7 +74,7 @@ describe('source file conventions', () => {
       'apps/desktop/electron.vite.config.ts':
         "const entry = new URL('./src/main/index.ts', import.meta.url);",
       'apps/desktop/electron-builder.config.cjs': "const pkg = require('../../package.json');",
-      'apps/daemon/vitest.built.config.ts': 'export default {};',
+      'apps/daemon/vitest.deployment.config.ts': 'export default {};',
       'eslint.config.js': 'export default [];',
       'apps/daemon/test/run-state.test.ts': 'export const value = 1;',
       'tests/e2e/runtime.spec.ts': 'export const value = 1;',

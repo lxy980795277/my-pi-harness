@@ -2,7 +2,7 @@
 
 `PluginConnectionService` 为每个已安装服务插件管理一份 OAuth 授权。授权页只发起连接和读取账号状态；账户创建、Client 配置、Token 保存与 Apps 复用均由 daemon 管理，不建立高级服务账户记录或手工绑定关系。
 
-`integrations/resources/plugins/<id>/manifest.yaml` 声明 API 来源、OAuth 端点、Scopes、PKCE、账号字段和只读网关路径。daemon 的专用 `MY_PI_HARNESS_SKILL_*` 客户端配置覆盖 manifest 的客户端字段；不回退应用登录客户端。GitHub 使用 `repo user`，Google 申请离线授权并从 Token 响应的 `id_token` 读取展示账号；这些账号字段不建立应用登录身份。
+`tools/src/plugins/<id>/manifest.yaml` 声明 API 来源、OAuth 端点、Scopes、PKCE、账号字段和只读网关路径。daemon 的专用 `MY_PI_HARNESS_SKILL_*` 客户端配置覆盖 manifest 的客户端字段；不回退应用登录客户端。GitHub 使用 `repo user`，Google 申请离线授权并从 Token 响应的 `id_token` 读取展示账号；这些账号字段不建立应用登录身份。
 
 随机 state 和 PKCE verifier 只在内存保存十分钟。state 绑定插件安装 generation、profile 用户和身份 epoch，只消费一次；重新开始、断开、卸载和关闭取消所属流程。授权码交换和账号读取受十秒截止及请求取消约束。回调成功后通知 Remote MCP 失效旧目录和连接，Apps 仍须各自显式开启。
 

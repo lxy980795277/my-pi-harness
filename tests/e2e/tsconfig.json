@@ -3,10 +3,7 @@
   "compilerOptions": {
     "noEmit": true,
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "types": ["node"],
-    "paths": {
-      "@my-pi-harness/protocol": ["../../packages/protocol/src/index.ts"]
-    }
+    "types": ["node"]
   },
   "include": ["*.ts"]
 }

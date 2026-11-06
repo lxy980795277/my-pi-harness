@@ -22,7 +22,7 @@ interface RunningDaemon {
   restart: () => Promise<void>;
 }
 
-/** Starts built daemon exports and static Web with an isolated listener per test. */
+/** Starts source daemon exports and static Web with an isolated listener per test. */
 export const test = base.extend<{ daemon: RunningDaemon }>({
   page: async ({ page, daemon }, use) => {
     await page.context().addCookies([
@@ -64,7 +64,7 @@ export const test = base.extend<{ daemon: RunningDaemon }>({
     }
     const child = spawn(
       process.execPath,
-      [fileURLToPath(new URL('./start-daemon.mjs', import.meta.url))],
+      ['--import', 'tsx', fileURLToPath(new URL('./start-daemon.mjs', import.meta.url))],
       {
         stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
         env: {

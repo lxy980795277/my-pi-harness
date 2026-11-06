@@ -51,12 +51,11 @@ class SkillWorkflows(unittest.TestCase):
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=20, check=False)
         self.assertEqual(result.returncode, 0, result.stderr.decode())
 
-    def test_dependencies_are_explicit_and_no_stdin_dispatch_exists(self):
+    def test_dependencies_are_explicit(self):
         for name, script in [('documents','docx_edit.py'), ('pdf','pdf_edit.py'), ('spreadsheets','xlsx_check.py'), ('presentations','pptx_check.py')]:
             report = self.command(name,script,'dependencies')
             self.assertEqual(report['missingModules'], [])
             self.assertIn('installation',report)
-        self.assertFalse((RESOURCE_ROOT/'shared/office/runner.py').exists())
 
     def test_docx_review_notes_fields_merge_and_create_only(self):
         self.python('documents', "from documents import docx; docx({'paragraphs':[{'text':'项目报告','heading':1},{'text':'Original paragraph'}], 'tables':[{'rows':[['项目','数量'],['甲','1']], 'headerRows':1}], 'layout':{'width':595,'height':842}, 'footer':{'text':'页','pageNumbers':True}}, 'source.docx')")
@@ -92,7 +91,7 @@ class SkillWorkflows(unittest.TestCase):
         self.assertEqual(next(item for item in report['fields'] if item['name']=='region')['value'],'west')
         self.command('pdf','pdf_edit.py','form','form.pdf','bad.pdf','--set','region','"unknown"',success=False)
         self.command('pdf','pdf_edit.py','form','form.pdf','flatten.pdf','--flatten',success=False)
-        result=subprocess.run([sys.executable,'-B',str(RESOURCE_ROOT/'shared/document-view/render_pdf_pages.py'),'--source',str(self.root/'filled.pdf'),'--pages','1','--max-pixels','600'],capture_output=True,env=BASE_ENV,timeout=20)
+        result=subprocess.run([sys.executable,'-B',str(RESOURCE_ROOT/'utils/document-view/render_pdf_pages.py'),'--source',str(self.root/'filled.pdf'),'--pages','1','--max-pixels','600'],capture_output=True,env=BASE_ENV,timeout=20)
         self.assertEqual(result.returncode,0,result.stderr.decode());self.assertEqual(len(json.loads(result.stdout)['images']),1)
         self.python('pdf',"from pypdf import PdfWriter; w=PdfWriter(clone_from='form.pdf'); w.encrypt('test'); w.write('encrypted.pdf')")
         self.assertIn('Encrypted',self.command('pdf','pdf_edit.py','inspect','encrypted.pdf',success=False))

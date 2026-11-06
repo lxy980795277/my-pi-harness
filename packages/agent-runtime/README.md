@@ -1,6 +1,6 @@
 # Agent Runtime
 
-Node端的模型接入与持久会话运行层，使用精确固定的Pi core/ai 1.4.0公开接口。HTTP、SQLite、OS凭据和页面由宿主提供；本包不导入Fastify、Electron、React或SQL驱动。源码检查通过paths消费protocol、tools与sandbox等工作区源码，生产通过真实exports读取dist。
+Node端的模型接入与持久会话运行层，使用精确固定的Pi core/ai 1.4.0公开接口。HTTP、SQLite、OS凭据和页面由宿主提供；本包不导入Fastify、Electron、React或SQL驱动。源码检查、测试与生产均通过实际package exports读取工作区源码；Node进程显式加载tsx，不依赖后端dist或源码覆盖别名。
 
 ## 源码职责
 

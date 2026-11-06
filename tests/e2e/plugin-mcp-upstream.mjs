@@ -2,7 +2,7 @@ import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { Server } from '@modelcontextprotocol/server';
 import { NodeStreamableHTTPServerTransport } from '@modelcontextprotocol/node';
-import { RemoteMcpManager } from '../../packages/integrations/dist/index.js';
+import { RemoteMcpManager } from '@my-pi-harness/integrations';
 
 /** Real SDK traffic stays on this isolated issuer; no synthetic token reaches GitHub. */
 export async function startPluginMcpUpstream() {

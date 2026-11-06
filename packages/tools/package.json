@@ -4,29 +4,15 @@
   "private": true,
   "type": "module",
   "files": [
-    "dist",
-    "resources"
+    "src"
   ],
   "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
-    },
-    "./skills": {
-      "types": "./dist/skills/index.d.ts",
-      "import": "./dist/skills/index.js"
-    },
-    "./plugins": {
-      "types": "./dist/plugins/index.d.ts",
-      "import": "./dist/plugins/index.js"
-    },
-    "./document-text": {
-      "types": "./dist/utils/document-text.d.ts",
-      "import": "./dist/utils/document-text.js"
-    }
+    ".": "./src/index.ts",
+    "./skills": "./src/skills/index.ts",
+    "./plugins": "./src/plugins/index.ts",
+    "./document-text": "./src/utils/document-text.ts"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint .",
     "test": "vitest run --config vitest.config.ts"

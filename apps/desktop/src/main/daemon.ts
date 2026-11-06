@@ -53,10 +53,10 @@ export async function startDaemon({ signal }: DaemonStartOptions = {}): Promise<
     ? resolve(resources, 'node', process.platform === 'win32' ? 'node.exe' : 'node')
     : (process.env['MY_PI_HARNESS_NODE_PATH'] ?? 'node');
   const entry = app.isPackaged
-    ? resolve(resources, 'daemon', 'dist', 'bootstrap.js')
+    ? resolve(resources, 'daemon', 'src', 'bootstrap.ts')
     : fileURLToPath(new URL('../../../daemon/src/bootstrap.ts', import.meta.url));
   const args = app.isPackaged
-    ? [`--env-file=${resolve(resources, 'daemon', 'desktop-oauth.env')}`, entry]
+    ? [`--env-file=${resolve(resources, 'daemon', 'desktop-oauth.env')}`, '--import', 'tsx', entry]
     : [
         `--env-file-if-exists=${fileURLToPath(new URL('../../../../.env', import.meta.url))}`,
         '--import',

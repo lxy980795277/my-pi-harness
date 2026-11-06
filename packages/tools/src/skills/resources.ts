@@ -14,6 +14,12 @@ import type { SkillDownloadFile } from './types.js';
 export type SkillResourceManifest = Static<typeof manifestSchema>;
 
 const manifestName = 'resource-manifest.json';
+const sharedResourceSources = new Set([
+  'plugins/shared/office/common.py',
+  'plugins/shared/office/cli_support.py',
+  'plugins/shared/office/convert_pdf.py',
+  'utils/document-view/pdf_safety.py',
+]);
 const manifestSchema = Type.Object(
   {
     version: Type.Literal(1),
@@ -32,11 +38,9 @@ const manifestSchema = Type.Object(
   { additionalProperties: false },
 );
 
-export const BUNDLED_SKILL_RESOURCE_DIRECTORY = fileURLToPath(
-  new URL('../../resources/', import.meta.url),
-);
+export const BUNDLED_SKILL_RESOURCE_DIRECTORY = fileURLToPath(new URL('../', import.meta.url));
 
-/** Shared files are named relative to tools/resources and pinned by their exact SHA-256. */
+/** Shared files are named relative to tools/src and pinned by their exact SHA-256. */
 export function parseSkillResourceManifest(source: Uint8Array): SkillResourceManifest {
   let parsed: unknown;
   try {
@@ -53,7 +57,7 @@ export function parseSkillResourceManifest(source: Uint8Array): SkillResourceMan
     skillResourcePath(dependency.source);
     skillResourcePath(dependency.target);
     if (
-      !dependency.source.startsWith('shared/') ||
+      !sharedResourceSources.has(dependency.source) ||
       dependency.target === 'SKILL.md' ||
       dependency.target === manifestName ||
       targets.has(dependency.target)

@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "dependencies": [
+    {
+      "source": "plugins/shared/office/common.py",
+      "target": "scripts/common.py",
+      "hash": "6039b92cd325c535c1af2f3ac0d9e4a82a79d61106cc73efbcda97b02317d7e1"
+    },
+    {
+      "source": "plugins/shared/office/cli_support.py",
+      "target": "scripts/cli_support.py",
+      "hash": "702fb8d69fb12f06d4860fd4aa242257945a735d9352a168f41d3dea845a9060"
+    },
+    {
+      "source": "utils/document-view/pdf_safety.py",
+      "target": "scripts/pdf_safety.py",
+      "hash": "eb6ca3a4f6890438c7ffd162e93b2fc7c4c4b7de617530f5d62e149a8a599022"
+    }
+  ]
+}

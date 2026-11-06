@@ -227,9 +227,15 @@ importers:
       '@my-pi-harness/eslint-config':
         specifier: workspace:*
         version: link:packages/eslint-config
+      '@my-pi-harness/integrations':
+        specifier: workspace:*
+        version: link:packages/integrations
       '@my-pi-harness/protocol':
         specifier: workspace:*
         version: link:packages/protocol
+      '@my-pi-harness/storage':
+        specifier: workspace:*
+        version: link:packages/storage
       '@playwright/test':
         specifier: 'catalog:'
         version: 1.63.0
@@ -254,6 +260,9 @@ importers:
       prettier-plugin-tailwindcss:
         specifier: 'catalog:'
         version: 0.8.1(prettier@3.8.5)
+      tsx:
+        specifier: 'catalog:'
+        version: 4.23.15
       turbo:
         specifier: 'catalog:'
         version: 2.10.13
@@ -299,6 +308,9 @@ importers:
       pino:
         specifier: 'catalog:'
         version: 10.3.1
+      tsx:
+        specifier: 'catalog:'
+        version: 4.23.15
       typebox:
         specifier: 'catalog:'
         version: 1.3.30
@@ -306,9 +318,6 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 24.19.2
-      tsx:
-        specifier: 'catalog:'
-        version: 4.23.15
       typescript:
         specifier: 'catalog:'
         version: 6.0.3

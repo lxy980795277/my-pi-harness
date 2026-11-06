@@ -12,7 +12,7 @@ Electron main 负责窗口、有限 preload 桥，以及独立 Node daemon 的�
 
 退出请求会中止尚未完成的 daemon 或页面启动，并等待资源回收；重复退出请求不会提前结束应用。supervisor 的就绪解析、取消和回收使用真实 Node 子进程测试，窗口策略和应用生命周期由源码单测验证；实际 Electron 行为由桌面 smoke 检查。
 
-`pnpm package:desktop` 构建所有应用，校验并缓存官方 Node 分发包，部署 daemon 生产依赖、Web 和 Node 到桌面资源，然后生成当前平台的未签名应用目录。`pnpm smoke:desktop` 在完成打包后启动该应用目录，检查真实服务、有限桥、Renderer 隔离、来源拒绝和退出后的服务关闭；截图保存在 `output/playwright/desktop.png`。
+`pnpm package:desktop` 构建Web和Electron main/preload，校验并缓存官方Node分发包，部署daemon源码、生产依赖tsx、Web和Node到桌面资源，再生成当前平台的未签名应用目录。daemon使用随包Node和tsx运行src/bootstrap.ts；main/preload将协议源码打入JS/CJS产物。`pnpm smoke:desktop`在完成打包后启动该应用目录，检查真实服务、有限桥、Renderer隔离、来源拒绝和退出后的服务关闭；截图保存在`output/playwright/desktop.png`。
 
 桌面启动使用私有随机secret建立HttpOnly页面Cookie，不向Renderer暴露该秘密。daemon数据在macOS位于userData/profiles/default，Windows位于LocalAppData/My Pi Harness/profiles/default，与独立daemon一致；安装资源保持只读。原生模块为独立Node24构建，不重建为Electron ABI。
 

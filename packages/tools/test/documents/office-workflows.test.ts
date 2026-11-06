@@ -11,7 +11,7 @@ it.skipIf(!existsSync(python))(
   'runs the materialized Office Skill CLIs and advanced format helpers',
   async () => {
     const script = fileURLToPath(new URL('./office-workflows.py', import.meta.url));
-    const resources = fileURLToPath(new URL('../../resources', import.meta.url));
+    const resources = fileURLToPath(new URL('../../src', import.meta.url));
     await new Promise<void>((accept, reject) => {
       execFile(
         python,

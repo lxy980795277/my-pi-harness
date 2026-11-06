@@ -1,8 +1,7 @@
 {
   "extends": "../../packages/tsconfig/node.json",
   "compilerOptions": {
-    "noEmit": true,
-    "paths": { "@my-pi-harness/protocol": ["../../packages/protocol/src/index.ts"] }
+    "noEmit": true
   },
   "include": ["src/main/**/*.ts", "test/**/*.ts", "electron.vite.config.ts"]
 }

@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
 import { afterEach, expect, it } from 'vitest';
-import { PluginCatalog } from '../../src/plugins/index.js';
+import { BUILTIN_PLUGIN_RESOURCE_DIRECTORY } from '../../src/plugins/index.js';
 import {
   SkillCatalog,
   installSkillFiles,
@@ -23,8 +23,8 @@ it('freezes exact shared dependency bytes and rejects changed source dependencie
   const directory = await realpath(await mkdtemp(join(tmpdir(), 'shared-skill-resource-')));
   directories.push(directory);
   const bundled = join(directory, 'bundled');
-  const library = join(bundled, 'shared/office/common.py');
-  await mkdir(join(bundled, 'shared/office'), { recursive: true });
+  const library = join(bundled, 'plugins/shared/office/common.py');
+  await mkdir(join(bundled, 'plugins/shared/office'), { recursive: true });
   await writeFile(library, 'frozen helper');
   const root = join(directory, 'skills');
   await installSkillFiles(
@@ -44,7 +44,7 @@ it('freezes exact shared dependency bytes and rejects changed source dependencie
             version: 1,
             dependencies: [
               {
-                source: 'shared/office/common.py',
+                source: 'plugins/shared/office/common.py',
                 target: 'scripts/common.py',
                 hash: hash('frozen helper'),
               },
@@ -85,9 +85,15 @@ it('freezes exact shared dependency bytes and rejects changed source dependencie
 it.each([
   { source: '../private', target: 'scripts/helper.py', hash: 'a'.repeat(64) },
   { source: 'plugins/example/private', target: 'scripts/helper.py', hash: 'a'.repeat(64) },
-  { source: 'shared/office/helper.py', target: 'SKILL.md', hash: 'a'.repeat(64) },
-  { source: 'shared/office/helper.py', target: '../helper.py', hash: 'a'.repeat(64) },
-  { source: 'shared/office/helper.py', target: 'scripts/helper.py', hash: 'bad' },
+  { source: 'plugins/shared/private.ts', target: 'scripts/helper.py', hash: 'a'.repeat(64) },
+  {
+    source: 'utils/document-view/render_pdf_pages.py',
+    target: 'scripts/helper.py',
+    hash: 'a'.repeat(64),
+  },
+  { source: 'plugins/shared/office/common.py', target: 'SKILL.md', hash: 'a'.repeat(64) },
+  { source: 'plugins/shared/office/common.py', target: '../helper.py', hash: 'a'.repeat(64) },
+  { source: 'plugins/shared/office/common.py', target: 'scripts/helper.py', hash: 'bad' },
 ])('rejects unsafe or unpinned dependency declarations', (dependency) => {
   expect(() =>
     parseSkillResourceManifest(
@@ -106,7 +112,18 @@ it.each(['documents', 'pdf', 'spreadsheets', 'presentations'])(
       materializationDirectory: join(directory, 'readable'),
       protectedDirectories: [join(directory, 'profile')],
     });
-    const [entry] = await catalog.discover([new PluginCatalog().skillRoot(pluginId)], signal);
+    const [entry] = await catalog.discover(
+      [
+        {
+          path: join(BUILTIN_PLUGIN_RESOURCE_DIRECTORY, pluginId, 'skills'),
+          scope: 'plugin',
+          pluginId,
+          workspaceId: null,
+          managed: true,
+        },
+      ],
+      signal,
+    );
     if (entry === undefined) throw new Error('missing bundled Skill');
     const frozen = await catalog.freeze(entry, signal);
     expect(frozen.resources.some((resource) => resource.path === 'scripts/common.py')).toBe(true);

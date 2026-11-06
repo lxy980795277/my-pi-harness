@@ -61,7 +61,7 @@ await access(
     'node_modules',
     '@my-pi-harness',
     'tools',
-    'resources',
+    'src',
     'plugins',
     'github',
     'skills',
@@ -76,7 +76,7 @@ await access(
     'node_modules',
     '@my-pi-harness',
     'tools',
-    'resources',
+    'src',
     'plugins',
     'documents',
     'skills',
@@ -86,7 +86,7 @@ await access(
   ),
 );
 const temporary = await mkdtemp(join(tmpdir(), 'my-pi-harness-desktop-'));
-const { openProfileStore } = await import('../packages/storage/dist/index.js');
+const { openProfileStore } = await import('@my-pi-harness/storage');
 const profileDirectory =
   process.platform === 'win32'
     ? join(temporary, 'My Pi Harness', 'profiles', 'default')

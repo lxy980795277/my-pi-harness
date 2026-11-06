@@ -67,7 +67,6 @@ export interface ArtifactToolHandlers {
 export interface ToolContext {
   owner: ToolOwner;
   readOnly: boolean;
-  supportsImages: boolean;
   workspace(signal: AbortSignal): Promise<WorkspaceToolContext>;
   work?: WorkToolHandlers;
   agents?: AgentToolHandlers;

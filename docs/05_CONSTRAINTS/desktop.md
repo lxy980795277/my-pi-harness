@@ -2,7 +2,7 @@
 
 本页规定桌面实现与发布必须满足的要求；当前已实现范围以 [架构](../01_ARCHITECTURE/overview.md) 和所属功能验证为准。后续要求不表示能力已经实现。Web Renderer复用浏览器页面，桌面专有能力通过有限协议接入。
 
-main/preload与构建工具使用strict TypeScript和NodeNext；包内ESM导入保留编译后的`.js`，不将Web的无后缀或UI风格规则强施宿主代码。通用类型、外部解析、错误、日志与持久化见 [后端规范](backend.md)，Renderer见 [前端规范](frontend.md)。
+main/preload与构建工具使用strict TypeScript及Bundler解析；包内ESM导入保留`.js`，不将Web的无后缀或UI风格规则强施宿主代码。通用类型、外部解析、错误、日志与持久化见 [后端规范](backend.md)，Renderer见 [前端规范](frontend.md)。
 
 ## 进程职责
 
@@ -45,7 +45,7 @@ contextBridge.exposeInMainWorld('desktop', {
 
 - main持有启动取消信号和daemon句柄；下载、就绪等待或页面加载期间退出，取消剩余步骤。退出开始后不创建新窗口或遗留新服务。
 - 开发等待真实HTTP就绪，发布等待经过schema校验的daemon.ready。等待有总时限、单次请求时限和取消；进程退出、spawn error或无效记录立即失败，不用固定sleep代替。
-- daemon使用独立Node；发布按process.resourcesPath定位随包Node与JavaScript。生产忽略开发可执行文件、页面URL、tsx和源码覆盖项，不要求用户预装Node或pnpm。
+- daemon使用独立Node；发布按process.resourcesPath定位随包Node、daemon/src/bootstrap.ts及生产依赖tsx。生产只加载随包源码和loader，忽略开发可执行文件、页面URL与源码覆盖项，不要求用户预装Node、pnpm或tsx。Electron main/preload仍构建为JS/CJS，并将源码协议包及必要依赖打入产物。
 - Electron启动入口清除ELECTRON_RUN_AS_NODE等改变启动模式的宿主覆盖项；不得用Electron的process.execPath冒充独立Node。开发和发布准备共用已校验的Node资源流程。
 - stop幂等，重复请求共享关闭结果；先IPC正常关闭，再有界等待，超时按平台强制回收。确认真实exit/close，child.killed仅表示已发送信号。[Node子进程](https://nodejs.org/download/release/v24.20.0/docs/api/child_process.html)
 - before-quit阻止重复退出绕过清理；启动失败回收已获得资源，窗口关闭清除引用。当前关闭最后窗口即退出，不隐式增加托盘或macOS驻留模式。
@@ -66,7 +66,7 @@ Windows环境变量名不区分大小写，env不能同时保留Path和PATH。`.
 
 ## 发布与验收
 
-应用版本、打包范围与当前签名状态见 [发布规范](../06_RELEASES/overview.md)。正式发布验证安装路径启动、无源码依赖、资源完整、进程退出、升级迁移和卸载数据政策，macOS与Windows分别提供证据。
+应用版本、打包范围与当前签名状态见 [发布规范](../06_RELEASES/overview.md)。正式发布验证安装路径启动、不依赖源码仓库、资源完整、进程退出、升级迁移和卸载数据政策，macOS与Windows分别提供证据。
 
 macOS签名与公证、Windows代码签名分别实施；随包Node/helper纳入签名检查，凭据不进仓库。ad-hoc开发签名不能宣称已正式公证。[Electron代码签名](https://www.electronjs.org/docs/latest/tutorial/code-signing)
 

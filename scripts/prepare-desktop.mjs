@@ -24,7 +24,7 @@ await run(
   ],
   { cwd: root },
 );
-// Legacy deploy hoists the daemon's self-link to workspace source; its entry lives in deployed dist.
+// Legacy deploy hoists the daemon's self-link to workspace source; use the deployed package root.
 await rm(
   join(output, 'daemon', 'node_modules', '.pnpm', 'node_modules', '@my-pi-harness', 'daemon'),
   { force: true },
