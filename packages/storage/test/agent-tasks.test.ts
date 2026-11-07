@@ -11,6 +11,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { openProfileStore } from '../src/index';
 import {
   createAgentSession,
+  agentSettingsFixture,
   codec,
   event,
   run,
@@ -36,6 +37,37 @@ async function fixture(approvalMode: ApprovalMode = 'ask'): Promise<AgentSession
 }
 
 describe('durable agent tasks', () => {
+  it('requires explicitly supplied defaults without seeding settings during reads', async () => {
+    const value = await fixture();
+    expect(value.store.getAgentSettings().revision).toBe(0);
+    const database = new Database(join(value.directory, 'data.sqlite'));
+    try {
+      expect(database.prepare('SELECT count(*) AS count FROM agent_settings').get()).toEqual({
+        count: 0,
+      });
+    } finally {
+      database.close();
+    }
+    value.store.close();
+    value.store = await openProfileStore(value.directory);
+    expect(() => value.store.getAgentSettings()).toThrow(
+      expect.objectContaining({ code: 'AGENT_SETTINGS_UNAVAILABLE' }),
+    );
+  });
+
+  it('saves complete initial settings without a default factory and rejects stale revisions', async () => {
+    const value = await fixture();
+    value.store.close();
+    value.store = await openProfileStore(value.directory);
+    const initial = agentSettingsFixture();
+    const saved = value.store.putAgentSettings(initial);
+    expect(saved).toEqual({ ...initial, revision: 1 });
+    expect(value.store.getAgentSettings()).toEqual(saved);
+    expect(() => value.store.putAgentSettings(initial)).toThrow(
+      expect.objectContaining({ code: 'CONFLICT' }),
+    );
+  });
+
   it('keeps root and child live output isolated while unrelated durable commits preserve partials', async () => {
     const { store } = await fixture();
     spawn(store, 'first');

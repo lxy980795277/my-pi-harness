@@ -4,7 +4,6 @@ import type {
   AppSettings,
   HarnessEvent,
   MessageView,
-  ProviderConfig,
   QueueInput,
   RunView,
   SessionSummary,
@@ -18,12 +17,13 @@ import type {
   AgentSettings,
   Artifact,
 } from '@my-pi-harness/protocol';
+import type { ProviderRecord } from '@my-pi-harness/protocol/internal';
 
 /** Private SQLite columns never serve as HTTP responses without protocol validation. */
 export const providers = sqliteTable('provider_configs', {
   id: text('id').primaryKey(),
   revision: integer('revision').notNull(),
-  data: text('data', { mode: 'json' }).$type<ProviderConfig>().notNull(),
+  data: text('data', { mode: 'json' }).$type<ProviderRecord>().notNull(),
 });
 
 export const builtinSlots = sqliteTable('builtin_provider_slots', {
@@ -42,7 +42,7 @@ export const providerVersions = sqliteTable(
   {
     id: text('id').notNull(),
     revision: integer('revision').notNull(),
-    data: text('data', { mode: 'json' }).$type<ProviderConfig>().notNull(),
+    data: text('data', { mode: 'json' }).$type<ProviderRecord>().notNull(),
   },
   (table) => [primaryKey({ columns: [table.id, table.revision] })],
 );

@@ -7,6 +7,7 @@ import { Value } from 'typebox/value';
 import { createMemoryCredentialStore } from '@my-pi-harness/storage';
 import {
   ConnectionViewSchema,
+  ConnectionOAuthStartSchema,
   type ConnectionView,
   type ConnectionServiceId,
 } from '@my-pi-harness/protocol';
@@ -176,6 +177,7 @@ it('uses real OAuth state/PKCE/code exchange and serializes token refresh withou
     `${value.origin}/api/connections/oauth/callback/github`,
     signal,
   );
+  expect(Value.Check(ConnectionOAuthStartSchema, start)).toBe(true);
   const url = new URL(start.url);
   const state = url.searchParams.get('state');
   if (state === null) throw new Error('Missing state');

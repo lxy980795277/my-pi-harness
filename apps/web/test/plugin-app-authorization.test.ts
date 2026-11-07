@@ -83,6 +83,18 @@ describe('independent plugin App launch documents', () => {
     );
   });
 
+  it.each([
+    { url: RESULT.url, expiresAt: RESULT.expiresAt },
+    { ...RESULT, state: 123 },
+    { ...RESULT, credential: 'must-not-cross-to-renderer' },
+  ])('rejects malformed MCP launch data before navigating %j', async (body) => {
+    request.mockResolvedValueOnce(body);
+    await expect(
+      startPluginAppAuthorization(SERVER.id, 'a'.repeat(43), new AbortController().signal),
+    ).rejects.toThrow();
+    expect(auth).not.toHaveBeenCalled();
+  });
+
   it('consumes a desktop launch capability once across effect replay without browser login', async () => {
     request.mockResolvedValueOnce(RESULT);
     const ticket = 'a'.repeat(43);

@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { Type } from 'typebox';
 import {
   ConnectionControlSchema,
+  ConnectionOAuthStartSchema,
   ConnectionInputSchema,
   ConnectionUpdateSchema,
   ConnectionSecretInputSchema,
@@ -109,10 +110,7 @@ export function registerConnectionRoutes(
         params: Params,
         body: ConnectionControlSchema,
         response: {
-          200: Type.Object(
-            { url: Type.String(), expiresAt: Type.Integer() },
-            { additionalProperties: false },
-          ),
+          200: ConnectionOAuthStartSchema,
         },
       },
     },

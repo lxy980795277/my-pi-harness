@@ -1,3 +1,5 @@
+import { ApiErrorSchema } from '@my-pi-harness/protocol';
+import { Value } from 'typebox/value';
 import { request as httpRequest } from 'node:http';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -52,6 +54,47 @@ describe('M1 application authorization and settings', () => {
         401,
       );
   });
+  it('rejects invalid authorization and model operation inputs before invoking their owners', async () => {
+    const { origin, services } = await setup();
+    const grant = await loginFixture(origin, services);
+    const headers = {
+      Cookie: grant.cookie,
+      Origin: origin,
+      'X-CSRF-Token': grant.csrf,
+      'Content-Type': 'application/json',
+    };
+    const invalid: [string, string, unknown][] = [
+      ['/api/auth/pair', 'POST', { code: '' }],
+      ['/api/auth/pair', 'POST', { code: 'x'.repeat(129) }],
+      ['/api/auth/login', 'POST', { providerId: 'github', method: 'unsupported' }],
+      ['/api/auth/login', 'POST', { providerId: 'x'.repeat(101) }],
+      ['/api/providers/missing/enabled', 'PUT', { enabled: true, expectedRevision: 0 }],
+      ['/api/providers/missing/key', 'POST', { key: 'x'.repeat(16_385) }],
+      ['/api/providers/missing/test', 'POST', { modelId: '' }],
+      ['/api/providers/missing/auth', 'POST', { kind: 'password' }],
+      [
+        '/api/auth-flows/missing/respond',
+        'POST',
+        { promptId: 'prompt', value: 'x'.repeat(16_385) },
+      ],
+      ['/api/auth-flows/missing/respond', 'POST', { promptId: 'prompt', value: '', secret: true }],
+    ];
+    for (const [path, method, body] of invalid) {
+      const response = await fetch(`${origin}${path}`, {
+        method,
+        headers,
+        body: JSON.stringify(body),
+      });
+      expect(response.status, path).toBe(400);
+      const error: unknown = await response.json();
+      expect(Value.Check(ApiErrorSchema, error), path).toBe(true);
+      expect(error).toEqual({ code: 'INVALID_REQUEST', message: '请求字段或类型无效。' });
+    }
+    expect(services.store.listProviders()).not.toContainEqual(
+      expect.objectContaining({ id: 'missing' }),
+    );
+  });
+
   it('validates atomic model settings and applies only a usable saved default to new sessions', async () => {
     const { origin, services } = await setup();
     const grant = await loginFixture(origin, services);
@@ -300,13 +343,26 @@ describe('M1 application authorization and settings', () => {
       body: JSON.stringify(input),
     });
     expect(created.status).toBe(200);
+    expect(await created.text()).not.toContain('credentialRef');
+    const stored = services.store.getProvider('account');
+    if (stored === undefined) throw new Error('Provider was not persisted');
+    expect(stored.credentialRef.length).toBeGreaterThan(0);
     const saved = await fetch(`${origin}/api/providers/account/key`, {
       method: 'POST',
       headers,
       body: JSON.stringify({ key: 'fake-key-private' }),
     });
     expect(saved.status).toBe(200);
-    expect(await saved.text()).not.toContain('fake-key-private');
+    const savedBody = await saved.text();
+    expect(savedBody).not.toContain('fake-key-private');
+    expect(savedBody).not.toContain('credentialRef');
+    const publicProvider = await services.gateway.getProvider('account');
+    expect(publicProvider).toMatchObject({ hasCredential: true, credentialType: 'api_key' });
+    expect(publicProvider).not.toHaveProperty('credentialRef');
+    const detail = await fetch(`${origin}/api/providers/account`, { headers });
+    expect(detail.status).toBe(200);
+    expect(await detail.text()).not.toContain('credentialRef');
+    expect(services.store.getProvider('account')?.credentialRef).toBe(stored.credentialRef);
     expect(
       (
         await fetch(`${origin}/api/providers/account`, {
@@ -326,6 +382,8 @@ describe('M1 application authorization and settings', () => {
       ).status,
     ).toBe(200);
     const response = await fetch(`${origin}/api/providers`, { headers });
-    expect(await response.text()).toContain('"hasCredential":false');
+    const listed = await response.text();
+    expect(listed).toContain('"hasCredential":false');
+    expect(listed).not.toContain('credentialRef');
   });
 });

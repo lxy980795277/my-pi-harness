@@ -10,10 +10,17 @@ export type SkillInstallInput = Static<typeof SkillInstallInputSchema>;
 export type SkillControlInput = Static<typeof SkillControlInputSchema>;
 export type SkillResourceRead = Static<typeof SkillResourceReadSchema>;
 export type SkillResourceContent = Static<typeof SkillResourceContentSchema>;
+export type SkillDirectoryResponse = Static<typeof SkillDirectoryResponseSchema>;
 
 const object = { additionalProperties: false } as const;
 const id = Type.String({ minLength: 1, maxLength: 160 });
 const hash = Type.String({ pattern: '^[a-f0-9]{64}$' });
+
+/** The host resolves a registered Skill; desktop callers still verify native path semantics. */
+export const SkillDirectoryResponseSchema = Type.Object(
+  { path: Type.String({ minLength: 1, maxLength: 4096 }) },
+  object,
+);
 
 /** Scope records who owns the source; it does not grant filesystem access. */
 export const SkillScopeSchema = Type.Enum(['project', 'user', 'plugin', 'system']);

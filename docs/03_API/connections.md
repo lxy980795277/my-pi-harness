@@ -16,4 +16,6 @@
 
 创建包含serviceId、name、authMode、clientId、scopes；编辑另带expectedRevision。控制请求带expectedRevision与expectedAccessEpoch，秘密请求另带value。未知字段拒绝，秘密不混入公开配置或DTO。SQLite仅保存配置、账户元数据、版本及系统凭据引用；这个高级入口继续使用原系统凭据库。
 
+高级账户的OAuth启动返回共享`ConnectionOAuthStart`：`{url:string,expiresAt:integer}`，拒绝附加字段；expiresAt为毫秒。该结果不含MCP独立流程的state字段，Web与daemon使用同一schema。
+
 普通GET不访问供应商或刷新Token。OAuth固定官方端点，回调检查issuer、一次性state及所属身份。断开优先于在途秘密发布，失败清理暂存引用。引用此账户的手动MCP按官方endpoint与冻结epoch读取Token，仍遵守自身配置、信任和工具审批；插件App使用插件专属Token，不再自动创建或关联此类账户。

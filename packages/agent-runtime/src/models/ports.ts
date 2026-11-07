@@ -1,10 +1,11 @@
-import type { AppSettings, AppSettingsInput, ProviderConfig } from '@my-pi-harness/protocol';
+import type { AppSettings, AppSettingsInput } from '@my-pi-harness/protocol';
+import type { ProviderRecord } from '@my-pi-harness/protocol/internal';
 
-/** Non-secret provider metadata, independently versioned from credentials. */
+/** Host-owned provider records carry opaque references; credential bytes remain separately owned. */
 export interface ProviderStore {
-  listProviders(): ProviderConfig[];
-  getProvider(id: string): ProviderConfig | undefined;
-  putProvider(input: ProviderConfig, expectedRevision?: number): ProviderConfig;
+  listProviders(): ProviderRecord[];
+  getProvider(id: string): ProviderRecord | undefined;
+  putProvider(input: ProviderRecord, expectedRevision?: number): ProviderRecord;
   deleteProvider(id: string): void;
   getBuiltinProviderId(builtinId: string): string | undefined;
   bindBuiltinProvider(builtinId: string, providerId: string): void;

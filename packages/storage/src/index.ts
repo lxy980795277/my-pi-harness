@@ -11,7 +11,8 @@ export {
 export type { CredentialStore, CredentialBackend, SecretUpdate } from './credentials/credentials';
 export type { ArtifactBlob, ArtifactDownload, ArtifactLimits } from './artifacts/blobs';
 
-export { sessionLogDirectory, type ProfileStoreOptions } from './sessions/session-log-directory';
+export { sessionLogDirectory } from './sessions/session-log-directory';
+export type { ProfileStoreOptions } from './profile/options';
 export {
   SessionBatchSchema,
   type SessionBatch,

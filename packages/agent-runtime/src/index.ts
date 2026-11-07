@@ -2,6 +2,7 @@ export { ModelGateway, type ModelGatewayOptions, type ResolvedModel } from './mo
 export { SessionRuntime, type SessionRuntimeOptions } from './sessions/runtime';
 export { SubagentCoordinator, type SubagentCoordinatorOptions } from './subagents/coordinator';
 export type { SubagentStore } from './subagents/ports';
+export { defaultAgentSettings } from './subagents/default-settings';
 export { RuntimeError } from './errors';
 export { createPiCredentialStore, decodeCredential, type SecretStore } from './models/credentials';
 export { encodeContextMessage, decodeContextMessage } from './context/codec';

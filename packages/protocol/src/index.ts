@@ -11,6 +11,7 @@ export {
 } from './sessions/session-stream';
 export type { SessionChange, SessionPatch, SessionStreamUpdate } from './sessions/session-stream';
 export { parseExternalUrl } from './host/external-links';
+export { ApiErrorSchema, type ApiError } from './host/http';
 
 export {
   CustomProtocolSchema,
@@ -21,6 +22,10 @@ export {
   DefaultModelSchema,
   AppSettingsSchema,
   AppSettingsInputSchema,
+  ProviderAuthInputSchema,
+  ProviderEnabledInputSchema,
+  ProviderKeyInputSchema,
+  ProviderTestInputSchema,
   ProviderConfigSchema,
   ProviderInputSchema,
   NativeProviderInfoSchema,
@@ -35,6 +40,10 @@ export type {
   DefaultModel,
   AppSettings,
   AppSettingsInput,
+  ProviderAuthInput,
+  ProviderEnabledInput,
+  ProviderKeyInput,
+  ProviderTestInput,
   ProviderConfig,
   ProviderInput,
   NativeProviderInfo,
@@ -80,6 +89,9 @@ export {
   AuthStatusSchema,
   AuthFlowSchema,
   PairingCodeResponseSchema,
+  PairingInputSchema,
+  LoginInputSchema,
+  AuthFlowResponseInputSchema,
 } from './application/auth';
 export type {
   AppUser,
@@ -91,6 +103,9 @@ export type {
   AuthStatus,
   AuthFlow,
   PairingCodeResponse,
+  PairingInput,
+  LoginInput,
+  AuthFlowResponseInput,
 } from './application/auth';
 
 export { APP_VERSION } from './version';

@@ -5,3 +5,4 @@ export * from './live-messages';
 export * from './skills';
 export * from './session-records';
 export * from './plugin-state';
+export * from './provider-record';

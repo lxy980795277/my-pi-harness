@@ -14,6 +14,7 @@ import {
 import { CONNECTION_PROVIDERS, connectionProvider } from '@my-pi-harness/plugins';
 import type {
   ConnectionControl,
+  ConnectionOAuthStart,
   ConnectionInput,
   ConnectionUpdate,
   ConnectionView,
@@ -381,7 +382,7 @@ export class ConnectionService {
     input: ConnectionControl,
     redirectUrl: string,
     signal: AbortSignal,
-  ): Promise<{ url: string; expiresAt: number }> {
+  ): Promise<ConnectionOAuthStart> {
     const record = this.require(id);
     this.expected(record, input);
     if (record.authMode !== 'oauth')

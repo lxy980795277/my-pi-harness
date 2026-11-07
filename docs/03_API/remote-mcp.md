@@ -32,6 +32,8 @@
 | POST /:id/oauth/cancel                | 按revision/epoch取消待完成流程，保留已有Token和信任 |
 | POST /:id/oauth/disconnect            | 撤销本机MCP OAuth连接，清理账户令牌并使旧绑定失效   |
 
+MCP OAuth管理启动和桌面一次性ticket启动均返回共享`McpOAuthStart`：`{url:string,state:string,expiresAt:integer}`，拒绝附加字段；expiresAt为毫秒。Web管理页与插件App启动页使用同一schema，插件共享Skill OAuth仍使用独立的authorizationUrl响应。
+
 工具开关及可信只读API见[目录协议](local-mcp.md#目录控制与json交换)。插件安装的Server归属只在宿主私有记录保存，清理按稳定Server ID与归属匹配，不根据名称删除手动配置。授信、目录冻结和实际调用要求插件已完成安装、插件与App均启用，且组件referenceId仍精确指向该Server；停用或安装未提交的配置不能在MCP页面重新授信绕过插件控制。
 
 草稿测试输入为严格的`{transport,endpoint,headers}`，沿用登录与CSRF校验，临时Header不写凭据库。30秒内通过SDK初始化并读取tools/resources/prompts目录，只返回`connected:true`、三类数量和elapsedMs；取消、超时及认证未完成返回安全错误。测试不复用按ID查找的旧秘密，不创建Server、信任、目录缓存或JSONL，也不自动开始OAuth。

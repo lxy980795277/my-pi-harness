@@ -127,7 +127,9 @@ describe('application login transport', () => {
       .fn<typeof globalThis.fetch>()
       .mockResolvedValueOnce(response({ ...flow(), id: 'provider-flow', prompt: null }))
       .mockResolvedValueOnce(
-        new Response(JSON.stringify({ message: '请重新登录' }), { status: 401 }),
+        new Response(JSON.stringify({ code: 'LOGIN_REQUIRED', message: '请重新登录' }), {
+          status: 401,
+        }),
       );
     vi.stubGlobal('fetch', fetch);
     const signal = new AbortController().signal;

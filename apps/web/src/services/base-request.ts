@@ -1,3 +1,5 @@
+import { ApiErrorSchema } from '@my-pi-harness/protocol';
+import { Value } from 'typebox/value';
 import type { HttpMethod } from '@/types/http';
 import { API_PREFIX } from '@/constants/api';
 
@@ -81,12 +83,7 @@ const requestResponse = async (
     let message = `本机服务返回错误（HTTP ${response.status}），请检查服务后重试。`;
     try {
       const failure: unknown = await response.json();
-      if (
-        typeof failure === 'object' &&
-        failure !== null &&
-        'message' in failure &&
-        typeof failure.message === 'string'
-      ) {
+      if (Value.Check(ApiErrorSchema, failure)) {
         message = failure.message;
       }
     } catch {

@@ -1,9 +1,11 @@
 import {
   AuthStatusSchema,
   LoginFlowSchema,
-  LoginMethodSchema,
+  LoginInputSchema,
+  PairingInputSchema,
   PairingCodeResponseSchema,
-  type LoginMethod,
+  type LoginInput,
+  type PairingInput,
 } from '@my-pi-harness/protocol';
 import type { FastifyInstance } from 'fastify';
 import { Type } from 'typebox';
@@ -27,14 +29,11 @@ export function registerAuthRoutes(
   server.get('/api/auth/status', { schema: { response: { 200: AuthStatusSchema } } }, (request) =>
     auth.status(request),
   );
-  server.post<{ Body: { code: string } }>(
+  server.post<{ Body: PairingInput }>(
     '/api/auth/pair',
     {
       schema: {
-        body: Type.Object(
-          { code: Type.String({ minLength: 1, maxLength: 128 }) },
-          { additionalProperties: false },
-        ),
+        body: PairingInputSchema,
         response: { 200: AuthStatusSchema },
       },
     },
@@ -60,17 +59,11 @@ export function registerAuthRoutes(
       return { ok: true };
     },
   );
-  server.post<{ Body: { providerId: string; method?: LoginMethod } }>(
+  server.post<{ Body: LoginInput }>(
     '/api/auth/login',
     {
       schema: {
-        body: Type.Object(
-          {
-            providerId: Type.String({ minLength: 1, maxLength: 100 }),
-            method: Type.Optional(LoginMethodSchema),
-          },
-          { additionalProperties: false },
-        ),
+        body: LoginInputSchema,
         response: { 200: LoginFlowSchema },
       },
     },

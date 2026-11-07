@@ -1,6 +1,6 @@
-import { Type } from 'typebox';
 import {
   RemoteMcpViewSchema,
+  McpOAuthStartSchema,
   SkillOAuthLaunchTicketSchema,
   parseExternalUrl,
   type RemoteMcpView,
@@ -10,12 +10,6 @@ import { getJson, requestJson } from '@/services/base-request';
 import { openExternal } from '@/services/open-external';
 import { parseResponse } from '@/utils/parse-response';
 import type { PluginAuthorizationWindow } from '@/features/plugins/types/plugin-connection';
-
-const OAuthStartSchema = Type.Object({
-  url: Type.String(),
-  state: Type.String(),
-  expiresAt: Type.Integer(),
-});
 
 /** Independent MCP Apps open their own launch document without using the plugin's REST token. */
 export const openPluginAppAuthorization = async (
@@ -70,7 +64,7 @@ export const startPluginAppAuthorization = async (
     );
   }
   signal.throwIfAborted();
-  return parseExternalUrl(parseResponse(OAuthStartSchema, result).url);
+  return parseExternalUrl(parseResponse(McpOAuthStartSchema, result).url);
 };
 
 /** React effect replay shares this document's single-use ticket request without persisting it. */

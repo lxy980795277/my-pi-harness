@@ -3,18 +3,16 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
+import type { BranchView, MessageView, QueueInput, RunView } from '@my-pi-harness/protocol';
 import type {
-  BranchView,
-  MessageView,
-  ProviderConfig,
-  QueueInput,
-  RunView,
-} from '@my-pi-harness/protocol';
-import type { FrozenMcpToolData, EventInput } from '@my-pi-harness/protocol/internal';
+  FrozenMcpToolData,
+  EventInput,
+  ProviderRecord,
+} from '@my-pi-harness/protocol/internal';
 import { openProfileStore, type ProfileStore } from '../src/index';
 
 const fixtures: { directory: string; store: ProfileStore }[] = [];
-const provider: ProviderConfig = {
+const provider: ProviderRecord = {
   id: 'provider',
   name: 'Local fixture',
   kind: 'custom',

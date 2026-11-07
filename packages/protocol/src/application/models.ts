@@ -12,6 +12,10 @@ export type ConnectionResult = Static<typeof ConnectionResultSchema>;
 export type DefaultModel = Static<typeof DefaultModelSchema>;
 export type AppSettings = Static<typeof AppSettingsSchema>;
 export type AppSettingsInput = Static<typeof AppSettingsInputSchema>;
+export type ProviderAuthInput = Static<typeof ProviderAuthInputSchema>;
+export type ProviderEnabledInput = Static<typeof ProviderEnabledInputSchema>;
+export type ProviderKeyInput = Static<typeof ProviderKeyInputSchema>;
+export type ProviderTestInput = Static<typeof ProviderTestInputSchema>;
 
 const id = Type.String({ minLength: 1, maxLength: 160 });
 
@@ -96,13 +100,12 @@ const providerFields = {
   requiresApiKey: Type.Boolean(),
 };
 
-/** Stored non-secret provider configuration and computed credential availability. */
+/** Public provider settings and computed credential availability; private references remain host-owned. */
 export const ProviderConfigSchema = Type.Object(
   {
     id,
     ...providerFields,
     models: Type.Array(ModelDefinitionSchema),
-    credentialRef: id,
     revision: Type.Integer({ minimum: 1 }),
     hasCredential: Type.Boolean(),
     credentialType: Type.Union([Type.Literal('api_key'), Type.Literal('oauth'), Type.Null()]),
@@ -166,5 +169,29 @@ export const AppSettingsInputSchema = Type.Object(
     expectedRevision: Type.Integer({ minimum: 1 }),
     defaultModel: Type.Union([DefaultModelSchema, Type.Null()]),
   },
+  { additionalProperties: false },
+);
+
+/** Selects one of the native provider's declared authorization methods. */
+export const ProviderAuthInputSchema = Type.Object(
+  { kind: NativeProviderInfoSchema.properties.authKinds.items },
+  { additionalProperties: false },
+);
+
+/** Enabling a configured provider requires the exact settings revision being edited. */
+export const ProviderEnabledInputSchema = Type.Object(
+  { enabled: Type.Boolean(), expectedRevision: Type.Integer({ minimum: 1 }) },
+  { additionalProperties: false },
+);
+
+/** A submitted key is transient request data and never part of public provider settings. */
+export const ProviderKeyInputSchema = Type.Object(
+  { key: Type.String({ minLength: 1, maxLength: 16_384 }) },
+  { additionalProperties: false },
+);
+
+/** Connection tests address one saved model without starting a conversation Run. */
+export const ProviderTestInputSchema = Type.Object(
+  { modelId: id },
   { additionalProperties: false },
 );

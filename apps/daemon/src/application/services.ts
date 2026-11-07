@@ -13,6 +13,7 @@ import {
   SessionRuntime,
   ToolRuntime,
   WorkRuntime,
+  defaultAgentSettings,
 } from '@my-pi-harness/agent-runtime';
 import {
   createSystemCredentialStore,
@@ -87,6 +88,7 @@ export async function createApplicationServices(
 ): Promise<ApplicationServices> {
   const store = await openProfileStore(config.profileDirectory, {
     sessionLogRoot: config.sessionLogRoot,
+    defaultAgentSettings,
   });
   let commands: CommandManager | undefined;
   let artifacts: ArtifactService | undefined;

@@ -1,6 +1,7 @@
 import { Type } from 'typebox';
 import {
   SkillControlInputSchema,
+  SkillDirectoryResponseSchema,
   SkillResourceReadSchema,
   SkillResourceContentSchema,
   type SkillResourceRead,
@@ -170,7 +171,7 @@ export function registerSkillRoutes(server: FastifyInstance, skills: SkillsServi
       schema: {
         params: Params,
         querystring: Query,
-        response: { 200: Type.Object({ path: Type.String() }, { additionalProperties: false }) },
+        response: { 200: SkillDirectoryResponseSchema },
       },
     },
     async (request, reply) => ({

@@ -2,11 +2,10 @@ import { asc, eq } from 'drizzle-orm';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import {
   AppSettingsSchema,
-  ProviderConfigSchema,
   type AppSettings,
   type AppSettingsInput,
-  type ProviderConfig,
 } from '@my-pi-harness/protocol';
+import { ProviderRecordSchema, type ProviderRecord } from '@my-pi-harness/protocol/internal';
 import { StorageError } from '../shared/errors';
 import { checked } from '../shared/validation';
 import * as schema from '../sqlite/schema';
@@ -19,27 +18,27 @@ export class ModelSettingsRepository {
     private readonly transact: <T>(operation: () => T) => T,
   ) {}
 
-  /** Public metadata only; credential presence is computed later by the credential owner. */
-  public listProviders(): ProviderConfig[] {
+  /** Host records include opaque credential references; the gateway projects public metadata. */
+  public listProviders(): ProviderRecord[] {
     this.assertOpen();
     return this.db
       .select()
       .from(schema.providers)
       .orderBy(asc(schema.providers.id))
       .all()
-      .map((row) => checked(ProviderConfigSchema, row.data));
+      .map((row) => checked(ProviderRecordSchema, row.data));
   }
 
   /** Read one provider configuration without retrieving secrets. */
-  public getProvider(id: string): ProviderConfig | undefined {
+  public getProvider(id: string): ProviderRecord | undefined {
     this.assertOpen();
     const row = this.db.select().from(schema.providers).where(eq(schema.providers.id, id)).get();
-    return row ? checked(ProviderConfigSchema, row.data) : undefined;
+    return row ? checked(ProviderRecordSchema, row.data) : undefined;
   }
 
   /** Save a caller-incremented revision; computed credential flags are never durable facts. */
-  public putProvider(input: ProviderConfig, expectedRevision?: number): ProviderConfig {
-    const value = checked(ProviderConfigSchema, {
+  public putProvider(input: ProviderRecord, expectedRevision?: number): ProviderRecord {
+    const value = checked(ProviderRecordSchema, {
       ...input,
       hasCredential: false,
       credentialType: null,

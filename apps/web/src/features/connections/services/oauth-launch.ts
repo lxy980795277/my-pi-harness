@@ -1,5 +1,9 @@
-import { parseExternalUrl, type ConnectionView } from '@my-pi-harness/protocol';
-import { Type } from 'typebox';
+import {
+  ConnectionOAuthStartSchema,
+  parseExternalUrl,
+  type ConnectionView,
+  type ConnectionOAuthStart,
+} from '@my-pi-harness/protocol';
 import { connectionAction } from '@/features/connections/services/connections';
 import {
   openConnectionAuthorizationWindow,
@@ -8,9 +12,7 @@ import {
 import { openExternal } from '@/services/open-external';
 import { parseResponse } from '@/utils/parse-response';
 
-export interface ConnectionAuthorizationLaunch {
-  url: string;
-  expiresAt: number;
+export interface ConnectionAuthorizationLaunch extends ConnectionOAuthStart {
   popup: ConnectionAuthorizationWindow | null;
 }
 
@@ -27,10 +29,7 @@ export const beginConnectionAuthorization = async (
   signal.addEventListener('abort', close, { once: true });
   try {
     const result = parseResponse(
-      Type.Object(
-        { url: Type.String(), expiresAt: Type.Integer() },
-        { additionalProperties: false },
-      ),
+      ConnectionOAuthStartSchema,
       await connectionAction(connection, 'oauth/start', signal),
     );
     signal.throwIfAborted();

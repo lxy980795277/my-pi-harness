@@ -30,11 +30,15 @@
 | POST /api/auth-flows/:id/respond | `{promptId,value}`；只接受准确的待响应挑战            |
 | DELETE /api/auth-flows/:id       | 取消认证流程                                          |
 
+Provider操作使用共享的`ProviderEnabledInput`、`ProviderKeyInput`、`ProviderTestInput`与`ProviderAuthInput`；分别保留正整数revision、1–16384字符key、1–160字符modelId及api_key/oauth枚举约束。模型认证回应使用`AuthFlowResponseInput`，promptId长度1–160，value最多16384字符，具体挑战的选项与非空要求由认证所有者检查；所有请求拒绝未知字段。
+
 自定义协议包括openai-completions、openai-responses和anthropic-messages。URL须为HTTPS，显式回环目标可用HTTP；禁止URL凭据、查询串和fragment。OpenAI通常配置 `/v1` 前缀；Anthropic SDK自己追加 `/v1/messages`，通常配置服务根地址。非秘密headers与兼容参数使用明确schema；auth、cookie、key、token相关header名不能落入普通配置。
 
 内置Provider由六个Pi factory拥有名称、端点和模型。正常列表每厂商仅有一个固定入口；只能启停与认证，不能新增、删除或改写目录。响应models包含完整Pi目录，不套用custom输入的100条上限。custom模型与Provider协议一致；已有模型切换Provider协议时，owner将旧API同步到新协议。模型Dialog维护ModelDefinition草稿，并通过PUT Provider一次提交整个models，使用同一expectedRevision保证原子更新。未提交的同ID模型headers/compat由owner保留，改ID草稿须携带原高级字段。ModelInfo的supportedThinkingLevels只读，不进入配置写入。
 
-Provider ID标识配置实例，credentialRef标识系统凭据项；builtin_provider_slots保存每个原生厂商的正常入口绑定。Gateway初始化时复用该绑定；未绑定时从同厂商、无端点及模型覆盖的配置中按启用优先、ID字节升序选择，或新建官方配置和独立凭据引用。绑定不随启停变化，正常列表仅返回当前绑定的六个入口。legacy为未绑定或已不在当前目录内的内置配置的只读派生状态，不表示存在旧数据库升级支持；当前开发数据采用fresh schema，不保留旧格式兼容。
+Provider ID标识配置实例；公开ProviderConfig不含credentialRef。系统凭据引用由protocol/internal的ProviderRecord保存，Gateway在宿主内部使用，并通过明确字段投影返回公开配置和认证状态。该拆分保持既有SQLite JSON字段和布局，不新增数据迁移。
+
+builtin_provider_slots保存每个原生厂商的正常入口绑定。Gateway初始化时复用该绑定；未绑定时从同厂商、无端点及模型覆盖的配置中按启用优先、ID字节升序选择，或新建官方配置和独立凭据引用。绑定不随启停变化，正常列表仅返回当前绑定的六个入口。legacy为未绑定或已不在当前目录内的内置配置的只读派生状态，不表示存在旧数据库升级支持；当前开发数据采用fresh schema，不保留旧格式兼容。
 
 requiresApiKey=false仅适用于custom：请求跳过保存凭据和环境认证，使用Pi HTTP/SSE实现并在最终fetch剥除SDK生成的认证与OpenAI租户头。daemon启动时一次清理已核实的OpenAI/Anthropic SDK环境认证、Base URL、custom headers和日志覆盖项，阻止SDK自行带入宿主组织/项目、任意环境头或调试日志；其余环境保留。切换标志保留原凭据。hasCredential/credentialType描述保存状态，authSource描述实际认证模式，configured描述认证配置是否齐备；这些字段不证明远端连接成功。credentialPreview仅为掩码，OAuth不返回Token预览。运行期间持有Provider lease，配置和认证变更返回冲突；探测不会静默改用其他模型。
 

@@ -25,7 +25,6 @@ export type {
   McpLaunchInput,
   McpLaunchPreview,
   McpLease,
-  McpResultContent,
   McpSecretDescriptor,
 } from './mcp/types';
 

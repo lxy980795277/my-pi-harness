@@ -7,6 +7,7 @@ import { Value } from 'typebox/value';
 import { describe, expect, it, vi } from 'vitest';
 import {
   McpServerViewSchema,
+  McpOAuthStartSchema,
   McpToolCatalogSchema,
   RemoteMcpViewSchema,
   WorkspaceSchema,
@@ -682,8 +683,7 @@ it('binds MCP OAuth callbacks to one owner flow, rejects issuer mix-up and never
       );
       expect(response.status, await response.clone().text()).toBe(200);
       const started: unknown = await response.json();
-      if (!Value.Check(Type.Object({ url: Type.String(), state: Type.String() }), started))
-        throw new Error('Invalid start');
+      if (!Value.Check(McpOAuthStartSchema, started)) throw new Error('Invalid start');
       expect(new URL(started.url).searchParams.get('redirect_uri')).toBe(
         `${f.origin}/api/mcp/oauth/callback`,
       );

@@ -1,6 +1,7 @@
 import { Type } from 'typebox';
 import {
   SkillViewSchema,
+  SkillDirectoryResponseSchema,
   SkillDetailSchema,
   SkillResourceContentSchema,
   type SkillResourceContent,
@@ -109,7 +110,7 @@ export const revealSkillDirectory = async (
     return;
   }
   const directory = parseResponse(
-    Type.Object({ path: Type.String() }, { additionalProperties: false }),
+    SkillDirectoryResponseSchema,
     await requestJson(
       `/skills/${encodeURIComponent(skill.id)}/directory${query(workspaceId)}`,
       'POST',

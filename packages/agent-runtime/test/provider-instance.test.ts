@@ -38,7 +38,6 @@ function config(overrides: Partial<ProviderConfig> = {}): ProviderConfig {
     models: [],
     enabled: true,
     requiresApiKey: true,
-    credentialRef: 'fixture-secret',
     revision: 1,
     hasCredential: false,
     credentialType: null,

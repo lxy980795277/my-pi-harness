@@ -87,6 +87,8 @@ describe('connection OAuth browser launch', () => {
     for (const result of [
       new Error('synthetic-start-failure'),
       { ...RESULT, url: 'javascript:alert(1)' },
+      { ...RESULT, state: 'belongs-only-to-mcp-response' },
+      { ...RESULT, expiresAt: 'not-an-integer' },
     ]) {
       const { popup } = browser();
       if (result instanceof Error) action.mockRejectedValueOnce(result);

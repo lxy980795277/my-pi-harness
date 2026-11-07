@@ -1,13 +1,14 @@
 import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import {
-  defaultAgentSettings,
-  type AgentTask,
-  type MessageView,
-  type RunView,
-  type ToolCallRecord,
-  type ApprovalMode,
+import type {
+  AgentSettings,
+  AgentRole,
+  AgentTask,
+  MessageView,
+  RunView,
+  ToolCallRecord,
+  ApprovalMode,
 } from '@my-pi-harness/protocol';
 import { openProfileStore, type ProfileStore } from '../../src/index';
 import type { EventInput } from '@my-pi-harness/protocol/internal';
@@ -16,6 +17,34 @@ import { storedToolCallId } from '../../src/sessions/projections/tool-intents';
 export interface AgentSessionFixture {
   directory: string;
   store: ProfileStore;
+}
+
+/** Explicit storage fixture settings; no application policy is inferred by the repository. */
+export function agentSettingsFixture(): AgentSettings {
+  return {
+    revision: 0,
+    enabled: true,
+    limits: {
+      maxTasks: 16,
+      maxDepth: 3,
+      maxConcurrentRequests: 4,
+      timeoutMs: 600_000,
+      maxOutputTokens: 4096,
+    },
+    roles: ['researcher', 'reviewer', 'worker'].map(
+      (id): AgentRole => ({
+        id,
+        name: id,
+        description: `Fixture ${id}`,
+        instructions: `Complete the fixture ${id} task.`,
+        enabled: true,
+        access: id === 'worker' ? 'write' : 'read-only',
+        providerId: null,
+        modelId: null,
+        thinkingLevel: null,
+      }),
+    ),
+  };
 }
 
 export function event(
@@ -75,14 +104,14 @@ export function spawn(
   const assistantId = `delegate-${id}`;
   const callId = `call-${id}`;
   const sourceToolCallId = storedToolCallId(parentRunId, assistantId, callId);
-  const role = defaultAgentSettings().roles.find((item) => item.id === roleId);
+  const role = agentSettingsFixture().roles.find((item) => item.id === roleId);
   if (!role) throw new Error('Default researcher role is required');
   const task: AgentTask = {
     id,
     sourceToolCallId,
     title: id,
     role,
-    limits: defaultAgentSettings().limits,
+    limits: agentSettingsFixture().limits,
     createdAt: 2,
   };
   const tool: ToolCallRecord = {
@@ -132,7 +161,7 @@ export async function createAgentSession(
   approvalMode: ApprovalMode = 'ask',
 ): Promise<AgentSessionFixture> {
   const directory = await mkdtemp(join(tmpdir(), 'my-pi-agents-'));
-  const store = await openProfileStore(directory);
+  const store = await openProfileStore(directory, { defaultAgentSettings: agentSettingsFixture });
   const value = { directory, store };
   store.createSession({
     id: 'session',

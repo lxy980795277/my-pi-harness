@@ -1,3 +1,4 @@
+import type { ApiError } from '@my-pi-harness/protocol';
 import { randomUUID } from 'node:crypto';
 import { readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -136,7 +137,9 @@ export async function createDaemonApplication(
           .type('text/html; charset=utf-8')
           .send(renderDocument());
       }
-      return reply.code(404).send({ code: 'NOT_FOUND', message: 'Resource not found' });
+      return reply
+        .code(404)
+        .send({ code: 'NOT_FOUND', message: 'Resource not found' } satisfies ApiError);
     });
   }
   return { server, streams, identity };

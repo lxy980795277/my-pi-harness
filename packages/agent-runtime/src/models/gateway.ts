@@ -22,7 +22,7 @@ import type {
   ProviderConfig,
   ProviderInput,
 } from '@my-pi-harness/protocol';
-import type { ResolvedSessionCreateInput } from '@my-pi-harness/protocol/internal';
+import type { ProviderRecord, ResolvedSessionCreateInput } from '@my-pi-harness/protocol/internal';
 import { AuthFlows } from './auth-flows';
 import { createPiCredentialStore, type SecretStore } from './credentials';
 import { RuntimeError } from '../errors';
@@ -112,7 +112,7 @@ export class ModelGateway {
       }
       const original = await this.loader(builtinId);
       this.ensureOpen();
-      const config: ProviderConfig = {
+      const config: ProviderRecord = {
         id: randomUUID(),
         name: original.name,
         kind: 'builtin',
@@ -187,7 +187,7 @@ export class ModelGateway {
         throw new RuntimeError('PROVIDER_CONFLICT', 'Provider configuration changed');
       if (!previous && input.expectedRevision !== undefined && input.expectedRevision !== 0)
         throw new RuntimeError('PROVIDER_CONFLICT', 'Provider configuration does not exist');
-      const config: ProviderConfig = {
+      const config: ProviderRecord = {
         id,
         name: input.name,
         kind: input.kind,
@@ -508,12 +508,12 @@ export class ModelGateway {
       throw new RuntimeError('PROVIDER_BUSY', 'Provider is in use');
     }
   }
-  private requireConfig(id: string): ProviderConfig {
+  private requireConfig(id: string): ProviderRecord {
     const config = this.options.store.getProvider(id);
     if (!config) throw new RuntimeError('PROVIDER_NOT_FOUND', 'Provider does not exist');
     return config;
   }
-  private async withCredentialStatus(config: ProviderConfig): Promise<ProviderConfig> {
+  private async withCredentialStatus(config: ProviderRecord): Promise<ProviderConfig> {
     const credential = await this.credentials.read(config.id);
     const keyless = config.kind === 'custom' && !config.requiresApiKey;
     const legacy =
@@ -528,7 +528,14 @@ export class ModelGateway {
           : '••••'
         : null;
     return {
-      ...config,
+      id: config.id,
+      kind: config.kind,
+      builtinId: config.builtinId,
+      api: config.api,
+      baseUrl: config.baseUrl,
+      enabled: config.enabled,
+      requiresApiKey: config.requiresApiKey,
+      revision: config.revision,
       name:
         config.kind === 'builtin' && !legacy && config.builtinId !== null
           ? (await this.loader(config.builtinId)).name

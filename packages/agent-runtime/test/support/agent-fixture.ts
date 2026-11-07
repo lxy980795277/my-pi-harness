@@ -21,6 +21,7 @@ import type { ExternalTools } from '../../src/tools/external';
 import type { ApprovalReviewer } from '../../src/tools/approval-review';
 import type { SkillsPort, ToolDiscoveryPort } from '../../src/capabilities/ports';
 import { WorkRuntime } from '../../src/work/runtime';
+import { defaultAgentSettings } from '../../src/subagents/default-settings';
 
 interface AgentFixtureOptions {
   model?(original: Model<Api>, modelId: string): Model<Api>;
@@ -115,7 +116,7 @@ async function forwardReportedUsage(
 
 export async function agentFixture(options: AgentFixtureOptions): Promise<AgentFixture> {
   const directory = await realpath(await mkdtemp(join(tmpdir(), 'my-pi-agents-')));
-  const store = await openProfileStore(join(directory, 'profile'));
+  const store = await openProfileStore(join(directory, 'profile'), { defaultAgentSettings });
   const faux = fauxProvider({ tokensPerSecond: 0, tokenSize: { min: 128, max: 128 } });
   const models = createModels();
   models.setProvider(faux.provider);

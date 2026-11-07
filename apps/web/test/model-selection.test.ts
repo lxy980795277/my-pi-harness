@@ -41,7 +41,6 @@ const provider = (overrides: Partial<ProviderConfig> = {}): ProviderConfig => {
     configured: true,
     authSource: 'none',
     credentialPreview: null,
-    credentialRef: 'opaque-reference',
     revision: 2,
     hasCredential: false,
     credentialType: null,

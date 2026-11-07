@@ -1,3 +1,4 @@
+import type { McpOAuthStart } from '@my-pi-harness/protocol';
 import { randomUUID } from 'node:crypto';
 import { RemoteOAuthSession } from '@my-pi-harness/integrations';
 import { RuntimeError } from '@my-pi-harness/agent-runtime';
@@ -94,7 +95,7 @@ export class RemoteMcpOAuth {
     input: McpControlInput,
     redirectUrl: string,
     signal: AbortSignal,
-  ): Promise<{ url: string; state: string; expiresAt: number }> {
+  ): Promise<McpOAuthStart> {
     if ([...this.operations.values()].some((entry) => entry.id === id))
       fail('MCP_BUSY', '此服务器的OAuth操作正在进行，请完成或取消后重试。');
     this.cancel(id);
@@ -218,7 +219,7 @@ export class RemoteMcpOAuth {
     input: McpControlInput,
     redirectUrl: string,
     signal: AbortSignal,
-  ): Promise<{ url: string; state: string; expiresAt: number }> {
+  ): Promise<McpOAuthStart> {
     const server = this.options.require(id);
     this.options.expected(server, input.expectedRevision, input.expectedAccessEpoch);
     this.options.assertAuthority(server);

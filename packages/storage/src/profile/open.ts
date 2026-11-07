@@ -3,12 +3,13 @@ import Database from 'better-sqlite3';
 import { ProfileStore } from './store';
 import { applyMigrations } from '../sqlite/migrations/apply';
 import { acquireProfileLock } from './profile-lock';
-import { sessionLogDirectory, type ProfileStoreOptions } from '../sessions/session-log-directory';
+import { sessionLogDirectory } from '../sessions/session-log-directory';
+import type { ProfileStoreOptions } from './options';
 
 /**
  * Open one profile, migrate and interrupt old runs before any model work can begin.
  * @param directory Local application profile, separate from Pi or other harness data.
- * @param options Explicit log root; omission uses a hidden directory inside this profile.
+ * @param options Host-selected log placement, artifact limits and default Agent settings.
  * @returns An owned synchronous store with its cross-process lock held until close.
  */
 export async function openProfileStore(

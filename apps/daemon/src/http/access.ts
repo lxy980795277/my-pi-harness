@@ -1,3 +1,4 @@
+import type { ApiError } from '@my-pi-harness/protocol';
 import type { FastifyInstance } from 'fastify';
 import type { ApplicationServices } from '../application/services';
 
@@ -31,16 +32,19 @@ export function registerRequestAccess(
     if (callback) reply.header('Referrer-Policy', 'no-referrer');
     const write = !['GET', 'HEAD'].includes(request.method);
     if (!auth.trustedSource(request, write && !bootstrap)) {
-      void reply.code(403).send({ code: 'SOURCE_REJECTED', message: '请求来源未授权。' });
+      void reply
+        .code(403)
+        .send({ code: 'SOURCE_REJECTED', message: '请求来源未授权。' } satisfies ApiError);
       return;
     }
     if (
       skillGateway &&
       !services.authorizeSkillGateway(request.headers['x-pi-harness-skill-gateway'])
     ) {
-      void reply
-        .code(403)
-        .send({ code: 'SKILL_GATEWAY_FORBIDDEN', message: '插件网关请求未授权。' });
+      void reply.code(403).send({
+        code: 'SKILL_GATEWAY_FORBIDDEN',
+        message: '插件网关请求未授权。',
+      } satisfies ApiError);
       return;
     }
     const publicRoute =
@@ -53,15 +57,21 @@ export function registerRequestAccess(
       ['/api/auth/login', '/api/auth/logout'].includes(path) ||
       /^\/api\/auth\/login-flows\/login_[A-Za-z0-9_-]+(?:\/complete)?$/.test(path);
     if (!publicRoute && !auth.client(request)) {
-      void reply.code(401).send({ code: 'LOCAL_AUTH_REQUIRED', message: '请先完成本机授权。' });
+      void reply
+        .code(401)
+        .send({ code: 'LOCAL_AUTH_REQUIRED', message: '请先完成本机授权。' } satisfies ApiError);
       return;
     }
     if (!publicRoute && !trustOnly && !auth.isAuthorized(request)) {
-      void reply.code(401).send({ code: 'LOGIN_REQUIRED', message: '请先登录。' });
+      void reply
+        .code(401)
+        .send({ code: 'LOGIN_REQUIRED', message: '请先登录。' } satisfies ApiError);
       return;
     }
     if (write && !publicRoute && !auth.csrfValid(request)) {
-      void reply.code(403).send({ code: 'CSRF_REJECTED', message: '请求授权已失效。' });
+      void reply
+        .code(403)
+        .send({ code: 'CSRF_REJECTED', message: '请求授权已失效。' } satisfies ApiError);
       return;
     }
     done();

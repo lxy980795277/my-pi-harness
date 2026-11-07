@@ -8,10 +8,17 @@ export type ConnectionControl = Static<typeof ConnectionControlSchema>;
 export type ConnectionView = Static<typeof ConnectionViewSchema>;
 export type ConnectionSecretInput = Static<typeof ConnectionSecretInputSchema>;
 export type ConnectionProviderView = Static<typeof ConnectionProviderViewSchema>;
+export type ConnectionOAuthStart = Static<typeof ConnectionOAuthStartSchema>;
 
 const object = { additionalProperties: false } as const;
 const id = Type.String({ minLength: 1, maxLength: 160 });
 const epoch = Type.Integer({ minimum: 1 });
+
+/** The account owner follows this URL while the daemon owns the one-use OAuth state. */
+export const ConnectionOAuthStartSchema = Type.Object(
+  { url: Type.String(), expiresAt: Type.Integer() },
+  object,
+);
 
 /** Finite provider families; Google sub-apps share one explicitly scoped connection. */
 export const ConnectionServiceIdSchema = Type.Enum([

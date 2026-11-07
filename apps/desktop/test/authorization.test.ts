@@ -218,6 +218,34 @@ describe('registered Skill directory reveal', () => {
       await rm(directory, { recursive: true, force: true });
     }
   });
+  it.each([{ path: '' }, { path: '/'.repeat(4097) }, { path: '/private', unregistered: true }])(
+    'rejects malformed directory data before invoking the native shell %j',
+    async (body) => {
+      const origin = await serve((request) => {
+        if (request.url === '/api/auth/desktop') return bootstrap();
+        if (request.url === '/api/auth/status')
+          return {
+            body: {
+              localAuthorized: true,
+              authenticated: true,
+              csrfToken: 'csrf',
+              providers: [],
+              profileBound: true,
+              user: null,
+              session: null,
+            },
+          };
+        return { body };
+      });
+      const auth = createDesktopAuthorization(origin, 'owner');
+      await auth.authorizeRenderer(origin);
+      await expect(auth.revealSkillDirectory('registered', null)).rejects.toThrow(
+        'Skill目录不可用',
+      );
+      expect(desktop.openPath).not.toHaveBeenCalled();
+    },
+  );
+
   it('does not open a rejected or malformed directory response', async () => {
     const origin = await serve((request) => {
       if (request.url === '/api/auth/desktop') return bootstrap();

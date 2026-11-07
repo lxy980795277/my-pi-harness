@@ -1,7 +1,7 @@
-import { Type, type Static } from 'typebox';
-import { SessionCreateInputSchema, type HarnessEvent } from '../sessions/sessions';
+import type { SessionCreateInput, HarnessEvent } from '../sessions/sessions';
 
-export type ResolvedSessionCreateInput = Static<typeof ResolvedSessionCreateInputSchema>;
+/** Session input after the application has resolved its optional defaults. */
+export type ResolvedSessionCreateInput = Required<SessionCreateInput>;
 
 /** Session input with identities and timestamp selected once before its creation transaction. */
 export interface SessionCreateRecord extends ResolvedSessionCreateInput {
@@ -24,6 +24,3 @@ export interface RequestAcceptance {
   runId: string | null;
   inputId: string | null;
 }
-
-/** Resolved owner selection contains all defaults required for durable session creation. */
-export const ResolvedSessionCreateInputSchema = Type.Required(SessionCreateInputSchema);

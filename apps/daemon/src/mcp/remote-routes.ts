@@ -2,6 +2,7 @@ import { Type } from 'typebox';
 import type { FastifyInstance } from 'fastify';
 import {
   RemoteMcpInputSchema,
+  McpOAuthStartSchema,
   RemoteMcpUpdateSchema,
   RemoteMcpViewSchema,
   RemoteMcpTrustInputSchema,
@@ -32,10 +33,6 @@ const SecretParams = Type.Object(
   { additionalProperties: false },
 );
 const ok = Type.Object({ ok: Type.Literal(true) }, { additionalProperties: false });
-const OAuthStart = Type.Object(
-  { url: Type.String(), state: Type.String(), expiresAt: Type.Integer() },
-  { additionalProperties: false },
-);
 
 /** Remote management is protected by the same application-auth and CSRF hooks as stdio management. */
 export function registerRemoteMcpRoutes(
@@ -208,7 +205,13 @@ export function registerRemoteMcpRoutes(
   );
   server.post<{ Params: { id: string }; Body: McpControlInput }>(
     '/api/mcp/remote-servers/:id/oauth/start',
-    { schema: { params: Params, body: McpControlInputSchema, response: { 200: OAuthStart } } },
+    {
+      schema: {
+        params: Params,
+        body: McpControlInputSchema,
+        response: { 200: McpOAuthStartSchema },
+      },
+    },
     async (request) => {
       const address = server.server.address();
       if (address === null || typeof address === 'string')

@@ -1,5 +1,5 @@
+import { taskSettingsFixture } from './fixtures/task-settings';
 import type { AgentMessageInput, AgentTaskSummary } from '@my-pi-harness/protocol';
-import { defaultAgentSettings } from '@my-pi-harness/protocol';
 import { createElement, type EffectCallback, type FC } from 'react';
 import type * as React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -58,9 +58,7 @@ vi.mock('../src/features/tasks/services/agents', () => {
 });
 
 function task(changes: Partial<AgentTaskSummary> = {}): AgentTaskSummary {
-  const settings = defaultAgentSettings();
-  const role = settings.roles[0];
-  if (role === undefined) throw new Error('Missing fixture role');
+  const { role, limits } = taskSettingsFixture();
   return {
     id: 'task',
     sessionId: 'session',
@@ -71,7 +69,7 @@ function task(changes: Partial<AgentTaskSummary> = {}): AgentTaskSummary {
     sourceToolCallId: 'spawn',
     title: 'Task',
     role,
-    limits: settings.limits,
+    limits,
     createdAt: 1,
     updatedAt: 2,
     latestRunId: 'old-run',

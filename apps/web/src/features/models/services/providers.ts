@@ -13,6 +13,10 @@ import {
   type NativeProviderInfo,
   type ProviderConfig,
   type ProviderInput,
+  type ProviderAuthInput,
+  type ProviderEnabledInput,
+  type ProviderKeyInput,
+  type ProviderTestInput,
   type ConnectionResult,
 } from '@my-pi-harness/protocol';
 import { Type } from 'typebox';
@@ -74,7 +78,7 @@ export const setProviderEnabled = async (
     await requestJson(
       `/providers/${encodeURIComponent(provider.id)}/enabled`,
       'PUT',
-      { enabled, expectedRevision: provider.revision },
+      { enabled, expectedRevision: provider.revision } satisfies ProviderEnabledInput,
       signal,
     ),
   );
@@ -99,7 +103,12 @@ export const writeProviderKey = async (
   key: string,
   signal: AbortSignal,
 ): Promise<void> => {
-  await requestJson(`/providers/${encodeURIComponent(id)}/key`, 'POST', { key }, signal);
+  await requestJson(
+    `/providers/${encodeURIComponent(id)}/key`,
+    'POST',
+    { key } satisfies ProviderKeyInput,
+    signal,
+  );
 };
 
 /** Removes this instance's stored API key. */
@@ -114,7 +123,7 @@ export const startProviderAuth = async (id: string, signal: AbortSignal): Promis
     await requestJson(
       `/providers/${encodeURIComponent(id)}/auth`,
       'POST',
-      { kind: 'oauth' },
+      { kind: 'oauth' } satisfies ProviderAuthInput,
       signal,
     ),
   );
@@ -136,7 +145,7 @@ export const testProvider = async (
     await requestJson(
       `/providers/${encodeURIComponent(id)}/test`,
       'POST',
-      { modelId },
+      { modelId } satisfies ProviderTestInput,
       signal,
       45_000,
     ),

@@ -1,3 +1,4 @@
+import type { McpOAuthStart } from '@my-pi-harness/protocol';
 import { randomUUID } from 'node:crypto';
 import {
   RuntimeError,
@@ -456,7 +457,7 @@ export class RemoteMcpService implements ExternalTools {
     input: McpControlInput,
     redirectUrl: string,
     signal: AbortSignal,
-  ): Promise<{ url: string; state: string; expiresAt: number }> {
+  ): Promise<McpOAuthStart> {
     return this.oauth.beginOAuth(id, input, redirectUrl, signal);
   }
   public completeOAuth(params: URLSearchParams, signal: AbortSignal): Promise<void> {

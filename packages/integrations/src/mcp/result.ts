@@ -1,7 +1,8 @@
 import type { CallToolResult } from '@modelcontextprotocol/client';
+import type { ToolContent } from '@my-pi-harness/protocol/internal';
 import { containsSecret } from './catalog';
 import { McpError } from './errors';
-import type { McpCallOutcome, McpResultContent } from './types';
+import type { McpCallOutcome } from './types';
 
 const TEXT_LIMIT = 128000;
 const IMAGE_LIMIT = 2 * 1024 * 1024;
@@ -27,10 +28,10 @@ export function projectMcpResult(
 ): Extract<McpCallOutcome, { kind: 'known' }> {
   if (containsSecret(result, secrets))
     throw new McpError('SECRET_ECHO', 'The server returned credential-bearing content');
-  const content: McpResultContent[] = [];
+  const content: ToolContent[] = [];
   let textCharacters = 0;
   let imageBytes = 0;
-  const append = (block: McpResultContent): void => {
+  const append = (block: ToolContent): void => {
     if (content.length >= CONTENT_BLOCK_LIMIT)
       throw new McpError('RESULT_LIMIT', 'The local tool result exceeded its content block limit');
     content.push(block);

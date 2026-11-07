@@ -5,7 +5,6 @@ import type {
   HarnessEvent,
   AppSettings,
   AppSettingsInput,
-  ProviderConfig,
   SessionSnapshot,
   SessionSummary,
   Workspace,
@@ -30,6 +29,7 @@ import type {
   LiveMessageDelta,
   RequestAcceptance,
   SessionCreateRecord,
+  ProviderRecord,
 } from '@my-pi-harness/protocol/internal';
 import { StorageError } from '../shared/errors';
 import { AuthRepository } from '../repositories/auth';
@@ -52,7 +52,7 @@ import { PrivateSessionFiles } from '../sessions/private-files';
 import { AttachmentBlobs } from '../sessions/attachment-blobs';
 import { agentInterruptionEvents } from '../sessions/agent-recovery';
 import { ModelContextQuery } from '../sessions/model-context';
-import type { ProfileStoreOptions } from '../sessions/session-log-directory';
+import type { ProfileStoreOptions } from './options';
 import { SkillContextQuery } from '../sessions/skill-context';
 import { AgentTaskQuery } from '../sessions/agent-tasks';
 import { AgentSettingsRepository } from '../repositories/agent-settings';
@@ -118,7 +118,7 @@ export class ProfileStore {
     this.skillContext = new SkillContextQuery(this.db);
     this.work = new WorkRepository(this.db);
     this.agentTasks = new AgentTaskQuery(this.db);
-    this.agentSettings = new AgentSettingsRepository(this.db);
+    this.agentSettings = new AgentSettingsRepository(this.db, options.defaultAgentSettings);
     this.eventCommit = new SessionEventCommit(
       this.db,
       this.projector,
@@ -235,18 +235,18 @@ export class ProfileStore {
     }
   }
 
-  /** Public metadata only; credential presence is computed later by the credential owner. */
-  public listProviders(): ProviderConfig[] {
+  /** Host records retain private references; the gateway owns public credential status. */
+  public listProviders(): ProviderRecord[] {
     return this.modelSettings.listProviders();
   }
 
   /** Read one provider configuration without retrieving secrets. */
-  public getProvider(id: string): ProviderConfig | undefined {
+  public getProvider(id: string): ProviderRecord | undefined {
     return this.modelSettings.getProvider(id);
   }
 
   /** Save a caller-incremented revision; computed credential flags are never durable facts. */
-  public putProvider(input: ProviderConfig, expectedRevision?: number): ProviderConfig {
+  public putProvider(input: ProviderRecord, expectedRevision?: number): ProviderRecord {
     return this.modelSettings.putProvider(input, expectedRevision);
   }
 

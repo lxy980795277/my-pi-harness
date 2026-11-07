@@ -24,7 +24,7 @@
 
 返回值区分 `known`、`not-dispatched` 与 `unknown`。只有明确没有交给 stdin 才报告未派发；已经写入而没有合法有界结果时报告 unknown，并回收连接。宿主独立 deadline 默认 120 秒，不只依赖 SDK timeout。已知 `isError` 是明确错误结果，不承诺副作用回滚。unknown 不自动重试。
 
-投影结果最多 128 个 content 块，附加 structuredContent 同样计入。文本与 structuredContent 共同进入最多 128000 字符的模型文本；图片总量 2 MiB，仅接受标准 base64 且签名匹配的 PNG/JPEG/GIF/WebP，不承担完整图像解码，是否进入模型及受保护附件由 runtime 决定。资源链接只作为标明未读取的文本，嵌入文本保持来源；音频与嵌入二进制仅说明类型，不自动抓取外部资源。
+文本/图像块使用protocol/internal的ToolContent，McpCallOutcome继续独立表达known、not-dispatched与unknown；投影结果最多 128 个 content 块，附加 structuredContent 同样计入。文本与 structuredContent 共同进入最多 128000 字符的模型文本；图片总量 2 MiB，仅接受标准 base64 且签名匹配的 PNG/JPEG/GIF/WebP，不承担完整图像解码，是否进入模型及受保护附件由 runtime 决定。资源链接只作为标明未读取的文本，嵌入文本保持来源；音频与嵌入二进制仅说明类型，不自动抓取外部资源。
 
 ## 远端连接与OAuth
 

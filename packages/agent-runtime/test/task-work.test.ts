@@ -2,17 +2,13 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createModels, fauxAssistantMessage, fauxProvider } from '@earendil-works/pi-ai';
-import {
-  defaultAgentSettings,
-  type MessageView,
-  type RunView,
-  type ToolCallRecord,
-} from '@my-pi-harness/protocol';
+import type { MessageView, RunView, ToolCallRecord } from '@my-pi-harness/protocol';
 import { openProfileStore } from '@my-pi-harness/storage';
 import { describe, expect, it } from 'vitest';
 import { decodeContextMessage, encodeContextMessage, encodeToolResult } from '../src/context/codec';
 import { toolCallRecordId } from '../src/tools/ledger';
 import { WorkRuntime } from '../src/work/runtime';
+import { defaultAgentSettings } from '../src/subagents/default-settings';
 
 async function fixture() {
   const directory = await mkdtemp(join(tmpdir(), 'my-pi-task-work-'));

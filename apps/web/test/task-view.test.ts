@@ -1,5 +1,5 @@
+import { taskSettingsFixture } from './fixtures/task-settings';
 import {
-  defaultAgentSettings,
   initialWorkState,
   type AgentTaskDetail,
   type AgentTaskSummary,
@@ -17,15 +17,13 @@ import {
 } from '../src/features/tasks/utils/task-view';
 
 function task(id: string, changes: Partial<AgentTaskSummary> = {}): AgentTaskSummary {
-  const settings = defaultAgentSettings();
-  const role = settings.roles[0];
-  if (role === undefined) throw new Error('Missing test role');
+  const { role, limits } = taskSettingsFixture();
   return {
     id,
     sourceToolCallId: `source-${id}`,
     title: id,
     role,
-    limits: settings.limits,
+    limits,
     createdAt: 10,
     sessionId: 'session',
     branchId: 'main',

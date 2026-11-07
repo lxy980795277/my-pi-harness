@@ -25,6 +25,8 @@
 
 宿主 `FrozenSkill` 记录完整指令、资源索引、来源与授权版本；资源本体在 profile 不可变目录中，接受前完成 hash 与文件同步。授权同时绑定 Skill 控制 revision、插件 revision 与安装 generation；停用后重启用、卸载后重装均不能延长旧授权。Run 租约阻止活动资源被卸载，队列恢复核对原授权。动态加载与 Run 级工具请求仍由 agent-runtime 的工具及会话事实拥有，不从安装配置回填历史内容。
 
+目录API的`SkillDirectoryResponse`只包含path，长度1–4096且不允许附加字段，由daemon、Web和Desktop复用。Desktop另检查绝对路径、NUL及实际目录，再调用原生打开能力；这些宿主检查不放入浏览器安全schema。
+
 `DesktopBridge.revealSkillDirectory(skillId,workspaceId)` 仅接收身份参数。主进程校验所属页面，带所属会话向上述目录 API 解析路径后交给操作系统；Renderer 无任意路径打开能力。浏览器设置使用复制校验路径的降级操作。
 
 ## 插件管理

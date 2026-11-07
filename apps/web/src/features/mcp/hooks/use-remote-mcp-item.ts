@@ -1,8 +1,11 @@
 import type { RemoteMcpItemState, RemoteMcpAction } from '@/features/mcp/types/mcp';
 import { useCallback, useState, type ChangeEvent } from 'react';
-import { Type } from 'typebox';
 import { useQueryClient } from '@tanstack/react-query';
-import type { RemoteMcpView, RemoteMcpTrustPreview } from '@my-pi-harness/protocol';
+import {
+  McpOAuthStartSchema,
+  type RemoteMcpView,
+  type RemoteMcpTrustPreview,
+} from '@my-pi-harness/protocol';
 import { useAsyncEvent } from '@/hooks/use-async-event';
 import { openExternal } from '@/services/open-external';
 import { parseResponse } from '@/utils/parse-response';
@@ -82,10 +85,7 @@ export const useRemoteMcpItem = (
       async (signal: AbortSignal, action: RemoteMcpAction): Promise<void> => {
         const value = await remoteMcpAction(server, action, signal);
         if (action === 'oauth/start') {
-          const result = parseResponse(
-            Type.Object({ url: Type.String(), state: Type.String(), expiresAt: Type.Integer() }),
-            value,
-          );
+          const result = parseResponse(McpOAuthStartSchema, value);
           signal.throwIfAborted();
           setOauthUrl(result.url);
           await openExternal(result.url);

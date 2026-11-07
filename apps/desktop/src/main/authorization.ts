@@ -1,6 +1,10 @@
-import { AuthFlowSchema, LoginFlowSchema, AuthStatusSchema } from '@my-pi-harness/protocol';
+import {
+  AuthFlowSchema,
+  LoginFlowSchema,
+  AuthStatusSchema,
+  SkillDirectoryResponseSchema,
+} from '@my-pi-harness/protocol';
 import { Value } from 'typebox/value';
-import { Type } from 'typebox';
 import { isAbsolute } from 'node:path';
 import { stat } from 'node:fs/promises';
 import { session, shell } from 'electron';
@@ -101,13 +105,7 @@ export function createDesktopAuthorization(
       const result: unknown = await response.json();
       if (
         !response.ok ||
-        !Value.Check(
-          Type.Object(
-            { path: Type.String({ minLength: 1, maxLength: 4096 }) },
-            { additionalProperties: false },
-          ),
-          result,
-        ) ||
+        !Value.Check(SkillDirectoryResponseSchema, result) ||
         !isAbsolute(result.path) ||
         result.path.includes('\0')
       )

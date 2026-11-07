@@ -2,12 +2,8 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Value } from 'typebox/value';
-import {
-  ProviderConfigSchema,
-  ModelInfoSchema,
-  type ProviderConfig,
-  type ProviderInput,
-} from '@my-pi-harness/protocol';
+import { ProviderConfigSchema, ModelInfoSchema, type ProviderInput } from '@my-pi-harness/protocol';
+import { ProviderRecordSchema, type ProviderRecord } from '@my-pi-harness/protocol/internal';
 import { createMemoryCredentialStore, openProfileStore } from '@my-pi-harness/storage';
 import { describe, expect, it } from 'vitest';
 import { ModelGateway } from '../src/models/gateway';
@@ -25,7 +21,7 @@ function custom(): ProviderInput {
     requiresApiKey: false,
   };
 }
-function native(id: string, baseUrl: string | null = null): ProviderConfig {
+function native(id: string, baseUrl: string | null = null): ProviderRecord {
   return {
     id,
     name: 'Old name',
@@ -83,14 +79,15 @@ describe('model settings ownership', () => {
       expect(codex?.models.every((model) => model.api === 'openai-codex-responses')).toBe(true);
       for (const config of configs) {
         expect([...Value.Errors(ProviderConfigSchema, config)]).toEqual([]);
+        expect(config).not.toHaveProperty('credentialRef');
         for (const model of await gateway.listModels(config.id))
           expect(Value.Check(ModelInfoSchema, model)).toBe(true);
       }
       expect(await gateway.getProvider('duplicate')).toMatchObject({
         id: 'duplicate',
-        credentialRef: 'secret-duplicate',
         legacy: true,
       });
+      expect(await gateway.getProvider('duplicate')).not.toHaveProperty('credentialRef');
       expect(await gateway.getProvider('old-proxy')).toMatchObject({
         baseUrl: 'https://proxy.invalid/v1',
         legacy: true,
@@ -122,6 +119,11 @@ describe('model settings ownership', () => {
     try {
       let config = await gateway.saveProvider(custom());
       expect(config).toMatchObject({ models: [], configured: true, authSource: 'none' });
+      expect(config).not.toHaveProperty('credentialRef');
+      const stored = store.getProvider(config.id);
+      if (stored === undefined) throw new Error('Missing saved provider record');
+      expect(Value.Check(ProviderRecordSchema, stored)).toBe(true);
+      expect(Value.Check(ProviderConfigSchema, stored)).toBe(false);
       const model = {
         id: 'model',
         name: 'Model',
@@ -190,6 +192,8 @@ describe('model settings ownership', () => {
       store = await openProfileStore(directory);
       gateway = new ModelGateway({ store, secrets });
       await gateway.initialize();
+      expect(store.getProvider(config.id)?.credentialRef).toBe(stored.credentialRef);
+      expect(await gateway.getProvider(config.id)).not.toHaveProperty('credentialRef');
       expect(await gateway.resolveSessionInput({ title: 'Restarted' })).toEqual({
         ...selected,
         title: 'Restarted',

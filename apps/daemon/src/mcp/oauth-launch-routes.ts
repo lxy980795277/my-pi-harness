@@ -2,6 +2,7 @@ import { Type } from 'typebox';
 import { RuntimeError } from '@my-pi-harness/agent-runtime';
 import {
   McpControlInputSchema,
+  McpOAuthStartSchema,
   SkillOAuthLaunchTicketSchema,
   type McpControlInput,
 } from '@my-pi-harness/protocol';
@@ -53,7 +54,7 @@ export function registerMcpOAuthLaunchRoutes(
   server.post<{ Params: { id: string }; Body: { ticket: string } }>(
     '/api/mcp/remote-servers/:id/oauth/launch',
     {
-      schema: { params: McpParams, body: Ticket },
+      schema: { params: McpParams, body: Ticket, response: { 200: McpOAuthStartSchema } },
     },
     async (request, reply) => {
       services.oauthLaunchTickets.consume('mcp', request.params.id, request.body.ticket);

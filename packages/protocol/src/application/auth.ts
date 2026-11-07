@@ -9,6 +9,9 @@ export type LoginFlowStatus = Static<typeof LoginFlowStatusSchema>;
 export type LoginFlow = Static<typeof LoginFlowSchema>;
 export type AuthFlow = Static<typeof AuthFlowSchema>;
 export type PairingCodeResponse = Static<typeof PairingCodeResponseSchema>;
+export type PairingInput = Static<typeof PairingInputSchema>;
+export type LoginInput = Static<typeof LoginInputSchema>;
+export type AuthFlowResponseInput = Static<typeof AuthFlowResponseInputSchema>;
 
 /** Public application identity; provider secrets and external subject IDs remain host-owned. */
 export const AppUserSchema = Type.Object(
@@ -132,5 +135,29 @@ export const AuthFlowSchema = Type.Object(
 /** An authorized desktop owner can request the browser pairing challenge. */
 export const PairingCodeResponseSchema = Type.Object(
   { code: Type.String() },
+  { additionalProperties: false },
+);
+
+/** A one-use pairing code grants local client trust independently of application login. */
+export const PairingInputSchema = Type.Object(
+  { code: Type.String({ minLength: 1, maxLength: 128 }) },
+  { additionalProperties: false },
+);
+
+/** Login grants retain the provider's explicit device or browser flow choice. */
+export const LoginInputSchema = Type.Object(
+  {
+    providerId: Type.String({ minLength: 1, maxLength: 100 }),
+    method: Type.Optional(LoginMethodSchema),
+  },
+  { additionalProperties: false },
+);
+
+/** A response addresses one pending model-provider authorization challenge. */
+export const AuthFlowResponseInputSchema = Type.Object(
+  {
+    promptId: Type.String({ minLength: 1, maxLength: 160 }),
+    value: Type.String({ maxLength: 16_384 }),
+  },
   { additionalProperties: false },
 );

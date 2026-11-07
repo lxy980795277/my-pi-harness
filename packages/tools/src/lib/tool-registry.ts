@@ -1,10 +1,9 @@
 import { Type, type Static, type TSchema } from 'typebox';
 import type { Artifact, ToolSource } from '@my-pi-harness/protocol';
+import type { ToolContent } from '@my-pi-harness/protocol/internal';
 import type { ToolContext } from './tool-context';
 
-export type ToolContent =
-  | { type: 'text'; text: string }
-  | { type: 'image'; data: string; mimeType: string };
+export type { ToolContent } from '@my-pi-harness/protocol/internal';
 export interface ToolResult {
   summary: string;
   content: ToolContent[];

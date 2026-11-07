@@ -4,11 +4,13 @@ Node 24 宿主使用的同步存储。JSONL保存会话执行事实，独立不�
 
 ## 源码职责
 
-`src/index.ts`是唯一公开入口。`profile/`拥有打开、锁、关闭和跨JSONL与SQLite的唯一事务编排；`sqlite/`保存Drizzle表和按版本校验的迁移；`sessions/`保存日志、附件、上下文查询和事件校验，`sessions/projections/`维护可重建的会话、工具、能力及工作状态投影。`repositories/`保存身份、模型配置、工作区、MCP、扩展及高级账户的SQLite仓储；`credentials/`拥有系统凭据和插件私有凭据；`shared/`仅放存储错误和通用持久数据校验。
+`src/index.ts`是唯一公开入口。`profile/`拥有宿主options、打开、锁、关闭和跨JSONL与SQLite的唯一事务编排；`sqlite/`保存Drizzle表和按版本校验的迁移；`sessions/`保存日志、附件、上下文查询和事件校验，`sessions/projections/`维护可重建的会话、工具、能力及工作状态投影。`repositories/`保存身份、模型配置、工作区、MCP、扩展及高级账户的SQLite仓储；`credentials/`拥有系统凭据和插件私有凭据；`shared/`仅放存储错误和通用持久数据校验。
 
 SessionQueries拥有会话快照、输入队列来源、幂等接受结果及公开事件分页的SQL读取；SessionRecovery在ProfileStore的启动事务内从日志与附件重建投影并核对产物引用。SessionEventCommit拥有会话创建与后续事件的校验和暂存，不自行提交事务；ArtifactRepository拥有已发布产物的元数据、可见性核对和blob引用。ProfileStore保留公开门面、资源所有权、提交顺序与失败冻结，所有查询与恢复共用同一数据库和内存流式覆盖层，没有第二份会话状态。
 
 模型配置、厂商绑定和默认模型由`ModelSettingsRepository`查询与更新，`ProfileStore`保持对外方法和事务所有权。配置更新通过宿主提供的事务函数执行，继续服从profile关闭状态和日志写入失败后的写入冻结，不另建提交或恢复路径。
+
+模型配置的宿主数据使用protocol/internal的ProviderRecord，保留credentialRef与既有持久状态字段，SQLite JSON布局不变。ModelGateway以明确字段投影生成公开ProviderConfig并计算凭据状态；公开数据不包含系统凭据引用，秘密字节仍只由凭据存储管理。
 
 AgentSettingsRepository读取持久JSON时只投影当前AgentSettingsSchema字段，校验必填值、revision与角色关联；废弃附加字段不改写原记录。新设置写入仍严格校验，不接受已删除的累计token额度。任务历史沿既有持久事件投影处理，不增设旧版本分支。
 
@@ -121,4 +123,4 @@ SQLite schema按版本和checksum校验：0001保存配置与会话投影，0002
 
 通信先保存`task.message_queued`，消费事件与对应目标模型输入必须同批，`MessageView.agentMessageId`唯一关联原通信，正文与目标Run同时核对；不能只凭相同文本匹配用户消息，也不允许一个消费关联多个输入。原通信是单独来源，不能作为真正的用户提问展示或编辑；未消费内容不会触发模型请求。父Run终态要求所属任务已经关闭，任务关闭要求本身与后代没有在途执行。启动按叶到根结束子Run和任务，将未消费通信结算为未送达，保留已完成消息及结果，不重做模型或工具副作用。
 
-`listAgentBoard()`在分页前按当前分支、工作区及执行/人工等待/终态筛选，详情按任务消息ordinal分页。角色配置通过独立`agent_settings`保存并检查revision；默认值由protocol的`defaultAgentSettings()`产生，日志重建不删除用户配置。
+`listAgentBoard()`在分页前按当前分支、工作区及执行/人工等待/终态筛选，详情按任务消息ordinal分页。角色配置通过独立`agent_settings`保存并检查revision；默认值由宿主通过ProfileStoreOptions.defaultAgentSettings显式提供，storage不定义角色或指令。无持久设置且未注入factory时读取明确失败；默认读取不写库，已有设置优先。完整配置的显式首写不依赖factory，按未保存revision0递增至1；后续保存拒绝过期revision，日志重建不删除用户配置。

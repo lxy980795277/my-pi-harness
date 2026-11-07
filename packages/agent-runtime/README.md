@@ -15,7 +15,7 @@ Node端的模型接入与持久会话运行层，使用精确固定的Pi core/ai
 | `work/`         | Plan、Todos、用户提问、检查点和相应会话工具                          |
 | `context/`      | 消息codec、附件输入、规则、预算、摘要及每次请求的上下文投影          |
 
-根`index.ts`是跨包公开入口，`errors.ts`定义包级运行失败。包内直接导入所属模块，不通过根入口或内部转发层回引；`ProviderStore`由`models/ports.ts`声明，`RuntimeStore`与会话接受记录由`sessions/ports.ts`声明。
+根`index.ts`是跨包公开入口，`errors.ts`定义包级运行失败。包内直接导入所属模块，不通过根入口或内部转发层回引；`ProviderStore`由`models/ports.ts`声明，`RuntimeStore`由`sessions/ports.ts`声明，宿主会话提交记录由protocol/internal唯一定义。
 
 `runs/execution.ts`拥有单次执行的取消、失败、终态及扩展工作结算；`agent.ts`装配Pi Agent和每次请求的能力/上下文钩子，`inputs.ts`投递队列与`RunInjectedInput`，`messages.ts`拥有SDK事件记录和未执行工具的结算，`prepare.ts`共用主子Run的模型检查与输入接受准备。`runs/ports.ts`声明可选`RunHooks`和注入输入接口，执行器只调用这些接口，不导入subagents，运行中输入投递不负责通信领域校验。注入输入在实际消费时提供整批持久记录，仍由Run统一提交；持久化失败由执行器中止整个Run。输入准备仍使用共享协议中的AgentMessage表达续作来源，不为消除该DTO引用增加新的消息格式或适配框架。
 
@@ -27,7 +27,7 @@ tools包的ToolRegistration拥有模型schema、来源、默认/按需加载、�
 
 `ModelGateway`装配账户实例、模型清单、连接探测与认证。OpenAI（Codex）、Anthropic、Google、DeepSeek、MiniMax、Kimi六个内置Provider按公开factory固定为单例入口，名称、端点和模型目录只读；自定义Provider允许空模型列表，模型Dialog草稿一次提交整个Provider，保留未提交的同ID模型headers/compat，切换协议同步已有模型API。自定义Provider使用Pi的Chat Completions、Responses或Anthropic lazy API。请求HTTP与模型SSE解析由Pi负责。OpenAI兼容Base URL通常含`/v1`；Anthropic SDK会追加`/v1/messages`，通常配置不含`/v1`的服务根地址。HTTPS及显式回环HTTP可用，地址不得含用户信息、query或fragment。
 
-公开providerKind、配置实例ID与credentialRef分别表示协议/厂商、账户配置和秘密存储引用。不同实例使用独立Pi注册ID与凭据；生产默认AuthContext不读取供应商环境变量或其他应用认证文件。requiresApiKey=false跳过保存及环境凭据，通过Pi公开fetch注入剥除SDK认证头；恢复Key要求可继续使用原保存凭据。模型定义显式指定真实modelId、能力、上下文和compat，保存配置不证明远端可用。`testConnection`发起有超时的真实请求，可能产生供应商用量；它返回脱敏结果。
+公开providerKind与配置实例ID分别表示协议/厂商和账户配置；credentialRef仅存在于宿主ProviderRecord，ModelGateway通过明确字段投影生成公开ProviderConfig，不将引用交给Renderer。不同实例使用独立Pi注册ID与凭据；生产默认AuthContext不读取供应商环境变量或其他应用认证文件。requiresApiKey=false跳过保存及环境凭据，通过Pi公开fetch注入剥除SDK认证头；恢复Key要求可继续使用原保存凭据。模型定义显式指定真实modelId、能力、上下文和compat，保存配置不证明远端可用。`testConnection`发起有超时的真实请求，可能产生供应商用量；它返回脱敏结果。
 
 `resolve()`返回Model、绑定的streamFn及必须调用的`release()`。该lease从认证检查前开始，阻止运行期间修改Provider和凭据；调用者在失败或SDK真正结算后释放。本包的SessionRuntime与连接探测负责这些释放，外部调用者须遵守相同规则。
 
@@ -42,6 +42,8 @@ tools包的ToolRegistration拥有模型schema、来源、默认/按需加载、�
 `SessionRuntime`序列化单会话命令；每个Session只有一个活跃根Run，不同Session可独立运行。子Run通过Task归属并由SubagentCoordinator管理，仍复用RunExecution和同Session日志。输入、Run配置与模型上下文先提交，再创建真实Agent请求。SDK事件映射为独立公开字段，完整事实先持久化后通知，流式片段通过独立内存入口发布；订阅者不等待SDK idle，真正结算由Run所有者等待。绑定工作区的会话通过ToolRuntime提供受策略与单次审批约束的工具循环；没有工作区不获得本机目录权限，deferred不会被误报为完整成功。
 
 ## 子Agent与任务树
+
+`subagents/default-settings.ts`唯一拥有默认角色、指令及执行限制，根入口导出defaultAgentSettings。daemon将factory显式交给storage；首次读取返回revision0而不写配置，首次修改仍递增为revision1，已保存设置优先。protocol只定义字段与校验，不提供角色策略。
 
 宿主通过agentStore提供SubagentStore以启用Task查询和配置，SubagentCoordinator协调任务树，SubagentMessaging处理同树通信，模型通过五个委派工具调用对应能力。AgentRequestScheduler只管理全局与祖先子树的并发名额，流真正结算后才释放，不以累计用量限制请求。Task保留sourceToolCallId，子Run保留taskId，祖先关系由原工具事实推导；根快照排除子转录，WorkRuntime.forTask复用独立上下文与人工交互。任务通信有agentMessageId来源，模型正文编码和持久来源匹配由context拥有。
 

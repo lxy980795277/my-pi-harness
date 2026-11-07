@@ -1,6 +1,7 @@
 import type { Tool, Resource, Prompt } from '@modelcontextprotocol/client';
 import type { ProcessLaunch, ProcessScope } from '@my-pi-harness/sandbox/process';
 import type { TSchema } from 'typebox';
+import type { ToolContent } from '@my-pi-harness/protocol/internal';
 
 export interface McpSecretDescriptor {
   slotId: string;
@@ -55,12 +56,8 @@ export interface McpCatalog {
   prompts?: readonly Prompt[];
 }
 
-export type McpResultContent =
-  | { type: 'text'; text: string }
-  | { type: 'image'; data: string; mimeType: string };
-
 export type McpCallOutcome =
-  | { kind: 'known'; isError: boolean; content: McpResultContent[]; summary: string }
+  | { kind: 'known'; isError: boolean; content: ToolContent[]; summary: string }
   | { kind: 'not-dispatched'; cancelled: boolean; code: string; message: string }
   | { kind: 'unknown'; code: string; message: string };
 

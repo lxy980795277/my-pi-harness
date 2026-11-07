@@ -30,11 +30,18 @@ export type RemoteMcpTrustInput = Static<typeof RemoteMcpTrustInputSchema>;
 export type McpImportDocument = Static<typeof McpImportDocumentSchema>;
 export type McpReadOnlyGrantView = Static<typeof McpReadOnlyGrantViewSchema>;
 export type McpImportPreview = Static<typeof McpImportPreviewSchema>;
+export type McpOAuthStart = Static<typeof McpOAuthStartSchema>;
 
 const id = Type.String({ minLength: 1, maxLength: 160 });
 const revision = Type.Integer({ minimum: 1 });
 const environmentName = Type.String({ pattern: '^[A-Za-z_][A-Za-z0-9_]*$', maxLength: 128 });
 const object = { additionalProperties: false } as const;
+
+/** An independent MCP authorization flow includes its daemon-owned state identity. */
+export const McpOAuthStartSchema = Type.Object(
+  { url: Type.String(), state: Type.String(), expiresAt: Type.Integer() },
+  object,
+);
 
 /** Startup grants are independent for supervised and unrestricted child processes. */
 export const McpScopeSchema = Type.Enum(['sandboxed', 'full-access']);

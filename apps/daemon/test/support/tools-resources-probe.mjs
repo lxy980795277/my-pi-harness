@@ -104,7 +104,9 @@ async function main() {
     'FrozenSkillSchema',
     'FrozenMcpToolSchema',
     'LiveMessageDeltaSchema',
-    'ResolvedSessionCreateInputSchema',
+    'ProviderRecordSchema',
+    'ToolContentSchema',
+    'defaultAgentSettings',
   ])
     assert.equal(name in protocol, false, `${name} escaped into the public protocol`);
   assert.equal(isPublicAddress('::ffff:127.0.0.1'), false);

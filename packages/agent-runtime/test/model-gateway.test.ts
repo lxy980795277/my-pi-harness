@@ -13,11 +13,21 @@ import {
 import { openAICompletionsApi } from '@earendil-works/pi-ai/api/openai-completions.lazy';
 import type { CustomProtocol, ProviderInput } from '@my-pi-harness/protocol';
 import { APP_VERSION } from '@my-pi-harness/protocol';
-import { createMemoryCredentialStore, openProfileStore } from '@my-pi-harness/storage';
+import {
+  createMemoryCredentialStore,
+  openProfileStore,
+  type ProfileStore,
+} from '@my-pi-harness/storage';
 import { describe, expect, it } from 'vitest';
 import { ModelGateway } from '../src/models/gateway';
 import { decodeCredential } from '../src/models/credentials';
 import { SessionRuntime } from '../src/sessions/runtime';
+
+function credentialReference(store: ProfileStore, providerId: string): string {
+  const record = store.getProvider(providerId);
+  if (record === undefined) throw new Error('Missing fixture provider record');
+  return record.credentialRef;
+}
 
 function sendEvent(response: ServerResponse, type: string, data: unknown): void {
   response.write(`event: ${type}\ndata: ${JSON.stringify(data)}\n\n`);
@@ -324,7 +334,8 @@ describe('ModelGateway protocol and credentials', () => {
       );
       if (!canonical) throw new Error('Missing canonical slot');
       expect(canonical.id).not.toBe('old-proxy');
-      expect(canonical.credentialRef).not.toBe('old-proxy-key');
+      expect(canonical).not.toHaveProperty('credentialRef');
+      expect(credentialReference(store, canonical.id)).not.toBe('old-proxy-key');
       await expect(gateway.resolve(canonical.id, 'requested-model')).rejects.toMatchObject({
         code: 'AUTH_REQUIRED',
       });
@@ -351,7 +362,7 @@ describe('ModelGateway protocol and credentials', () => {
         },
       });
       expect(http.requests[0]?.authorization).toBe('Bearer legacy-private-key');
-      expect(await secrets.read(canonical.credentialRef)).toBeUndefined();
+      expect(await secrets.read(credentialReference(store, canonical.id))).toBeUndefined();
     } finally {
       await runtime.close();
       await gateway.close();
@@ -401,7 +412,10 @@ describe('ModelGateway protocol and credentials', () => {
         expect(credentialReads).toBe(before);
         expect(http.requests).toHaveLength(1);
         expect(http.requests[0]).toMatchObject({ authorization: undefined, apiKey: undefined });
-        expect(await secrets.read(config.credentialRef)).toContain('fixture-retained-key');
+        expect(config).not.toHaveProperty('credentialRef');
+        expect(await secrets.read(credentialReference(store, config.id))).toContain(
+          'fixture-retained-key',
+        );
         config = await gateway.saveProvider({
           ...input,
           requiresApiKey: true,
@@ -478,10 +492,14 @@ describe('ModelGateway protocol and credentials', () => {
             'Bearer fixture-key-two',
           ]);
         expect(JSON.stringify(await gateway.listProviders())).not.toContain('fixture-key');
-        expect(first.credentialRef).not.toBe(second.credentialRef);
+        expect(first).not.toHaveProperty('credentialRef');
+        expect(second).not.toHaveProperty('credentialRef');
+        expect(credentialReference(store, first.id)).not.toBe(
+          credentialReference(store, second.id),
+        );
         await gateway.logout(first.id);
-        expect(await secrets.read(first.credentialRef)).toBeUndefined();
-        expect(await secrets.read(second.credentialRef)).toBeDefined();
+        expect(await secrets.read(credentialReference(store, first.id))).toBeUndefined();
+        expect(await secrets.read(credentialReference(store, second.id))).toBeDefined();
       } finally {
         await gateway.close();
         store.close();
@@ -687,7 +705,8 @@ describe('ModelGateway protocol and credentials', () => {
       if (!second.prompt) throw new Error('Expected code prompt');
       gateway.respondAuth(flow.id, second.prompt.id, 'fixture-code');
       await until(() => gateway.getAuth(flow.id).status === 'completed');
-      const serialized = await secrets.read(config.credentialRef);
+      expect(config).not.toHaveProperty('credentialRef');
+      const serialized = await secrets.read(credentialReference(store, config.id));
       if (!serialized) throw new Error('Credential was not persisted');
       expect(decodeCredential(serialized)).toMatchObject({
         type: 'oauth',
@@ -696,12 +715,12 @@ describe('ModelGateway protocol and credentials', () => {
       });
       expect(JSON.stringify(gateway.getAuth(flow.id))).not.toContain('fixture-access');
       await gateway.logout(config.id);
-      expect(await secrets.read(config.credentialRef)).toBeUndefined();
+      expect(await secrets.read(credentialReference(store, config.id))).toBeUndefined();
       const cancelled = gateway.startAuth(config.id, 'oauth');
       gateway.cancelAuth(cancelled.id);
       await until(() => gateway.getAuth(cancelled.id).status === 'cancelled');
       await gateway.close();
-      expect(await secrets.read(config.credentialRef)).toBeUndefined();
+      expect(await secrets.read(credentialReference(store, config.id))).toBeUndefined();
     } finally {
       await gateway.close();
       store.close();

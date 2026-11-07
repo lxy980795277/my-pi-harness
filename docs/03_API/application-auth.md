@@ -35,6 +35,8 @@ Host必须对应实际回环监听器或自有开发页面；有Origin时必须�
 | POST /api/auth/logout                   | `{}`                                             | 撤销当前客户端全部应用会话并取消其登录流程，清除登录Cookie，返回`{ok:true}`          |
 | POST /api/auth/pairing-code             | `{}`；应用登录                                   | `{code}`；只在既有挑战过期时更新挑战                                                 |
 
+配对和登录请求分别使用共享`PairingInputSchema`与`LoginInputSchema`，拒绝未知字段；code长度1–128，providerId长度1–100，method可省略或为device/web。模型授权挑战使用独立`AuthFlowResponseInputSchema`，不复用应用登录请求。
+
 配对挑战10分钟有效，使用后替换。每分钟最多5次尝试，超过返回429。配对码仅在直接运行daemon的交互终端或已登录页面展示，不进入普通日志和公开启动记录。
 
 ## 登录与恢复

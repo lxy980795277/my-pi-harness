@@ -1,3 +1,4 @@
+import type { ApiError } from '@my-pi-harness/protocol';
 import {
   AuthFlowSchema,
   ConnectionResultSchema,
@@ -9,11 +10,20 @@ import {
   ProviderInputSchema,
   type ProviderInput,
   type AppSettingsInput,
+  ProviderAuthInputSchema,
+  ProviderEnabledInputSchema,
+  ProviderKeyInputSchema,
+  ProviderTestInputSchema,
+  AuthFlowResponseInputSchema,
+  type ProviderAuthInput,
+  type ProviderEnabledInput,
+  type ProviderKeyInput,
+  type ProviderTestInput,
+  type AuthFlowResponseInput,
 } from '@my-pi-harness/protocol';
 import type { ModelGateway } from '@my-pi-harness/agent-runtime';
 import type { FastifyInstance } from 'fastify';
 import { Type } from 'typebox';
-import type { ProviderAuthInput } from './types';
 
 const IdParams = Type.Object(
   { id: Type.String({ minLength: 1, maxLength: 160 }) },
@@ -48,15 +58,12 @@ export function registerModelRoutes(server: FastifyInstance, gateway: ModelGatew
     },
     (request) => gateway.saveSettings(request.body),
   );
-  server.put<{ Params: { id: string }; Body: { enabled: boolean; expectedRevision: number } }>(
+  server.put<{ Params: { id: string }; Body: ProviderEnabledInput }>(
     '/api/providers/:id/enabled',
     {
       schema: {
         params: IdParams,
-        body: Type.Object(
-          { enabled: Type.Boolean(), expectedRevision: Type.Integer({ minimum: 1 }) },
-          { additionalProperties: false },
-        ),
+        body: ProviderEnabledInputSchema,
         response: { 200: ProviderConfigSchema },
       },
     },
@@ -79,9 +86,10 @@ export function registerModelRoutes(server: FastifyInstance, gateway: ModelGatew
     },
     (request, reply) => {
       if (request.body.id !== undefined && request.body.id !== request.params.id)
-        return reply
-          .code(400)
-          .send({ code: 'PROVIDER_ID_MISMATCH', message: '模型配置 ID 不一致。' });
+        return reply.code(400).send({
+          code: 'PROVIDER_ID_MISMATCH',
+          message: '模型配置 ID 不一致。',
+        } satisfies ApiError);
       return gateway.saveProvider({ ...request.body, id: request.params.id });
     },
   );
@@ -98,15 +106,12 @@ export function registerModelRoutes(server: FastifyInstance, gateway: ModelGatew
     { schema: { params: IdParams, response: { 200: Type.Array(ModelInfoSchema) } } },
     (request) => gateway.listModels(request.params.id),
   );
-  server.post<{ Params: { id: string }; Body: { key: string } }>(
+  server.post<{ Params: { id: string }; Body: ProviderKeyInput }>(
     '/api/providers/:id/key',
     {
       schema: {
         params: IdParams,
-        body: Type.Object(
-          { key: Type.String({ minLength: 1, maxLength: 16_384 }) },
-          { additionalProperties: false },
-        ),
+        body: ProviderKeyInputSchema,
         response: { 200: ProviderConfigSchema },
       },
     },
@@ -120,15 +125,12 @@ export function registerModelRoutes(server: FastifyInstance, gateway: ModelGatew
       return { ok: true };
     },
   );
-  server.post<{ Params: { id: string }; Body: { modelId: string } }>(
+  server.post<{ Params: { id: string }; Body: ProviderTestInput }>(
     '/api/providers/:id/test',
     {
       schema: {
         params: IdParams,
-        body: Type.Object(
-          { modelId: Type.String({ minLength: 1, maxLength: 160 }) },
-          { additionalProperties: false },
-        ),
+        body: ProviderTestInputSchema,
         response: { 200: ConnectionResultSchema },
       },
     },
@@ -154,10 +156,7 @@ export function registerModelRoutes(server: FastifyInstance, gateway: ModelGatew
     {
       schema: {
         params: IdParams,
-        body: Type.Object(
-          { kind: Type.Union([Type.Literal('api_key'), Type.Literal('oauth')]) },
-          { additionalProperties: false },
-        ),
+        body: ProviderAuthInputSchema,
         response: { 200: AuthFlowSchema },
       },
     },
@@ -185,18 +184,12 @@ export function registerModelRoutes(server: FastifyInstance, gateway: ModelGatew
     { schema: { params: IdParams, response: { 200: AuthFlowSchema } } },
     (request) => gateway.getAuth(request.params.id),
   );
-  server.post<{ Params: { id: string }; Body: { promptId: string; value: string } }>(
+  server.post<{ Params: { id: string }; Body: AuthFlowResponseInput }>(
     '/api/auth-flows/:id/respond',
     {
       schema: {
         params: IdParams,
-        body: Type.Object(
-          {
-            promptId: Type.String({ minLength: 1, maxLength: 160 }),
-            value: Type.String({ maxLength: 16_384 }),
-          },
-          { additionalProperties: false },
-        ),
+        body: AuthFlowResponseInputSchema,
         response: { 200: AuthFlowSchema },
       },
     },

@@ -7,6 +7,9 @@ import {
   type LoginMethod,
   type AuthFlow,
   type AuthStatus,
+  type PairingInput,
+  type LoginInput,
+  type AuthFlowResponseInput,
 } from '@my-pi-harness/protocol';
 import { Type } from 'typebox';
 
@@ -25,7 +28,7 @@ export const fetchAuthStatus = async (signal: AbortSignal): Promise<AuthStatus> 
 export const pairBrowser = async (code: string, signal: AbortSignal): Promise<AuthStatus> => {
   const status = parseResponse(
     AuthStatusSchema,
-    await requestJson('/auth/pair', 'POST', { code }, signal),
+    await requestJson('/auth/pair', 'POST', { code } satisfies PairingInput, signal),
   );
   setCsrfToken(status.csrfToken);
   return status;
@@ -61,7 +64,7 @@ export const respondToAuthFlow = async (
     await requestJson(
       `/auth-flows/${encodeURIComponent(id)}/respond`,
       'POST',
-      { promptId, value },
+      { promptId, value } satisfies AuthFlowResponseInput,
       signal,
     ),
   );
@@ -88,7 +91,7 @@ export const startLogin = async (
 ): Promise<LoginFlow> => {
   return parseResponse(
     LoginFlowSchema,
-    await requestJson('/auth/login', 'POST', { providerId, method }, signal),
+    await requestJson('/auth/login', 'POST', { providerId, method } satisfies LoginInput, signal),
   );
 };
 
