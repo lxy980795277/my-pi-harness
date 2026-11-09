@@ -534,6 +534,7 @@ describe('frozen queued MCP authority', () => {
     for (const metadata of [
       { version: 1, requestId: 'invalid-queue' },
       { ...queueMetadata('invalid-queue'), mcpBindings: '[]' },
+      { ...queueMetadata('invalid-queue'), unrecognized: true },
     ]) {
       expect(() =>
         store.append('session', [event('queue.added', 'run', queued(), metadata)]),
@@ -541,6 +542,29 @@ describe('frozen queued MCP authority', () => {
     }
     expect(store.getSnapshot('session').queue).toEqual([]);
     expect(store.findRequest('session', 'invalid-queue')).toBeUndefined();
+  });
+
+  it('validates private queue data again when reading the durable projection', async () => {
+    const value = await fixture();
+    accept(value.store);
+    const input = queued();
+    value.store.append('session', [
+      event('queue.added', 'run', input, queueMetadata('queue-read')),
+    ]);
+    const connection = new Database(join(value.directory, 'data.sqlite'));
+    try {
+      connection
+        .prepare('UPDATE queued_inputs SET private_data = ? WHERE id = ?')
+        .run(
+          JSON.stringify({ ...queueMetadata('queue-read'), skillCandidates: 'invalid' }),
+          input.id,
+        );
+      expect(() => value.store.getQueuePrivateData('session', input.id)).toThrow(
+        expect.objectContaining({ code: 'INVALID_RECORD' }),
+      );
+    } finally {
+      connection.close();
+    }
   });
 
   it('retains private bindings through edits and projection rebuild without exposing them publicly', async () => {

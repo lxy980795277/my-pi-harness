@@ -1,17 +1,13 @@
 import {
-  AuthFlowSchema,
   AuthStatusSchema,
   PairingCodeResponseSchema,
   LoginFlowSchema,
   type LoginFlow,
   type LoginMethod,
-  type AuthFlow,
   type AuthStatus,
   type PairingInput,
   type LoginInput,
-  type AuthFlowResponseInput,
 } from '@my-pi-harness/protocol';
-import { Type } from 'typebox';
 
 import { getJson, requestJson, setCsrfToken } from '@/services/base-request';
 import { parseResponse } from '@/utils/parse-response';
@@ -37,42 +33,6 @@ export const pairBrowser = async (code: string, signal: AbortSignal): Promise<Au
 /** Revokes application sessions while preserving this browser's local trust. */
 export const logoutBrowser = async (signal: AbortSignal): Promise<void> => {
   await requestJson('/auth/logout', 'POST', {}, signal);
-};
-
-/** Reads the server-owned model-provider OAuth flow. */
-export const fetchAuthFlow = async (id: string, signal: AbortSignal): Promise<AuthFlow> => {
-  return parseResponse(
-    AuthFlowSchema,
-    await getJson(`/auth-flows/${encodeURIComponent(id)}`, signal),
-  );
-};
-
-/** Restores authorized model-provider flows after refresh without persisting client-side facts. */
-export const fetchAuthFlows = async (signal: AbortSignal): Promise<AuthFlow[]> => {
-  return parseResponse(Type.Array(AuthFlowSchema), await getJson('/auth-flows', signal));
-};
-
-/** Replies only to the exact pending OAuth challenge. */
-export const respondToAuthFlow = async (
-  id: string,
-  promptId: string,
-  value: string,
-  signal: AbortSignal,
-): Promise<AuthFlow> => {
-  return parseResponse(
-    AuthFlowSchema,
-    await requestJson(
-      `/auth-flows/${encodeURIComponent(id)}/respond`,
-      'POST',
-      { promptId, value } satisfies AuthFlowResponseInput,
-      signal,
-    ),
-  );
-};
-
-/** Cancels a model-provider OAuth exchange without treating it as logout. */
-export const cancelAuthFlow = async (id: string, signal: AbortSignal): Promise<void> => {
-  await requestJson(`/auth-flows/${encodeURIComponent(id)}`, 'DELETE', {}, signal);
 };
 
 /** Creates a short-lived code for authorizing an additional browser entry point. */

@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
 
 import { useSettingsStore } from '@/features/settings/stores/settings';
-import { cancelAuthFlow } from '@/features/auth/services/auth';
+import { cancelAuthFlow } from '@/features/models/services/provider-auth';
 import { useAsyncEvent } from '@/hooks/use-async-event';
 
 /** Parent and child closes first cancel the model exchange owned by the settings window. */

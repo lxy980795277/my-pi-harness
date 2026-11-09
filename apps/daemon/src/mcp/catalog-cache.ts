@@ -16,13 +16,15 @@ interface Preparation<E> {
   authority: string;
   before?(signal: AbortSignal): Promise<void>;
   assertCurrent(): void;
-  restore(value: McpCatalog, discoveredAt: number): E;
-  discover(signal: AbortSignal): Promise<unknown>;
+  createEntry(value: McpCatalog, discoveredAt: number): E;
+  discover(signal: AbortSignal): Promise<McpCatalog>;
 }
 interface Active {
   authority: string;
   controller: AbortController;
   signal: AbortSignal;
+  refresh: boolean;
+  failure: { cause: unknown } | null;
   task: Promise<void>;
 }
 type State = Pick<ToolDiscoveryDiagnostic, 'status' | 'error'>;
@@ -54,7 +56,7 @@ export class CatalogCache<E extends CatalogEntry> {
       error: catalogFailure(error),
     });
   }
-  public publish(key: string, serverId: string, scope: string, entry: E): void {
+  private publish(key: string, serverId: string, scope: string, entry: E): void {
     this.repository.saveCatalog(serverId, scope, {
       authority: entry.authority,
       discoveredAt: entry.discoveredAt,
@@ -80,6 +82,22 @@ export class CatalogCache<E extends CatalogEntry> {
     signal?.throwIfAborted();
     if (this.closed) throw new DOMException('MCP service is closing', 'AbortError');
     if (this.entries.get(plan.key)?.authority === plan.authority) return;
+    await this.wait(plan, this.operation(plan, false), signal);
+  }
+  /** Refresh skips durable recovery; caller cancellation stops waiting while owned work remains bounded. */
+  public async refresh(plan: Preparation<E>, signal: AbortSignal): Promise<E> {
+    signal.throwIfAborted();
+    if (this.closed) throw new DOMException('MCP service is closing', 'AbortError');
+    const operation = this.operation(plan, true);
+    await this.wait(plan, operation, signal);
+    if (operation.failure !== null) throw operation.failure.cause;
+    operation.signal.throwIfAborted();
+    const entry = this.entries.get(plan.key);
+    if (entry?.authority !== plan.authority)
+      throw new DOMException('MCP discovery was invalidated', 'AbortError');
+    return entry;
+  }
+  private operation(plan: Preparation<E>, refresh: boolean): Active {
     let operation = this.active.get(plan.key);
     if (operation?.authority !== plan.authority) {
       operation?.controller.abort();
@@ -88,13 +106,20 @@ export class CatalogCache<E extends CatalogEntry> {
         authority: plan.authority,
         controller,
         signal: AbortSignal.any([controller.signal, AbortSignal.timeout(30_000)]),
+        refresh,
+        failure: null,
         task: Promise.resolve(),
       };
       this.active.set(plan.key, operation);
+      this.entries.delete(plan.key);
       this.states.set(plan.key, { status: 'loading' });
       operation.task = this.run(plan, operation);
       this.tasks.add(operation.task);
     }
+    if (refresh) operation.refresh = true;
+    return operation;
+  }
+  private async wait(plan: Preparation<E>, operation: Active, signal?: AbortSignal): Promise<void> {
     const waiting =
       signal === undefined ? operation.signal : AbortSignal.any([operation.signal, signal]);
     try {
@@ -102,8 +127,10 @@ export class CatalogCache<E extends CatalogEntry> {
     } catch (error: unknown) {
       signal?.throwIfAborted();
       if (!operation.signal.aborted) throw error;
-      if (!operation.controller.signal.aborted && this.active.get(plan.key) === operation)
+      if (!operation.controller.signal.aborted && this.active.get(plan.key) === operation) {
+        operation.failure = { cause: error };
         this.failure(plan, error, true);
+      }
     }
   }
   public start(plan: Preparation<E>): void {
@@ -152,31 +179,36 @@ export class CatalogCache<E extends CatalogEntry> {
       await plan.before?.(signal);
       signal.throwIfAborted();
       plan.assertCurrent();
-      let stored;
-      try {
-        stored = this.repository.catalog(plan.serverId, plan.scope);
-      } catch {
-        this.repository.removeCatalog(plan.serverId, plan.scope);
-      }
-      if (stored?.authority === plan.authority) {
+      if (!operation.refresh) {
+        let stored;
         try {
-          const catalog = decodeMcpCatalog(stored.data);
-          signal.throwIfAborted();
-          plan.assertCurrent();
-          if (this.active.get(plan.key) !== operation) return;
-          this.entries.set(plan.key, plan.restore(catalog, stored.discoveredAt));
-          this.states.set(plan.key, { status: 'ready' });
-          return;
+          stored = this.repository.catalog(plan.serverId, plan.scope);
         } catch {
-          signal.throwIfAborted();
           this.repository.removeCatalog(plan.serverId, plan.scope);
         }
+        if (stored?.authority === plan.authority) {
+          try {
+            const catalog = decodeMcpCatalog(stored.data);
+            signal.throwIfAborted();
+            plan.assertCurrent();
+            if (this.active.get(plan.key) !== operation) return;
+            this.entries.set(plan.key, plan.createEntry(catalog, stored.discoveredAt));
+            this.states.set(plan.key, { status: 'ready' });
+            return;
+          } catch {
+            signal.throwIfAborted();
+            this.repository.removeCatalog(plan.serverId, plan.scope);
+          }
+        }
       }
-      await plan.discover(signal);
+      const catalog = await plan.discover(signal);
       signal.throwIfAborted();
       plan.assertCurrent();
+      if (this.active.get(plan.key) !== operation) return;
+      this.publish(plan.key, plan.serverId, plan.scope, plan.createEntry(catalog, Date.now()));
     } catch (error: unknown) {
       if (this.active.get(plan.key) !== operation) return;
+      operation.failure = { cause: error };
       this.entries.delete(plan.key);
       if (operation.controller.signal.aborted) this.states.set(plan.key, { status: 'idle' });
       else this.failure(plan, error, signal.aborted);
@@ -190,6 +222,7 @@ export class CatalogCache<E extends CatalogEntry> {
     const failure = catalogFailure(error, timedOut);
     const reported = this.states.get(plan.key)?.error?.code === failure.code;
     this.entries.delete(plan.key);
+    this.repository.removeCatalog(plan.serverId, plan.scope);
     this.states.set(plan.key, { status: 'error', error: failure });
     if (reported) return;
     try {

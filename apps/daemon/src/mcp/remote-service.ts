@@ -48,6 +48,7 @@ import { remoteMcpView } from './remote-view';
 import { McpDirectoryPolicy, mcpMetadata } from './directory';
 import { assertRemoteNameAvailable, validateRemoteInput } from './remote-configuration';
 import { testRemoteMcpDraft } from './remote-connection-test';
+import { deleteMcpCredentials } from './credential-cleanup';
 import {
   connectionAuthority,
   pluginCredentialId,
@@ -78,9 +79,18 @@ export class RemoteMcpService implements ExternalTools {
         available: (server) => this.pluginAvailable(server),
         assertAuthority: (server) => this.assertAuthority(server),
         connectionAuthority: (server) => this.connectionAuthority(server),
-        discover: (id, input, signal) => this.discover(id, input, signal),
+        discover: async (id, input, signal) => {
+          const server = this.require(id);
+          this.expected(server, input.expectedRevision, input.expectedAccessEpoch);
+          const binding = await this.binding(server, signal);
+          const value = await this.manager.discover(binding, { signal });
+          signal.throwIfAborted();
+          this.expected(this.require(id), server.revision, server.accessEpoch);
+          this.assertAuthority(this.require(id));
+          return value;
+        },
       },
-      (serverId) => options.onBackgroundError?.({ code: 'MCP_APP_DISCOVERY_FAILED', serverId }),
+      (serverId) => options.onDiscoveryError?.({ code: 'MCP_DISCOVERY_FAILED', serverId }),
     );
     this.manager =
       options.manager ??
@@ -262,12 +272,14 @@ export class RemoteMcpService implements ExternalTools {
     server: StoredRemoteMcpServer,
     retained: ReadonlySet<string> = new Set(),
   ): Promise<void> {
-    for (const ref of [
-      ...server.secretBindings.map((slot) => slot.credentialRef),
-      server.oauthCredentialRef,
-      server.oauthClientSecretRef,
-    ])
-      if (ref !== null && !retained.has(ref)) await this.options.credentials.delete(ref);
+    await deleteMcpCredentials(
+      this.options.credentials,
+      [
+        ...server.secretBindings.map((slot) => slot.credentialRef),
+        server.oauthCredentialRef,
+        server.oauthClientSecretRef,
+      ].filter((ref) => ref === null || !retained.has(ref)),
+    );
   }
   public async remove(id: string, expectedRevision: number): Promise<void> {
     this.catalogs.delete(id);
@@ -380,7 +392,7 @@ export class RemoteMcpService implements ExternalTools {
         fail('MCP_CREDENTIAL_WRITE_FAILED', '系统凭据保存失败，配置未生效。');
       }
       this.cancelFlows(id);
-      if (slot.credentialRef !== null) await this.options.credentials.delete(slot.credentialRef);
+      await deleteMcpCredentials(this.options.credentials, [slot.credentialRef]);
       return this.view(saved);
     });
   }
@@ -412,7 +424,7 @@ export class RemoteMcpService implements ExternalTools {
     );
     this.cancelFlows(id);
     await this.manager.invalidateServer(id);
-    if (slot.credentialRef !== null) await this.options.credentials.delete(slot.credentialRef);
+    await deleteMcpCredentials(this.options.credentials, [slot.credentialRef]);
     return this.view(saved);
   }
   public async deleteOAuthClientSecret(id: string, input: McpControlInput): Promise<RemoteMcpView> {
@@ -435,8 +447,10 @@ export class RemoteMcpService implements ExternalTools {
     );
     this.cancelFlows(id);
     await this.manager.invalidateServer(id);
-    for (const ref of [server.oauthClientSecretRef, server.oauthCredentialRef])
-      if (ref !== null) await this.options.credentials.delete(ref);
+    await deleteMcpCredentials(this.options.credentials, [
+      server.oauthClientSecretRef,
+      server.oauthCredentialRef,
+    ]);
     return this.view(saved);
   }
   private assertAuthority(server: StoredRemoteMcpServer): void {
@@ -490,8 +504,7 @@ export class RemoteMcpService implements ExternalTools {
     );
     this.cancelFlows(id);
     await this.manager.invalidateServer(id);
-    if (server.oauthCredentialRef !== null)
-      await this.options.credentials.delete(server.oauthCredentialRef);
+    await deleteMcpCredentials(this.options.credentials, [server.oauthCredentialRef]);
     return this.view(next);
   }
   private async binding(
@@ -555,19 +568,7 @@ export class RemoteMcpService implements ExternalTools {
   ): Promise<McpToolCatalog> {
     const server = this.require(id);
     this.expected(server, input.expectedRevision, input.expectedAccessEpoch);
-    const binding = await this.binding(server, signal);
-    const value = await this.manager.discover(binding, { signal });
-    signal.throwIfAborted();
-    this.expected(this.require(id), server.revision, server.accessEpoch);
-    this.assertAuthority(this.require(id));
-    const entry = {
-      authority: this.catalogs.authority(this.require(id)),
-      revision: server.revision,
-      accessEpoch: server.accessEpoch,
-      value,
-      discoveredAt: Date.now(),
-    };
-    this.catalogs.publish(id, id, 'remote', entry);
+    const entry = await this.catalogs.discoverServer(id, signal);
     return this.catalogView(server, entry);
   }
   private catalogView(server: StoredRemoteMcpServer, entry: CatalogEntry): McpToolCatalog {
@@ -587,15 +588,12 @@ export class RemoteMcpService implements ExternalTools {
           tool.supported &&
           this.options.store.mcp.directory.control(server.id, tool.remoteToolName).enabled,
         enabled: this.options.store.mcp.directory.control(server.id, tool.remoteToolName).enabled,
-        readOnlyAuthorized: this.options.store.mcp.directory
-          .grants(server.id)
-          .some(
-            (grant) =>
-              grant.remoteToolName === tool.remoteToolName &&
-              grant.definitionFingerprint === tool.definitionFingerprint &&
-              grant.serverRevision === server.revision &&
-              grant.accessEpoch === server.accessEpoch,
-          ),
+        readOnlyAuthorized:
+          this.directory.currentGrant(
+            server.id,
+            tool.remoteToolName,
+            tool.definitionFingerprint,
+          ) !== undefined,
         diagnostic: tool.unavailableReason,
       })),
     };
@@ -660,18 +658,11 @@ export class RemoteMcpService implements ExternalTools {
         catalog.accessEpoch !== server.accessEpoch
       )
         fail('MCP_SELECTION_STALE', '工具目录已失效，请重新发现。');
-      const grant = this.options.store.mcp.directory
-        .grants(server.id)
-        .find(
-          (entry) =>
-            entry.remoteToolName === selection.remoteToolName &&
-            entry.definitionFingerprint === selection.definitionFingerprint &&
-            entry.serverRevision === server.revision &&
-            entry.accessEpoch === server.accessEpoch &&
-            entry.ownerId === identity.ownerId &&
-            entry.identityEpoch === identity.epoch &&
-            entry.toolControlRevision === control.revision,
-        );
+      const grant = this.directory.currentGrant(
+        server.id,
+        tool.remoteToolName,
+        tool.definitionFingerprint,
+      );
       if (approvalMode === 'read-only' && grant === undefined)
         fail('MCP_SELECTION_FORBIDDEN', '此工具没有精确只读授权。');
       if (server.grant === null) fail('MCP_DISABLED', '远端授权失效。');
@@ -722,16 +713,7 @@ export class RemoteMcpService implements ExternalTools {
       const catalog = this.catalog(server.id);
       if (catalog === null) continue;
       const tools = catalog.tools.filter(
-        (tool) =>
-          tool.available &&
-          (!(approvalMode === 'read-only') ||
-            this.options.store.mcp.directory
-              .grants(server.id)
-              .some(
-                (grant) =>
-                  grant.remoteToolName === tool.remoteToolName &&
-                  grant.definitionFingerprint === tool.definitionFingerprint,
-              )),
+        (tool) => tool.available && (approvalMode !== 'read-only' || tool.readOnlyAuthorized),
       );
       if (result.length + tools.length > 512) fail('MCP_CATALOG_LIMIT', '远程工具目录超过512项。');
       for (let offset = 0; offset < tools.length; offset += 16)
@@ -783,9 +765,12 @@ export class RemoteMcpService implements ExternalTools {
         fail('MCP_SELECTION_STALE', '原工具授权已失效，请重新选择。');
       if (
         frozen.authorization.readOnlyGrantId !== undefined &&
-        !this.options.store.mcp.directory
-          .grants(server.id)
-          .some((grant) => grant.id === frozen.authorization.readOnlyGrantId)
+        this.directory.currentGrant(
+          server.id,
+          frozen.selection.remoteToolName,
+          frozen.selection.definitionFingerprint,
+          frozen.authorization.readOnlyGrantId,
+        ) === undefined
       )
         fail('MCP_SELECTION_STALE', '只读授权已撤销。');
     }
@@ -949,8 +934,10 @@ export class RemoteMcpService implements ExternalTools {
         fail('MCP_CREDENTIAL_WRITE_FAILED', '系统凭据保存失败，配置未生效。');
       }
       this.cancelFlows(id);
-      for (const previous of [server.oauthClientSecretRef, server.oauthCredentialRef])
-        if (previous !== null) await this.options.credentials.delete(previous);
+      await deleteMcpCredentials(this.options.credentials, [
+        server.oauthClientSecretRef,
+        server.oauthCredentialRef,
+      ]);
       return this.view(saved);
     });
   }

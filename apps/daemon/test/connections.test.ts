@@ -79,15 +79,6 @@ async function body(response: Response): Promise<ConnectionView> {
     throw new Error('Invalid public connection response');
   return value;
 }
-async function enablePluginApp(
-  value: Awaited<ReturnType<typeof fixture>>,
-  service: ConnectionServiceId,
-) {
-  const plugin = await value.services.plugins.install(service, new AbortController().signal);
-  const app = plugin.components.find((entry) => entry.kind === 'app');
-  if (app === undefined) throw new Error('Missing plugin App');
-  await value.services.plugins.component(service, app.id, plugin.revision, true);
-}
 
 it('keeps protected GET inert and rejects unknown HTTP fields without exposing fake secrets', async () => {
   const value = await fixture();
@@ -137,7 +128,7 @@ it.each(['github', 'google', 'vercel', 'notion', 'supabase'] as const)(
     );
     expect(connected.accountId).toBe(`${service}-account`);
     expect(JSON.stringify(connected)).not.toContain(`fixture-${service}-token`);
-    await enablePluginApp(value, service);
+    expect(value.services.store.extensions.plugins()).toEqual([]);
     const endpoint = value.services.connections
       .providers()
       .find((entry) => entry.serviceId === service)?.mcpEndpoints[0];
@@ -204,7 +195,6 @@ it('uses real OAuth state/PKCE/code exchange and serializes token refresh withou
   );
   const connected = value.services.connections.get(configured.id);
   expect(connected.connected).toBe(true);
-  await enablePluginApp(value, 'github');
   const stored = value.services.store.connections.get(configured.id);
   if (stored?.credentialRef === null || stored?.credentialRef === undefined)
     throw new Error('No opaque credential');

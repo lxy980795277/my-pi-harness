@@ -15,7 +15,7 @@ Node端的模型接入与持久会话运行层，使用精确固定的Pi core/ai
 | `work/`         | Plan、Todos、用户提问、检查点和相应会话工具                          |
 | `context/`      | 消息codec、附件输入、规则、预算、摘要及每次请求的上下文投影          |
 
-根`index.ts`是跨包公开入口，`errors.ts`定义包级运行失败。包内直接导入所属模块，不通过根入口或内部转发层回引；`ProviderStore`由`models/ports.ts`声明，`RuntimeStore`由`sessions/ports.ts`声明，宿主会话提交记录由protocol/internal唯一定义。
+根`index.ts`是跨包公开入口，`errors.ts`定义包级运行失败。包内直接导入所属模块，不通过根入口或内部转发层回引；`ProviderStore`由`models/ports.ts`声明，`RuntimeStore`由`sessions/ports.ts`声明，宿主会话提交记录及队列私有接受数据由protocol/internal唯一定义。RuntimeStore只暴露执行需要的读写操作，启动恢复由宿主负责；队列读取返回已校验的QueueCapabilityMetadata，运行时只处理缺失记录及绑定的当前有效性，不重复持久数据校验。
 
 `runs/execution.ts`拥有单次执行的取消、失败、终态及扩展工作结算；`agent.ts`装配Pi Agent和每次请求的能力/上下文钩子，`inputs.ts`投递队列与`RunInjectedInput`，`messages.ts`拥有SDK事件记录和未执行工具的结算，`prepare.ts`共用主子Run的模型检查与输入接受准备。`runs/ports.ts`声明可选`RunHooks`和注入输入接口，执行器只调用这些接口，不导入subagents，运行中输入投递不负责通信领域校验。注入输入在实际消费时提供整批持久记录，仍由Run统一提交；持久化失败由执行器中止整个Run。输入准备仍使用共享协议中的AgentMessage表达续作来源，不为消除该DTO引用增加新的消息格式或适配框架。
 

@@ -1,9 +1,9 @@
-import type { OAuthPromptState } from '@/features/auth/types/auth';
+import type { OAuthPromptState } from '@/features/models/types/oauth';
 import type { AuthFlow } from '@my-pi-harness/protocol';
 import { useCallback, useState, type ChangeEvent, type SubmitEvent } from 'react';
 
-import { respondToAuthFlow } from '@/features/auth/services/auth';
-import { getPromptPresentation } from '@/features/auth/utils/oauth-view';
+import { respondToAuthFlow } from '@/features/models/services/provider-auth';
+import { getPromptPresentation } from '@/features/models/utils/oauth-view';
 import { useAsyncEvent } from '@/hooks/use-async-event';
 
 /** Secret replies never become mutation variables or request-cache entries. */

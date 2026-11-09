@@ -244,6 +244,9 @@ describe('MCP directory management', () => {
       if (tool === undefined) throw new Error('Missing frozen tool');
       expect(f.services.mcp.isReadOnlyAuthorized(tool, { text: 'allowed' })).toBe(true);
       expect(f.services.mcp.isReadOnlyAuthorized(tool, { text: 'different' })).toBe(false);
+      const missingControl = { ...tool, authorization: { ...tool.authorization } };
+      delete missingControl.authorization.toolControlRevision;
+      expect(f.services.mcp.isReadOnlyAuthorized(missingControl, { text: 'allowed' })).toBe(false);
       const grants: unknown = await (
         await f.send(`/api/mcp/servers/${f.local.id}/readonly-grants`)
       ).json();

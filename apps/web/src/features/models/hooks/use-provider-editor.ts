@@ -12,10 +12,13 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState, type SubmitEvent } from 'react';
 
 import { useSettingsStore } from '@/features/settings/stores/settings';
-import { fetchAuthFlow, fetchAuthFlows } from '@/features/auth/services/auth';
+import {
+  fetchAuthFlow,
+  fetchAuthFlows,
+  startProviderAuth,
+} from '@/features/models/services/provider-auth';
 import {
   saveProvider,
-  startProviderAuth,
   writeProviderKey,
   deleteProvider,
   deleteProviderKey,

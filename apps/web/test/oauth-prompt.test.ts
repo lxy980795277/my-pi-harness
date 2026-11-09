@@ -1,6 +1,9 @@
 import type { AuthFlow } from '@my-pi-harness/protocol';
 import { describe, expect, it } from 'vitest';
-import { getPromptPresentation, oauthRefetchInterval } from '../src/features/auth/utils/oauth-view';
+import {
+  getPromptPresentation,
+  oauthRefetchInterval,
+} from '../src/features/models/utils/oauth-view';
 
 const prompt = (type: NonNullable<AuthFlow['prompt']>['type']): NonNullable<AuthFlow['prompt']> => {
   return { id: 'challenge', message: 'Provider login', secret: type === 'secret', type };

@@ -136,8 +136,8 @@ export async function createApplicationServices(
       ...(options.onError === undefined
         ? {}
         : {
-            onBackgroundError: (diagnostic) => {
-              const error = new Error(`Plugin App discovery failed: ${diagnostic.serverId}`);
+            onDiscoveryError: (diagnostic) => {
+              const error = new Error(`Remote MCP discovery failed: ${diagnostic.serverId}`);
               error.name = diagnostic.code;
               options.onError?.(error);
             },

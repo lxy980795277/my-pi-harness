@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { Value } from 'typebox/value';
 import { RuntimeError, type FrozenMcpTool } from '@my-pi-harness/agent-runtime';
 import type { McpCatalog } from '@my-pi-harness/integrations';
-import type { ProfileStore } from '@my-pi-harness/storage';
+import type { McpReadOnlyGrant, ProfileStore } from '@my-pi-harness/storage';
 import type {
   McpToolControlInput,
   McpReadOnlyGrantInput,
@@ -143,26 +143,50 @@ export class McpDirectoryPolicy {
     this.store.mcp.directory.revoke(id, grantId);
     await this.owner.invalidate(id);
   }
+  /** Finds a grant for the current definition, identity, configuration and tool control. */
+  public currentGrant(
+    serverId: string,
+    remoteToolName: string,
+    definitionFingerprint: string,
+    grantId?: string,
+  ): McpReadOnlyGrant | undefined {
+    const server = this.owner.server(serverId);
+    const identity = this.owner.identity();
+    const control = this.store.mcp.directory.control(serverId, remoteToolName);
+    if (!server.enabled || !control.enabled) return undefined;
+    return this.store.mcp.directory
+      .grants(serverId)
+      .find(
+        (grant) =>
+          (grantId === undefined || grant.id === grantId) &&
+          grant.remoteToolName === remoteToolName &&
+          grant.serverRevision === server.revision &&
+          grant.accessEpoch === server.accessEpoch &&
+          grant.definitionFingerprint === definitionFingerprint &&
+          grant.ownerId === identity.ownerId &&
+          grant.identityEpoch === identity.epoch &&
+          grant.toolControlRevision === control.revision,
+      );
+  }
   public authorized(tool: FrozenMcpTool, args: Record<string, unknown>): boolean {
     try {
       this.owner.assert([tool]);
     } catch {
       return false;
     }
-    const authorization = tool.authorization;
-    return this.store.mcp.directory
-      .grants(tool.selection.serverId)
-      .some(
-        (grant) =>
-          grant.id === authorization.readOnlyGrantId &&
-          grant.remoteToolName === tool.selection.remoteToolName &&
-          grant.serverRevision === tool.selection.serverRevision &&
-          grant.accessEpoch === authorization.accessEpoch &&
-          grant.definitionFingerprint === tool.selection.definitionFingerprint &&
-          grant.ownerId === authorization.ownerId &&
-          grant.identityEpoch === authorization.identityEpoch &&
-          grant.toolControlRevision === authorization.toolControlRevision &&
-          grant.argumentsHash === mcpArgumentsHash(args),
-      );
+    const grantId = tool.authorization.readOnlyGrantId;
+    if (grantId === undefined) return false;
+    const grant = this.currentGrant(
+      tool.selection.serverId,
+      tool.selection.remoteToolName,
+      tool.selection.definitionFingerprint,
+      grantId,
+    );
+    return (
+      grant !== undefined &&
+      grant.id === tool.authorization.readOnlyGrantId &&
+      grant.toolControlRevision === tool.authorization.toolControlRevision &&
+      grant.argumentsHash === mcpArgumentsHash(args)
+    );
   }
 }

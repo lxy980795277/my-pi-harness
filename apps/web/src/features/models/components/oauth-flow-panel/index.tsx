@@ -4,29 +4,20 @@ import { Button } from '@/components/ui/button';
 import { Notice } from '@/components/ui/notice';
 import { Input } from '@/components/ui/input';
 import { Field } from '@/components/ui/field';
-import { OAuthPrompt } from '@/features/auth/components/oauth-prompt';
-import { useOAuthFlow } from '@/features/auth/hooks/use-oauth-flow';
+import { OAuthPrompt } from '@/features/models/components/oauth-prompt';
+import { useOAuthFlow } from '@/features/models/hooks/use-oauth-flow';
 import { describeError } from '@/utils/describe-error';
 
 interface OAuthFlowPanelProps {
   flowId: string;
-  onClose?: () => void;
-  onCompleted?: () => void;
+  onCompleted: () => void;
 }
 
-/** OAuth interaction stays in the owning dialog; optional application flows can have a close action. */
-export const OAuthFlowPanel: FC<OAuthFlowPanelProps> = ({ flowId, onClose, onCompleted }) => {
+/** Model-provider authorization remains inside its owning settings dialog. */
+export const OAuthFlowPanel: FC<OAuthFlowPanelProps> = ({ flowId, onCompleted }) => {
   const state = useOAuthFlow(flowId, onCompleted);
   return (
     <section className="space-y-4" aria-label="OAuth 授权">
-      {onClose && (
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold">OAuth 授权</h2>
-          <Button type="button" variant="ghost" onClick={onClose}>
-            关闭面板
-          </Button>
-        </div>
-      )}
       {state.query.isPending && <Notice>正在准备登录…</Notice>}
       {state.query.isError && <Notice tone="error">{describeError(state.query.error)}</Notice>}
       {state.actionError && <Notice tone="error">{state.actionError}</Notice>}

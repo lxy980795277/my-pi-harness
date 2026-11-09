@@ -8,6 +8,7 @@ import {
   type HarnessEvent,
 } from '@my-pi-harness/protocol';
 import {
+  QueueCapabilityMetadataSchema,
   FrozenSkillSchema,
   SkillCandidatesSchema,
   FrozenMcpToolSchema,
@@ -17,7 +18,7 @@ import {
 import { checked } from '../../shared/validation';
 import { StorageError } from '../../shared/errors';
 import * as schema from '../../sqlite/schema';
-import { CapabilityLoadSchema, InputIdSchema, QueueRequestSchema } from '../event-validation';
+import { CapabilityLoadSchema, InputIdSchema } from '../event-validation';
 
 const definition = Type.Object({
   name: Type.String({ minLength: 1, maxLength: 100 }),
@@ -120,7 +121,7 @@ function consumedSkillCandidates(
       .get();
     if (!source)
       throw new StorageError('INVALID_EVENT', 'Consumed input has no accepted Skill metadata');
-    metadata.push(checked(QueueRequestSchema, source.privateData));
+    metadata.push(checked(QueueCapabilityMetadataSchema, source.privateData));
   }
   return metadata.flatMap((input) => [
     ...input.skillCandidates,

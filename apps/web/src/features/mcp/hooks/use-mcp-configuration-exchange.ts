@@ -1,6 +1,7 @@
 import type { McpConfigurationExchangeState } from '@/features/mcp/types/mcp';
-import { useCallback, useEffect, useRef, useState, type ChangeEvent } from 'react';
+import { useCallback, useState, type ChangeEvent } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { useBlobDownload } from '@/hooks/use-blob-download';
 import { useAsyncEvent } from '@/hooks/use-async-event';
 import { fetchMcpConfiguration, importMcpConfiguration } from '@/features/mcp/services/remote-mcp';
 
@@ -11,28 +12,13 @@ export const useMcpConfigurationExchange = (): McpConfigurationExchangeState => 
   const [encoded, setEncoded] = useState('');
   const [preview, setPreview] = useState<string | null>(null);
   const [summary, setSummary] = useState<string | null>(null);
-  const downloadUrl = useRef<string | null>(null);
-  useEffect(() => {
-    return (): void => {
-      if (downloadUrl.current !== null) {
-        URL.revokeObjectURL(downloadUrl.current);
-      }
-    };
-  }, []);
-  const download = useAsyncEvent(
-    useCallback(async (signal: AbortSignal): Promise<void> => {
+  const download = useBlobDownload(
+    'mcp-configuration',
+    useCallback(async (signal: AbortSignal): Promise<Blob> => {
       const config = await fetchMcpConfiguration(signal);
-      if (downloadUrl.current !== null) {
-        URL.revokeObjectURL(downloadUrl.current);
-      }
-      downloadUrl.current = URL.createObjectURL(
-        new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' }),
-      );
-      const link = document.createElement('a');
-      link.href = downloadUrl.current;
-      link.download = 'mcp-configuration.json';
-      link.click();
+      return new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
     }, []),
+    'mcp-configuration.json',
   );
   const inspect = useAsyncEvent(
     useCallback(

@@ -6,7 +6,7 @@ Node 24 宿主使用的同步存储。JSONL保存会话执行事实，独立不�
 
 `src/index.ts`是唯一公开入口。`profile/`拥有宿主options、打开、锁、关闭和跨JSONL与SQLite的唯一事务编排；`sqlite/`保存Drizzle表和按版本校验的迁移；`sessions/`保存日志、附件、上下文查询和事件校验，`sessions/projections/`维护可重建的会话、工具、能力及工作状态投影。`repositories/`保存身份、模型配置、工作区、MCP、扩展及高级账户的SQLite仓储；`credentials/`拥有系统凭据和插件私有凭据；`shared/`仅放存储错误和通用持久数据校验。
 
-SessionQueries拥有会话快照、输入队列来源、幂等接受结果及公开事件分页的SQL读取；SessionRecovery在ProfileStore的启动事务内从日志与附件重建投影并核对产物引用。SessionEventCommit拥有会话创建与后续事件的校验和暂存，不自行提交事务；ArtifactRepository拥有已发布产物的元数据、可见性核对和blob引用。ProfileStore保留公开门面、资源所有权、提交顺序与失败冻结，所有查询与恢复共用同一数据库和内存流式覆盖层，没有第二份会话状态。
+SessionQueries拥有会话快照、输入队列来源、幂等接受结果及公开事件分页的SQL读取；队列私有接受数据使用protocol/internal的QueueCapabilityMetadataSchema，写入、回放与持久投影读取均校验，查询返回已校验类型。SessionRecovery在ProfileStore的启动事务内从日志与附件重建投影并核对产物引用。SessionEventCommit拥有会话创建与后续事件的校验和暂存，不自行提交事务；ArtifactRepository拥有已发布产物的元数据、可见性核对和blob引用。ProfileStore保留公开门面、资源所有权、提交顺序与失败冻结，所有查询与恢复共用同一数据库和内存流式覆盖层，没有第二份会话状态。
 
 模型配置、厂商绑定和默认模型由`ModelSettingsRepository`查询与更新，`ProfileStore`保持对外方法和事务所有权。配置更新通过宿主提供的事务函数执行，继续服从profile关闭状态和日志写入失败后的写入冻结，不另建提交或恢复路径。
 

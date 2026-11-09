@@ -1,5 +1,5 @@
 import type { SecretInputType } from '@/types/input';
-import type { PromptPresentation } from '@/features/auth/types/auth';
+import type { PromptPresentation } from '@/features/models/types/oauth';
 import type { AuthFlow } from '@my-pi-harness/protocol';
 
 import type { SelectOption } from '@/components/ui/select-field';

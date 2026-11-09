@@ -6,7 +6,7 @@ import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Notice } from '@/components/ui/notice';
 import { SelectField } from '@/components/ui/select-field';
-import { useOAuthPrompt } from '@/features/auth/hooks/use-oauth-prompt';
+import { useOAuthPrompt } from '@/features/models/hooks/use-oauth-prompt';
 
 interface OAuthPromptProps {
   flowId: string;

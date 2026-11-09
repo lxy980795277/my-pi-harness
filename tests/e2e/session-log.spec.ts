@@ -106,7 +106,10 @@ test('会话标题栏全宽展示，下载完整 JSONL 并在失败后重试', a
       await route.fulfill({
         status: 503,
         contentType: 'application/json',
-        body: JSON.stringify({ message: '会话日志暂不可用，请重试。' }),
+        body: JSON.stringify({
+          code: 'SESSION_LOG_UNAVAILABLE',
+          message: '会话日志暂不可用，请重试。',
+        }),
       });
     });
     const download = header.getByRole('button', { name: '下载对话日志', exact: true });

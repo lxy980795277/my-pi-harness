@@ -1,9 +1,15 @@
-import { Resolver } from 'node:dns/promises';
+import type { LookupAddress } from 'node:dns';
 import { request as httpRequest, type IncomingMessage } from 'node:http';
 import { request as httpsRequest } from 'node:https';
 import { isIP } from 'node:net';
 import { ToolError } from './tool-registry';
-import { checkCancelled, isPublicAddress } from '@my-pi-harness/sandbox';
+import { checkCancelled } from '@my-pi-harness/sandbox';
+import {
+  createPinnedLookup,
+  isPublicAddress,
+  resolveSocketAddress,
+  SandboxError,
+} from '@my-pi-harness/sandbox/network';
 import type { WebFetchGatewayAccess } from './tool-context';
 
 interface WebResponse {
@@ -79,38 +85,19 @@ export function gatewayTarget(
   return url;
 }
 
-/** Resolve through an owned resolver so abort cancels DNS; the returned address is used by the socket. */
-async function publicAddresses(
-  url: URL,
-  signal: AbortSignal,
-): Promise<{ address: string; family: number }[]> {
+async function publicAddress(url: URL, signal: AbortSignal): Promise<LookupAddress> {
   checkCancelled(signal);
-  const hostname = url.hostname.replace(/^\[|\]$/g, '');
-  const family = isIP(hostname);
-  if (family) return [{ address: hostname, family }];
-  const resolver = new Resolver({ timeout: 3000, tries: 1 });
-  const abort = (): void => {
-    resolver.cancel();
-  };
-  signal.addEventListener('abort', abort, { once: true });
   try {
-    const answers = await Promise.allSettled([
-      resolver.resolve4(hostname),
-      resolver.resolve6(hostname),
-    ]);
-    checkCancelled(signal);
-    const addresses = answers.flatMap((answer, index) =>
-      answer.status === 'fulfilled'
-        ? answer.value.map((address) => ({ address, family: index === 0 ? 4 : 6 }))
-        : [],
+    return await resolveSocketAddress(
+      url.hostname.replace(/^\[|\]$/g, ''),
+      signal,
+      assertPublicAddress,
     );
-    if (addresses.length === 0)
-      throw new ToolError('DNS_FAILED', 'The web hostname could not be resolved');
-    for (const entry of addresses) assertPublicAddress(entry.address);
-    return addresses;
-  } finally {
-    signal.removeEventListener('abort', abort);
-    resolver.cancel();
+  } catch (cause) {
+    checkCancelled(signal);
+    if (cause instanceof SandboxError && cause.code === 'DNS_FAILED')
+      throw new ToolError('DNS_FAILED', 'The web hostname could not be resolved', { cause });
+    throw cause;
   }
 }
 
@@ -176,11 +163,7 @@ export async function requestWebUrl(
   signal: AbortSignal,
   gateway?: WebFetchGatewayAccess,
 ): Promise<WebResponse> {
-  const addresses = gateway
-    ? [{ address: '127.0.0.1', family: 4 }]
-    : await publicAddresses(url, signal);
-  const selected = addresses[0];
-  if (!selected) throw new ToolError('DNS_FAILED', 'The web hostname has no public address');
+  const selected = gateway ? { address: '127.0.0.1', family: 4 } : await publicAddress(url, signal);
   const request = url.protocol === 'https:' ? httpsRequest : httpRequest;
   return await new Promise<WebResponse>((accept, reject) => {
     const client = request(
@@ -197,10 +180,7 @@ export async function requestWebUrl(
             ? {}
             : { 'content-type': contentType, 'content-length': Buffer.byteLength(body) }),
         },
-        lookup: (_hostname, options, callback) => {
-          if (options.all) callback(null, [selected]);
-          else callback(null, selected.address, selected.family);
-        },
+        lookup: createPinnedLookup(selected),
       },
       (response) => {
         readResponse(response, accept, reject, gateway === undefined ? 500_000 : 5 * 1024 * 1024);

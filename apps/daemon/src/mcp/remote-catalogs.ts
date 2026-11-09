@@ -24,7 +24,7 @@ interface Owner {
   available(server: StoredRemoteMcpServer): boolean;
   assertAuthority(server: StoredRemoteMcpServer): void;
   connectionAuthority(server: StoredRemoteMcpServer): ServiceCredentialAuthority;
-  discover(id: string, input: McpControlInput, signal: AbortSignal): Promise<unknown>;
+  discover(id: string, input: McpControlInput, signal: AbortSignal): Promise<McpCatalog>;
 }
 
 /** Non-secret authority snapshots bind recovered remote catalogs to their current account and trust. */
@@ -65,7 +65,7 @@ export class RemoteCatalogs extends CatalogCache<RemoteCatalogEntry> {
         if (this.authority(current) !== authority)
           throw new RuntimeError('MCP_CONFLICT', 'MCP目录准备期间授权已变化。');
       },
-      restore: (value: McpCatalog, discoveredAt: number): RemoteCatalogEntry => ({
+      createEntry: (value: McpCatalog, discoveredAt: number): RemoteCatalogEntry => ({
         authority,
         revision: server.revision,
         accessEpoch: server.accessEpoch,
@@ -93,6 +93,9 @@ export class RemoteCatalogs extends CatalogCache<RemoteCatalogEntry> {
       return;
     }
     await this.prepare(plan, signal);
+  }
+  public async discoverServer(id: string, signal: AbortSignal): Promise<RemoteCatalogEntry> {
+    return await this.refresh(this.preparation(id), signal);
   }
   public startServer(id: string): void {
     const server = this.owner.require(id);

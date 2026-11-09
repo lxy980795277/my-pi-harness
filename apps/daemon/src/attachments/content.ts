@@ -1,39 +1,20 @@
 import { extname } from 'node:path';
 import { RuntimeError } from '@my-pi-harness/agent-runtime';
 
-export const TEXT_LIMIT = 256_000;
-export const IMAGE_LIMIT = 2 * 1024 * 1024;
-export const PDF_LIMIT = 8 * 1024 * 1024;
-
-const documentFormats: Readonly<Record<string, { format: string; mediaType: string }>> = {
-  '.docx': {
-    format: 'docx',
-    mediaType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  },
-  '.docm': { format: 'docx', mediaType: 'application/vnd.ms-word.document.macroEnabled.12' },
-  '.xlsx': {
-    format: 'xlsx',
-    mediaType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  },
-  '.xlsm': { format: 'xlsx', mediaType: 'application/vnd.ms-excel.sheet.macroEnabled.12' },
-  '.pptx': {
-    format: 'pptx',
-    mediaType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-  },
-  '.pptm': {
-    format: 'pptx',
-    mediaType: 'application/vnd.ms-powerpoint.presentation.macroEnabled.12',
-  },
-  '.odt': { format: 'odt', mediaType: 'application/vnd.oasis.opendocument.text' },
-  '.ods': { format: 'ods', mediaType: 'application/vnd.oasis.opendocument.spreadsheet' },
-  '.odp': { format: 'odp', mediaType: 'application/vnd.oasis.opendocument.presentation' },
-  '.rtf': { format: 'rtf', mediaType: 'application/rtf' },
-  '.epub': { format: 'epub', mediaType: 'application/epub+zip' },
-};
+import {
+  ATTACHMENT_BYTE_LIMITS,
+  ATTACHMENT_FORMATS,
+  ATTACHMENT_MAX_BASE64_LENGTH,
+  type AttachmentDocumentFormat,
+} from '@my-pi-harness/protocol';
 
 /** Reject permissive Buffer decoding, including ignored garbage and incomplete padding. */
 export function decodeUpload(value: string): Buffer {
-  if (value.length > 11_184_812 || value.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(value))
+  if (
+    value.length > ATTACHMENT_MAX_BASE64_LENGTH ||
+    value.length % 4 !== 0 ||
+    !/^[A-Za-z0-9+/]*={0,2}$/.test(value)
+  )
     throw new RuntimeError('ATTACHMENT_INVALID', '附件编码无效。');
   const bytes = Buffer.from(value, 'base64');
   if (bytes.toString('base64') !== value)
@@ -42,7 +23,7 @@ export function decodeUpload(value: string): Buffer {
 }
 
 export function decodeText(bytes: Uint8Array): string {
-  if (bytes.byteLength > TEXT_LIMIT)
+  if (bytes.byteLength > ATTACHMENT_BYTE_LIMITS.text)
     throw new RuntimeError('ATTACHMENT_TOO_LARGE', '文本附件不能超过256KB。');
   if (bytes.includes(0)) throw new RuntimeError('ATTACHMENT_TYPE', '只支持UTF-8文本。');
   try {
@@ -74,14 +55,20 @@ export function checkAborted(signal?: AbortSignal): void {
 }
 
 /** Filename and MIME select a supported parser; the parser validates the archive contents. */
-export function documentFormat(name: string, mediaType: string): string | undefined {
-  const entry = documentFormats[extname(name).toLowerCase()];
-  if (!entry) return undefined;
+export function documentFormat(
+  name: string,
+  mediaType: string,
+): AttachmentDocumentFormat | undefined {
+  const extension = extname(name).slice(1).toLowerCase();
+  const entry = ATTACHMENT_FORMATS.find((format) => {
+    return format.kind === 'document' && format.extensions.includes(extension);
+  });
+  if (!entry || entry.kind !== 'document') return undefined;
   if (
     mediaType.toLowerCase() !== entry.mediaType.toLowerCase() &&
     mediaType !== 'application/octet-stream' &&
-    !(entry.format === 'rtf' && mediaType === 'text/rtf')
+    !entry.aliases?.includes(mediaType)
   )
     throw new RuntimeError('ATTACHMENT_TYPE', '文档类型与文件扩展名不符。');
-  return entry.format;
+  return entry.parser;
 }

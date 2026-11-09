@@ -30,7 +30,7 @@ bind接收当前Run的ToolContext，返回异步调用入口；注册工厂同�
 
 ## Skill资源与插件声明
 
-SkillCatalog发现注册根并按project、user、plugin、system排序，正文与资源索引共同生成contentHash。freeze重新读取源树验证相同内容，再发布不可变快照；loadResource只读取已接受路径并检查hash和大小。安装拒绝链接、隐藏资源、路径遍历、重复及超限文件，不执行源安装脚本。GitHub下载固定提交及blob身份，网络请求由宿主注入受控传输。
+SkillCatalog发现注册根并按project、user、plugin、system排序，正文与资源索引共同生成contentHash。它返回全部有序来源，不判断启用或遮蔽；daemon的SkillsService使用同一发现快照和当前组件控制计算有效目录，详情与冻结不会再次扫描目录。freeze仍重新读取所选源树验证相同内容，再发布不可变快照；loadResource只读取已接受路径并检查hash和大小。安装拒绝链接、隐藏资源、路径遍历、重复及超限文件，不执行源安装脚本。GitHub下载固定提交及blob身份，网络请求由宿主注入受控传输。
 
 resource-manifest.json的version为1，dependencies每项包含source、target和hash。source是宿主resourceSources中注册的精确标识，映射到固定目录与相对文件；未注册来源明确拒绝。target是Skill内唯一相对路径。通用引擎不自行查找插件或宿主源码，也不接受模型提供共享文件根。发现和冻结验证SHA-256，将共享依赖复制进快照，后续读取不依赖升级后的源码；专属格式模块直接随各Skill保存。
 

@@ -507,24 +507,13 @@ export class ConnectionService {
     )
       fail('CONNECTION_REQUIRED', '外部账户未连接或授权已失效，请重新连接。');
   }
-  private appEnabled(serviceId: string, componentId: string): boolean {
-    const plugin = this.options.store.extensions.plugins().find((item) => item.id === serviceId);
-    return (
-      plugin?.enabled === true &&
-      plugin.components.some(
-        (item) => item.kind === 'app' && item.id === componentId && item.enabled,
-      )
-    );
-  }
   public authority(
     connectionId: string,
     endpoint: string,
   ): { connectionId: string; accessEpoch: number; ownerId: string; identityEpoch: number } {
     const record = this.require(connectionId);
     this.assertConnected(record);
-    const componentId = pluginEndpointComponent(record.serviceId, endpoint);
-    if (!this.appEnabled(record.serviceId, componentId))
-      fail('CONNECTION_APP_DISABLED', '此MCP所属的服务应用已停用。');
+    pluginEndpointComponent(record.serviceId, endpoint);
     return {
       connectionId,
       accessEpoch: record.accessEpoch,

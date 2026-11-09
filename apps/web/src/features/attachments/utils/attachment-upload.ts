@@ -1,62 +1,38 @@
-import type { AttachmentUpload } from '@my-pi-harness/protocol';
+import {
+  ATTACHMENT_BYTE_LIMITS,
+  ATTACHMENT_FORMATS,
+  type AttachmentUpload,
+} from '@my-pi-harness/protocol';
 
-const EXTENSION_TYPES: Readonly<Record<string, string>> = {
-  txt: 'text/plain',
-  md: 'text/markdown',
-  json: 'application/json',
-  csv: 'text/csv',
-  ts: 'text/plain',
-  tsx: 'text/plain',
-  js: 'text/plain',
-  jsx: 'text/plain',
-  py: 'text/plain',
-  yml: 'text/plain',
-  yaml: 'text/plain',
-  css: 'text/plain',
-  html: 'text/plain',
-  pdf: 'application/pdf',
-  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  docm: 'application/vnd.ms-word.document.macroEnabled.12',
-  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  xlsm: 'application/vnd.ms-excel.sheet.macroEnabled.12',
-  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-  pptm: 'application/vnd.ms-powerpoint.presentation.macroEnabled.12',
-  odt: 'application/vnd.oasis.opendocument.text',
-  ods: 'application/vnd.oasis.opendocument.spreadsheet',
-  odp: 'application/vnd.oasis.opendocument.presentation',
-  rtf: 'application/rtf',
-  epub: 'application/epub+zip',
-  png: 'image/png',
-  jpg: 'image/jpeg',
-  jpeg: 'image/jpeg',
-  webp: 'image/webp',
-  gif: 'image/gif',
-};
-const DOCUMENT_EXTENSIONS = new Set([
-  'pdf',
-  'docx',
-  'docm',
-  'xlsx',
-  'xlsm',
-  'pptx',
-  'pptm',
-  'odt',
-  'ods',
-  'odp',
-  'rtf',
-  'epub',
-]);
+/** File picker declarations follow the same supported formats as upload preflight and host parsing. */
+export const ATTACHMENT_ACCEPT = [
+  'text/*',
+  ...ATTACHMENT_FORMATS.flatMap((format) => {
+    return [
+      format.mediaType,
+      ...format.extensions.map((extension) => {
+        return `.${extension}`;
+      }),
+    ];
+  }),
+].join(',');
 
 /** Encodes one file locally; its bytes are retained only until the upload completes. */
 export const fileToUpload = async (file: File, signal: AbortSignal): Promise<AttachmentUpload> => {
   const extension = file.name.split('.').at(-1)?.toLowerCase() ?? '';
-  const mediaType = file.type || EXTENSION_TYPES[extension] || 'application/octet-stream';
-  let limit = 256_000;
+  const format = ATTACHMENT_FORMATS.find((entry) => {
+    return entry.extensions.includes(extension);
+  });
+  const mediaType = file.type || format?.mediaType || 'application/octet-stream';
+  let limit: number = ATTACHMENT_BYTE_LIMITS.text;
   if (mediaType.startsWith('image/')) {
-    limit = 2_097_152;
+    limit = ATTACHMENT_BYTE_LIMITS.image;
   }
-  if (DOCUMENT_EXTENSIONS.has(extension) || mediaType === 'application/pdf') {
-    limit = 8_388_608;
+  if (format?.kind === 'document') {
+    limit = ATTACHMENT_BYTE_LIMITS.document;
+  }
+  if (format?.kind === 'pdf' || mediaType === 'application/pdf') {
+    limit = ATTACHMENT_BYTE_LIMITS.pdf;
   }
   if (file.size > limit) {
     throw new Error(`“${file.name}”超过大小限制。文本限 256 KB，图片限 2 MB，文档限 8 MB。`);

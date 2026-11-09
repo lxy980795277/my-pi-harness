@@ -14,7 +14,7 @@ import { Label } from '@/components/ui/label';
 import { Tabs } from '@/components/ui/tabs';
 import { TabsList } from '@/components/ui/tabs/tabs-list';
 import { TabsTrigger } from '@/components/ui/tabs/tabs-trigger';
-import { OAuthFlowPanel } from '@/features/auth/components/oauth-flow-panel';
+import { OAuthFlowPanel } from '@/features/models/components/oauth-flow-panel';
 import { useProviderEditor } from '@/features/models/hooks/use-provider-editor';
 import { useProviderEditorFields } from '@/features/models/hooks/use-provider-editor-fields';
 

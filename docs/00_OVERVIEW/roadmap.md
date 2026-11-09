@@ -2,6 +2,8 @@
 
 本页管理功能范围与里程碑顺序，详细验收由各里程碑 Spec 承担。`规划` 不表示能力已经可用；只有实现与必要验证都完成后才能调整状态。
 
+2026-11-09完成[共享规则与状态归属治理](../04_FEATURES/202611091051_refactor_shared-mechanisms/spec.md)的实现与本机工程验证：统一MCP当前授权、凭据清理与目录状态、队列私有契约、Skill有效目录、网络原语及前端资源生命周期。2142项源码回归、7项隔离部署、六条相关浏览器链路及类型/静态/构建检查通过，详见[验证记录](../04_FEATURES/202611091051_refactor_shared-mechanisms/verify.md)。属于M0与既有M1–M5维护，M6及原有真实账号、Office视觉和平台验收缺口保持。本轮按用户后续授权整理为[0.19.1](../06_RELEASES/0.19.1.md)本地提交，仅同步提交元数据，不重新打包。
+
 2026-11-07完成[共享协议与模块数据归属整理](../04_FEATURES/202611070332_refactor_protocol-contracts/spec.md)：复审后仅统一重复跨端数据、拆分Provider公开/宿主记录、迁移默认Agent策略并统一工具内容；合理的单模块定义保持。本机2108项源码、7项部署及全仓静态/类型/构建检查通过，见[验证记录](../04_FEATURES/202611070332_refactor_protocol-contracts/verify.md)。属于M0与既有M1–M5维护，M6及原有外部验收缺口保持。 本轮于2026-11-08按用户授权整理为[0.19.0](../06_RELEASES/0.19.0.md)本地提交，公开协议25，SQLite10与会话格式保持，不重新打包。
 
 2026-11-06按用户确认完成[插件、协议与存储职责治理](../04_FEATURES/202611061544_refactor_plugin-protocol-storage/spec.md)：独立plugins包，Skills保留tools，收紧integrations并划分公开/宿主协议及Store职责。本机2094项源码回归、7项生产部署、全仓静态/类型/构建通过，见[验证记录](../04_FEATURES/202611061544_refactor_plugin-protocol-storage/verify.md)。本轮按用户后续提交授权整理为[0.18.4](../06_RELEASES/0.18.4.md)，仅同步产品元数据。属于M0和既有M1–M5维护，M6及既有外部验收缺口保持原状态。

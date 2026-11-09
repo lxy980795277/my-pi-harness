@@ -333,4 +333,142 @@ describe('remote MCP draft connection and configuration ownership', () => {
       await f.close();
     }
   });
+
+  it.each(['update', 'remove'] as const)(
+    'attempts every obsolete secret and OAuth credential after %s commits even if one deletion fails',
+    async (operation) => {
+      const f = await fixture();
+      try {
+        let server = f.services.remoteMcp.create({
+          ...input,
+          secretHeaders: [
+            { slotId: 'api', headerName: 'X-Api-Key' },
+            { slotId: 'extra', headerName: 'X-Extra-Key' },
+          ],
+        });
+        for (const slot of ['api', 'extra'])
+          server = await f.services.remoteMcp.writeSecret(server.id, slot, {
+            expectedRevision: server.revision,
+            value: `synthetic-${slot}-secret`,
+          });
+        const stored = f.services.store.remoteMcp.get(server.id);
+        if (stored === undefined) throw new Error('Missing remote server');
+        const oauthRefs = ['mcp:fixture-oauth', 'mcp:fixture-oauth-client'];
+        for (const ref of oauthRefs) await f.credentials.write(ref, 'synthetic-oauth-secret');
+        f.services.store.remoteMcp.save(
+          {
+            ...stored,
+            oauthCredentialRef: oauthRefs[0] ?? null,
+            oauthClientSecretRef: oauthRefs[1] ?? null,
+          },
+          stored.revision,
+          stored.accessEpoch,
+        );
+        const refs = [
+          ...stored.secretBindings.map((binding) => binding.credentialRef),
+          ...oauthRefs,
+        ];
+        const blocked = refs[0];
+        if (blocked === null || blocked === undefined) throw new Error('Missing secret reference');
+        const remove = f.credentials.delete.bind(f.credentials);
+        const deleted = vi.spyOn(f.credentials, 'delete').mockImplementation(async (ref) => {
+          if (ref === blocked) throw new Error('synthetic-private-cleanup-detail');
+          await remove(ref);
+        });
+        const pending =
+          operation === 'update'
+            ? f.services.remoteMcp.update(server.id, {
+                ...input,
+                endpoint: 'https://changed.example/mcp',
+                expectedRevision: server.revision,
+              })
+            : f.services.remoteMcp.remove(server.id, server.revision);
+        await expect(pending).rejects.toMatchObject({
+          code: 'MCP_CREDENTIAL_CLEANUP_FAILED',
+          message: '配置已保存，但旧系统凭据清理失败。',
+        });
+        expect(deleted.mock.calls.map(([ref]) => ref).sort()).toEqual(refs.sort());
+        expect(await f.credentials.list()).toEqual([blocked]);
+        const current = f.services.store.remoteMcp.get(server.id);
+        if (operation === 'remove') expect(current).toBeUndefined();
+        else
+          expect(current).toMatchObject({
+            endpoint: 'https://changed.example/mcp',
+            enabled: false,
+            oauthCredentialRef: null,
+            oauthClientSecretRef: null,
+            secretBindings: [{ credentialRef: null }],
+          });
+      } finally {
+        await f.close();
+      }
+    },
+  );
+
+  it.each(['replace', 'delete'] as const)(
+    'cleans both previous OAuth references after client-secret %s even if the first deletion fails',
+    async (operation) => {
+      const f = await fixture();
+      try {
+        const server = f.services.remoteMcp.create({
+          ...input,
+          secretHeaders: [],
+          oauth: true,
+          oauthClient: {
+            clientId: 'fixture-client',
+            clientSecret: true,
+            issuer: 'https://example.com/oauth',
+            scopes: [],
+            accessTypeOffline: false,
+          },
+        });
+        const stored = f.services.store.remoteMcp.get(server.id);
+        if (stored === undefined) throw new Error('Missing remote server');
+        const clientRef = 'mcp:fixture-old-client';
+        const tokenRef = 'mcp:fixture-old-token';
+        for (const ref of [clientRef, tokenRef])
+          await f.credentials.write(ref, 'synthetic-old-oauth-secret');
+        f.services.store.remoteMcp.save(
+          { ...stored, oauthClientSecretRef: clientRef, oauthCredentialRef: tokenRef },
+          stored.revision,
+          stored.accessEpoch,
+        );
+        const remove = f.credentials.delete.bind(f.credentials);
+        const deleted = vi.spyOn(f.credentials, 'delete').mockImplementation(async (ref) => {
+          if (ref === clientRef) throw new Error('synthetic-private-cleanup-detail');
+          await remove(ref);
+        });
+        const pending =
+          operation === 'replace'
+            ? f.services.remoteMcp.writeOAuthClientSecret(server.id, {
+                expectedRevision: server.revision,
+                value: 'synthetic-new-client-secret',
+              })
+            : f.services.remoteMcp.deleteOAuthClientSecret(server.id, {
+                expectedRevision: server.revision,
+                expectedAccessEpoch: server.accessEpoch,
+              });
+        await expect(pending).rejects.toMatchObject({ code: 'MCP_CREDENTIAL_CLEANUP_FAILED' });
+        expect(deleted.mock.calls.map(([ref]) => ref)).toEqual([clientRef, tokenRef]);
+        expect(await f.credentials.read(tokenRef)).toBeUndefined();
+        const saved = f.services.store.remoteMcp.get(server.id);
+        if (saved === undefined) throw new Error('Missing committed configuration');
+        expect(saved).toMatchObject({
+          enabled: false,
+          revision: server.revision + 1,
+          oauthCredentialRef: null,
+        });
+        if (operation === 'delete') expect(saved.oauthClientSecretRef).toBeNull();
+        else {
+          if (saved.oauthClientSecretRef === null) throw new Error('Missing new client secret');
+          expect(saved.oauthClientSecretRef).not.toBe(clientRef);
+          expect(await f.credentials.read(saved.oauthClientSecretRef)).toBe(
+            'synthetic-new-client-secret',
+          );
+        }
+      } finally {
+        await f.close();
+      }
+    },
+  );
 });

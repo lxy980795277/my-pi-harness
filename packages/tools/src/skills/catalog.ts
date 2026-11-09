@@ -26,7 +26,7 @@ import type {
 } from './types';
 
 const precedence = { project: 0, user: 1, plugin: 2, system: 3 };
-/** Filesystem catalog owns content snapshots, never execution permission. */
+/** Discovers ordered sources and immutable content; the host owns enabled/shadowed selection. */
 export class SkillCatalog {
   private readonly leases = new Map<string, number>();
   private readonly materializer: SkillMaterializer;
@@ -86,7 +86,6 @@ export class SkillCatalog {
           id,
           contentHash,
           resources,
-          shadowed: false,
           source: directory,
         });
       }
@@ -98,11 +97,6 @@ export class SkillCatalog {
         (rootOrder.get(a.root) ?? 0) - (rootOrder.get(b.root) ?? 0) ||
         a.name.localeCompare(b.name),
     );
-    const names = new Set<string>();
-    for (const skill of output) {
-      skill.shadowed = names.has(skill.name);
-      names.add(skill.name);
-    }
     return output;
   }
 

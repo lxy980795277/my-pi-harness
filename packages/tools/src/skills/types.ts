@@ -29,7 +29,6 @@ export interface DiscoveredSkill extends ParsedSkill {
   contentHash: string;
   resources: SkillResource[];
   managed: boolean;
-  shadowed: boolean;
   source: string;
 }
 export interface SkillCatalogOptions {

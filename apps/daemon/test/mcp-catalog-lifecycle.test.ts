@@ -217,6 +217,125 @@ it('keeps a failed server visible as a safe diagnostic while other enabled catal
   expect(f.remote.get(f.server.id).catalogStatus).toBe('ready');
 });
 
+it('invalidates memory and durable remote catalogs after an explicit refresh failure and retries discovery', async () => {
+  const f = await setup();
+  const discover = vi.spyOn(f.manager, 'discover').mockResolvedValue(catalog());
+  await f.remote.freezeCandidates(null, 'ask', AbortSignal.timeout(5000));
+  const control = {
+    expectedRevision: f.server.revision,
+    expectedAccessEpoch: f.server.accessEpoch,
+  };
+  discover.mockRejectedValueOnce(new Error('Authorization Bearer fixture-private-secret'));
+  await expect(
+    f.remote.discover(f.server.id, control, AbortSignal.timeout(5000)),
+  ).rejects.toThrow();
+  expect(f.remote.catalog(f.server.id)).toBeNull();
+  expect(f.store.mcp.directory.catalog(f.server.id, 'remote')).toBeUndefined();
+  expect(f.remote.get(f.server.id)).toMatchObject({ catalogStatus: 'error' });
+  expect(f.remote.diagnostics()).toMatchObject([
+    { status: 'error', toolCount: 0, error: { code: 'MCP_CATALOG_FAILED' } },
+  ]);
+  expect(JSON.stringify(f.remote.diagnostics())).not.toContain('fixture-private-secret');
+  expect(await f.remote.freezeCandidates(null, 'ask', AbortSignal.timeout(5000))).toHaveLength(1);
+  expect(discover).toHaveBeenCalledTimes(3);
+});
+
+it('shares an explicit refresh between callers while cancellation releases only one waiter', async () => {
+  const f = await setup();
+  const entered = gate();
+  const finish = gate();
+  cleanups.push(() => {
+    finish.release();
+    return Promise.resolve();
+  });
+  const discover = vi.spyOn(f.manager, 'discover').mockImplementation(async () => {
+    entered.release();
+    await finish.promise;
+    return catalog();
+  });
+  const control = {
+    expectedRevision: f.server.revision,
+    expectedAccessEpoch: f.server.accessEpoch,
+  };
+  const caller = new AbortController();
+  const one = f.remote.discover(f.server.id, control, caller.signal);
+  const rejected = expect(one).rejects.toMatchObject({ name: 'AbortError' });
+  await entered.promise;
+  expect(f.remote.get(f.server.id).catalogStatus).toBe('loading');
+  const two = f.remote.discover(f.server.id, control, AbortSignal.timeout(5000));
+  caller.abort();
+  await rejected;
+  finish.release();
+  expect((await two).tools).toHaveLength(1);
+  expect(discover).toHaveBeenCalledTimes(1);
+  expect(f.remote.get(f.server.id).catalogStatus).toBe('ready');
+});
+
+it('joins an in-flight background discovery when explicitly refreshing the same authority', async () => {
+  const f = await setup();
+  const entered = gate();
+  const finish = gate();
+  cleanups.push(() => {
+    finish.release();
+    return Promise.resolve();
+  });
+  const discover = vi.spyOn(f.manager, 'discover').mockImplementation(async () => {
+    entered.release();
+    await finish.promise;
+    return catalog();
+  });
+  const preparing = f.remote.freezeCandidates(null, 'ask', AbortSignal.timeout(5000));
+  await entered.promise;
+  const refreshing = f.remote.discover(
+    f.server.id,
+    {
+      expectedRevision: f.server.revision,
+      expectedAccessEpoch: f.server.accessEpoch,
+    },
+    AbortSignal.timeout(5000),
+  );
+  finish.release();
+  expect(await preparing).toHaveLength(1);
+  expect((await refreshing).tools).toHaveLength(1);
+  expect(discover).toHaveBeenCalledTimes(1);
+});
+
+it('rejects previous-identity readonly grants in remote display, candidates and exact selection', async () => {
+  const f = await setup();
+  vi.spyOn(f.manager, 'discover').mockResolvedValue(catalog());
+  const signal = AbortSignal.timeout(5000);
+  const [tool] = await f.remote.freezeCandidates(null, 'ask', signal);
+  if (tool === undefined) throw new Error('Missing remote tool');
+  f.remote.grantReadOnly(f.server.id, {
+    ...tool.selection,
+    expectedAccessEpoch: f.server.accessEpoch,
+    arguments: { owner: 'fixture' },
+  });
+  const [readonly] = await f.remote.freezeCandidates(null, 'read-only', signal);
+  if (readonly === undefined) throw new Error('Missing readonly remote tool');
+  expect(f.remote.isReadOnlyAuthorized(readonly, { owner: 'fixture' })).toBe(true);
+  expect(f.remote.isReadOnlyAuthorized(readonly, { owner: 'other' })).toBe(false);
+  const owner = f.store.auth.profileOwner();
+  if (owner === undefined) throw new Error('Missing owner');
+  f.store.mcp.revokeIdentity(owner.id);
+  const control = {
+    expectedRevision: f.server.revision,
+    expectedAccessEpoch: f.server.accessEpoch,
+  };
+  f.remote.trust(f.server.id, {
+    ...control,
+    fingerprint: f.remote.preview(f.server.id, control).fingerprint,
+  });
+  await f.remote.discover(f.server.id, control, signal);
+  expect(f.store.mcp.directory.grants(f.server.id)).toHaveLength(1);
+  expect(f.remote.catalog(f.server.id)?.tools[0]?.readOnlyAuthorized).toBe(false);
+  expect(await f.remote.freezeCandidates(null, 'read-only', signal)).toEqual([]);
+  expect(() => f.remote.freezeSelections(null, 'read-only', [tool.selection], signal)).toThrow(
+    '此工具没有精确只读授权',
+  );
+  expect(f.remote.isReadOnlyAuthorized(readonly, { owner: 'fixture' })).toBe(false);
+});
+
 it('stops an obsolete in-flight catalog from publishing after trust is revoked', async () => {
   const f = await setup();
   const entered = gate();
@@ -379,6 +498,66 @@ async function localSetup() {
   await local.trust(server.id, { ...control, startupFingerprint: preview.startupFingerprint });
   return { workspace, adapter, options, local };
 }
+
+it('records explicit local discovery failures in the directory state and clears obsolete snapshots', async () => {
+  const { workspace, adapter, options, local } = await localSetup();
+  await local.freezeCandidates(workspace.id, 'ask', AbortSignal.timeout(5000));
+  const [server] = local.list();
+  if (server === undefined) throw new Error('Missing local server');
+  const discover = vi
+    .spyOn(adapter.manager, 'discover')
+    .mockRejectedValueOnce(new Error('private-secret'));
+  await expect(
+    local.discover(
+      server.id,
+      {
+        expectedRevision: server.revision,
+        expectedAccessEpoch: server.accessEpoch,
+        scope: 'sandboxed',
+      },
+      AbortSignal.timeout(5000),
+    ),
+  ).rejects.toMatchObject({ code: 'MCP_DISCOVERY_FAILED' });
+  expect(local.catalog(server.id, 'sandboxed')).toBeNull();
+  expect(options.store.mcp.directory.catalog(server.id, 'sandboxed')).toBeUndefined();
+  expect(local.diagnostics(workspace.id, 'ask')).toMatchObject([
+    { status: 'error', toolCount: 0, error: { code: 'MCP_CATALOG_FAILED' } },
+  ]);
+  expect(local.get(server.id).diagnostic).toBeNull();
+  expect(await local.freezeCandidates(workspace.id, 'ask', AbortSignal.timeout(5000))).toHaveLength(
+    1,
+  );
+  expect(discover).toHaveBeenCalledTimes(2);
+});
+
+it('rejects previous-identity readonly grants consistently for a retrusted local server', async () => {
+  const { workspace, options, local } = await localSetup();
+  const signal = AbortSignal.timeout(5000);
+  const [tool] = await local.freezeCandidates(workspace.id, 'ask', signal);
+  const [server] = local.list();
+  if (tool === undefined || server === undefined) throw new Error('Missing local tool');
+  local.grantReadOnly(server.id, {
+    ...tool.selection,
+    expectedAccessEpoch: server.accessEpoch,
+    arguments: { text: 'fixture' },
+  });
+  expect(await local.freezeCandidates(workspace.id, 'read-only', signal)).toHaveLength(1);
+  await local.revokeIdentity();
+  const control = {
+    expectedRevision: server.revision,
+    expectedAccessEpoch: server.accessEpoch,
+    scope: 'sandboxed' as const,
+  };
+  const preview = await local.preview(server.id, control);
+  await local.trust(server.id, { ...control, startupFingerprint: preview.startupFingerprint });
+  await local.discover(server.id, control, signal);
+  expect(options.store.mcp.directory.grants(server.id)).toHaveLength(1);
+  expect(local.catalog(server.id, 'sandboxed')?.tools[0]?.readOnlyAuthorized).toBe(false);
+  expect(await local.freezeCandidates(workspace.id, 'read-only', signal)).toEqual([]);
+  await expect(
+    local.freezeSelections(workspace.id, 'read-only', [tool.selection], signal),
+  ).rejects.toThrow('此工具没有当前身份的精确只读授权');
+});
 
 it('restores local catalogs only for the explicitly trusted workspace isolation scope', async () => {
   const { workspace, adapter, options, local: first } = await localSetup();

@@ -6,6 +6,7 @@ import {
   downloadGitHubSkill,
   installSkillFiles,
   type SkillRoot,
+  type DiscoveredSkill,
   type SkillResourceContent,
   type SkillResourceLease,
 } from '@my-pi-harness/tools';
@@ -92,20 +93,20 @@ export class SkillsService {
   private async discover(workspaceId: string | null, signal: AbortSignal) {
     return await this.catalog.discover(await this.roots(workspaceId), signal);
   }
-  private enabled(id: string): boolean {
-    const control = this.options.repository.skills().find((entry) => entry.id === id);
+  private enabled(id: string, controls = this.options.repository.skills()): boolean {
+    const control = controls.find((entry) => entry.id === id);
     if (control !== undefined && !control.enabled) return false;
     return true;
   }
-  public async list(workspaceId: string | null, signal: AbortSignal): Promise<SkillView[]> {
-    const skills = await this.discover(workspaceId, signal);
+  /** Apply current controls once to an ordered discovery snapshot. */
+  private project(skills: readonly DiscoveredSkill[]): SkillView[] {
+    const controls = this.options.repository.skills();
+    const plugins = this.options.repository.plugins();
     const seen = new Set<string>();
     return skills.map((skill) => {
-      let enabled = this.enabled(skill.id);
+      let enabled = this.enabled(skill.id, controls);
       if (skill.pluginId !== null) {
-        const plugin = this.options.repository
-          .plugins()
-          .find((entry) => entry.id === skill.pluginId);
+        const plugin = plugins.find((entry) => entry.id === skill.pluginId);
         const component = plugin?.components.find(
           (entry) => entry.kind === 'skill' && entry.referenceId === skill.id,
         );
@@ -135,13 +136,17 @@ export class SkillsService {
       };
     });
   }
+  public async list(workspaceId: string | null, signal: AbortSignal): Promise<SkillView[]> {
+    return this.project(await this.discover(workspaceId, signal));
+  }
   public async detail(
     id: string,
     workspaceId: string | null,
     signal: AbortSignal,
   ): Promise<SkillDetail> {
-    const entry = (await this.discover(workspaceId, signal)).find((skill) => skill.id === id);
-    const view = (await this.list(workspaceId, signal)).find((skill) => skill.id === id);
+    const skills = await this.discover(workspaceId, signal);
+    const entry = skills.find((skill) => skill.id === id);
+    const view = this.project(skills).find((skill) => skill.id === id);
     if (entry === undefined || view === undefined)
       throw new SkillError('SKILL_NOT_FOUND', 'Skill is not registered in this workspace');
     return {
@@ -218,7 +223,7 @@ export class SkillsService {
     )
       throw new SkillError('SKILL_SELECTION', 'Select at most 16 distinct Skills');
     const skills = await this.discover(workspaceId, signal);
-    const views = await this.list(workspaceId, signal);
+    const views = this.project(skills);
     const output: FrozenSkill[] = [];
     for (const selection of selections) {
       const skill = skills.find((entry) => entry.id === selection.id);

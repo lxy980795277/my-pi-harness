@@ -6,6 +6,7 @@ import { Popover } from '@/components/ui/popover';
 import { PopoverTrigger } from '@/components/ui/popover/popover-trigger';
 import { PopoverContent } from '@/components/ui/popover/popover-content';
 import { Notice } from '@/components/ui/notice';
+import { ATTACHMENT_ACCEPT } from '@/features/attachments/utils/attachment-upload';
 import type { AttachmentComposerState } from '@/features/attachments/types/attachment';
 
 export interface AttachmentComposerProps {
@@ -21,7 +22,7 @@ export const AttachmentComposer: FC<AttachmentComposerProps> = ({ state, locked 
         type="file"
         multiple
         className="hidden"
-        accept="text/*,.md,.json,.csv,.ts,.tsx,.js,.jsx,.py,.yaml,.yml,image/png,image/jpeg,image/webp,image/gif,application/pdf,.docx,.docm,.xlsx,.xlsm,.pptx,.pptm,.odt,.ods,.odp,.rtf,.epub"
+        accept={ATTACHMENT_ACCEPT}
         onChange={state.changeFiles}
         aria-label="上传附件"
         disabled={locked || state.upload.pending}

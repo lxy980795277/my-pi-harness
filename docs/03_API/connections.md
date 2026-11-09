@@ -18,4 +18,4 @@
 
 高级账户的OAuth启动返回共享`ConnectionOAuthStart`：`{url:string,expiresAt:integer}`，拒绝附加字段；expiresAt为毫秒。该结果不含MCP独立流程的state字段，Web与daemon使用同一schema。
 
-普通GET不访问供应商或刷新Token。OAuth固定官方端点，回调检查issuer、一次性state及所属身份。断开优先于在途秘密发布，失败清理暂存引用。引用此账户的手动MCP按官方endpoint与冻结epoch读取Token，仍遵守自身配置、信任和工具审批；插件App使用插件专属Token，不再自动创建或关联此类账户。
+普通GET不访问供应商或刷新Token。OAuth固定官方端点，回调检查issuer、一次性state及所属身份。断开优先于在途秘密发布，失败清理暂存引用。引用此账户的手动MCP按官方endpoint与冻结epoch读取Token，仍遵守自身配置、信任和工具审批；不要求安装或启用同供应商插件。插件App使用插件专属Token，并由MCP按精确pluginOwner、组件和Server引用检查插件开关，不再自动创建或关联此类账户。

@@ -1,19 +1,16 @@
 import type { ProviderSaveMethod } from '@/features/models/types/model';
 import {
-  AuthFlowSchema,
   ModelInfoSchema,
   AppSettingsSchema,
   NativeProviderInfoSchema,
   ProviderConfigSchema,
   ConnectionResultSchema,
-  type AuthFlow,
   type ModelInfo,
   type AppSettings,
   type AppSettingsInput,
   type NativeProviderInfo,
   type ProviderConfig,
   type ProviderInput,
-  type ProviderAuthInput,
   type ProviderEnabledInput,
   type ProviderKeyInput,
   type ProviderTestInput,
@@ -114,19 +111,6 @@ export const writeProviderKey = async (
 /** Removes this instance's stored API key. */
 export const deleteProviderKey = async (id: string, signal: AbortSignal): Promise<void> => {
   await requestJson(`/providers/${encodeURIComponent(id)}/key`, 'DELETE', {}, signal);
-};
-
-/** Starts the selected native provider's OAuth flow. */
-export const startProviderAuth = async (id: string, signal: AbortSignal): Promise<AuthFlow> => {
-  return parseResponse(
-    AuthFlowSchema,
-    await requestJson(
-      `/providers/${encodeURIComponent(id)}/auth`,
-      'POST',
-      { kind: 'oauth' } satisfies ProviderAuthInput,
-      signal,
-    ),
-  );
 };
 
 /** Revokes this instance's OAuth credentials; current runs keep their frozen state. */

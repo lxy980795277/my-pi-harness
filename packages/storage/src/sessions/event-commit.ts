@@ -14,14 +14,15 @@ import { StorageError } from '../shared/errors';
 import { assertJson, checked } from '../shared/validation';
 import * as schema from '../sqlite/schema';
 import { validateAgentBatch } from './agent-batch';
-import { InputIdSchema, QueueRequestSchema, RunAcceptedSchema } from './event-validation';
+import { InputIdSchema, RunAcceptedSchema } from './event-validation';
 import type { ProjectionWriter } from './projections/projector';
 import { validateToolBatch } from './projections/tool-batch';
 import type { StoredSessionEvent } from './session-jsonl';
-import type {
-  SessionCreateRecord,
-  EventInput,
-  RequestAcceptance,
+import {
+  QueueCapabilityMetadataSchema,
+  type SessionCreateRecord,
+  type EventInput,
+  type RequestAcceptance,
 } from '@my-pi-harness/protocol/internal';
 import type { WorkspaceRepository } from '../repositories/workspaces';
 
@@ -121,7 +122,7 @@ export class SessionEventCommit {
         incoming = { runId: run.id, inputId: null };
       } else if (input.type === 'queue.added' && input.privateData !== undefined) {
         const value = checked(QueueInputSchema, input.data);
-        requestId = checked(QueueRequestSchema, input.privateData).requestId;
+        requestId = checked(QueueCapabilityMetadataSchema, input.privateData).requestId;
         incoming = { runId: null, inputId: value.id };
       }
       if (requestId === undefined || incoming === undefined) continue;

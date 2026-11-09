@@ -120,10 +120,7 @@ describe('standard Skill parsing and immutable resources', () => {
       [f.source, { ...f.source, path: project, scope: 'project', workspaceId: 'workspace' }],
       signal,
     );
-    expect(entries.map((entry) => [entry.scope, entry.shadowed])).toEqual([
-      ['project', false],
-      ['user', true],
-    ]);
+    expect(entries.map((entry) => entry.scope)).toEqual(['project', 'user']);
     expect(await f.catalog.discover([f.source], signal)).toHaveLength(1);
   });
   it('does not overwrite same-name directories and cleans cancelled staging', async () => {

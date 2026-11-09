@@ -486,7 +486,6 @@ describe('SessionRuntime durable execution', () => {
         findRequest: (id, request) => actual.findRequest(id, request),
         getQueueBranch: (id, input) => actual.getQueueBranch(id, input),
         getQueuePrivateData: (id, input) => actual.getQueuePrivateData(id, input),
-        recoverInterrupted: () => actual.recoverInterrupted(),
         append: (id, events) => {
           if (events.some(({ type }) => type === 'message.completed')) {
             failed = true;
@@ -529,7 +528,6 @@ describe('SessionRuntime durable execution', () => {
         getQueueBranch: (id, input) => actual.getQueueBranch(id, input),
         getQueuePrivateData: (id, input) => actual.getQueuePrivateData(id, input),
         findRequest: (id, request) => actual.findRequest(id, request),
-        recoverInterrupted: () => actual.recoverInterrupted(),
         append: (id, events) => {
           const result = actual.append(id, events);
           if (events.some(({ type }) => type === 'run.accepted')) accepted = true;

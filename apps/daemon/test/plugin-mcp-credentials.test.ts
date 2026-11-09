@@ -15,7 +15,7 @@ import {
 } from '@my-pi-harness/storage';
 import { PluginConnectionService } from '@my-pi-harness/plugins';
 import { RemoteMcpService } from '../src/mcp/remote-service';
-import type { PluginRefreshDiagnostic } from '../src/mcp/remote-options';
+import type { McpCatalogDiagnostic } from '../src/mcp/remote-options';
 import { SkillsService } from '../src/skills/service';
 import { PluginService } from '@my-pi-harness/plugins';
 import { createPluginAppPort } from '../src/plugins/apps';
@@ -38,7 +38,7 @@ const catalog: McpCatalog = {
     },
   ],
 };
-async function fixture(onBackgroundError?: (diagnostic: PluginRefreshDiagnostic) => void) {
+async function fixture(onDiscoveryError?: (diagnostic: McpCatalogDiagnostic) => void) {
   const directory = await realpath(await mkdtemp(join(tmpdir(), 'plugin-mcp-credentials-')));
   cleanups.push(async () => await rm(directory, { recursive: true, force: true }));
   const store = await openProfileStore(directory, {
@@ -108,7 +108,7 @@ async function fixture(onBackgroundError?: (diagnostic: PluginRefreshDiagnostic)
     credentials: createMemoryCredentialStore(),
     manager,
     pluginToken: { authority: (id) => connections.authority(id), read },
-    ...(onBackgroundError === undefined ? {} : { onBackgroundError }),
+    ...(onDiscoveryError === undefined ? {} : { onDiscoveryError }),
   });
   cleanups.push(async () => await remote.close());
   const skills = new SkillsService({
@@ -479,7 +479,7 @@ it('aborts and drains owned background App discovery before remote shutdown comp
 });
 
 it('reports unexpected background discovery failures without upstream or credential details', async () => {
-  const diagnostics: PluginRefreshDiagnostic[] = [];
+  const diagnostics: McpCatalogDiagnostic[] = [];
   const f = await fixture((diagnostic) => {
     diagnostics.push(diagnostic);
   });
@@ -490,7 +490,7 @@ it('reports unexpected background discovery failures without upstream or credent
   );
   await f.authorize();
   await vi.waitFor(() => {
-    expect(diagnostics).toEqual([{ code: 'MCP_APP_DISCOVERY_FAILED', serverId: app.referenceId }]);
+    expect(diagnostics).toEqual([{ code: 'MCP_DISCOVERY_FAILED', serverId: app.referenceId }]);
   });
   expect(JSON.stringify(diagnostics)).not.toContain('private-token-sensitive');
   expect(f.remote.catalog(app.referenceId)).toBeNull();

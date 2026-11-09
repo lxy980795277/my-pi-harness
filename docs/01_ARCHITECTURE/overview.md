@@ -59,6 +59,8 @@ ProfileStore保留JSONL、SQLite、锁和失败冻结的单一编排，模型配
 
 protocol根入口只导出公开跨端数据，宿主使用显式internal出口。EventInput、RequestAcceptance和SessionCreateRecord由internal唯一定义；公开协议不依赖internal，Renderer不导入internal，runtime与storage不为复用类型相互依赖实现。ProviderConfig是公开配置和认证状态，带credentialRef的ProviderRecord仅在internal共享；工具文本/图像内容也通过internal的ToolContent统一。
 
+队列接受元数据由protocol/internal的QueueCapabilityMetadataSchema唯一定义；storage校验持久写入、回放和查询数据，runtime消费已校验类型并重验当前能力授权。宿主启动独立调用存储恢复，恢复不属于RuntimeStore执行端口。SkillCatalog只提供有序来源和内容；daemon的SkillsService使用一次发现快照计算当前启用与遮蔽，详情和冻结共用该快照，冻结时仍重新读取所选来源校验hash。
+
 默认子Agent角色、提示与限制归agent-runtime/subagents/default-settings，daemon将工厂显式注入ProfileStoreOptions。storage只管理配置的持久化与revision，不提供默认业务策略，也不因打开profile写入默认配置；没有已存配置且宿主未注入时明确失败。
 
 模型Provider认证、应用登录与插件授权继续由各自领域拥有；插件与高级账户复用integrations/oauth的协议机制，保留各自账户和安装归属。plugins通过窄接口使用宿主存储、凭据、Skills与MCP；tools和integrations不反向依赖plugins。
@@ -74,6 +76,8 @@ MCP由daemon的`McpService`管理配置、系统秘密与启动授权，`Externa
 ## 工具、资源与产物
 
 工具的定义、来源、默认/按需加载、可用条件、参数效果策略和执行绑定由`ToolRegistration`统一声明。原生领域直接贡献注册项，外部MCP保留自己的精确Server绑定；runtime按同一接受集合校验、审批和记录，主子Run分别绑定当前会话、任务、角色和工作区端口。tools与integrations分别依赖sandbox，彼此不导入实现；sandbox不依赖tools、integrations、Pi、storage或业务protocol。
+
+sandbox/network拥有可取消的DNS查询、全部解析地址校验及socket固定查找；tools的Web请求和integrations的远端传输分别提供地址策略，并保留各自URL、凭据、网关、重定向及正文限制，不因共用网络机制合并访问权限。
 
 原生工具在`packages/tools/src/tools/`按名称平铺，每个文件集中拥有自己的schema、描述、可用条件、策略和执行逻辑；`tools/index.ts`只聚合导出，根`workspace-tool-registry.ts`组合目录。注册契约、公共上下文与共用文件操作由`lib`拥有，检索与授权字节正文提取在`utils`；具体工具回调类型随工具定义，命令和通用Skill由tools内领域服务负责，插件贡献由plugins负责。这些服务不按模型工具数量拆分。具体源码职责见[tools包](../../packages/tools/README.md#公开入口与源码职责)。
 

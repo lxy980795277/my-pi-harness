@@ -12,11 +12,14 @@ import {
   type SessionSummary,
   type ToolCallView,
 } from '@my-pi-harness/protocol';
-import type { RequestAcceptance } from '@my-pi-harness/protocol/internal';
+import {
+  QueueCapabilityMetadataSchema,
+  type RequestAcceptance,
+  type QueueCapabilityMetadata,
+} from '@my-pi-harness/protocol/internal';
 import { StorageError } from '../shared/errors';
 import { checked } from '../shared/validation';
 import * as schema from '../sqlite/schema';
-import { QueueRequestSchema } from './event-validation';
 import type { LiveMessages } from './live-messages';
 import type { ProjectionWriter } from './projections/projector';
 import type { ToolProjection } from './projections/tools';
@@ -105,7 +108,7 @@ export class SessionQueries {
   }
 
   /** Host-only frozen input authority; browser responses never receive this column. */
-  public getQueuePrivateData(sessionId: string, inputId: string): Record<string, unknown> | null {
+  public getQueuePrivateData(sessionId: string, inputId: string): QueueCapabilityMetadata | null {
     const row = this.db
       .select()
       .from(schema.queue)
@@ -113,8 +116,7 @@ export class SessionQueries {
       .get();
     if (row === undefined) throw new StorageError('CONFLICT', 'Queued input no longer exists');
     if (row.privateData === null) return null;
-    checked(QueueRequestSchema, row.privateData);
-    return row.privateData;
+    return checked(QueueCapabilityMetadataSchema, row.privateData);
   }
 
   /** Resolve pending input provenance from its immutable acceptance and original run. */

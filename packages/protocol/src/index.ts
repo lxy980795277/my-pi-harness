@@ -1,4 +1,5 @@
 export * from './sessions/context';
+export * from './sessions/attachment-capabilities';
 export * from './extensions/mcp';
 export * from './extensions/skills';
 export * from './extensions/plugins';

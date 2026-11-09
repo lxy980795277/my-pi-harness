@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import Fastify from 'fastify';
 import { openProfileStore, type ProfileStore } from '@my-pi-harness/storage';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { SkillCatalog } from '@my-pi-harness/tools';
 import { SkillsService } from '../src/skills/service';
 import { PluginService, type PluginAppPort } from '@my-pi-harness/plugins';
 import { registerSkillRoutes } from '../src/skills/routes';
@@ -67,6 +68,87 @@ afterEach(async () => {
   }
 });
 describe('Skill and plugin installation ownership', () => {
+  it('returns metadata and content from one discovery snapshot even when the source changes', async () => {
+    const f = await fixture();
+    const skill = await f.skills.create(
+      {
+        scope: 'user',
+        workspaceId: null,
+        name: 'example',
+        description: 'Original description',
+        content: 'Original instructions',
+      },
+      signal,
+    );
+    // eslint-disable-next-line @typescript-eslint/unbound-method -- The replacement calls the original with its exact SkillCatalog receiver.
+    const discover = SkillCatalog.prototype.discover;
+    const spy = vi.spyOn(SkillCatalog.prototype, 'discover').mockImplementation(async function (
+      this: SkillCatalog,
+      roots,
+      ownedSignal,
+    ) {
+      const snapshot = await discover.call(this, roots, ownedSignal);
+      await writeFile(
+        join(f.profile, 'skills/example/SKILL.md'),
+        '---\nname: example\ndescription: Updated description\n---\nUpdated instructions\n',
+      );
+      return snapshot;
+    });
+    try {
+      const detail = await f.skills.detail(skill.id, null, signal);
+      expect(detail).toMatchObject({
+        contentHash: skill.contentHash,
+        description: 'Original description',
+        content: 'Original instructions',
+      });
+      expect(spy).toHaveBeenCalledTimes(1);
+    } finally {
+      spy.mockRestore();
+    }
+    await expect(
+      f.skills.freezeSelections(null, [{ id: skill.id, contentHash: skill.contentHash }], signal),
+    ).rejects.toMatchObject({ code: 'SKILL_STALE' });
+  });
+
+  it('allows an enabled lower-priority source when the project source is disabled', async () => {
+    const f = await fixture();
+    const user = await f.skills.create(
+      {
+        scope: 'user',
+        workspaceId: null,
+        name: 'example',
+        description: 'User task',
+        content: 'User instructions',
+      },
+      signal,
+    );
+    const project = await f.skills.create(
+      {
+        scope: 'project',
+        workspaceId: 'project',
+        name: 'example',
+        description: 'Project task',
+        content: 'Project instructions',
+      },
+      signal,
+    );
+    await f.skills.control(project.id, 'project', project.contentHash, false, signal);
+    const candidates = await f.skills.freezeCandidates('project', signal);
+    expect(candidates.map((entry) => entry.selection.id)).toEqual([user.id]);
+    const discover = vi.spyOn(SkillCatalog.prototype, 'discover');
+    try {
+      const [frozen] = await f.skills.freezeSelections(
+        'project',
+        [{ id: user.id, contentHash: user.contentHash }],
+        signal,
+      );
+      expect(frozen?.content).toBe('User instructions');
+      expect(discover).toHaveBeenCalledTimes(1);
+    } finally {
+      discover.mockRestore();
+    }
+  });
+
   it('accepts enabled candidate metadata without creating snapshots or retaining resources', async () => {
     const f = await fixture();
     const skill = await f.skills.create(

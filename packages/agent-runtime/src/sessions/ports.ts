@@ -2,6 +2,7 @@ import type { HarnessEvent, SessionSnapshot, SessionSummary } from '@my-pi-harne
 import type {
   EventInput,
   RequestAcceptance,
+  QueueCapabilityMetadata,
   SessionCreateRecord,
   FrozenSkill,
   LiveMessageDelta,
@@ -37,9 +38,8 @@ export interface RuntimeStore {
   /** Read the context reset marker recorded when this summary was first created. */
   getCompactionContextStart?(sessionId: string, compactionId: string): string | null;
   getQueueBranch(sessionId: string, inputId: string): string;
-  getQueuePrivateData(sessionId: string, inputId: string): Record<string, unknown> | null;
+  getQueuePrivateData(sessionId: string, inputId: string): QueueCapabilityMetadata | null;
   findRequest(sessionId: string, requestId: string): RequestAcceptance | undefined;
-  recoverInterrupted(): HarnessEvent[];
 }
 
 /** The accepted input may belong to an active run or the durable queue. */

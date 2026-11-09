@@ -1,18 +1,14 @@
-import { Type, type Static } from 'typebox';
 import { Value } from 'typebox/value';
-import {
-  ToolDiscoveryDiagnosticSchema,
-  type InputRequest,
-  type SessionSummary,
-  type SkillSelection,
-  type ToolDiscoveryDiagnostic,
+import type {
+  InputRequest,
+  SessionSummary,
+  SkillSelection,
+  ToolDiscoveryDiagnostic,
 } from '@my-pi-harness/protocol';
-import {
-  FrozenSkillSchema,
-  SkillCandidatesSchema,
-  FrozenMcpToolsSchema,
-  type FrozenSkill,
-  type SkillCandidate,
+import type {
+  QueueCapabilityMetadata,
+  FrozenSkill,
+  SkillCandidate,
 } from '@my-pi-harness/protocol/internal';
 import { externalBindingKey, type ExternalTools, type FrozenMcpTool } from '../tools/external';
 import type { SkillsPort, ToolDiscoveryPort } from './ports';
@@ -32,32 +28,14 @@ export interface FrozenInputCapabilities {
   skillDiagnostics?: readonly SkillContextDiagnostic[];
 }
 
-interface InputCapabilityData {
+/** In-process MCP definitions retain executable schemas until storage validates their JSON fields. */
+type InputCapabilityData = Omit<
+  QueueCapabilityMetadata,
+  'version' | 'requestId' | 'mcpBindings' | 'candidateBindings'
+> & {
   mcpBindings: readonly FrozenMcpTool[];
   candidateBindings: readonly FrozenMcpTool[];
-  skillBindings: readonly FrozenSkill[];
-  skillCandidates: readonly SkillCandidate[];
-  discoveryDiagnostics: readonly ToolDiscoveryDiagnostic[];
-  mentionedSkillBindings: readonly FrozenSkill[];
-  inheritedSkillBindings: readonly FrozenSkill[];
-}
-
-const frozenSkillsSchema = Type.Array(FrozenSkillSchema, { maxItems: 16 });
-const diagnosticsSchema = Type.Array(ToolDiscoveryDiagnosticSchema, { maxItems: 512 });
-const QueueCapabilityMetadataSchema = Type.Object(
-  {
-    version: Type.Literal(1),
-    requestId: Type.String({ minLength: 1 }),
-    mcpBindings: FrozenMcpToolsSchema,
-    candidateBindings: FrozenMcpToolsSchema,
-    skillBindings: frozenSkillsSchema,
-    skillCandidates: SkillCandidatesSchema,
-    discoveryDiagnostics: diagnosticsSchema,
-    mentionedSkillBindings: frozenSkillsSchema,
-    inheritedSkillBindings: frozenSkillsSchema,
-  },
-  { additionalProperties: false },
-);
+};
 
 export function skillSelectionKey(skills: readonly SkillSelection[]): string {
   return JSON.stringify(
@@ -106,11 +84,11 @@ export function encodeInputCapabilities(input: FrozenInputCapabilities): InputCa
   return {
     mcpBindings: input.external,
     candidateBindings: input.candidates,
-    skillBindings: input.skills,
-    skillCandidates: input.skillCandidates,
-    discoveryDiagnostics: input.diagnostics ?? [],
-    mentionedSkillBindings: input.mentionedSkills ?? [],
-    inheritedSkillBindings: input.inheritedSkills ?? [],
+    skillBindings: [...input.skills],
+    skillCandidates: [...input.skillCandidates],
+    discoveryDiagnostics: [...(input.diagnostics ?? [])],
+    mentionedSkillBindings: [...(input.mentionedSkills ?? [])],
+    inheritedSkillBindings: [...(input.inheritedSkills ?? [])],
   };
 }
 
@@ -125,14 +103,9 @@ export class InputCapabilityResolver {
     },
   ) {}
 
-  public metadata(
-    sessionId: string,
-    inputId: string,
-  ): Static<typeof QueueCapabilityMetadataSchema> {
+  public metadata(sessionId: string, inputId: string): QueueCapabilityMetadata {
     const input = this.options.store.getQueuePrivateData(sessionId, inputId);
     if (input === null) throw new RuntimeError('INPUT_BINDING_INVALID', '排队输入缺少接受记录。');
-    if (!Value.Check(QueueCapabilityMetadataSchema, input))
-      throw new RuntimeError('INPUT_BINDING_INVALID', '排队输入私有数据无效。');
     return input;
   }
 

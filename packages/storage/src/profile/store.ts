@@ -28,6 +28,7 @@ import type {
   FrozenSkill,
   LiveMessageDelta,
   RequestAcceptance,
+  QueueCapabilityMetadata,
   SessionCreateRecord,
   ProviderRecord,
 } from '@my-pi-harness/protocol/internal';
@@ -447,7 +448,7 @@ export class ProfileStore {
   }
 
   /** Host-only frozen input authority; browser responses never receive this column. */
-  public getQueuePrivateData(sessionId: string, inputId: string): Record<string, unknown> | null {
+  public getQueuePrivateData(sessionId: string, inputId: string): QueueCapabilityMetadata | null {
     this.assertOpen();
     return this.sessions.getQueuePrivateData(sessionId, inputId);
   }

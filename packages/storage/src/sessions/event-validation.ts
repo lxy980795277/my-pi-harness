@@ -10,7 +10,6 @@ import {
   SessionSummarySchema,
   SkillSelectionsSchema,
   ToolCallRecordSchema,
-  ToolDiscoveryDiagnosticSchema,
   WorkStateSchema,
   AgentTaskSchema,
   AgentTaskOutcomeSchema,
@@ -18,12 +17,6 @@ import {
   AgentMessageQueuedSchema,
   ArtifactPublishedSchema,
 } from '@my-pi-harness/protocol';
-import {
-  FrozenMcpToolSchema,
-  FrozenSkillSchema,
-  SkillCandidatesSchema,
-} from '@my-pi-harness/protocol/internal';
-
 export const SessionCreatedSchema = Type.Object(
   { session: SessionSummarySchema, branch: BranchViewSchema },
   { additionalProperties: false },
@@ -60,21 +53,6 @@ export const BranchSelectionSchema = Type.Object(
   { branchId: Type.String({ minLength: 1 }) },
   { additionalProperties: false },
 );
-export const QueueRequestSchema = Type.Object(
-  {
-    version: Type.Literal(1),
-    requestId: Type.String({ minLength: 1 }),
-    mcpBindings: Type.Array(FrozenMcpToolSchema, { maxItems: 512 }),
-    candidateBindings: Type.Array(FrozenMcpToolSchema, { maxItems: 512 }),
-    skillBindings: Type.Array(FrozenSkillSchema, { maxItems: 16 }),
-    skillCandidates: SkillCandidatesSchema,
-    mentionedSkillBindings: Type.Array(FrozenSkillSchema, { maxItems: 16 }),
-    inheritedSkillBindings: Type.Array(FrozenSkillSchema, { maxItems: 16 }),
-    discoveryDiagnostics: Type.Array(ToolDiscoveryDiagnosticSchema, { maxItems: 512 }),
-  },
-  { additionalProperties: false },
-);
-
 export const WorkEventSchema = Type.Object(
   { state: WorkStateSchema, taskId: Type.Optional(Type.String({ minLength: 1, maxLength: 160 })) },
   { additionalProperties: false },

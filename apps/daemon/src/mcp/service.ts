@@ -46,6 +46,7 @@ import { LocalCatalogs, type LocalCatalogEntry as CatalogEntry } from './local-c
 import { closeMcpResources } from './lifecycle';
 import { validateLocalMcpInput } from './local-input';
 import { LocalPreflights } from './local-preflights';
+import { deleteMcpCredentials } from './credential-cleanup';
 
 export interface McpServiceOptions {
   store: ProfileStore;
@@ -91,7 +92,11 @@ export class McpService implements ExternalTools {
         const server = this.require(id);
         this.expected(server, input.expectedRevision, input.expectedAccessEpoch);
         const binding = await this.inspectConnection(server, input.scope, true, signal);
-        return await this.discoverPrepared(server, input.scope, binding, signal);
+        this.validateConnection(binding);
+        const value = await this.manager.discover(binding, { signal });
+        signal.throwIfAborted();
+        this.validateConnection(binding);
+        return value;
       },
     });
     this.directory = new McpDirectoryPolicy(options.store, {
@@ -245,7 +250,8 @@ export class McpService implements ExternalTools {
         server.accessEpoch,
       );
       this.clearCatalog(id);
-      await this.deleteRefs(
+      await deleteMcpCredentials(
+        this.options.credentials,
         server.secretBindings
           .filter(
             (binding) => !bindings.some((next) => next.credentialRef === binding.credentialRef),
@@ -261,17 +267,11 @@ export class McpService implements ExternalTools {
       this.expected(server, expectedRevision);
       this.options.store.mcp.remove(id, expectedRevision);
       this.clearCatalog(id);
-      await this.deleteRefs(server.secretBindings.map((binding) => binding.credentialRef));
+      await deleteMcpCredentials(
+        this.options.credentials,
+        server.secretBindings.map((binding) => binding.credentialRef),
+      );
     });
-  }
-  private async deleteRefs(refs: readonly (string | null)[]): Promise<void> {
-    const results = await Promise.allSettled(
-      refs
-        .filter((ref): ref is string => ref !== null)
-        .map((ref) => this.options.credentials.delete(ref)),
-    );
-    if (results.some((result) => result.status === 'rejected'))
-      fail('MCP_CREDENTIAL_CLEANUP_FAILED', '配置已保存，但旧系统凭据清理失败。');
   }
   public async writeSecret(
     id: string,
@@ -316,7 +316,7 @@ export class McpService implements ExternalTools {
         fail('MCP_CREDENTIAL_WRITE_FAILED', '系统凭据未保存，配置保持原状。');
       }
       this.clearCatalog(id);
-      await this.deleteRefs([slot.credentialRef]);
+      await deleteMcpCredentials(this.options.credentials, [slot.credentialRef]);
       return this.view(saved);
     });
   }
@@ -346,7 +346,7 @@ export class McpService implements ExternalTools {
     const revoked = this.options.store.mcp.save(next, server.revision, server.accessEpoch);
     this.clearCatalog(id);
     await this.manager.invalidateServer(id);
-    await this.deleteRefs([slot.credentialRef]);
+    await deleteMcpCredentials(this.options.credentials, [slot.credentialRef]);
     return this.view(revoked);
   }
   private clearCatalog(id: string): void {
@@ -544,38 +544,12 @@ export class McpService implements ExternalTools {
   ): Promise<McpToolCatalog> {
     const server = this.require(id);
     this.expected(server, input.expectedRevision, input.expectedAccessEpoch);
-    const binding = await this.connection(server, input.scope, true, signal);
-    return await this.discoverPrepared(server, input.scope, binding, signal);
-  }
-  private async discoverPrepared(
-    server: StoredMcpServer,
-    scope: McpScope,
-    binding: McpConnectionBinding,
-    signal: AbortSignal,
-  ): Promise<McpToolCatalog> {
-    signal.throwIfAborted();
-    this.validateConnection(binding);
     try {
-      const value = await this.manager.discover(binding, { signal });
-      signal.throwIfAborted();
-      this.validateConnection(binding);
-      const entry = {
-        authority: this.catalogs.authority(server, scope),
-        revision: server.revision,
-        accessEpoch: server.accessEpoch,
-        startupFingerprint: binding.startupFingerprint,
-        value,
-        discoveredAt: Date.now(),
-      };
-      this.catalogs.publish(`${server.id}:${scope}`, server.id, scope, entry);
-      this.connectionDiagnostics.delete(server.id);
-      return this.catalogView(server, scope, entry);
+      const entry = await this.catalogs.discoverServer(id, input.scope, signal);
+      return this.catalogView(server, input.scope, entry);
     } catch (cause) {
+      signal.throwIfAborted();
       if (cause instanceof RuntimeError || cause instanceof StorageError) throw cause;
-      this.connectionDiagnostics.set(
-        server.id,
-        'MCP连接或工具发现失败，请检查启动配置与隔离范围。',
-      );
       fail('MCP_DISCOVERY_FAILED', 'MCP连接或工具发现失败，请检查启动配置与隔离范围。');
     }
   }
@@ -600,15 +574,12 @@ export class McpService implements ExternalTools {
           tool.supported &&
           this.options.store.mcp.directory.control(server.id, tool.remoteToolName).enabled,
         enabled: this.options.store.mcp.directory.control(server.id, tool.remoteToolName).enabled,
-        readOnlyAuthorized: this.options.store.mcp.directory
-          .grants(server.id)
-          .some(
-            (grant) =>
-              grant.remoteToolName === tool.remoteToolName &&
-              grant.definitionFingerprint === tool.definitionFingerprint &&
-              grant.serverRevision === server.revision &&
-              grant.accessEpoch === server.accessEpoch,
-          ),
+        readOnlyAuthorized:
+          this.directory.currentGrant(
+            server.id,
+            tool.remoteToolName,
+            tool.definitionFingerprint,
+          ) !== undefined,
         diagnostic: tool.unavailableReason,
       })),
     };
@@ -672,18 +643,11 @@ export class McpService implements ExternalTools {
         fail('MCP_SELECTION_STALE', '工具目录已失效，请重新发现并选择工具。');
       const control = this.options.store.mcp.directory.control(server.id, tool.remoteToolName);
       if (!control.enabled) fail('MCP_TOOL_DISABLED', '此工具已停用。');
-      const readOnlyGrant = this.options.store.mcp.directory
-        .grants(server.id)
-        .find(
-          (grant) =>
-            grant.remoteToolName === tool.remoteToolName &&
-            grant.serverRevision === server.revision &&
-            grant.accessEpoch === server.accessEpoch &&
-            grant.definitionFingerprint === tool.definitionFingerprint &&
-            grant.toolControlRevision === control.revision &&
-            grant.ownerId === binding.ownerId &&
-            grant.identityEpoch === binding.identityEpoch,
-        );
+      const readOnlyGrant = this.directory.currentGrant(
+        server.id,
+        tool.remoteToolName,
+        tool.definitionFingerprint,
+      );
       if (approvalMode === 'read-only' && readOnlyGrant === undefined)
         fail('MCP_SELECTION_FORBIDDEN', '此工具没有当前身份的精确只读授权。');
       signal.throwIfAborted();
@@ -749,16 +713,7 @@ export class McpService implements ExternalTools {
       if (catalog === null) continue;
       const selections = catalog.tools
         .filter(
-          (tool) =>
-            tool.available &&
-            (!(approvalMode === 'read-only') ||
-              this.options.store.mcp.directory
-                .grants(server.id)
-                .some(
-                  (grant) =>
-                    grant.remoteToolName === tool.remoteToolName &&
-                    grant.definitionFingerprint === tool.definitionFingerprint,
-                )),
+          (tool) => tool.available && (approvalMode !== 'read-only' || tool.readOnlyAuthorized),
         )
         .map((tool) => ({
           serverId: tool.serverId,
@@ -803,9 +758,12 @@ export class McpService implements ExternalTools {
         definition.name !== modelName(server.id, selection.remoteToolName) ||
         !server.enabled ||
         (authorization.readOnlyGrantId !== undefined &&
-          !this.options.store.mcp.directory
-            .grants(server.id)
-            .some((grant) => grant.id === authorization.readOnlyGrantId)) ||
+          this.directory.currentGrant(
+            server.id,
+            selection.remoteToolName,
+            selection.definitionFingerprint,
+            authorization.readOnlyGrantId,
+          ) === undefined) ||
         !this.options.store.mcp.directory.control(server.id, selection.remoteToolName).enabled ||
         (authorization.toolControlRevision !== undefined &&
           this.options.store.mcp.directory.control(server.id, selection.remoteToolName).revision !==

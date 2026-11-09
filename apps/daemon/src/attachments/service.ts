@@ -11,12 +11,15 @@ import {
   toWorkspaceRelativePath,
   workspacePath,
 } from '@my-pi-harness/sandbox';
-import type {
-  Attachment,
-  AttachmentContent,
-  AttachmentReference,
-  AttachmentUpload,
-  Workspace,
+import {
+  ATTACHMENT_BYTE_LIMITS,
+  ATTACHMENT_FORMATS,
+  ATTACHMENT_MAX_BYTES,
+  type Attachment,
+  type AttachmentContent,
+  type AttachmentReference,
+  type AttachmentUpload,
+  type Workspace,
 } from '@my-pi-harness/protocol';
 import type { ProfileStore } from '@my-pi-harness/storage';
 import {
@@ -26,8 +29,6 @@ import {
   decodeUpload,
   imageMediaType,
   safeName,
-  IMAGE_LIMIT,
-  PDF_LIMIT,
 } from './content';
 
 type AttachmentStore = Pick<ProfileStore, 'putAttachment' | 'getAttachment'>;
@@ -90,7 +91,7 @@ export class AttachmentService {
     let imageData: string | null = null;
 
     if (format) {
-      if (bytes.length > PDF_LIMIT)
+      if (bytes.length > ATTACHMENT_BYTE_LIMITS.document)
         throw new RuntimeError('ATTACHMENT_TOO_LARGE', '文档不能超过8MiB。');
       if (format === 'rtf') {
         if (!bytes.subarray(0, 5).equals(Buffer.from('{\\rtf')))
@@ -101,14 +102,14 @@ export class AttachmentService {
       kind = 'document';
       text = await extractDocument(bytes, format, signal);
     } else if (mediaType.startsWith('image/')) {
-      if (bytes.length > IMAGE_LIMIT)
+      if (bytes.length > ATTACHMENT_BYTE_LIMITS.image)
         throw new RuntimeError('ATTACHMENT_TOO_LARGE', '图片不能超过2MiB。');
       if (imageType !== mediaType)
         throw new RuntimeError('ATTACHMENT_TYPE', '图片类型与内容不符。');
       kind = 'image';
       imageData = bytes.toString('base64');
     } else if (mediaType === 'application/pdf') {
-      if (bytes.length > PDF_LIMIT)
+      if (bytes.length > ATTACHMENT_BYTE_LIMITS.pdf)
         throw new RuntimeError('ATTACHMENT_TOO_LARGE', 'PDF不能超过8MiB。');
       if (bytes.subarray(0, 5).toString() !== '%PDF-')
         throw new RuntimeError('ATTACHMENT_TYPE', 'PDF内容无效。');
@@ -116,12 +117,7 @@ export class AttachmentService {
       text = await extractPdf(bytes, signal);
     } else if (
       mediaType.startsWith('text/') ||
-      [
-        'application/json',
-        'application/xml',
-        'application/javascript',
-        'application/x-yaml',
-      ].includes(mediaType)
+      ATTACHMENT_FORMATS.some((entry) => entry.kind === 'text' && entry.mediaType === mediaType)
     ) {
       text = decodeText(bytes);
     } else throw new RuntimeError('ATTACHMENT_TYPE', '不支持此附件格式。');
@@ -187,11 +183,11 @@ export class AttachmentService {
         (!isAbsolute(difference) && difference !== '..' && !difference.startsWith(`..${sep}`))
       )
         throw new RuntimeError('ATTACHMENT_PATH', '不能引用应用数据目录。');
-      const handle = await openRegular(path, PDF_LIMIT);
+      const handle = await openRegular(path, ATTACHMENT_MAX_BYTES);
       let bytes: Buffer;
       try {
         const before = await handle.stat();
-        bytes = Buffer.alloc(Math.min(before.size + 1, PDF_LIMIT + 1));
+        bytes = Buffer.alloc(Math.min(before.size + 1, ATTACHMENT_MAX_BYTES + 1));
         let length = 0;
         while (length < bytes.length) {
           checkAborted(signal);

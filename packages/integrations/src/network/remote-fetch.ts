@@ -1,8 +1,13 @@
-import { Resolver } from 'node:dns/promises';
+import type { LookupAddress } from 'node:dns';
 import { request as httpRequest, type IncomingMessage } from 'node:http';
 import { request as httpsRequest } from 'node:https';
 import { isIP } from 'node:net';
-import { isPublicAddress } from '@my-pi-harness/sandbox/network';
+import {
+  createPinnedLookup,
+  isPublicAddress,
+  resolveSocketAddress,
+  SandboxError,
+} from '@my-pi-harness/sandbox/network';
 import type { FetchLike } from '@modelcontextprotocol/client';
 import { NetworkError } from './errors';
 
@@ -57,34 +62,15 @@ async function resolveAddress(
   url: URL,
   signal: AbortSignal,
   fixtureOrigin?: string,
-): Promise<{ address: string; family: number }> {
-  const hostname = url.hostname.replace(/^\[|\]$/g, '');
-  const family = isIP(hostname);
-  if (family !== 0) return { address: hostname, family };
-  const resolver = new Resolver({ timeout: 3000, tries: 1 });
-  const cancel = (): void => resolver.cancel();
-  signal.addEventListener('abort', cancel, { once: true });
+): Promise<LookupAddress> {
   try {
-    signal.throwIfAborted();
-    const results = await Promise.allSettled([
-      resolver.resolve4(hostname),
-      resolver.resolve6(hostname),
-    ]);
-    signal.throwIfAborted();
-    const addresses = results.flatMap((result, index) =>
-      result.status === 'fulfilled'
-        ? result.value.map((address) => ({ address, family: index === 0 ? 4 : 6 }))
-        : [],
-    );
-    if (addresses.length === 0) throw new NetworkError('DNS_FAILED', '远程地址解析失败。');
-    if (url.origin !== fixtureOrigin)
-      for (const address of addresses) assertRemoteAddress(address.address);
-    const selected = addresses[0];
-    if (selected === undefined) throw new NetworkError('DNS_FAILED', '远程地址没有可用记录。');
-    return selected;
-  } finally {
-    signal.removeEventListener('abort', cancel);
-    resolver.cancel();
+    return await resolveSocketAddress(url.hostname.replace(/^\[|\]$/g, ''), signal, (address) => {
+      if (url.origin !== fixtureOrigin) assertRemoteAddress(address);
+    });
+  } catch (error) {
+    if (error instanceof SandboxError && error.code === 'DNS_FAILED')
+      throw new NetworkError('DNS_FAILED', '远程地址解析失败。');
+    throw error;
   }
 }
 function responseBody(
@@ -162,10 +148,7 @@ export function createRemoteFetch(options: RemoteNetworkOptions = {}): FetchLike
           headers: Object.fromEntries(headers),
           agent: false,
           signal,
-          lookup: (_host, lookupOptions, callback) => {
-            if (lookupOptions.all) callback(null, [selected]);
-            else callback(null, selected.address, selected.family);
-          },
+          lookup: createPinnedLookup(selected),
         },
         (response) => {
           const status = response.statusCode ?? 500;

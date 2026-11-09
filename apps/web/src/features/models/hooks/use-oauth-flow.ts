@@ -1,17 +1,16 @@
-import type { OAuthFlowState } from '@/features/auth/types/auth';
+import type { OAuthFlowState } from '@/features/models/types/oauth';
 import type { AuthFlow } from '@my-pi-harness/protocol';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect } from 'react';
 
-import { cancelAuthFlow, fetchAuthFlow } from '@/features/auth/services/auth';
-import { AUTH_STATUS_QUERY_KEY } from '@/features/auth/utils/authorization-status';
-import { AUTH_STATUS_LABELS, oauthRefetchInterval } from '@/features/auth/utils/oauth-view';
+import { cancelAuthFlow, fetchAuthFlow } from '@/features/models/services/provider-auth';
+import { AUTH_STATUS_LABELS, oauthRefetchInterval } from '@/features/models/utils/oauth-view';
 import { useAsyncEvent } from '@/hooks/use-async-event';
 import { authorizationUrl } from '@/utils/authorization-url';
 import { describeError } from '@/utils/describe-error';
 
-/** Shared OAuth view mechanics; a provider dialog supplies its own completion and close policy. */
-export const useOAuthFlow = (flowId: string, onCompleted?: () => void): OAuthFlowState => {
+/** Owns model-provider authorization polling and refreshes only model configuration. */
+export const useOAuthFlow = (flowId: string, onCompleted: () => void): OAuthFlowState => {
   const client = useQueryClient();
   const query = useQuery({
     queryKey: ['auth-flow', flowId],
@@ -28,11 +27,10 @@ export const useOAuthFlow = (flowId: string, onCompleted?: () => void): OAuthFlo
       async (signal: AbortSignal): Promise<void> => {
         await Promise.all([
           client.invalidateQueries({ queryKey: ['providers'] }),
-          client.invalidateQueries({ queryKey: AUTH_STATUS_QUERY_KEY }),
           client.invalidateQueries({ queryKey: ['auth-flows'] }),
         ]);
         signal.throwIfAborted();
-        onCompleted?.();
+        onCompleted();
       },
       [client, onCompleted],
     ),

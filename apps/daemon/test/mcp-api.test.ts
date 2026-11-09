@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { McpServerViewSchema, WorkspaceSchema, type McpServerInput } from '@my-pi-harness/protocol';
 import { createMemoryCredentialStore, type CredentialStore } from '@my-pi-harness/storage';
 import { Value } from 'typebox/value';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { loadDaemonConfig } from '../src/application/config';
 import { createDaemonApplication } from '../src/http/server';
 import { createApplicationServices } from '../src/application/services';
@@ -101,6 +101,41 @@ async function trust(
 }
 
 describe('protected MCP configuration API', () => {
+  it('commits removal and attempts every local secret even after the first deletion fails', async () => {
+    const value = await fixture();
+    try {
+      let server = await create(value, {
+        ...value.input,
+        secretSlots: [
+          { slotId: 'api', environmentName: 'API_TOKEN' },
+          { slotId: 'extra', environmentName: 'EXTRA_TOKEN' },
+        ],
+      });
+      for (const slot of ['api', 'extra'])
+        server = await value.services.mcp.writeSecret(server.id, slot, {
+          expectedRevision: server.revision,
+          value: `synthetic-${slot}-secret`,
+        });
+      const refs = await value.credentials.list();
+      const blocked = refs[0];
+      if (blocked === undefined) throw new Error('Missing saved secret');
+      const remove = value.credentials.delete.bind(value.credentials);
+      const deleted = vi.spyOn(value.credentials, 'delete').mockImplementation(async (ref) => {
+        if (ref === blocked) throw new Error('synthetic-private-cleanup-detail');
+        await remove(ref);
+      });
+      await expect(value.services.mcp.remove(server.id, server.revision)).rejects.toMatchObject({
+        code: 'MCP_CREDENTIAL_CLEANUP_FAILED',
+        message: '配置已保存，但旧系统凭据清理失败。',
+      });
+      expect(deleted.mock.calls.map(([ref]) => ref).sort()).toEqual(refs.sort());
+      expect(value.services.store.mcp.get(server.id)).toBeUndefined();
+      expect(await value.credentials.list()).toEqual([blocked]);
+    } finally {
+      await value.close();
+    }
+  });
+
   it('rejects launch controls in public and secret names before saving or previewing configuration', async () => {
     const value = await fixture();
     try {

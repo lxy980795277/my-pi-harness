@@ -1,4 +1,4 @@
-import type { McpConnectionBinding } from '@my-pi-harness/integrations';
+import type { McpCatalog, McpConnectionBinding } from '@my-pi-harness/integrations';
 import type {
   ApprovalMode,
   McpScope,
@@ -24,7 +24,7 @@ interface Owner {
     signal: AbortSignal,
   ): Promise<McpConnectionBinding>;
   validate(binding: McpConnectionBinding): void;
-  discover(id: string, input: McpScopeInput, signal: AbortSignal): Promise<unknown>;
+  discover(id: string, input: McpScopeInput, signal: AbortSignal): Promise<McpCatalog>;
 }
 
 /** Local preparation additionally checks the current workspace and executable identity before restore. */
@@ -44,8 +44,7 @@ export class LocalCatalogs extends CatalogCache<LocalCatalogEntry> {
       secretBindings: server.secretBindings,
     });
   }
-  public async prepareServer(id: string, scope: McpScope, signal: AbortSignal): Promise<void> {
-    signal.throwIfAborted();
+  private preparation(id: string, scope: McpScope) {
     const server = this.owner.require(id);
     const key = `${id}:${scope}`;
     let binding: McpConnectionBinding | undefined;
@@ -54,35 +53,43 @@ export class LocalCatalogs extends CatalogCache<LocalCatalogEntry> {
       return binding;
     };
     const authority = this.authority(server, scope);
-    await this.prepare(
-      {
-        key,
-        serverId: id,
-        scope,
-        authority,
-        before: async (owned) => {
-          owned.throwIfAborted();
-          binding = await this.owner.connection(server, scope, owned);
-          owned.throwIfAborted();
-        },
-        assertCurrent: () => this.owner.validate(prepared()),
-        restore: (value, discoveredAt) => ({
-          authority,
-          revision: server.revision,
-          accessEpoch: server.accessEpoch,
-          startupFingerprint: prepared().startupFingerprint,
-          value,
-          discoveredAt,
-        }),
-        discover: (owned) =>
-          this.owner.discover(
-            id,
-            { scope, expectedRevision: server.revision, expectedAccessEpoch: server.accessEpoch },
-            owned,
-          ),
+    return {
+      key,
+      serverId: id,
+      scope,
+      authority,
+      before: async (owned: AbortSignal) => {
+        owned.throwIfAborted();
+        binding = await this.owner.connection(server, scope, owned);
+        owned.throwIfAborted();
       },
-      signal,
-    );
+      assertCurrent: () => this.owner.validate(prepared()),
+      createEntry: (value: McpCatalog, discoveredAt: number): LocalCatalogEntry => ({
+        authority,
+        revision: server.revision,
+        accessEpoch: server.accessEpoch,
+        startupFingerprint: prepared().startupFingerprint,
+        value,
+        discoveredAt,
+      }),
+      discover: (owned: AbortSignal) =>
+        this.owner.discover(
+          id,
+          { scope, expectedRevision: server.revision, expectedAccessEpoch: server.accessEpoch },
+          owned,
+        ),
+    };
+  }
+  public async prepareServer(id: string, scope: McpScope, signal: AbortSignal): Promise<void> {
+    signal.throwIfAborted();
+    await this.prepare(this.preparation(id, scope), signal);
+  }
+  public async discoverServer(
+    id: string,
+    scope: McpScope,
+    signal: AbortSignal,
+  ): Promise<LocalCatalogEntry> {
+    return await this.refresh(this.preparation(id, scope), signal);
   }
   public diagnostics(
     servers: readonly McpServerView[],

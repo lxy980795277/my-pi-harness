@@ -11,6 +11,7 @@ import {
   type MessageView,
   type SessionSummary,
 } from '@my-pi-harness/protocol';
+import { QueueCapabilityMetadataSchema } from '@my-pi-harness/protocol/internal';
 import { StorageError } from '../../shared/errors';
 import { projectArtifact } from '../../artifacts/projection';
 import { ToolProjection } from './tools';
@@ -23,7 +24,6 @@ import {
   BranchSelectionSchema,
   InputIdSchema,
   MessageCompletedSchema,
-  QueueRequestSchema,
   RunAcceptedSchema,
   RunFinishedSchema,
 } from '../event-validation';
@@ -317,7 +317,7 @@ export class ProjectionWriter {
     const run = this.run(event);
     if (run.status !== 'running' || this.session(event.sessionId).activeRunId !== run.id)
       throw new StorageError('CONFLICT', 'Queued input must originate in the active run');
-    const request = checked(QueueRequestSchema, privateData);
+    const request = checked(QueueCapabilityMetadataSchema, privateData);
     this.db
       .insert(schema.queue)
       .values({ id: input.id, sessionId: input.sessionId, data: input, privateData })
@@ -440,9 +440,9 @@ export class ProjectionWriter {
         )
           throw new StorageError('CONFLICT', 'Queued input was modified or consumed');
         if (privateData !== undefined) {
-          const nextMetadata = checked(QueueRequestSchema, privateData);
+          const nextMetadata = checked(QueueCapabilityMetadataSchema, privateData);
           if (row.privateData !== null) {
-            const original = checked(QueueRequestSchema, row.privateData);
+            const original = checked(QueueCapabilityMetadataSchema, row.privateData);
             if (original.requestId !== nextMetadata.requestId)
               throw new StorageError(
                 'CONFLICT',

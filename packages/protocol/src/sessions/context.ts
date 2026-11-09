@@ -1,4 +1,10 @@
 import { Type, type Static } from 'typebox';
+import {
+  ATTACHMENT_BYTE_LIMITS,
+  ATTACHMENT_IMAGE_BASE64_LENGTH,
+  ATTACHMENT_MAX_BASE64_LENGTH,
+  ATTACHMENT_MAX_BYTES,
+} from './attachment-capabilities';
 
 export type Attachment = Static<typeof AttachmentSchema>;
 export type AttachmentContent = Static<typeof AttachmentContentSchema>;
@@ -41,7 +47,7 @@ export const AttachmentSchema = Type.Object(
       Type.Literal('document'),
       Type.Literal('reference'),
     ]),
-    byteLength: Type.Integer({ minimum: 0, maximum: 8_388_608 }),
+    byteLength: Type.Integer({ minimum: 0, maximum: ATTACHMENT_MAX_BYTES }),
     preview: Type.String({ maxLength: 4000 }),
     sourcePath: Type.Union([Type.String({ maxLength: 2000 }), Type.Null()]),
     workspaceId: Type.Optional(Type.Union([id, Type.Null()])),
@@ -53,8 +59,11 @@ export const AttachmentSchema = Type.Object(
 export const AttachmentContentSchema = Type.Object(
   {
     attachment: AttachmentSchema,
-    text: Type.Union([Type.String({ maxLength: 256_000 }), Type.Null()]),
-    imageData: Type.Union([Type.String({ maxLength: 2_796_208 }), Type.Null()]),
+    text: Type.Union([Type.String({ maxLength: ATTACHMENT_BYTE_LIMITS.text }), Type.Null()]),
+    imageData: Type.Union([
+      Type.String({ maxLength: ATTACHMENT_IMAGE_BASE64_LENGTH }),
+      Type.Null(),
+    ]),
   },
   { additionalProperties: false },
 );
@@ -63,7 +72,7 @@ export const AttachmentUploadSchema = Type.Object(
   {
     name: Type.String({ minLength: 1, maxLength: 240 }),
     mediaType: Type.String({ minLength: 1, maxLength: 100 }),
-    data: Type.String({ maxLength: 11_184_812 }),
+    data: Type.String({ maxLength: ATTACHMENT_MAX_BASE64_LENGTH }),
   },
   { additionalProperties: false },
 );

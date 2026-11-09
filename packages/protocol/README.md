@@ -8,11 +8,13 @@
 
 `src/index.ts`只汇总公开导出，`src/version.ts`是版本脚本生成的固定入口。`application/`定义应用登录、模型设置与工作区协议；`sessions/`定义会话、流更新及上下文交互；`tools/`定义公开工具调用与产物；`extensions/`定义MCP、Skills、插件和服务连接；`host/`定义公开服务健康状态、桌面启动消息、有限桌面桥及外链校验。
 
-`internal/`拥有冻结MCP授权、Skill正文与资源绑定、canonical工具结果、实时消息覆盖输入及持久提交数据。ToolContentSchema统一执行、MCP投影与持久结果的文本/图像块，保留原字符串及块数上限；ToolResult与MCP调用结果的外层语义仍由各自模块拥有。`EventInput`、`RequestAcceptance`与已分配身份的`SessionCreateRecord`在这里唯一定义，runtime和storage通过此入口共享，不互相依赖实现。ProviderRecord保留宿主credentialRef及既有持久字段，公开ProviderConfig仅表达配置与认证状态。公开模块不得引用internal，Renderer不得导入internal；源码边界检查覆盖合法宿主消费、公开重导出和非法子路径。
+`internal/`拥有冻结MCP授权、Skill正文与资源绑定、canonical工具结果、实时消息覆盖输入及持久提交数据。ToolContentSchema统一执行、MCP投影与持久结果的文本/图像块，保留原字符串及块数上限；ToolResult与MCP调用结果的外层语义仍由各自模块拥有。`EventInput`、`RequestAcceptance`与已分配身份的`SessionCreateRecord`在这里唯一定义，runtime和storage通过此入口共享，不互相依赖实现。QueueCapabilityMetadataSchema统一队列私有接受数据及绑定上限；storage在写入、回放及读取持久投影时校验，并向runtime返回明确类型。ProviderRecord保留宿主credentialRef及既有持久字段，公开ProviderConfig仅表达配置与认证状态。公开模块不得引用internal，Renderer不得导入internal；源码边界检查覆盖合法宿主消费、公开重导出和非法子路径。
 
 公开HTTP请求与响应按所属领域集中：应用配对/登录、模型认证挑战及Provider操作输入由application拥有；高级账户OAuth、MCP OAuth和插件Skill OAuth各自返回独立DTO，不合并为可选字段。ApiError只含code/message，HTTP状态仍由传输表达。SkillDirectoryResponse供daemon、Web与Desktop共用，原生路径与真实目录检查仍属于桌面主进程。
 
 字段、失败语义和桌面桥见 [协议文档](../../docs/03_API/overview.md)。改变协议时同时更新所有消费者和相关行为验证。
+
+`sessions/attachment-capabilities`集中声明附件格式、MIME别名和字节上限，供文件选择、客户端预检、公开schema及宿主解析选择复用；不承担文件签名、UTF-8或解压校验，也不扩展到产物格式。
 
 应用身份使用`AppUser`、`LoginProvider`、`LoginSessionInfo`、`LoginFlow`，`AuthStatus`分别表达本机信任与应用登录。未登录不返回profile用户资料；公开登录流程只包含用户验证码，不含私有device_code、上游Token或应用bearer。模型授权继续使用独立`AuthFlow`。
 
