@@ -8,8 +8,10 @@ import {
   resolveSocketAddress,
   SandboxError,
 } from '@my-pi-harness/sandbox/network';
-import type { FetchLike } from '@modelcontextprotocol/client';
 import { NetworkError } from './errors';
+
+/** Restricted HTTP requests accept URLs and explicit options, never Request objects. */
+export type RemoteFetch = (url: string | URL, init?: RequestInit) => Promise<Response>;
 
 export interface RemoteNetworkOptions {
   /** Only host tests may explicitly inject an exact local fixture origin. */
@@ -112,9 +114,9 @@ function responseBody(
 }
 
 /** DNS is checked and pinned on every socket; redirects, ambient proxy and cookies are never followed. */
-export function createRemoteFetch(options: RemoteNetworkOptions = {}): FetchLike {
+export function createRemoteFetch(options: RemoteNetworkOptions = {}): RemoteFetch {
   return async (input, init = {}) => {
-    const url = parseRemoteUrl(input instanceof Request ? input.url : input, options.fixtureOrigin);
+    const url = parseRemoteUrl(input, options.fixtureOrigin);
     if (options.allowedOrigins !== undefined && !options.allowedOrigins.has(url.origin))
       throw new NetworkError('ORIGIN_FORBIDDEN', '远程请求不能跨越已授权来源。');
     const signals = [options.signal, init.signal].filter(

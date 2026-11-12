@@ -10,6 +10,6 @@ allowed-tools: 'web_fetch'
 
 ## 已连接服务的只读访问
 
-当前激活Skill记录中的gatewayUrl是本机只读入口。使用web_fetch GET请求该入口下的服务API路径；宿主附加认证，不传入认证头，也不读取凭据。网关拒绝的路径不能绕过或改为上游直连。修改操作通过tool_search搜索已启用的MCP工具；命中会自动加载，下一次模型请求按返回的真实名称调用，继续遵守用户授权和工具审批。
+当前激活Skill记录中的gatewayUrl是本机只读入口。使用web_fetch的raw模式（mode="raw"，method="GET"）请求该入口下的服务API路径；宿主附加认证，不传入认证头，也不读取凭据。网关拒绝的路径不能绕过或改为上游直连。修改操作通过tool_search搜索已启用的MCP工具；命中会自动加载，下一次模型请求按返回的真实名称调用，继续遵守用户授权和工具审批。
 
 通过gatewayUrl下的v1/profile、v1/organizations、v1/projects及指定项目的health、database/openapi、config/database或readonly路径读取管理信息。网关返回不允许的路径时，使用实际MCP目录确认可用能力。

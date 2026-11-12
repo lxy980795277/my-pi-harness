@@ -7,6 +7,7 @@ import type {
   ArtifactToolHandlers,
   MemoryToolHandlers,
   SearchToolHandlers,
+  WebToolHandlers,
 } from '@my-pi-harness/tools';
 import type { Artifact, RunView, SessionSummary, Workspace } from '@my-pi-harness/protocol';
 import type { ApprovalReviewer } from './approval-review';
@@ -47,6 +48,7 @@ export interface ToolRuntimeOptions {
   reviewer?: ApprovalReviewer;
   externalTools?: ExternalTools;
   skillGateway?: WebFetchGatewayAccess;
+  web?: WebToolHandlers;
   pythonPath?: string;
   commands?: CommandManager;
   artifacts?(context: ToolRunContext): ArtifactToolHandlers;

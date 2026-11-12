@@ -23,7 +23,7 @@ import { SessionRuntime } from '../../src/sessions/runtime';
 import { ToolRuntime } from '../../src/tools/runtime';
 import type { ToolRuntimeOptions } from '../../src/tools/types';
 import type { ExternalTools } from '../../src/tools/external';
-import type { WebFetchGatewayAccess } from '@my-pi-harness/tools';
+import type { WebFetchGatewayAccess, WebToolHandlers } from '@my-pi-harness/tools';
 import type { SkillsPort, ToolDiscoveryPort } from '../../src/capabilities/ports';
 import { WorkRuntime } from '../../src/work/runtime';
 import type { RunMemoryPort } from '../../src/runs/ports';
@@ -48,6 +48,7 @@ interface WorkFixtureOptions {
   discovery?: ToolDiscoveryPort;
   skills?: SkillsPort;
   skillGateway?: WebFetchGatewayAccess;
+  web?: WebToolHandlers;
   sessionTools?: boolean;
   tools?: boolean;
   context?: boolean;
@@ -112,6 +113,7 @@ export async function fixture(
       if (options.sessionTools !== false) toolOptions.work = work;
       if (options.externalTools) toolOptions.externalTools = options.externalTools;
       if (options.skillGateway) toolOptions.skillGateway = options.skillGateway;
+      if (options.web) toolOptions.web = options.web;
       tools = new ToolRuntime(toolOptions);
     }
     const runtimeOptions: ConstructorParameters<typeof SessionRuntime>[0] = {

@@ -105,7 +105,9 @@ pnpm --filter @my-pi-harness/agent-runtime test
 
 后续Run从当前分支有效消息所对应的已提交接受/加载事实继承最近16个Skill冻结正文，自动压缩不清除该来源；编辑分支、上下文重置和检查点选择只使用保留范围。正文不会因picker空选择、模型历史裁剪或磁盘更新而丢失或换成新版。继承前逐项重验当前启停、版本及插件授权；失效项排除，并在已记录system上下文的`unavailablePreviousSkills`中说明，普通聊天继续，显式新选择仍严格校验。队列私有`inheritedSkillBindings`保留原版本，恢复可排除已失效的继承；正文继承不自动继承MCP可执行集合。动态Skill依赖只从已获准工作区候选选择，附加资源索引非空时同时激活resource reader；没有工作区不提供本地文档、文件或命令工具，任意MCP名字不随Skill声明加载。
 
-Skill没有额外的工具grant状态，真实执行继续使用统一策略与逐次审批。服务插件通过冻结Skill中的`gatewayUrl`提供只读HTTP入口，模型使用会话级`web_fetch`访问允许路径，不要求工作区或授予文件/Shell能力；公网与网关访问继续执行现有网络校验、只读限制和审批。网关地址随接受输入与`context.prepared`保存，私有访问能力只在宿主执行请求时添加，不进入模型或会话日志。MCP写操作继续使用实际加载工具、独立信任与当前审批策略，接口见[运行时能力协议](../../docs/03_API/capability-runtime.md)。
+Skill没有额外的工具grant状态，真实执行继续使用统一策略与逐次审批。服务插件通过冻结Skill中的`gatewayUrl`提供只读HTTP入口，模型使用会话级`web_fetch`的`raw`模式访问允许路径，不要求工作区或授予文件/Shell能力；公网与网关访问继续执行现有网络校验、只读限制和审批。网关地址随接受输入与`context.prepared`保存，私有访问能力只在宿主执行请求时添加，不进入模型或会话日志。MCP写操作继续使用实际加载工具、独立信任与当前审批策略，接口见[运行时能力协议](../../docs/03_API/capability-runtime.md)。
+
+`web_search`与`web_fetch`的`page`模式通过ToolRuntimeOptions.web绑定宿主WebToolHandlers，主子Run分别沿用自己的角色与审批策略，公网搜索和正文提取不因服务使用POST而成为写操作。服务凭据不进入runtime、工具参数或持久模型请求；未配置凭据明确失败，不改用聊天模型Key或Shell请求。对外查询、正文提取及原始响应的范围见[联网工具协议](../../docs/03_API/web-tools.md)。
 
 ## 记忆与历史来源
 

@@ -10,7 +10,7 @@ ToolResult使用protocol/internal的ToolContent文本/图像块，不重复定�
 
 | 目录      | 负责的内容                                                         |
 | --------- | ------------------------------------------------------------------ |
-| tools/    | 34个工具分别平铺为独立文件；各自拥有参数、描述、策略及执行入口     |
+| tools/    | 35个工具分别平铺为独立文件；各自拥有参数、描述、策略及执行入口     |
 | lib/      | 注册契约、执行上下文及多个工具实际复用的文件操作、输入与传输机制   |
 | utils/    | 工具目录检索及工具、附件共用的文档正文提取                         |
 | skills/   | YAML解析、发现优先级、安装文件、不可变快照、共享依赖及独立资源租约 |
@@ -31,6 +31,14 @@ bind接收当前Run的ToolContext，返回异步调用入口；注册工厂同�
 记忆与跨会话来源共七个工具。`search_memories`及`save_memory`、`learn_memory`、`update_memory`、`delete_memory`在宿主装配时默认提供；`search_sessions`与`read_search_source`沿用按需发现、激活和执行链。save直接处理明确记忆请求，learn在当前学习开关允许时记录稳定偏好、长期指令或事实，update按精确ID和revision纠正已有条目。四个写工具均声明mutating及非readOnly；save、learn、update不需要额外审批，delete经过普通审批且full-access可自动批准。结果仅返回写入回执，不重复正文。当前分支的`search_session_history`与留存工具结果的`read_tool_result`继续承担各自原有范围。
 
 这七个工具通过lib/tool-context.ts的窄回调调用宿主，不导入记忆库、索引或会话实现。模型参数不能自报来源授权、hash、所属用户或任意工作区ID；宿主绑定实际消费的人类输入及持久工具调用，记忆领域再次检查来源、开关和revision。引用资料不能触发自动学习，明确保存仍由用户输入和宿主校验约束；没有一次性学习动作或待确认提案。子任务只有授权范围内的记忆读取，不继承记忆写入、历史搜索或引用能力。`spawn_agent.userMemoryIds`只转交父级当前可读的精确用户记忆引用，宿主在创建和子请求派发时复核。具体协议见[记忆与搜索](../../docs/03_API/memory-search.md)。
+
+## 公网搜索与网页读取
+
+`lib/web-raw.ts`集中拥有原始HTTP的目标检查、15秒截止、逐跳重定向与精确网关例外；web_fetch只负责模型参数、角色策略、模式分派及结果呈现。page目标由宿主提供商适配器在URL上传前校验，不借用raw传输的目标解析。`lib/web-content.ts`统一搜索、正文和raw的模型文本输出，正文与raw共享完整文本长度预算。
+
+`web_search`默认提供公网检索，`web_fetch`要求显式选择`mode`：`page`通过宿主的DeepSeek服务提取网页Markdown，只接受URL；`raw`保留原始文本/API响应及只读本地Skill网关，支持GET和经批准的POST。两种模式不按扩展名、响应类型或失败情况自动切换，未配置搜索凭据时明确报错。搜索与网页正文读取都是只读操作，上游服务的POST不构成业务写入；raw POST仍受角色写权限和审批限制。
+
+`WebToolHandlers`只传递检索/正文输入、取消信号及安全结果，凭据和远端适配由daemon/integrations拥有。公网结果标明来源并作为不可信资料，完整工具文本限制为100,000字符；page模式拒绝私有/本地目标，不把本地网关URL上传第三方。raw使用受限Node HTTP传输、全部DNS记录校验及固定socket地址，不依赖curl；只有宿主声明的精确Skill网关获得只读例外和私有认证头。具体配置及API见[联网工具协议](../../docs/03_API/web-tools.md)。
 
 ## Skill资源与插件声明
 

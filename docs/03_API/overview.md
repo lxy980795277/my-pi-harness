@@ -49,6 +49,8 @@ preload暴露 `DesktopBridge.getInfo()`、固定目录选择 `chooseWorkspaceDir
 
 ## M2协议
 
+联网搜索、网页正文与原始接口模式、独立DeepSeek凭据及权限见[联网工具协议](web-tools.md)。
+
 工具、审批、文件变化与执行恢复已有独立DTO与持久化规则。HTTP、IPC与持久化记录不能隐式复用含私有字段的服务对象。
 
 工作区与工具的API、审批和私有上下文规则见[M2协议](workspace-execution.md)。目录选择仅从当前受信任主frame调用，无参数，不暴露通用文件系统。

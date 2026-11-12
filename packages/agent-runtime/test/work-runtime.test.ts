@@ -128,7 +128,7 @@ describe('M3 durable session work through real Pi tools', () => {
                 message.role === 'system' ? (message.toolsAdded ?? []).map(({ name }) => name) : [],
               ),
             ),
-          ).toEqual(new Set(['web_fetch', 'ask_user', 'tool_search']));
+          ).toEqual(new Set(['web_fetch', 'web_search', 'ask_user', 'tool_search']));
           return call('ask_user', questionArgs('Which format?', ['Markdown', 'Text']));
         },
         (context) => {

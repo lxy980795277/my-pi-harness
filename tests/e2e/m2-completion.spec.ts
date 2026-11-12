@@ -39,7 +39,10 @@ test('完整工具链复用 SDK 调用ID，逐次审批、真实编辑与受限�
         },
       },
       { name: 'run_command', arguments: { command: "printf 'm2-shell-ok\\n'", yieldTimeMs: 5000 } },
-      { name: 'web_fetch', arguments: { url: 'http://127.0.0.1/blocked-private-resource' } },
+      {
+        name: 'web_fetch',
+        arguments: { mode: 'raw', url: 'http://127.0.0.1/blocked-private-resource' },
+      },
     ],
     finalText,
   );

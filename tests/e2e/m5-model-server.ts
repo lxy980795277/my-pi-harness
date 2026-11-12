@@ -103,7 +103,7 @@ export async function startM5Model(options: M5ModelOptions = {}): Promise<TestMo
           if (user.includes('[hold]')) return;
           if (user.includes('[fetch]') && results.length === 0) {
             if (options.webFetchUrl === undefined) throw new Error('Missing M5 fixture read URL');
-            tool('web_fetch', { url: options.webFetchUrl, method: 'GET' });
+            tool('web_fetch', { mode: 'raw', url: options.webFetchUrl, method: 'GET' });
           } else if (user.includes('[fetch]') && !serialized.includes('M5-READONLY-GET-OK')) {
             answer('M5-CHILD-FETCH-FAILED');
           } else if (user.includes('[ask]') && results.length === 0) {

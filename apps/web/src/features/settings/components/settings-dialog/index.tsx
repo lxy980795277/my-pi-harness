@@ -2,7 +2,17 @@ import type { SettingsDialogProps } from '@/features/settings/types/settings';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Suspense, type FC } from 'react';
-import { Plug, Settings2, Sparkles, BookOpen, Puzzle, Link, GitBranch, Brain } from 'lucide-react';
+import {
+  Plug,
+  Settings2,
+  Sparkles,
+  BookOpen,
+  Puzzle,
+  Link,
+  GitBranch,
+  Brain,
+  Globe,
+} from 'lucide-react';
 import { Dialog } from '@/components/ui/dialog';
 import { DialogContent } from '@/components/ui/dialog/dialog-content';
 import { DialogTitle } from '@/components/ui/dialog/dialog-title';
@@ -23,6 +33,7 @@ import { useSettingsDialog } from '@/features/settings/hooks/use-settings-dialog
 import { AgentSettingsPanel } from '@/features/tasks/components/agent-settings';
 import { MemorySettingsPanel } from '@/features/memory/components/memory-settings';
 import { SearchResourcesPanel } from '@/features/search/components/search-resources';
+import { WebSearchSettings } from '@/features/web-search/components/web-search-settings';
 
 /** A modal settings workspace leaves the conversation mounted behind it. */
 export const SettingsDialog: FC<SettingsDialogProps> = ({ theme, onToggleTheme }) => {
@@ -54,6 +65,10 @@ export const SettingsDialog: FC<SettingsDialogProps> = ({ theme, onToggleTheme }
               </TabsTrigger>
               <TabsTrigger value="agents" className="justify-start gap-2 rounded-xl px-3 py-2.5">
                 <GitBranch width={15} height={15} aria-hidden />子 Agent
+              </TabsTrigger>
+              <TabsTrigger value="web" className="justify-start gap-2 rounded-xl px-3 py-2.5">
+                <Globe width={15} height={15} aria-hidden />
+                联网搜索
               </TabsTrigger>
               <TabsTrigger value="memory" className="justify-start gap-2 rounded-xl px-3 py-2.5">
                 <Brain width={15} height={15} aria-hidden />
@@ -104,6 +119,9 @@ export const SettingsDialog: FC<SettingsDialogProps> = ({ theme, onToggleTheme }
             </TabsContent>
             <TabsContent value="mcp" className="m-0">
               <McpSettings />
+            </TabsContent>
+            <TabsContent value="web" className="m-0">
+              <WebSearchSettings />
             </TabsContent>
             <TabsContent value="agents" className="m-0">
               <AgentSettingsPanel />

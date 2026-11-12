@@ -80,7 +80,7 @@ it('pins the socket lookup to the public DNS answer and disables ambient connect
   fixtures.responses.push({ status: 200, body: 'public document' });
   const result = await executeTool(
     'web_fetch',
-    { url: 'https://public.example/document' },
+    { mode: 'raw', url: 'https://public.example/document' },
     context,
   );
   expect(result.content).toEqual([
@@ -101,7 +101,7 @@ it('pins the socket lookup to the public DNS answer and disables ambient connect
 it('rejects mixed public/private DNS results before creating a socket', async () => {
   fixtures.addresses = ['8.8.8.8', '127.0.0.1'];
   await expect(
-    executeTool('web_fetch', { url: 'http://public.example/' }, context),
+    executeTool('web_fetch', { mode: 'raw', url: 'http://public.example/' }, context),
   ).rejects.toMatchObject({ code: 'PRIVATE_NETWORK' });
   expect(fixtures.requests).toHaveLength(0);
 });
@@ -112,7 +112,7 @@ it('accepts a public A answer with its mapped AAAA representation and pins the s
   fixtures.responses.push({ status: 200, body: 'dual-stack public document' });
   const result = await executeTool(
     'web_fetch',
-    { url: 'https://public.example/document' },
+    { mode: 'raw', url: 'https://public.example/document' },
     context,
   );
   expect(result.content).toEqual([
@@ -134,7 +134,7 @@ it('rejects a mapped private AAAA answer even when the A answer is public', asyn
   fixtures.addresses = ['100.12.0.13'];
   fixtures.ipv6Addresses = ['::ffff:100.12.0.13', '::ffff:169.254.169.254'];
   await expect(
-    executeTool('web_fetch', { url: 'https://public.example/' }, context),
+    executeTool('web_fetch', { mode: 'raw', url: 'https://public.example/' }, context),
   ).rejects.toMatchObject({ code: 'PRIVATE_NETWORK' });
   expect(fixtures.requests).toHaveLength(0);
 });
@@ -142,7 +142,7 @@ it('rejects a mapped private AAAA answer even when the A answer is public', asyn
 it('checks redirect targets before a second socket can reach loopback', async () => {
   fixtures.responses.push({ status: 302, location: 'http://127.0.0.1/' });
   await expect(
-    executeTool('web_fetch', { url: 'http://public.example/' }, context),
+    executeTool('web_fetch', { mode: 'raw', url: 'http://public.example/' }, context),
   ).rejects.toMatchObject({ code: 'PRIVATE_NETWORK' });
   expect(fixtures.requests).toHaveLength(1);
 });
@@ -150,7 +150,8 @@ it('checks redirect targets before a second socket can reach loopback', async ()
 it('follows relative GET redirects but never automatically repeats a POST', async () => {
   fixtures.responses.push({ status: 302, location: '/next' }, { status: 200, body: 'next' });
   expect(
-    (await executeTool('web_fetch', { url: 'https://public.example/' }, context)).summary,
+    (await executeTool('web_fetch', { mode: 'raw', url: 'https://public.example/' }, context))
+      .summary,
   ).toContain('200');
   expect(fixtures.requests[1]?.url.href).toBe('https://public.example/next');
   fixtures.requests = [];
@@ -159,7 +160,7 @@ it('follows relative GET redirects but never automatically repeats a POST', asyn
     (
       await executeTool(
         'web_fetch',
-        { url: 'https://public.example/', method: 'POST', body: '{}' },
+        { mode: 'raw', url: 'https://public.example/', method: 'POST', body: '{}' },
         context,
       )
     ).summary,
@@ -167,18 +168,26 @@ it('follows relative GET redirects but never automatically repeats a POST', asyn
   expect(fixtures.requests).toHaveLength(1);
 });
 
+it('refuses an oversized redirected URL before another request', async () => {
+  fixtures.responses.push({ status: 302, location: `/${'x'.repeat(8192)}` });
+  await expect(
+    executeTool('web_fetch', { mode: 'raw', url: 'https://public.example/' }, context),
+  ).rejects.toMatchObject({ code: 'INVALID_URL' });
+  expect(fixtures.requests).toHaveLength(1);
+});
+
 it('refuses HTTPS downgrades, compression and oversized responses', async () => {
   fixtures.responses.push({ status: 302, location: 'http://public.example/' });
   await expect(
-    executeTool('web_fetch', { url: 'https://public.example/' }, context),
+    executeTool('web_fetch', { mode: 'raw', url: 'https://public.example/' }, context),
   ).rejects.toMatchObject({ code: 'UNSAFE_REDIRECT' });
   fixtures.responses.push({ status: 200, encoding: 'gzip' });
   await expect(
-    executeTool('web_fetch', { url: 'https://public.example/' }, context),
+    executeTool('web_fetch', { mode: 'raw', url: 'https://public.example/' }, context),
   ).rejects.toMatchObject({ code: 'UNSUPPORTED_ENCODING' });
   fixtures.responses.push({ status: 200, body: 'x'.repeat(500_001) });
   await expect(
-    executeTool('web_fetch', { url: 'https://public.example/' }, context),
+    executeTool('web_fetch', { mode: 'raw', url: 'https://public.example/' }, context),
   ).rejects.toMatchObject({ code: 'RESPONSE_LIMIT' });
 });
 
@@ -191,7 +200,7 @@ it('reaches only the owned gateway with a host-injected capability and pinned lo
   fixtures.responses.push({ status: 200, body: '{"login":"fixture"}' });
   const result = await executeTool(
     'web_fetch',
-    { url: 'http://127.0.0.1:4311/api/skill-gateway/github/user' },
+    { mode: 'raw', url: 'http://127.0.0.1:4311/api/skill-gateway/github/user' },
     gatewayContext,
   );
   expect(result.content).toEqual([
@@ -219,22 +228,24 @@ it.each([
   'http://user:secret@127.0.0.1:4311/api/skill-gateway/github/user',
   'http://127.0.0.1:4311/api/skill-gateway/github/../../auth/status',
 ])('does not extend gateway authority to %s', async (url) => {
-  await expect(executeTool('web_fetch', { url }, gatewayContext)).rejects.toThrow();
+  await expect(executeTool('web_fetch', { mode: 'raw', url }, gatewayContext)).rejects.toThrow();
   expect(fixtures.requests).toHaveLength(0);
 });
 
 it('keeps the capability off public requests and rejects gateway POST or redirects', async () => {
   fixtures.responses.push({ status: 200 });
-  await executeTool('web_fetch', { url: 'https://public.example/' }, gatewayContext);
+  await executeTool('web_fetch', { mode: 'raw', url: 'https://public.example/' }, gatewayContext);
   expect(fixtures.requests[0]?.options.headers).not.toHaveProperty('x-pi-harness-skill-gateway');
   fixtures.requests = [];
   const url = 'http://127.0.0.1:4311/api/skill-gateway/github/user';
   await expect(
-    executeTool('web_fetch', { url, method: 'POST', body: '{}' }, gatewayContext),
+    executeTool('web_fetch', { mode: 'raw', url, method: 'POST', body: '{}' }, gatewayContext),
   ).rejects.toMatchObject({ code: 'READ_ONLY' });
   expect(fixtures.requests).toHaveLength(0);
   fixtures.responses.push({ status: 302, location: 'https://public.example/' });
-  await expect(executeTool('web_fetch', { url }, gatewayContext)).rejects.toMatchObject({
+  await expect(
+    executeTool('web_fetch', { mode: 'raw', url }, gatewayContext),
+  ).rejects.toMatchObject({
     code: 'UNSAFE_REDIRECT',
   });
   expect(fixtures.requests).toHaveLength(1);

@@ -16,6 +16,8 @@
 
 `sessions/attachment-capabilities`集中声明附件格式、MIME别名和字节上限，供文件选择、客户端预检、公开schema及宿主解析选择复用；不承担文件签名、UTF-8或解压校验，也不扩展到产物格式。
 
+`web/web.ts`定义模型可见的公网搜索输入与联网服务配置DTO；字段说明随同一schema进入工具声明，设置仅公开是否配置。宿主端口的搜索条目、结果和网页输入/正文以`internal/web.ts`的纯接口共享，不作为公开HTTP/SSE响应，也不为同进程已验证结果增加校验副本。第三方响应schema和字段映射由integrations拥有，官方Key使用写入输入，不出现在状态、工具参数或结果；凭据存储由宿主拥有。联网服务与本地记忆/会话检索使用独立协议。
+
 应用身份使用`AppUser`、`LoginProvider`、`LoginSessionInfo`、`LoginFlow`，`AuthStatus.clientInitialized`表示已建立客户端，`authenticated`表示通过应用登录；客户端仅关联登录流程和CSRF，不授予业务访问。未登录不返回profile用户资料；公开登录流程只包含用户验证码，不含私有device_code、上游Token或应用bearer。模型授权继续使用独立`AuthFlow`。
 
 `sessions/agents.ts`定义子Agent角色与限制、任务摘要/分页详情、通信、停止命令及看板筛选。`RunView.taskId`省略表示根执行，存在时指向同Session的子任务；任务源仅持久化`sourceToolCallId`，公开摘要中的父子关系和用量由宿主投影，不要求日志重复保存。`MessageView.agentMessageId`标识通信形成的模型输入，关联原始通信，不能冒充用户提问或进入提问编辑入口。默认角色、指令与执行限制由agent-runtime的defaultAgentSettings拥有，宿主显式装配；协议仅定义配置字段及范围，包含任务数、深度、并发、时限和单请求输出，不设累计token额度，宿主保存设置时检查revision和模型选择关联。全局任务变更SSE只发送`ready/changed`失效通知，不携带任务正文或凭据。

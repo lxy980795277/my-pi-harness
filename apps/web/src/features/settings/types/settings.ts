@@ -6,6 +6,7 @@ export type SettingsCloseTarget = 'settings' | 'provider';
 export type SettingsSection =
   | 'general'
   | 'models'
+  | 'web'
   | 'mcp'
   | 'skills'
   | 'plugins'

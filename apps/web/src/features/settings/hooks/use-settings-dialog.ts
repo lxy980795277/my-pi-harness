@@ -67,6 +67,7 @@ export const useSettingsDialog = (): SettingsDialogState => {
       if (
         value === 'general' ||
         value === 'models' ||
+        value === 'web' ||
         value === 'mcp' ||
         value === 'skills' ||
         value === 'plugins' ||

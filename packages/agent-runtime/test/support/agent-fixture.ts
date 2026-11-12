@@ -23,6 +23,7 @@ import type { SkillsPort, ToolDiscoveryPort } from '../../src/capabilities/ports
 import { WorkRuntime } from '../../src/work/runtime';
 import { defaultAgentSettings } from '../../src/subagents/default-settings';
 import type { RunMemoryPort, RunSearchPort } from '../../src/runs/ports';
+import type { WebToolHandlers } from '@my-pi-harness/tools';
 
 interface AgentFixtureOptions {
   model?(original: Model<Api>, modelId: string): Model<Api>;
@@ -43,6 +44,7 @@ interface AgentFixtureOptions {
   discovery?: ToolDiscoveryPort;
   memory?: RunMemoryPort;
   search?: RunSearchPort;
+  web?: WebToolHandlers;
 }
 
 export interface AgentGate {
@@ -197,6 +199,7 @@ export async function agentFixture(options: AgentFixtureOptions): Promise<AgentF
     work,
     ...(options.externalTools ? { externalTools: options.externalTools } : {}),
     ...(options.reviewer ? { reviewer: options.reviewer } : {}),
+    ...(options.web ? { web: options.web } : {}),
   });
   if (options.settings) store.putAgentSettings(options.settings(store.getAgentSettings()));
   const runtime: SessionRuntime = new SessionRuntime({

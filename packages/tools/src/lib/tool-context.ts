@@ -1,4 +1,10 @@
-import { ToolError } from './tool-registry';
+import type { WebSearchInput } from '@my-pi-harness/protocol';
+import type {
+  WebSearchResult,
+  WebPageInput,
+  WebPageResult,
+} from '@my-pi-harness/protocol/internal';
+import { ToolError, type ToolInvocation } from './tool-registry';
 import type { AskUserHandler } from '../tools/ask-user';
 import type { SearchMemoriesHandler } from '../tools/search-memories';
 import type { SearchSessionsHandler } from '../tools/search-sessions';
@@ -61,6 +67,12 @@ export interface SearchToolHandlers {
   search: SearchSessionsHandler;
   read: ReadSearchSourceHandler;
 }
+/** Host-owned public web services; credentials and provider transport never enter tool arguments. */
+export interface WebToolHandlers {
+  search(this: void, input: WebSearchInput, invocation: ToolInvocation): Promise<WebSearchResult>;
+  /** Validate the public target before forwarding its URL to the page provider. */
+  fetchPage(this: void, input: WebPageInput, invocation: ToolInvocation): Promise<WebPageResult>;
+}
 export interface AgentToolHandlers {
   spawn: SpawnAgentHandler;
   status: GetAgentStatusHandler;
@@ -89,6 +101,7 @@ export interface ToolContext {
   work?: WorkToolHandlers;
   memory?: MemoryToolHandlers;
   search?: SearchToolHandlers;
+  web?: WebToolHandlers;
   agents?: AgentToolHandlers;
   capabilities?: CapabilityToolHandlers;
   commands?: CommandToolHandlers;
@@ -109,6 +122,11 @@ export function requireSearchHandlers(context: ToolContext): SearchToolHandlers 
   if (!context.search)
     throw new ToolError('SEARCH_UNAVAILABLE', '当前执行未获准搜索或读取会话来源。');
   return context.search;
+}
+export function requireWebHandlers(context: ToolContext): WebToolHandlers {
+  if (!context.web)
+    throw new ToolError('WEB_NOT_CONFIGURED', '请先在设置的联网搜索中配置 DeepSeek API Key。');
+  return context.web;
 }
 export function requireAgentHandlers(context: ToolContext): AgentToolHandlers {
   if (!context.agents) throw new ToolError('TOOL_NOT_AVAILABLE', '子任务工具不可用。');

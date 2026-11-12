@@ -10,7 +10,7 @@
 | ----------- | ------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
 | 工作区文件  | read_file、list_files、search_files、write_file、edit_file                                                    | 默认                                                       |
 | 命令        | run_command、wait_command、stop_command                                                                       | macOS且有工作区时默认                                      |
-| Web         | web_fetch                                                                                                     | 默认，服务网关访问不要求工作区                             |
+| Web         | web_search、web_fetch                                                                                         | 默认，服务网关访问不要求工作区                             |
 | 工作状态    | ask_user；update_plan、update_plan_steps、update_todos、search_session_history、read_tool_result              | ask_user默认，其余按需或由已有状态提供                     |
 | 记忆与历史  | search_memories、save_memory、learn_memory、update_memory、delete_memory、search_sessions、read_search_source | 五个记忆工具默认；历史搜索/精读按需，按Run范围收窄         |
 | 子任务      | spawn_agent、wait_agents；get_agent_status、send_agent_message、stop_agent                                    | 可委派时spawn_agent默认，wait_agents默认，其余按需         |
@@ -18,7 +18,7 @@
 | 正文与视觉  | read_document、view_image、view_pdf_page                                                                      | 按需，视觉入口要求模型支持图片                             |
 | 交付        | publish_artifact                                                                                              | 按需                                                       |
 
-以上当前原生入口共34项。实际声明随可用端口和角色收窄，动态能力只从本Run获准候选选择，不构成跨平台固定数量。办公流程由四个插件Skill及其资源CLI提供，通用读取、命令和交付入口分别拥有自己的模型schema。
+以上当前原生入口共35项。实际声明随可用端口和角色收窄，动态能力只从本Run获准候选选择，不构成跨平台固定数量。办公流程由四个插件Skill及其资源CLI提供，通用读取、命令和交付入口分别拥有自己的模型schema。
 
 run.accepted私有记录保存初始tools/toolSources、MCP绑定/候选和诊断、nativeCandidates、skillCandidates及显式或继承的Skill正文。原生候选记录definition/source/fingerprint，准确区分session与workspace；SkillCandidate只保存selection、authorization、name、description、scope和source，不含正文、资源或活动租约。供应商schema、预算与执行使用同一可见集合，来源和加载策略不混入供应商schema。
 

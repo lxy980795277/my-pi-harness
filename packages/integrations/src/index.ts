@@ -14,7 +14,7 @@ export {
   type RemoteOAuthStore,
   type RemoteOAuthOptions,
 } from './mcp/remote-oauth';
-export { createRemoteFetch } from './network/remote-fetch';
+export { createRemoteFetch, type RemoteFetch } from './network/remote-fetch';
 export { parseRemoteUrl } from './network/remote-fetch';
 export type {
   McpCallInput,
@@ -37,3 +37,5 @@ export {
   type ConnectionOAuthFlow,
 } from './connections/oauth';
 export * from './oauth/index';
+export { DeepSeekWebClient, type DeepSeekWebClientOptions } from './web/deepseek';
+export { WebServiceError, type WebServiceErrorCode } from './web/errors';

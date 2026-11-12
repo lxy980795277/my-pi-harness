@@ -55,6 +55,7 @@ export function createToolContext(
     ...(context.search ? { search: context.search } : {}),
     ...(context.controls ? { capabilities: context.controls } : {}),
     ...(options.skillGateway ? { skillGateway: options.skillGateway } : {}),
+    ...(options.web ? { web: options.web } : {}),
     ...(options.artifacts ? { artifacts: options.artifacts(context) } : {}),
     ...(options.commands
       ? {

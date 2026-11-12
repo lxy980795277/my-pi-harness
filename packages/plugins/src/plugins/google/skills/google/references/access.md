@@ -1,6 +1,6 @@
 # Google 只读网关与 Workspace Apps
 
-当前Skill的gatewayUrl连接插件市场中授权的唯一Google账号。使用web_fetch GET请求drive/v3/files及单个文件、导出和评论路径，或calendar/v3/users/{user}/calendarList与calendar/v3/calendars/{calendar}/events。保留分页标记，按URL编码对象ID和查询值，不自行附加认证头。
+当前Skill的gatewayUrl连接插件市场中授权的唯一Google账号。使用web_fetch的raw模式（mode="raw"，method="GET"）请求drive/v3/files及单个文件、导出和评论路径，或calendar/v3/users/{user}/calendarList与calendar/v3/calendars/{calendar}/events。保留分页标记，按URL编码对象ID和查询值，不自行附加认证头。
 
 Docs、Sheets、Slides的正文读取与修改，以及Drive或Calendar写操作，使用tool_search搜索对应的Workspace MCP工具；命中会自动加载，下一次请求按返回的真实名称调用。每个App单独开启；插件授权成功不代表App已经启用。
 

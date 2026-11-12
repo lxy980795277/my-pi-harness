@@ -296,7 +296,7 @@ describe('task-local context and work', () => {
           type: 'toolCall' as const,
           id: 'read',
           name: 'web_fetch',
-          arguments: { url: 'https://example.com/' },
+          arguments: { mode: 'raw', url: 'https://example.com/' },
         };
         const tool: ToolCallRecord = {
           ...rootTool,

@@ -12,6 +12,18 @@ import {
 } from '@my-pi-harness/sandbox/network';
 import type { WebFetchGatewayAccess } from './tool-context';
 
+export interface RawWebRequest {
+  url: string;
+  method: 'GET' | 'POST';
+  body: string | undefined;
+  contentType: string;
+}
+export interface RawWebResponse {
+  url: URL;
+  status: number;
+  text: string;
+  redirectUrl?: string;
+}
 interface WebResponse {
   status: number;
   location: string | undefined;
@@ -29,6 +41,8 @@ export function assertPublicAddress(address: string): void {
 
 /** Parse an HTTP(S) URL with public-target policy before DNS resolution. */
 export function parseWebUrl(input: string): URL {
+  if (input.length > 8192)
+    throw new ToolError('INVALID_URL', 'Web URLs cannot exceed 8192 characters');
   let url: URL;
   try {
     url = new URL(input);
@@ -61,10 +75,7 @@ export function parseWebUrl(input: string): URL {
 }
 
 /** Only the host-declared daemon gateway can bypass ordinary public-network validation. */
-export function gatewayTarget(
-  input: string,
-  access: WebFetchGatewayAccess | undefined,
-): URL | undefined {
+function gatewayTarget(input: string, access: WebFetchGatewayAccess | undefined): URL | undefined {
   if (access === undefined) return undefined;
   let url: URL;
   try {
@@ -155,7 +166,7 @@ function readResponse(
 }
 
 /** Make one bounded request using a pinned public address or the exact host-owned gateway. */
-export async function requestWebUrl(
+async function requestWebUrl(
   url: URL,
   method: string,
   body: string | undefined,
@@ -198,4 +209,41 @@ export async function requestWebUrl(
     });
     client.end(body);
   });
+}
+
+/** Raw HTTP owns its deadline and redirect policy, including the exact read-only gateway exception. */
+export async function fetchRawWeb(
+  input: RawWebRequest,
+  caller: AbortSignal,
+  access?: WebFetchGatewayAccess,
+): Promise<RawWebResponse> {
+  const signal = AbortSignal.any([caller, AbortSignal.timeout(15_000)]);
+  const gatewayUrl = gatewayTarget(input.url, access);
+  const gateway = gatewayUrl === undefined ? undefined : access;
+  let url = gatewayUrl ?? parseWebUrl(input.url);
+  if (gateway !== undefined && (input.method !== 'GET' || input.body !== undefined))
+    throw new ToolError('READ_ONLY', 'Plugin gateways accept read-only GET requests only');
+  for (let redirects = 0; ; redirects += 1) {
+    checkCancelled(signal);
+    const response = await requestWebUrl(
+      url,
+      input.method,
+      input.body,
+      input.contentType,
+      signal,
+      gateway,
+    );
+    if (response.status < 300 || response.status >= 400 || response.location === undefined)
+      return { url, status: response.status, text: response.text };
+    if (gateway !== undefined)
+      throw new ToolError('UNSAFE_REDIRECT', 'Plugin gateway redirects are not followed');
+    const target = parseWebUrl(new URL(response.location, url).href);
+    if (url.protocol === 'https:' && target.protocol === 'http:')
+      throw new ToolError('UNSAFE_REDIRECT', 'HTTPS redirects cannot downgrade to HTTP');
+    if (input.method !== 'GET')
+      return { url, status: response.status, text: response.text, redirectUrl: target.href };
+    if (redirects === 4)
+      throw new ToolError('REDIRECT_LIMIT', 'Web request exceeded its redirect limit');
+    url = target;
+  }
 }

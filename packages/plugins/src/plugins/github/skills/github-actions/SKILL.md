@@ -1,7 +1,7 @@
 ---
 name: github-actions
 description: '定位 GitHub Actions 失败的工作流、任务和日志，并验证针对性修复。'
-allowed-tools: 'web_fetch read_file search_files shell'
+allowed-tools: 'web_fetch read_file search_files run_command'
 ---
 
 确定仓库、PR或提交SHA，发现并加载实际MCP能力以读取run、job和失败step；只读请求可通过当前Skill的gatewayUrl访问仓库API；写入需要已加载的MCP工具。无权访问日志时说明具体缺项。
@@ -14,4 +14,4 @@ allowed-tools: 'web_fetch read_file search_files shell'
 
 ## 已连接服务的只读访问
 
-当前激活Skill记录中的gatewayUrl是本机只读入口。使用web_fetch GET请求该入口下的服务API路径；宿主附加认证，不传入认证头，也不读取凭据。网关拒绝的路径不能绕过或改为上游直连。修改操作通过tool_search搜索已启用的MCP工具；命中会自动加载，下一次模型请求按返回的真实名称调用，继续遵守用户授权和工具审批。
+当前激活Skill记录中的gatewayUrl是本机只读入口。使用web_fetch的raw模式（mode="raw"，method="GET"）请求该入口下的服务API路径；宿主附加认证，不传入认证头，也不读取凭据。网关拒绝的路径不能绕过或改为上游直连。修改操作通过tool_search搜索已启用的MCP工具；命中会自动加载，下一次模型请求按返回的真实名称调用，继续遵守用户授权和工具审批。

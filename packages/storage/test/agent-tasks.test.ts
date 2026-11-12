@@ -538,7 +538,7 @@ describe('durable agent tasks', () => {
     );
     const callId = 'fetch-review';
     const anchor = 'late-review-assistant';
-    const args = { url: 'https://example.com/reference' };
+    const args = { mode: 'raw', url: 'https://example.com/reference' };
     const tool: ToolCallRecord = {
       id: storedToolCallId('run-review', anchor, callId),
       sessionId: 'session',

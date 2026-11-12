@@ -26,6 +26,7 @@ describe('default declarations and accepted deferred capabilities', () => {
       'write_file',
       'edit_file',
       'web_fetch',
+      'web_search',
       'ask_user',
       'spawn_agent',
       'wait_agents',
@@ -67,6 +68,7 @@ describe('default declarations and accepted deferred capabilities', () => {
     });
     expect(selected.initial.definitions.map(({ name }) => name)).toEqual([
       'web_fetch',
+      'web_search',
       'ask_user',
       'spawn_agent',
       'wait_agents',

@@ -16,7 +16,7 @@ describe('consecutive tool-use reminders', () => {
   it('advises on the third, fifth and eighth exact call without exposing arguments', () => {
     const repeats = new RepeatToolReminder();
     const notices = Array.from({ length: 10 }, () =>
-      repeats.observe('web_fetch', { url: 'https://private.example/secret-value' }),
+      repeats.observe('web_fetch', { mode: 'raw', url: 'https://private.example/secret-value' }),
     );
     expect(notices.map((notice, index) => (notice ? index + 1 : null)).filter(Boolean)).toEqual([
       3, 5, 8,

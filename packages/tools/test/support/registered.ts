@@ -7,6 +7,7 @@ import {
   type ToolResult,
   type ToolPolicy,
   type WebFetchGatewayAccess,
+  type WebToolHandlers,
 } from '../../src/index';
 
 export function describeRegistered(name: string, args: Record<string, unknown>): ToolPolicy {
@@ -21,6 +22,7 @@ export async function executeRegistered(
   args: Record<string, unknown>,
   context: WorkspaceToolContext & {
     skillGateway?: WebFetchGatewayAccess;
+    web?: WebToolHandlers;
   },
 ): Promise<ToolResult> {
   context.signal.throwIfAborted();
@@ -33,6 +35,7 @@ export async function executeRegistered(
     owner: { sessionId: 'session', runId: 'run', taskId: null },
     readOnly: context.readOnly,
     ...(context.skillGateway ? { skillGateway: context.skillGateway } : {}),
+    ...(context.web ? { web: context.web } : {}),
     workspace: async () => ({ ...context, workspaceRoot: await canonicalWorkspace(context) }),
   })(args, { toolCallId: 'fixture', signal: context.signal });
 }

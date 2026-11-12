@@ -34,7 +34,7 @@ Electron沿用系统浏览器。Renderer先申请10分钟一次性启动ticket�
 
 ## Skill与MCP消费
 
-Skill接受时冻结公开gatewayUrl并写入Run私有接受事实及模型上下文；不改磁盘Skill正文/hash。宿主web_fetch仅对精确daemon origin及`/api/skill-gateway/<id>/`附加私有能力头并允许回环访问，模型不能传认证头。普通浏览器、应用登录Cookie或其他回环地址不能代替该能力。
+Skill接受时冻结公开gatewayUrl并写入Run私有接受事实及模型上下文；不改磁盘Skill正文/hash。宿主web_fetch的raw GET模式仅对精确daemon origin及`/api/skill-gateway/<id>/`附加私有能力头并允许回环访问，模型不能传认证头。普通浏览器、应用登录Cookie或其他回环地址不能代替该能力。
 
 网关只允许插件声明的只读路径与查询，声明的查询接口可转换为受限JSON POST；10秒、5MiB、禁止重定向。供应商Token只加到固定上游，不转发网关私有能力头。写操作通过单独开启的MCP App及原工具审批执行，不再有固定REST操作目录或逐Run服务grant工具。
 

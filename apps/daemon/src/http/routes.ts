@@ -1,3 +1,4 @@
+import { registerWebRoutes } from '../web/routes';
 import { registerSearchRoutes } from '../search/routes';
 import { registerMemoryRoutes } from '../memory/routes';
 import { registerRequestAccess } from './access';
@@ -48,6 +49,7 @@ export function registerApplicationRoutes(
   registerAgentRoutes(server, services);
   registerMemoryRoutes(server, services.memory, services.store);
   registerSearchRoutes(server, services.search);
+  registerWebRoutes(server, services.web);
   registerAttachmentRoutes(server, services.attachments);
   registerMcpRoutes(server, services.mcp);
   registerRemoteMcpRoutes(server, services.remoteMcp, () => services.webOrigin());

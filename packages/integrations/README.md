@@ -4,7 +4,15 @@
 
 ## 源码组织
 
-`src/index.ts`仅导出包API；`mcp/`拥有本地与远端连接、传输、目录及快照、协议schema和结果投影，`network/`拥有MCP和服务OAuth共用的受控远端网络访问。`oauth/`拥有通用授权码、PKCE、Token交换、刷新和安全错误，`connections/`提供独立服务账户的凭据编码与协议适配。McpError和NetworkError由各自领域的errors模块定义。插件声明、资源与授权生命周期由[plugins](../plugins/README.md)拥有；本地工具搜索Worker由daemon拥有，本包不承接插件安装或本地模型推理。
+`src/index.ts`仅导出包API；`mcp/`拥有本地与远端连接、传输、目录及快照、协议schema和结果投影，`network/`拥有MCP、服务OAuth与联网服务共用的受控远端网络访问及其RemoteFetch接口，不依赖某一消费协议的请求类型。`oauth/`拥有通用授权码、PKCE、Token交换、刷新和安全错误，`connections/`提供独立服务账户的凭据编码与协议适配，`web/`负责DeepSeek网页搜索与正文提取。McpError、NetworkError和WebServiceError由各自领域的errors模块定义。插件声明、资源与授权生命周期由[plugins](../plugins/README.md)拥有；本地工具搜索Worker由daemon拥有，本包不承接插件安装或本地模型推理。
+
+## 网页搜索与正文
+
+`DeepSeekWebClient`调用固定的官方`https://api.deepseek.com/v1/tools/search`和`/v1/tools/fetch`，分别映射结构化搜索结果和Markdown正文；默认传输复用`createRemoteFetch`的公网DNS全结果检查、socket固定与来源限制。调用者显式传入独立的官方Key，不读取环境、模型配置或当前聊天供应商凭据。两个接口在业务上都是只读操作，不能按其HTTP POST推断为写操作；原始HTTP/API请求和精确本地Skill网关仍由tools拥有，不经过DeepSeek。
+
+网页目标只允许无认证信息的HTTP(S)标准端口；上传URL前验证全部本机DNS结果为公网，拒绝本地网关、私网与保留地址。搜索文本只检查其中可识别的HTTP(S)引用，拒绝本地/私有字面地址、已知本地域名与URL认证信息，不解析普通查询、不为示例域名做DNS，也不承诺识别任意私人文本。提取由第三方执行，不能以本机地址检查承诺控制其后续DNS或重定向，也不承诺浏览器脚本执行。
+
+每次公开客户端操作拥有一个60秒截止，覆盖目标检查、HTTP和正文读取；内部POST继承该信号，不重复创建截止。daemon可施加更短的产品请求截止。响应总量4MiB并校验UTF-8、JSON与必需字段；搜索空数组和网页空标题是合法结果。API响应schema由web适配器本地维护，校验后映射protocol/internal的宿主结果接口；公开protocol只声明模型搜索输入和跨端配置DTO。内容是外部不可信文本，工具负责模型输出的截断和来源呈现。失败仅保留固定安全分类及HTTP状态，不回显上游正文、Key或cause；正文释放失败不覆盖已经确定的HTTP、格式或取消错误。取消贯穿DNS、传输和读取，调用不会自动重试或切换到原始请求。设置保存凭据本身不发起付费探测。API字段与供应商限制以[官方Search](https://api-docs.deepseek.com/zh-cn/api/search/)和[Fetch](https://api-docs.deepseek.com/zh-cn/api/fetch/)文档为准。
 
 ## 启动与租约
 

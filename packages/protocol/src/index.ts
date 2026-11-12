@@ -2,6 +2,7 @@ export * from './sessions/context';
 export * from './memory/memory';
 export * from './memory/mutations';
 export * from './search/search';
+export * from './web/web';
 export * from './sessions/attachment-capabilities';
 export * from './extensions/mcp';
 export * from './extensions/skills';

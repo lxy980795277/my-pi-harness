@@ -1,6 +1,6 @@
 # GitHub 只读访问与写入工具
 
-将当前Skill记录中的gatewayUrl作为API根地址，用web_fetch GET访问user、user/repos、users/{login}、users/{login}/repos、search/{类型}及repos/{owner}/{repo}/...。例如读取PR使用repos/{owner}/{repo}/pulls/{number}，读取Actions运行使用repos/{owner}/{repo}/actions/runs。路径片段和查询值按URL编码，不填写认证头。
+将当前Skill记录中的gatewayUrl作为API根地址，用web_fetch的raw模式（mode="raw"，method="GET"）访问user、user/repos、users/{login}、users/{login}/repos、search/{类型}及repos/{owner}/{repo}/...。例如读取PR使用repos/{owner}/{repo}/pulls/{number}，读取Actions运行使用repos/{owner}/{repo}/actions/runs。路径片段和查询值按URL编码，不填写认证头。
 
 网关使用插件市场中授权的唯一GitHub账号。未连接时提示用户在插件详情授权；应用登录不代表插件已授权。列表核对分页、仓库、编号和状态，返回API中的真实对象链接。
 

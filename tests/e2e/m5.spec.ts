@@ -97,7 +97,7 @@ for (const policy of CHILD_GET_POLICIES) {
       });
       expect(fetch).toMatchObject({
         status: 'completed',
-        arguments: { method: 'GET' },
+        arguments: { mode: 'raw', method: 'GET' },
         approval: { source: policy.source, decision: 'allow' },
       });
       expect(fetch?.result).toContain('HTTP 200');

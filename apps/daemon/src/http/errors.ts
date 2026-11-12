@@ -1,3 +1,4 @@
+import { WebConfigurationError } from '../web/service';
 import { MemoryError } from '@my-pi-harness/memory';
 import type { ApiError } from '@my-pi-harness/protocol';
 import { RuntimeError } from '@my-pi-harness/agent-runtime';
@@ -21,6 +22,11 @@ export function registerRequestErrors(server: FastifyInstance): void {
         : /CONFLICT|BUSY|STALE|CLOSED|REVOKED/.test(error.code)
           ? 409
           : 400;
+      void reply.code(status).send({ code: error.code, message: error.message } satisfies ApiError);
+      return;
+    }
+    if (error instanceof WebConfigurationError) {
+      const status = error.code === 'WEB_CLOSED' ? 409 : 503;
       void reply.code(status).send({ code: error.code, message: error.message } satisfies ApiError);
       return;
     }

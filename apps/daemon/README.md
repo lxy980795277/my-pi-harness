@@ -2,6 +2,8 @@
 
 The daemon owns the local application API, cookie authorization, provider gateway, Pi session runtime and profile storage. Browser and Electron clients share committed session facts. Routes project public DTOs; credentials remain in host-owned stores, with plugin OAuth persistence owned by [plugin connections](src/plugin-connections/README.md). See [M1 protocol](../../docs/03_API/model-session.md).
 
+`src/web/` owns dedicated DeepSeek web credentials and cancellable search/page operations; local memory search stays in `src/search/`. Settings and web tool semantics are defined by the [web protocol](../../docs/03_API/web-tools.md).
+
 `src/bootstrap.ts` is the process entry. `src/application/` owns configuration, startup environment policy, parent monitoring and service assembly. `src/http/` owns Fastify, request access/error handling, cancellation, runtime SSE and Web documents. Auth, sessions, models, MCP, Skills, plugins and other domains live directly under `src/`; route assembly does not own their business implementations. Skill resource adaptation belongs to `skills/runtime.ts`, and independent approval context belongs to `tools/approval-context.ts`.
 
 The daemon configuration is the sole owner of profile-directory resolution for browser and desktop entry points. An explicit `MY_PI_HARNESS_PROFILE_DIRECTORY` overrides the fixed platform default; process environment takes precedence over Node environment files. Electron's user-data directory stores only cookies and cache and does not select business storage. Default paths and launch configuration are defined in the [architecture](../../docs/01_ARCHITECTURE/overview.md#启动配置).

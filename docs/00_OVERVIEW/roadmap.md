@@ -1,5 +1,9 @@
 # 里程碑与功能覆盖
 
+2026-11-12按用户授权将联网工具重构与治理整理为[0.21.0](../06_RELEASES/0.21.0.md)本地提交，公开协议29、SQLite16，web_fetch使用显式page/raw模式，前后端须同步更新。真实数据保留，联网服务使用独立Key，M6/M7及原有外部验收缺口保持。
+
+2026-11-12按用户授权完成[联网工具重构](../04_FEATURES/202611121508_refactor_deepseek-web-tools/spec.md)：DeepSeek官方搜索和网页Markdown读取、显式原始HTTP模式、独立Key设置及插件网关保留，属于既有M2/M4维护；实现与本机隔离验证完成，真实API和平台未验项见同目录[验证记录](../04_FEATURES/202611121508_refactor_deepseek-web-tools/verify.md)。后续[代码治理](../04_FEATURES/202611121508_refactor_deepseek-web-tools/governance-verify.md)已完成，清理协议/网络/工具职责和重复请求并补齐边界回归。M6本地检索与M7范围保持。
+
 2026-11-12按用户授权将M6、[代码治理](../04_FEATURES/202611121101_refactor_m6-code-governance/verify.md)、自动客户端初始化与共享profile修复整理为[0.20.0](../06_RELEASES/0.20.0.md)本地提交。公开协议28、SQLite16，保留真实数据，Web/daemon/桌面须同步更新；M7及既有平台、账号与办公质量验收缺口保持，不重新生成桌面应用目录。
 
 2026-11-12按用户确认完成[Web与桌面共享profile](../04_FEATURES/202611121411_fix_shared-profile-directory/spec.md)，属于M0与M1配置维护：daemon统一解析默认目录和显式覆盖，保留既有桌面数据路径；定向回归、类型及构建证据见同目录[验证记录](../04_FEATURES/202611121411_fix_shared-profile-directory/verify.md)。不搬库、不改变M6或M7范围。

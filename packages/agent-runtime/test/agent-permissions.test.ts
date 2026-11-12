@@ -34,11 +34,20 @@ describe('task read-only capabilities and inherited approval policy', () => {
         response: (context) => {
           if (firstTask(context) === 'WEATHER_RESEARCH') {
             if (!hasResult(context, 'web_fetch'))
-              return call('web_fetch', { url: 'https://weather.invalid/', method: 'GET' }, 'read');
+              return call(
+                'web_fetch',
+                { mode: 'raw', url: 'https://weather.invalid/', method: 'GET' },
+                'read',
+              );
             if (resultCount(context, 'web_fetch') === 1)
               return call(
                 'web_fetch',
-                { url: 'https://weather.invalid/', method: 'POST', body: 'must not send' },
+                {
+                  mode: 'raw',
+                  url: 'https://weather.invalid/',
+                  method: 'POST',
+                  body: 'must not send',
+                },
                 'write',
               );
             return fauxAssistantMessage('Read weather; write rejected');

@@ -95,7 +95,7 @@ describe('compact tool presentation', () => {
   it('shows the URL for a web request and its failure reason when the request fails', () => {
     const request = tool({
       name: 'web_fetch',
-      arguments: { url: 'https://example.com/report' },
+      arguments: { mode: 'page', url: 'https://example.com/report' },
     });
     expect(toolPresentation(request)).toMatchObject({
       name: '网页获取',
@@ -108,6 +108,33 @@ describe('compact tool presentation', () => {
       statusLabel: '执行失败',
       showStatus: true,
     });
+  });
+
+  it('distinguishes internet search, page extraction and raw API requests in compact rows', () => {
+    expect(
+      toolPresentation(
+        tool({
+          name: 'web_search',
+          arguments: { query: 'DeepSeek search documentation' },
+        }),
+      ),
+    ).toMatchObject({ name: '网页搜索', summary: 'DeepSeek search documentation' });
+    expect(
+      toolPresentation(
+        tool({
+          name: 'web_fetch',
+          arguments: { mode: 'page', url: 'https://example.com/article' },
+        }),
+      ),
+    ).toMatchObject({ name: '网页获取', summary: 'https://example.com/article' });
+    expect(
+      toolPresentation(
+        tool({
+          name: 'web_fetch',
+          arguments: { mode: 'raw', url: 'https://example.com/api' },
+        }),
+      ),
+    ).toMatchObject({ name: '接口请求', summary: 'https://example.com/api' });
   });
 
   it('keeps review and user approval distinguishable while both operations are pending', () => {

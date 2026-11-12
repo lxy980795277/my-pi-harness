@@ -53,6 +53,7 @@ const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
   wait_command: { name: '等待命令', Icon: Clock, argument: 'commandId' },
   stop_command: { name: '停止命令', Icon: Square, argument: 'commandId' },
   web_fetch: { name: '网页获取', Icon: Globe, argument: 'url' },
+  web_search: { name: '网页搜索', Icon: Search, argument: 'query' },
   ask_user: { name: '询问用户', Icon: MessageCircleQuestion },
   update_plan: { name: '提交计划', Icon: ClipboardList, argument: 'title' },
   update_plan_steps: { name: '更新计划', Icon: ListChecks },
@@ -136,6 +137,9 @@ export const toolPresentation = (tool: ToolCallView): ToolPresentation => {
   let definition = TOOL_DEFINITIONS[tool.name];
   if (definition === undefined) {
     definition = { name: tool.name, Icon: Wrench };
+  }
+  if (tool.name === 'web_fetch' && tool.arguments['mode'] === 'raw') {
+    definition = { name: '接口请求', Icon: Globe, argument: 'url' };
   }
   let sourceLabel = '调用未接受';
   let fingerprint: string | null = null;

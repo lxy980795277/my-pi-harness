@@ -28,7 +28,7 @@
 | `apps/daemon`            | API装配、客户端初始化与应用登录、事件重放、profile与服务生命周期     | 页面组件与桌面窗口                                            |
 | `apps/desktop`           | Electron窗口、有限preload桥、daemon启动和退出、桌面资源与发布装配    | Agent Loop、业务数据库与工具实现                              |
 | `packages/agent-runtime` | Pi模型、认证与主/子Run编排、任务树及请求调度、审批、取消、队列和分支 | Electron、React、Fastify与SQL实现                             |
-| `packages/tools`         | 34个原生工具、通用Skill目录/不可变资源、受管理命令                   | 插件生命周期、Pi Loop、审批决定、数据库、OAuth或MCP协议       |
+| `packages/tools`         | 35个原生工具、通用Skill目录/不可变资源、受管理命令                   | 插件生命周期、Pi Loop、审批决定、数据库、OAuth或MCP协议       |
 | `packages/memory`        | 记忆事实规则、revision/幂等、候选确认及固定/相关选择                 | HTTP、SQL、Pi、模型Worker及第二份画像正文                     |
 | `packages/plugins`       | 插件声明/资源、安装启停更新、贡献与授权生命周期                      | SQL、HTTP、模型运行或通用Skill引擎                            |
 | `packages/sandbox`       | 宿主文件守卫、公网地址判定、平台隔离与受监管字节进程                 | 工具名称、插件状态、Pi、数据库与业务DTO                       |
@@ -135,11 +135,13 @@ M5的SubagentCoordinator拥有同Session日志内的子任务树，RunExecution�
 
 ## M4能力所有权
 
-`McpService`与`RemoteMcpService`拥有MCP配置、启动与工具授权；`SkillsService`冻结Skill正文、资源及公开gatewayUrl；plugins包的`PluginService`按精确引用管理安装和Skill/App贡献，`PluginConnectionService`拥有每插件单一授权、账号、刷新及撤销；daemon注入存储、Skills、MCP和回调配置。专用`PluginCredentialStore`由storage保存0600原子文件，通用OAuth机制由integrations提供。插件manifest声明OAuth与只读路径，私有网关能力只由宿主web_fetch附加；MCP按官方endpoint共享插件Token。接口与桌面适配见[插件连接协议](../03_API/plugin-connections.md)。
+联网搜索与网页正文采用独立DeepSeek服务：tools定义web_search及web_fetch的page/raw模型参数，integrations/web校验官方响应并执行远程传输，daemon/web拥有系统凭据、请求代次取消和设置API，Web只管理秘密表单及公开状态。raw请求与精确插件网关继续由tools执行，不上传本地URL；聊天模型和本地记忆检索不负责联网服务，详见[联网工具协议](../03_API/web-tools.md)。
+
+`McpService`与`RemoteMcpService`拥有MCP配置、启动与工具授权；`SkillsService`冻结Skill正文、资源及公开gatewayUrl；plugins包的`PluginService`按精确引用管理安装和Skill/App贡献，`PluginConnectionService`拥有每插件单一授权、账号、刷新及撤销；daemon注入存储、Skills、MCP和回调配置。专用`PluginCredentialStore`由storage保存0600原子文件，通用OAuth机制由integrations提供。插件manifest声明OAuth与只读路径，私有网关能力只由宿主web_fetch的raw GET模式附加；MCP按官方endpoint共享插件Token。接口与桌面适配见[插件连接协议](../03_API/plugin-connections.md)。
 
 MCP目录由宿主按当前身份、配置、凭据epoch和信任指纹保存至SQLite；启动恢复有效快照并后台预热远程服务，输入接受等待有界单飞准备。各服务失败保留独立诊断，不阻塞其他目录；GET不进行发现，关闭和撤销取消所属工作并阻止迟到发布。
 
-`RunCapabilities`管理真实session/workspace/MCP来源的候选与当前集合，搜索自动暂存命中，`run.tools_loaded`持久化后推进下一请求，结束释放且新Run重新选择。Skill候选元数据、显式正文及目录诊断进入可回放接受事实，模型按ID加载，由宿主解析预期内容与插件授权代次；正文继承独立于可执行工具集合。默认/按需策略及限额见[运行时能力协议](../03_API/capability-runtime.md)。daemon/search拥有懒加载的本地CPU向量Worker，Transformers.js为daemon生产依赖；缓存固定版本模型至profile的models目录，不继承供应商凭据环境；关闭时终止推理与下载，语义不可用时保留词法检索。插件只读API通过web_fetch访问允许网关，写入通过明确开启的MCP App和原有审批；不另建Skill工具grant。高级手动`ConnectionService`保持独立用途，办公Skill通过通用命令、文档/视觉读取和产物注册完成任务。
+`RunCapabilities`管理真实session/workspace/MCP来源的候选与当前集合，搜索自动暂存命中，`run.tools_loaded`持久化后推进下一请求，结束释放且新Run重新选择。Skill候选元数据、显式正文及目录诊断进入可回放接受事实，模型按ID加载，由宿主解析预期内容与插件授权代次；正文继承独立于可执行工具集合。默认/按需策略及限额见[运行时能力协议](../03_API/capability-runtime.md)。daemon/search拥有懒加载的本地CPU向量Worker，Transformers.js为daemon生产依赖；缓存固定版本模型至profile的models目录，不继承供应商凭据环境；关闭时终止推理与下载，语义不可用时保留词法检索。插件只读API通过web_fetch的raw GET模式访问允许网关，写入通过明确开启的MCP App和原有审批；不另建Skill工具grant。高级手动`ConnectionService`保持独立用途，办公Skill通过通用命令、文档/视觉读取和产物注册完成任务。
 
 生产部署同时包含`plugins/src`和`tools/src`：插件manifest、App声明、Skill及专属脚本位于`plugins/src/plugins/<id>`，共用办公支持位于`plugins/src/plugins/shared/office`；原生PDF页图支持位于`tools/src/utils/document-view`。daemon将三个共享办公脚本与原生pdf_safety.py合成显式resourceSources映射，通用Skill引擎只解析已注册来源，继续按清单路径、大小和hash冻结；运行资源物化到profile外受控目录。Python/LibreOffice等可选办公依赖按明确配置检测，准备依赖使用获准的普通命令。资源、Skills及账号授权见[插件体系设计](../09_TECHNICAL/插件体系设计.md)，协议传输、目录与调用见[MCP连接设计](../09_TECHNICAL/MCP连接设计.md)。
 

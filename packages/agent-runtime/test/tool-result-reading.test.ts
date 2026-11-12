@@ -56,7 +56,10 @@ describe('retained tool text reading', () => {
         contexts.push(context);
         requests += 1;
         if (requests === 1)
-          return call('web_fetch', { url: `${origin}/api/skill-gateway/test/document` });
+          return call('web_fetch', {
+            mode: 'raw',
+            url: `${origin}/api/skill-gateway/test/document`,
+          });
         let next: string | undefined;
         if (requests === 2) {
           const projected = resultText(context, 'web_fetch');

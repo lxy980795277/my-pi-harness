@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { assertPublicAddress, parseWebUrl } from '../src/lib/web-request';
+import { assertPublicAddress, parseWebUrl } from '../src/lib/web-raw';
 import { executeRegistered as executeTool } from './support/registered';
 import { isPublicAddress } from '@my-pi-harness/sandbox';
 
@@ -74,7 +74,7 @@ describe('public web targets', () => {
     await expect(
       executeTool(
         'web_fetch',
-        { url: 'http://127.0.0.1/' },
+        { mode: 'raw', url: 'http://127.0.0.1/' },
         {
           workspaceRoot: '/unused',
           profileDirectory: '/unused',

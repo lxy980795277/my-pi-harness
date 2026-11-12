@@ -407,7 +407,7 @@ it('only daemon ToolRuntime web_fetch can enter the read gateway, which attaches
   if (tool === undefined) throw new Error('Missing web_fetch');
   const result = await tool.execute(
     'gateway-provider-call',
-    { url: `${f.origin}${target}` },
+    { mode: 'raw', url: `${f.origin}${target}` },
     context.signal,
   );
   expect(result.isError).not.toBe(true);

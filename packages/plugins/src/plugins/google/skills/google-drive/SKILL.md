@@ -4,7 +4,7 @@ description: '查找 Drive 文件，核对元数据、父目录与评论，执�
 allowed-tools: 'web_fetch'
 ---
 
-确认账户、文件类型和查询范围。使用web_fetch访问当前Skill的gatewayUrl下的drive/v3/files，或查询实际MCP目录，后续使用稳定fileId；同名文件比较父目录、类型与修改时间，无法确定时再澄清。
+确认账户、文件类型和查询范围。使用web_fetch的raw模式（mode="raw"）访问当前Skill的gatewayUrl下的drive/v3/files，或查询实际MCP目录，后续使用稳定fileId；同名文件比较父目录、类型与修改时间，无法确定时再澄清。
 
 列表处理分页，注明共享盘、回收站及读取页数。元数据与正文分别读取；Google原生文档交给对应Docs/Sheets/Slides技能，二进制下载遵守工作区规则。
 
@@ -14,4 +14,4 @@ allowed-tools: 'web_fetch'
 
 ## 已连接服务的只读访问
 
-当前激活Skill记录中的gatewayUrl是本机只读入口。使用web_fetch GET请求该入口下的服务API路径；宿主附加认证，不传入认证头，也不读取凭据。网关拒绝的路径不能绕过或改为上游直连。修改操作通过tool_search搜索已启用的MCP工具；命中会自动加载，下一次模型请求按返回的真实名称调用，继续遵守用户授权和工具审批。
+当前激活Skill记录中的gatewayUrl是本机只读入口。使用web_fetch的raw模式（mode="raw"，method="GET"）请求该入口下的服务API路径；宿主附加认证，不传入认证头，也不读取凭据。网关拒绝的路径不能绕过或改为上游直连。修改操作通过tool_search搜索已启用的MCP工具；命中会自动加载，下一次模型请求按返回的真实名称调用，继续遵守用户授权和工具审批。

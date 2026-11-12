@@ -72,7 +72,9 @@ describe('accepted tools through Pi requests, budgets and durable execution', ()
         (definition): RunToolSelection => ({
           source: {
             kind:
-              definition.name === 'web_fetch' || definition.name === 'tool_search'
+              definition.name === 'web_fetch' ||
+              definition.name === 'web_search' ||
+              definition.name === 'tool_search'
                 ? 'session'
                 : 'workspace',
           },

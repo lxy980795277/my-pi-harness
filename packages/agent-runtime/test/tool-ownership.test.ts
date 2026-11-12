@@ -87,7 +87,7 @@ describe('task tool ownership', () => {
     { name: 'write_file', args: { path: 'blocked.txt', content: 'blocked', expectedHash: null } },
     {
       name: 'web_fetch',
-      args: { url: 'https://fixture.invalid/', method: 'POST', body: 'blocked' },
+      args: { mode: 'raw', url: 'https://fixture.invalid/', method: 'POST', body: 'blocked' },
     },
   ])(
     'denies read-only $name before approval, writer admission or execution',

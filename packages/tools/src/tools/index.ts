@@ -4,6 +4,7 @@ export { searchFilesTool } from './search-files';
 export { writeFileTool } from './write-file';
 export { editFileTool } from './edit-file';
 export { webFetchTool } from './web-fetch';
+export { webSearchTool } from './web-search';
 export { askUserTool } from './ask-user';
 export type { AskUserHandler } from './ask-user';
 export { updatePlanTool } from './update-plan';

@@ -39,7 +39,7 @@ function taskTool(
     role: 'assistant',
     stopReason: 'toolUse',
   };
-  const args = { url: `https://example.com/${id}` };
+  const args = { mode: 'raw', url: `https://example.com/${id}` };
   const tool: ToolCallRecord = {
     id: storedToolCallId(runId, message.id, call),
     sessionId: 'session',

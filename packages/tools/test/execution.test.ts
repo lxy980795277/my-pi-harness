@@ -38,9 +38,9 @@ describe('validated tool execution', () => {
       approvalRequired: false,
       mutating: false,
     });
-    expect(describeTool('web_fetch', { url: 'https://example.com', method: 'POST' })).toMatchObject(
-      { approvalRequired: true, mutating: true },
-    );
+    expect(
+      describeTool('web_fetch', { mode: 'raw', url: 'https://example.com', method: 'POST' }),
+    ).toMatchObject({ approvalRequired: true, mutating: true });
     expect(() => describeTool('run_command', { command: 'ls', extra: true })).toThrow(
       'Invalid arguments',
     );
@@ -231,7 +231,7 @@ describe('validated tool execution', () => {
     await expect(
       executeTool(
         'web_fetch',
-        { url: 'https://example.com', method: 'POST' },
+        { mode: 'raw', url: 'https://example.com', method: 'POST' },
         { ...context, readOnly: true },
       ),
     ).rejects.toMatchObject({ code: 'READ_ONLY' });

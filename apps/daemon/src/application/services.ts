@@ -1,3 +1,4 @@
+import { WebService } from '../web/service';
 import { SearchService } from '../search/service';
 import { SessionSearchService } from '../search/runtime';
 import { MemoryApplicationService } from '../memory/service';
@@ -56,6 +57,7 @@ export interface ApplicationServices {
   work: WorkRuntime;
   memory: MemoryApplicationService;
   search: SearchService;
+  web: WebService;
   attachments: AttachmentService;
   login: LoginService;
   mcp: McpService;
@@ -78,6 +80,7 @@ export interface ApplicationServices {
 export interface ServiceOptions {
   credentials?: CredentialStore;
   githubFetch?: typeof fetch;
+  webFetch?: typeof fetch;
   mcpManager?: McpManager;
   remoteFixtureOrigin?: string;
   remoteMcpManager?: RemoteMcpManager;
@@ -109,6 +112,7 @@ export async function createApplicationServices(
   let pluginConnections: PluginConnectionService | undefined;
   let models: LocalSearchModelResource | undefined;
   let search: SearchService | undefined;
+  let web: WebService | undefined;
   let resolveOrigin = (): string => `http://127.0.0.1:${config.port}`;
   const listenerOrigin = (): string => resolveOrigin();
   const webOrigin = (): string => config.developmentOrigin ?? listenerOrigin();
@@ -118,6 +122,11 @@ export async function createApplicationServices(
     const profileDirectory = await realpath(config.profileDirectory);
     const credentials =
       options.credentials ?? (await createSystemCredentialStore(config.profileDirectory));
+    web = new WebService({
+      credentials,
+      ...(options.webFetch === undefined ? {} : { fetch: options.webFetch }),
+    });
+    const ownedWeb = web;
     const runtimeRef: { current?: SessionRuntime } = {};
     gateway = new ModelGateway({
       store,
@@ -273,6 +282,10 @@ export async function createApplicationServices(
     artifacts = new ArtifactService(store, workspaces, profileDirectory);
     const ownedArtifacts = artifacts;
     const tools = new ToolRuntime({
+      web: {
+        search: (input, invocation) => ownedWeb.search(input, invocation.signal),
+        fetchPage: (input, invocation) => ownedWeb.fetchPage(input, invocation.signal),
+      },
       commands,
       artifacts: (context) => ({
         publish: (input, invocation) => {
@@ -367,6 +380,7 @@ export async function createApplicationServices(
       work: ownedWork,
       memory,
       search: ownedSearch,
+      web: ownedWeb,
       attachments: ownedAttachments,
       login,
       mcp: ownedMcp,
@@ -392,6 +406,7 @@ export async function createApplicationServices(
       close(): Promise<void> {
         closing ??= (async () => {
           const failures: unknown[] = [];
+          ownedWeb.stopAccepting();
           ownedMcp.stopAccepting();
           ownedLaunchTickets.close();
           ownedRemoteMcp.stopAccepting();
@@ -404,6 +419,7 @@ export async function createApplicationServices(
             () => ownedAttachments.close(),
             () => runtime.close(),
             () => tools.close(),
+            () => ownedWeb.close(),
             () => ownedArtifacts.close(),
             () => ownedSearch.close(),
             async () => await models?.close(),
@@ -440,6 +456,7 @@ export async function createApplicationServices(
       async () => await attachments?.close(),
       async () => await pluginConnections?.close(),
       async () => await search?.close(),
+      async () => await web?.close(),
       async () => await models?.close(),
       async () => await connections?.close(),
       async () => await mcp?.close(),

@@ -19,7 +19,8 @@ const skill: FrozenSkill = {
   description: 'Service Skill',
   scope: 'plugin',
   source: '/registered/plugin/github',
-  content: 'Read service API paths using web_fetch GET and this active Skill gatewayUrl.',
+  content:
+    'Read service API paths using web_fetch with mode="raw", method="GET" and this active Skill gatewayUrl.',
   gatewayUrl: 'http://127.0.0.1:4311/api/skill-gateway/github',
   resources: [],
   allowedTools: ['web_fetch'],
@@ -110,7 +111,7 @@ describe('plugin gateway instructions through the actual model and durable input
       f.faux.setResponses([
         (context) => {
           requests.push(context);
-          return call('web_fetch', { url: `${localSkill.gatewayUrl}/user` });
+          return call('web_fetch', { mode: 'raw', url: `${localSkill.gatewayUrl}/user` });
         },
         (context) => {
           requests.push(context);
@@ -145,7 +146,12 @@ describe('plugin gateway instructions through the actual model and durable input
 
       await f.runtime.updateSession(f.session.id, { approvalMode: 'read-only' });
       f.faux.setResponses([
-        call('web_fetch', { url: `${localSkill.gatewayUrl}/user`, method: 'POST', body: '{}' }),
+        call('web_fetch', {
+          mode: 'raw',
+          url: `${localSkill.gatewayUrl}/user`,
+          method: 'POST',
+          body: '{}',
+        }),
         fauxAssistantMessage('Network write was denied'),
       ]);
       await f.runtime.send(f.session.id, {
