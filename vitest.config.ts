@@ -10,6 +10,7 @@ export default defineConfig({
       'apps/daemon/test/**/*.test.ts',
       'apps/web/test/**/*.test.ts',
       'packages/storage/test/**/*.test.ts',
+      'packages/memory/test/**/*.test.ts',
       'packages/tools/test/**/*.test.ts',
       'packages/plugins/test/**/*.test.ts',
       'packages/sandbox/test/**/*.test.ts',

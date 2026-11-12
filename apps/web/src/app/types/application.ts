@@ -17,19 +17,14 @@ export interface ApplicationShellState {
   themeLabel: string;
   toggleTheme: Action;
   auth: UseQueryResult<AuthStatus, Error>;
-  pair: (code: string) => Promise<void>;
   receiveLogin: (status: AuthStatus) => void;
-  localAuthorized: boolean;
   checkingAuthorization: boolean;
   page: WorkspacePage;
   pageLabel: string;
   navigate: ValueChange<WorkspacePage>;
   authorized: boolean;
-  pairingCode: string | null;
-  hideCode: Action;
   settings: Action;
   signOut: Action;
-  pairing: Action;
   reconnect: Action;
   actionError: string | null;
 }

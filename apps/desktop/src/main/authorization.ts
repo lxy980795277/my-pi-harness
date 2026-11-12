@@ -9,7 +9,7 @@ import { isAbsolute } from 'node:path';
 import { stat } from 'node:fs/promises';
 import { session, shell } from 'electron';
 
-/** Desktop bootstrap grants local trust; application login stays owned by the daemon. */
+/** Desktop bootstrap initializes its client; application login stays owned by the daemon. */
 export interface DesktopAuthorization {
   authorizeRenderer(rendererOrigin: string): Promise<void>;
   openAuth(flowId: string): Promise<void>;
@@ -21,7 +21,7 @@ export interface DesktopAuthorization {
  * @param origin Validated daemon origin from its readiness record.
  * @param ownerSecret Private secret shared only with the supervised daemon.
  * @param signal Desktop lifetime cancellation.
- * @returns Local trust bootstrap and flow-ID-only external authorization operations.
+ * @returns Client bootstrap and flow-ID-only external authorization operations.
  */
 export function createDesktopAuthorization(
   origin: string,
@@ -35,7 +35,7 @@ export function createDesktopAuthorization(
     return AbortSignal.any([signal, AbortSignal.timeout(5000)]);
   };
   const currentCookies = async (): Promise<string> => {
-    if (rendererOrigin === undefined) throw new Error('桌面尚未授权');
+    if (rendererOrigin === undefined) throw new Error('桌面尚未连接');
     const cookies = await session.defaultSession.cookies.get({
       url: `${rendererOrigin}/api/auth/status`,
     });
@@ -68,7 +68,7 @@ export function createDesktopAuthorization(
       let lifetime = 90 * 24 * 3600;
       if (maxAge !== undefined) lifetime = Math.min(lifetime, Number(maxAge));
       await response.body?.cancel();
-      if (!response.ok || token === undefined) throw new Error('桌面授权失败');
+      if (!response.ok || token === undefined) throw new Error('桌面连接失败');
       await session.defaultSession.cookies.set({
         url: targetOrigin,
         name: 'my_pi_local',
@@ -91,7 +91,7 @@ export function createDesktopAuthorization(
       });
       const status: unknown = await statusResponse.json();
       if (!statusResponse.ok || !Value.Check(AuthStatusSchema, status) || status.csrfToken === null)
-        throw new Error('桌面授权已失效');
+        throw new Error('桌面连接已失效');
       const response = await fetch(target, {
         method: 'POST',
         headers: {

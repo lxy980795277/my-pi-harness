@@ -2,7 +2,7 @@ import type { SettingsDialogProps } from '@/features/settings/types/settings';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Suspense, type FC } from 'react';
-import { Plug, Settings2, Sparkles, BookOpen, Puzzle, Link, GitBranch } from 'lucide-react';
+import { Plug, Settings2, Sparkles, BookOpen, Puzzle, Link, GitBranch, Brain } from 'lucide-react';
 import { Dialog } from '@/components/ui/dialog';
 import { DialogContent } from '@/components/ui/dialog/dialog-content';
 import { DialogTitle } from '@/components/ui/dialog/dialog-title';
@@ -21,6 +21,8 @@ import { SkillsSettings } from '@/features/skills/components/skills-settings';
 import { PluginsSettings } from '@/features/plugins/components/plugins-settings';
 import { useSettingsDialog } from '@/features/settings/hooks/use-settings-dialog';
 import { AgentSettingsPanel } from '@/features/tasks/components/agent-settings';
+import { MemorySettingsPanel } from '@/features/memory/components/memory-settings';
+import { SearchResourcesPanel } from '@/features/search/components/search-resources';
 
 /** A modal settings workspace leaves the conversation mounted behind it. */
 export const SettingsDialog: FC<SettingsDialogProps> = ({ theme, onToggleTheme }) => {
@@ -52,6 +54,10 @@ export const SettingsDialog: FC<SettingsDialogProps> = ({ theme, onToggleTheme }
               </TabsTrigger>
               <TabsTrigger value="agents" className="justify-start gap-2 rounded-xl px-3 py-2.5">
                 <GitBranch width={15} height={15} aria-hidden />子 Agent
+              </TabsTrigger>
+              <TabsTrigger value="memory" className="justify-start gap-2 rounded-xl px-3 py-2.5">
+                <Brain width={15} height={15} aria-hidden />
+                记忆与搜索
               </TabsTrigger>
               <TabsTrigger value="mcp" className="justify-start gap-2 rounded-xl px-3 py-2.5">
                 <Plug width={15} height={15} aria-hidden />
@@ -101,6 +107,11 @@ export const SettingsDialog: FC<SettingsDialogProps> = ({ theme, onToggleTheme }
             </TabsContent>
             <TabsContent value="agents" className="m-0">
               <AgentSettingsPanel />
+            </TabsContent>
+            <TabsContent value="memory" className="m-0">
+              <MemorySettingsPanel>
+                <SearchResourcesPanel />
+              </MemorySettingsPanel>
             </TabsContent>
             <TabsContent value="skills" className="m-0">
               <SkillsSettings />

@@ -108,7 +108,7 @@ export class AuthRepository {
     return value;
   }
 
-  /** Persist a hashed local trust credential; cleanup work is bounded per write. */
+  /** Persist a hashed client credential; cleanup work is bounded per write. */
   public createLocalClient(input: LocalClient): LocalClient {
     return this.transaction(() => {
       this.cleanupExpired(input.createdAt);
@@ -124,7 +124,7 @@ export class AuthRepository {
     });
   }
 
-  /** Read trust by a bearer digest; expiry is checked without mutating records. */
+  /** Read a client by its bearer digest without renewing or mutating its expiry. */
   public findLocalClient(tokenHash: string, now: number): LocalClient | undefined {
     this.assertOpen();
     return this.client(
@@ -135,7 +135,7 @@ export class AuthRepository {
     );
   }
 
-  /** Resolve the owner of an in-flight login without accepting expired local trust. */
+  /** Resolve the owner of an in-flight login without accepting expired clients. */
   public findLocalClientById(id: string, now: number): LocalClient | undefined {
     this.assertOpen();
     return this.client(
@@ -305,7 +305,7 @@ export class AuthRepository {
     return this.storedSession(value, owner);
   }
 
-  /** Revoke every login for one client while retaining its local trust and profile data. */
+  /** Revoke every login for one client while retaining its credential and profile data. */
   public revokeClientSessions(clientId: string): void {
     this.transaction(() => {
       this.sqlite.prepare('DELETE FROM auth_login_sessions WHERE client_id = ?').run(clientId);

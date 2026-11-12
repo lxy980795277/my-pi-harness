@@ -25,10 +25,11 @@
 | 路径                     | 负责                                                                 | 不负责                                                        |
 | ------------------------ | -------------------------------------------------------------------- | ------------------------------------------------------------- |
 | `apps/web`               | 页面、交互、HTTP/SSE客户端、状态呈现                                 | Node API、凭据与Agent实例                                     |
-| `apps/daemon`            | API装配、本机信任与应用登录、事件重放、profile与服务生命周期         | 页面组件与桌面窗口                                            |
+| `apps/daemon`            | API装配、客户端初始化与应用登录、事件重放、profile与服务生命周期     | 页面组件与桌面窗口                                            |
 | `apps/desktop`           | Electron窗口、有限preload桥、daemon启动和退出、桌面资源与发布装配    | Agent Loop、业务数据库与工具实现                              |
 | `packages/agent-runtime` | Pi模型、认证与主/子Run编排、任务树及请求调度、审批、取消、队列和分支 | Electron、React、Fastify与SQL实现                             |
-| `packages/tools`         | 27个原生工具、通用Skill目录/不可变资源、受管理命令                   | 插件生命周期、Pi Loop、审批决定、数据库、OAuth或MCP协议       |
+| `packages/tools`         | 34个原生工具、通用Skill目录/不可变资源、受管理命令                   | 插件生命周期、Pi Loop、审批决定、数据库、OAuth或MCP协议       |
+| `packages/memory`        | 记忆事实规则、revision/幂等、候选确认及固定/相关选择                 | HTTP、SQL、Pi、模型Worker及第二份画像正文                     |
 | `packages/plugins`       | 插件声明/资源、安装启停更新、贡献与授权生命周期                      | SQL、HTTP、模型运行或通用Skill引擎                            |
 | `packages/sandbox`       | 宿主文件守卫、公网地址判定、平台隔离与受监管字节进程                 | 工具名称、插件状态、Pi、数据库与业务DTO                       |
 | `packages/integrations`  | MCP传输/目录/租约、通用OAuth、受控网络与高级账户协议适配             | 插件业务、本地推理、数据库、启动授权决策、Pi Loop、HTTP与页面 |
@@ -44,16 +45,16 @@
 
 源码目录表达实际拥有者，领域内直接引用具体实现。package根`index.ts`只提供公开导出，daemon根`bootstrap.ts`保留进程启动；生成的protocol版本文件和真正包级错误可留在根目录。没有旧路径兼容转发文件，也不以utils收纳未判断归属的代码。
 
-| 源码目录                     | 内部职责                                                                                                                                                                                                                                                                   |
-| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `apps/daemon/src`            | `application`负责配置、启动准备和服务装配；`http`负责Fastify、访问校验、错误映射、请求/SSE及Web资源；`search`拥有本地向量Worker；auth、models、sessions、mcp等领域直接位于src                                                                                              |
-| `packages/tools/src`         | `tools`按工具名平铺，一工具一文件，拥有参数、策略、回调类型与执行入口；`lib/tool-registry`拥有注册契约，`lib/tool-context`声明公共执行上下文；根`workspace-tool-registry`装配目录；`utils`提供检索及文档提取；`skills`拥有通用发现、冻结与资源租约，`commands`拥有命令状态 |
-| `packages/plugins/src`       | `plugins/<id>`保存插件声明、Skill正文和脚本；`lifecycle`拥有安装/启停/更新/卸载，`auth`拥有插件授权生命周期；`apps`和`gateway`管理固定贡献与访问规则，`accounts`提供高级账户供应商策略                                                                                     |
-| `packages/sandbox/src`       | `filesystem`拥有真实路径与稳定读取；`network`拥有地址原语；`policy`拥有共享敏感名称规则；`platform`实现OS隔离；`process`拥有启动、字节流、预算、watchdog与物理回收                                                                                                         |
-| `packages/integrations/src`  | `mcp`负责传输、目录、schema与租约；`network`提供受限远端访问；`oauth`提供共用授权码、PKCE、交换/刷新与安全错误，`connections`提供高级账户凭据编码和协议适配                                                                                                                |
-| `packages/protocol/src`      | `application`、`sessions`、`tools`、`extensions`和`host`提供公开schema/DTO；`internal`提供宿主冻结绑定、恢复/提交记录和插件私有数据；两个出口均无Node依赖                                                                                                                  |
-| `packages/storage/src`       | `profile`负责打开、锁与跨介质唯一提交；`sqlite`负责表和迁移；`sessions`负责JSONL、附件、查询、恢复与派生投影；`artifacts`负责元数据/引用、不可变blob、配额与下载租约；`repositories`负责独立配置；`credentials`负责凭据；`shared`仅放包级错误与校验                        |
-| `packages/agent-runtime/src` | `models`负责Provider及模型认证；`sessions`负责主会话；`subagents`负责任务树、角色、请求调度、通信与收束；`runs`复用单次Pi执行；`tools`负责每Run领域绑定、执行与审批；`capabilities`负责发现、绑定和动态加载；`work`负责独立工作状态；`context`负责模型请求上下文           |
+| 源码目录                     | 内部职责                                                                                                                                                                                                                                                                                                                |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/daemon/src`            | `application`负责配置、启动准备和服务装配；`http`负责Fastify、访问校验、错误映射、请求/SSE及Web资源；`memory`解析记忆用例、身份与主子范围；`search`拥有持久检索、后台索引及共享本地模型Worker；auth、models、sessions、mcp等领域直接位于src                                                                             |
+| `packages/tools/src`         | `tools`按工具名平铺，一工具一文件，拥有参数、策略、回调类型与执行入口；`lib/tool-registry`拥有注册契约，`lib/tool-context`声明公共执行上下文；根`workspace-tool-registry`装配目录；`utils`提供检索及文档提取；`skills`拥有通用发现、冻结与资源租约，`commands`拥有命令状态                                              |
+| `packages/plugins/src`       | `plugins/<id>`保存插件声明、Skill正文和脚本；`lifecycle`拥有安装/启停/更新/卸载，`auth`拥有插件授权生命周期；`apps`和`gateway`管理固定贡献与访问规则，`accounts`提供高级账户供应商策略                                                                                                                                  |
+| `packages/sandbox/src`       | `filesystem`拥有真实路径与稳定读取；`network`拥有地址原语；`policy`拥有共享敏感名称规则；`platform`实现OS隔离；`process`拥有启动、字节流、预算、watchdog与物理回收                                                                                                                                                      |
+| `packages/integrations/src`  | `mcp`负责传输、目录、schema与租约；`network`提供受限远端访问；`oauth`提供共用授权码、PKCE、交换/刷新与安全错误，`connections`提供高级账户凭据编码和协议适配                                                                                                                                                             |
+| `packages/protocol/src`      | `application`、`sessions`、`tools`、`extensions`、`memory`、`search`和`host`提供公开schema/DTO；`internal`提供宿主冻结绑定、恢复/提交记录和插件私有数据；两个出口均无Node依赖                                                                                                                                           |
+| `packages/storage/src`       | `profile`负责打开、锁与跨介质唯一提交；`sqlite`负责表和迁移；`sessions`负责JSONL、附件、查询、恢复与派生投影；`artifacts`负责元数据/引用、不可变blob、配额与下载租约；`memory`负责独立记忆事务与来源，`search`负责派生索引和只读来源窗口；`repositories`负责独立配置；`credentials`负责凭据；`shared`仅放包级错误与校验 |
+| `packages/agent-runtime/src` | `models`负责Provider及模型认证；`sessions`负责主会话；`subagents`负责任务树、角色、请求调度、通信与收束；`runs`复用单次Pi执行；`tools`负责每Run领域绑定、执行与审批；`capabilities`负责发现、绑定和动态加载；`work`负责独立工作状态；`context`负责模型请求上下文                                                        |
 
 ProfileStore保留JSONL、SQLite、锁和失败冻结的单一编排，模型配置仓储通过它的事务入口写入。SessionQueries拥有快照、队列来源、幂等结果和事件分页；SessionRecovery在所属启动事务内重建，SessionEventCommit校验和暂存会话创建及事件，ArtifactRepository管理产物元数据与引用。
 
@@ -109,19 +110,22 @@ TypeScript使用ESNext与Bundler解析并执行noEmit检查。Web、宿主、浏
 
 ## 启动配置
 
-| 环境变量                         | 含义                                                                |
-| -------------------------------- | ------------------------------------------------------------------- |
-| `MY_PI_HARNESS_PYTHON`           | 可选的绝对Python解释器路径，供固定文档读取/渲染入口使用             |
-| `MY_PI_HARNESS_PORT`             | daemon端口，默认4311；0申请动态端口                                 |
-| `MY_PI_HARNESS_WEB_DIST_PATH`    | 可选的已构建Web目录；配置后必须包含index.html                       |
-| `MY_PI_HARNESS_PARENT_PID`       | 可选的所有者进程ID，用于桌面启动链的退出回收                        |
-| `MY_PI_HARNESS_SESSION_LOG_ROOT` | JSONL根覆盖；独立安装包必填，须为绝对路径且末级名为`.my-pi-harness` |
+| 环境变量                          | 含义                                                                |
+| --------------------------------- | ------------------------------------------------------------------- |
+| `MY_PI_HARNESS_PYTHON`            | 可选的绝对Python解释器路径，供固定文档读取/渲染入口使用             |
+| `MY_PI_HARNESS_PORT`              | daemon端口，默认4311；0申请动态端口                                 |
+| `MY_PI_HARNESS_WEB_DIST_PATH`     | 可选的已构建Web目录；配置后必须包含index.html                       |
+| `MY_PI_HARNESS_PARENT_PID`        | 可选的所有者进程ID，用于桌面启动链的退出回收                        |
+| `MY_PI_HARNESS_PROFILE_DIRECTORY` | 可选的绝对profile目录；Web与桌面由daemon统一解析                    |
+| `MY_PI_HARNESS_SESSION_LOG_ROOT`  | JSONL根覆盖；独立安装包必填，须为绝对路径且末级名为`.my-pi-harness` |
 
-配置在监听、迁移或读取应用资源前校验。`MY_PI_HARNESS_PROFILE_DIRECTORY`指定绝对profile目录，默认位于macOS Application Support或Windows LocalAppData的My Pi Harness/profiles/default；Electron在macOS从app.userData派生同类目录，Windows采用同一LocalAppData规则，避免SQLite进入Roaming目录。独立owner.sqlite持有排他事务，data.sqlite使用WAL，进程死亡由OS释放所有权。
+配置在监听、迁移或读取应用资源前校验。daemon的`loadDaemonConfig()`是profile目录的唯一解析者，Web与桌面入口都使用它。`MY_PI_HARNESS_PROFILE_DIRECTORY`显式指定绝对目录；未设置时，macOS固定使用`~/Library/Application Support/@my-pi-harness/desktop/profiles/default`，Windows使用`%LOCALAPPDATA%/My Pi Harness/profiles/default`。macOS路径中的`@my-pi-harness/desktop`是固定数据命名空间，不随开发/发布应用名称或Electron的`userData`变化，不探测其他目录作为回退。独立owner.sqlite持有排他事务，data.sqlite使用WAL，进程死亡由OS释放所有权。
+
+桌面main传递已有进程环境，由独立Node加载环境文件后交给daemon解析；开发使用仓库根`.env`，发布只使用随包`desktop-oauth.env`，进程环境优先于环境文件。main不从`app.getPath('userData')`生成或覆盖profile配置。Electron的`userData`只保存Cookie和缓存，`--user-data-dir`不改变业务profile；两个入口使用相同环境配置时访问同一套业务数据，仍各自维护登录Cookie。
 
 JSONL根与上述数据库位置独立：开发入口、仓库中的daemon源码和正式构建产物统一使用仓库根目录的`.my-pi-harness`，通过模块位置定位，不随cwd或自定义profile改变。独立安装包已脱离源码仓库，启动时必须通过`MY_PI_HARNESS_SESSION_LOG_ROOT`指定该仓库中的隐藏目录；缺失时明确报错。测试显式指定临时日志根。日志实际目录为`<logRoot>/sessions/<SHA256(canonicalProfilePath)>/`，避免Electron和独立daemon的不同profile混写；storage不猜测cwd或NODE_ENV。开发期旧数据按用户授权清理，不做旧格式兼容。JSONL是会话权威，新日志根不能从SQLite反向生成日志；缺失既有日志明确失败。运行数据不进入Git、发布资源或源码扫描。
 
-`MY_PI_HARNESS_DESKTOP_SECRET`仅由main私有启动链注入，不进入公开启动记录；`MY_PI_HARNESS_DEVELOPMENT_ORIGIN`只允许自有5174开发页面。GitHub登录配置来自仓库根`.env`，开发daemon启动时自动加载，进程环境优先。Web使用授权码+PKCE，桌面使用Device Flow；打包只提取Client ID至`desktop-oauth.env`，不分发根`.env`或Client Secret。字段、本机信任、profile归属与恢复语义见[应用登录协议](../03_API/application-auth.md)。
+`MY_PI_HARNESS_DESKTOP_SECRET`仅由main私有启动链注入，不进入公开启动记录；`MY_PI_HARNESS_DEVELOPMENT_ORIGIN`只允许自有5174开发页面。浏览器自动初始化客户端后进入应用登录，无需通信码；初始化只关联客户端，不授予业务访问。GitHub登录配置来自仓库根`.env`，开发daemon启动时自动加载，进程环境优先。Web使用授权码+PKCE，桌面使用Device Flow；打包只提取Client ID至`desktop-oauth.env`，不分发根`.env`或Client Secret。字段、客户端、profile归属与恢复语义见[应用登录协议](../03_API/application-auth.md)。
 
 Web开发的 `DAEMON_ORIGIN` 指定同源代理目标，缺省连接上述独立daemon地址。桌面开发入口注入 `MY_PI_HARNESS_NODE_PATH` 和 `MY_PI_HARNESS_RENDERER_URL`，分别选择独立Node与开发页面；发布版根据安装资源和实际daemon地址解析，不使用这些开发覆盖项。
 
@@ -138,3 +142,9 @@ MCP目录由宿主按当前身份、配置、凭据epoch和信任指纹保存至
 `RunCapabilities`管理真实session/workspace/MCP来源的候选与当前集合，搜索自动暂存命中，`run.tools_loaded`持久化后推进下一请求，结束释放且新Run重新选择。Skill候选元数据、显式正文及目录诊断进入可回放接受事实，模型按ID加载，由宿主解析预期内容与插件授权代次；正文继承独立于可执行工具集合。默认/按需策略及限额见[运行时能力协议](../03_API/capability-runtime.md)。daemon/search拥有懒加载的本地CPU向量Worker，Transformers.js为daemon生产依赖；缓存固定版本模型至profile的models目录，不继承供应商凭据环境；关闭时终止推理与下载，语义不可用时保留词法检索。插件只读API通过web_fetch访问允许网关，写入通过明确开启的MCP App和原有审批；不另建Skill工具grant。高级手动`ConnectionService`保持独立用途，办公Skill通过通用命令、文档/视觉读取和产物注册完成任务。
 
 生产部署同时包含`plugins/src`和`tools/src`：插件manifest、App声明、Skill及专属脚本位于`plugins/src/plugins/<id>`，共用办公支持位于`plugins/src/plugins/shared/office`；原生PDF页图支持位于`tools/src/utils/document-view`。daemon将三个共享办公脚本与原生pdf_safety.py合成显式resourceSources映射，通用Skill引擎只解析已注册来源，继续按清单路径、大小和hash冻结；运行资源物化到profile外受控目录。Python/LibreOffice等可选办公依赖按明确配置检测，准备依赖使用获准的普通命令。资源、Skills及账号授权见[插件体系设计](../09_TECHNICAL/插件体系设计.md)，协议传输、目录与调用见[MCP连接设计](../09_TECHNICAL/MCP连接设计.md)。
+
+## M6记忆与历史所有权
+
+`MemoryApplicationService`用profile owner和实际Session/Task解析范围，`packages/memory`拥有事实、直接写入与学习规则，storage在原profile事务中保存独立记忆及派生检索。`runs/request.ts`的`dispatchRequest`在名额等待后再次核验当前事实与来源，将usage和最终prepared同批提交，再立即交给Provider；引用正文在实际输入中只保存一份。具体流程见[长期记忆与搜索设计](../09_TECHNICAL/长期记忆与搜索设计.md)。
+
+`LocalSearchModelResource`唯一拥有一个Worker，embedding与相关性复核是两个独立状态视图；资源显式准备，已缓存模型可直接本地懒加载，普通查询不下载。历史阅读使用精确来源窗口，模型默认窄搜索与人类所选引用分开授权。Web Query保存结果正文，Zustand只保存筛选、定位和待发引用；虚拟时间线继续按需挂载，阅读不切换执行分支。HTTP和持久字段见[记忆与搜索协议](../03_API/memory-search.md)。

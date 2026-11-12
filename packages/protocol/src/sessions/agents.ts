@@ -69,6 +69,7 @@ export const AgentTaskSchema = Type.Object(
   {
     id,
     sourceToolCallId: id,
+    userMemoryIds: Type.Optional(Type.Array(id, { maxItems: 100, uniqueItems: true })),
     title: Type.String({ minLength: 1, maxLength: 200 }),
     role: AgentRoleSchema,
     limits: AgentLimitsSchema,

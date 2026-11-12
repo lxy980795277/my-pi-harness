@@ -201,7 +201,7 @@ export class RunCapabilities implements RunControls {
   public ensure(names: readonly string[]): void {
     this.assertOpen();
     for (const name of names)
-      if (!this.candidates.has(name))
+      if (!this.canProvide(name))
         throw new RuntimeError('TOOL_NOT_AVAILABLE', `候选中没有工具：${name}`);
     this.assertStageLimit(names);
     for (const name of names)

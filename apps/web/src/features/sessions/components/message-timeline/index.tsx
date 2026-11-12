@@ -16,8 +16,12 @@ import { AnswerProcess } from '@/features/sessions/components/answer-process';
 import { TimelineContent } from '@/features/sessions/components/timeline-content';
 import { useMessageTimeline } from '@/features/sessions/hooks/use-message-timeline';
 import { cn } from '@/utils/cn';
+import { useSaveMessageMemory } from '@/features/memory/hooks/use-save-message-memory';
+import { MemoryEditor } from '@/features/memory/components/memory-editor';
+import { Notice } from '@/components/ui/notice';
 
 interface MessageTimelineProps {
+  sessionId: string;
   workspaceId: string | null;
   approvalMode: ApprovalMode;
   messages: MessageView[];
@@ -33,6 +37,7 @@ interface MessageTimelineProps {
 
 /** Render the visible measured rows and overscan while keeping the complete history scrollable. */
 export const MessageTimeline: FC<MessageTimelineProps> = ({
+  sessionId,
   workspaceId,
   approvalMode,
   messages,
@@ -45,7 +50,8 @@ export const MessageTimeline: FC<MessageTimelineProps> = ({
   onDecide,
   children,
 }) => {
-  const state = useMessageTimeline(messages, tools, activeRunId, runs, branchId);
+  const state = useMessageTimeline(sessionId, messages, tools, activeRunId, runs, branchId);
+  const memory = useSaveMessageMemory(workspaceId, branchId);
   return (
     <div className="relative min-h-0 flex-1">
       <div
@@ -55,6 +61,7 @@ export const MessageTimeline: FC<MessageTimelineProps> = ({
         onScroll={state.scroll}
       >
         <div ref={state.contentElement} className="mx-auto w-full max-w-4xl">
+          {state.seekError && <Notice>{state.seekError}</Notice>}
           <div className={cn('relative', state.empty && 'min-h-48')} ref={state.measureList}>
             {state.empty && (
               <div className="flex h-full min-h-48 items-center justify-center text-xs text-muted-foreground">
@@ -73,6 +80,8 @@ export const MessageTimeline: FC<MessageTimelineProps> = ({
                     <TimelineContent
                       entry={entry}
                       workspaceId={workspaceId}
+                      onSaveMemory={memory.open}
+                      onMessageElement={state.registerMessage}
                       approvalMode={approvalMode}
                       canEdit={canEdit}
                       onEdit={onEdit}
@@ -83,6 +92,8 @@ export const MessageTimeline: FC<MessageTimelineProps> = ({
                     <AnswerProcess
                       entry={entry}
                       workspaceId={workspaceId}
+                      onSaveMemory={memory.open}
+                      onMessageElement={state.registerMessage}
                       approvalMode={approvalMode}
                       canEdit={canEdit}
                       onBeforeToggle={state.beforeProcessToggle}
@@ -90,7 +101,9 @@ export const MessageTimeline: FC<MessageTimelineProps> = ({
                       onDecide={onDecide}
                     />
                   )}
-                  {entry.type === 'answer-footer' && <AnswerFooter footer={entry.footer} />}
+                  {entry.type === 'answer-footer' && (
+                    <AnswerFooter footer={entry.footer} onSaveMemory={memory.open} />
+                  )}
                   {entry.type === 'request-error' && (
                     <article className="min-w-0" aria-label="Agent的消息">
                       <RequestFailure text={entry.text} />
@@ -123,6 +136,13 @@ export const MessageTimeline: FC<MessageTimelineProps> = ({
           <ArrowDown width={14} height={14} aria-hidden />
           回到最新消息
         </Button>
+      )}
+      {memory.target && (
+        <MemoryEditor
+          key={memory.target.message?.id}
+          target={memory.target}
+          onClose={memory.close}
+        />
       )}
     </div>
   );

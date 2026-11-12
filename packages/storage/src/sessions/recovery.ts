@@ -71,6 +71,7 @@ export class SessionRecovery {
           'An authoritative session journal is missing; SQLite cannot replace it',
         );
     for (const table of [
+      schema.memoryAdoptions,
       schema.taskMessages,
       schema.taskWorkStates,
       schema.agentMessages,

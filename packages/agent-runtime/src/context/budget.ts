@@ -107,6 +107,7 @@ export function estimateContextUsage(
       attachments: 0,
       summary: 0,
       workingState: 0,
+      memory: 0,
     },
   };
 }

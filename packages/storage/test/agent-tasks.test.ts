@@ -20,6 +20,7 @@ import {
   type AgentSessionFixture,
 } from './fixtures/agent-session';
 import { storedToolCallId } from '../src/sessions/projections/tool-intents';
+import { encodeMemoryBlock } from '@my-pi-harness/memory/snapshot';
 
 const fixtures: AgentSessionFixture[] = [];
 
@@ -37,6 +38,74 @@ async function fixture(approvalMode: ApprovalMode = 'ask'): Promise<AgentSession
 }
 
 describe('durable agent tasks', () => {
+  it('keeps nested user-memory grants a subset and replays adopted transferred facts without consulting current memory', async () => {
+    const value = await fixture();
+    spawn(value.store, 'parent', 'root', 'researcher', ['transferred-user']);
+    expect(() =>
+      spawn(value.store, 'expanded', 'run-parent', 'researcher', ['ungranted-user']),
+    ).toThrow('expand its parent');
+    spawn(value.store, 'nested', 'run-parent', 'researcher', ['transferred-user']);
+    const usage = {
+      estimatedTokens: 10,
+      windowTokens: 4096,
+      reservedOutput: 512,
+      inputBudget: 3584,
+      trimmedMessages: 0,
+      prunedMessages: 0,
+      source: 'estimated',
+      providerInputTokens: null,
+      categories: {
+        system: 0,
+        rules: 0,
+        tools: 0,
+        messages: 0,
+        attachments: 0,
+        summary: 0,
+        workingState: 0,
+        memory: 10,
+      },
+    };
+    const privateRequest = (id: string) => {
+      const prompt = encodeMemoryBlock({
+        fingerprint: 'a'.repeat(64),
+        entries: [
+          {
+            id,
+            mode: 'relevant',
+            scope: { kind: 'user' },
+            category: 'fact',
+            body: 'Historical transferred fact',
+            revision: 1,
+            source: { kind: 'manual' },
+          },
+        ],
+      });
+      return {
+        version: 1,
+        systemPrompt: prompt,
+        messages: [{ message: { role: 'system', content: prompt } }],
+        memoryRange: { start: 0, end: prompt.length },
+      };
+    };
+    const context = { taskId: 'nested', branchId: 'main', usage, messageIds: ['user-nested'] };
+    expect(() =>
+      value.store.append('session', [
+        event('context.prepared', context, 'run-nested', privateRequest('ungranted-user')),
+      ]),
+    ).toThrow('outside this root or task');
+    value.store.append('session', [
+      event('context.prepared', context, 'run-nested', privateRequest('transferred-user')),
+    ]);
+    expect(value.store.getMemoryUsage('session', 'run-nested')?.entries).toMatchObject([
+      { id: 'transferred-user', mode: 'relevant', body: 'Historical transferred fact' },
+    ]);
+    value.store.close();
+    value.store = await openProfileStore(value.directory);
+    expect(value.store.getMemoryUsage('session', 'run-nested')?.entries).toMatchObject([
+      { id: 'transferred-user', body: 'Historical transferred fact' },
+    ]);
+  });
+
   it('requires explicitly supplied defaults without seeding settings during reads', async () => {
     const value = await fixture();
     expect(value.store.getAgentSettings().revision).toBe(0);

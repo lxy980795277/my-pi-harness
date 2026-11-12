@@ -17,6 +17,7 @@ import {
 } from '@/features/tasks/utils/task-view';
 import { requestFailureText } from '@/utils/run-failure';
 import { describeError } from '@/utils/describe-error';
+import { MemoryUsagePanel } from '@/features/memory/components/memory-usage';
 
 interface TaskDetailProps {
   task: AgentTaskSummary;
@@ -68,6 +69,11 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
       {state.stopping.error && <Notice tone="error">{state.stopping.error}</Notice>}
       {state.sending.error && <Notice tone="error">{state.sending.error}</Notice>}
       {diagnostic !== null && <Notice tone="error">{diagnostic}</Notice>}
+      <MemoryUsagePanel
+        sessionId={task.sessionId}
+        runId={task.latestRunId}
+        running={state.canStop}
+      />
       {detail && (
         <>
           <div className="space-y-3" aria-label="此任务的待处理事项">

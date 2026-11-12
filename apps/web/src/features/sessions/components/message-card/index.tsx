@@ -1,6 +1,6 @@
 import type { ApprovalMode, EditInput, MessageView } from '@my-pi-harness/protocol';
 import { Check, Copy, Pencil } from 'lucide-react';
-import { memo, type FC } from 'react';
+import { memo, useCallback, type FC } from 'react';
 
 import { Markdown } from '@/components/markdown';
 import { LoadingDots } from '@/components/loading-dots';
@@ -15,9 +15,13 @@ import { useMessageEditor } from '@/features/sessions/hooks/use-message-editor';
 import { useCopyText } from '@/hooks/use-copy-text';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/utils/cn';
+import { SaveMessageMemoryButton } from '@/features/memory/components/save-message-memory';
+import type { MessageElementRef } from '@/features/sessions/types/timeline-target';
 
 interface MessageCardProps {
   workspaceId: string | null;
+  onSaveMemory: (message: MessageView) => void;
+  onMessageElement: MessageElementRef;
   approvalMode: ApprovalMode;
   message: MessageView;
   failure: string | null;
@@ -36,15 +40,31 @@ const STATUS_LABELS: Record<MessageView['status'], string> = {
 
 /** Displays message text and attachments; editing creates a new branch rather than replacing this fact. */
 export const MessageCard: FC<MessageCardProps> = memo(
-  ({ message, failure, workspaceId, approvalMode, canEdit, onEdit }) => {
+  ({
+    message,
+    failure,
+    workspaceId,
+    onSaveMemory,
+    onMessageElement,
+    approvalMode,
+    canEdit,
+    onEdit,
+  }) => {
     const { editing, text, changeText, submit, start, cancel, pending, error, mcp, skills } =
       useMessageEditor(message, workspaceId, approvalMode, onEdit);
     const copy = useCopyText(message.text);
+    const locateElement = useCallback(
+      (node: HTMLElement | null): void => {
+        onMessageElement(message.id, node);
+      },
+      [message.id, onMessageElement],
+    );
     const streaming = message.status === 'streaming';
     const user = message.role === 'user';
 
     return (
       <article
+        ref={locateElement}
         className={cn('group group/message min-w-0 space-y-1', user && 'flex flex-col items-end')}
         aria-label={`${ROLE_LABELS[message.role]}的消息`}
       >
@@ -117,6 +137,7 @@ export const MessageCard: FC<MessageCardProps> = memo(
                 <Pencil width={14} height={14} aria-hidden />
               </Button>
             )}
+            {user && <SaveMessageMemoryButton message={message} onSave={onSaveMemory} />}
             {copy.copied && <span role="status">已复制</span>}
           </div>
         )}
@@ -166,6 +187,8 @@ export const MessageCard: FC<MessageCardProps> = memo(
   (previous, next) => {
     return (
       previous.workspaceId === next.workspaceId &&
+      previous.onSaveMemory === next.onSaveMemory &&
+      previous.onMessageElement === next.onMessageElement &&
       previous.approvalMode === next.approvalMode &&
       previous.message === next.message &&
       previous.failure === next.failure &&

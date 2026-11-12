@@ -12,7 +12,7 @@ import { describe, expect, it } from 'vitest';
 import { loadDaemonConfig } from '../src/application/config';
 import { createDaemonApplication, type DaemonApplication } from '../src/http/server';
 import { createApplicationServices } from '../src/application/services';
-import { loginFixture, pairFixture } from './support/login';
+import { loginFixture, initializeClientFixture } from './support/login';
 
 describe('authenticated original session JSONL download', () => {
   it('downloads original batches across branches and rejects untrusted, logged-out and invalid requests', async () => {
@@ -139,8 +139,8 @@ describe('authenticated original session JSONL download', () => {
       expect(text).not.toContain('synthetic-github-client-secret');
       expect(text).not.toContain('my_pi_session=');
       expect((await request(url, {})).status).toBe(401);
-      const paired = await pairFixture(origin, services.auth.pairingCode);
-      const loggedOut = await request(url, { Cookie: paired.cookie });
+      const client = await initializeClientFixture(origin);
+      const loggedOut = await request(url, { Cookie: client.cookie });
       expect(loggedOut.status).toBe(401);
       expect(await loggedOut.json()).toMatchObject({ code: 'LOGIN_REQUIRED' });
       const foreign = await request(url, { ...headers, Origin: 'https://untrusted.example' });

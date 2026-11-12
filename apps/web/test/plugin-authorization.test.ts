@@ -38,7 +38,7 @@ const STATUS: SkillConnectionStatus = {
   account: null,
 };
 const AUTH: AuthStatus = {
-  localAuthorized: true,
+  clientInitialized: true,
   authenticated: true,
   csrfToken: 'synthetic-csrf',
   providers: [],

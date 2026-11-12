@@ -32,6 +32,7 @@ import { launchAgentRun } from './launch';
 import { SubagentMessaging } from './messaging';
 import { assertDelegatedAttachments, isDescendant, resolveDelegationPolicy } from './policy';
 import type { RunHooks } from '../runs/ports';
+import { runMemoryRequest } from '../runs/memory';
 
 export interface SubagentCoordinatorOptions {
   store: SubagentStore;
@@ -40,7 +41,7 @@ export interface SubagentCoordinatorOptions {
   work?: WorkRuntime;
   externalTools?: ExternalTools;
   skills?: SkillsPort;
-  search?: ToolCatalogSearch;
+  toolSearch?: ToolCatalogSearch;
   commit(sessionId: string, events: readonly EventInput[]): void;
   publishMessageDelta(sessionId: string, delta: LiveMessageDelta): void;
   onError(error: unknown): void;
@@ -168,9 +169,21 @@ export class SubagentCoordinator {
       ? this.options.store.getTaskSnapshot(parent.session.id, parent.task.id)
       : this.options.store.getSnapshot(parent.session.id);
     assertDelegatedAttachments(parent, available, input.attachmentIds);
+    let userMemoryIds: readonly string[] = [];
+    if (input.userMemoryIds?.length) {
+      const execution = parent.execution;
+      const memory = execution?.options.memory;
+      if (!execution || !memory?.validateDelegation)
+        throw new RuntimeError('MEMORY_DELEGATION_UNAVAILABLE', '当前执行不能转交用户记忆。');
+      userMemoryIds = memory.validateDelegation(
+        runMemoryRequest(execution.options, execution.memoryQuery(), parent.controller.signal),
+        input.userMemoryIds,
+      );
+    }
     const task: AgentTask = {
       id: randomUUID(),
       sourceToolCallId,
+      ...(userMemoryIds.length ? { userMemoryIds: [...userMemoryIds] } : {}),
       title: input.title,
       role: structuredClone(role),
       limits,

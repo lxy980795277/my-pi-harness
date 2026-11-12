@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { loadDaemonConfig } from '../src/application/config';
 import { createApplicationServices, type ApplicationServices } from '../src/application/services';
 import { createDaemonApplication, type DaemonApplication } from '../src/http/server';
-import { pairFixture, type FixtureAuthorization } from './support/login';
+import { initializeClientFixture, type FixtureAuthorization } from './support/login';
 
 const CLIENT_ID = 'web-fixture-client';
 const CLIENT_SECRET = 'private-web-client-secret';
@@ -166,7 +166,7 @@ function callback(url: URL, cookie?: string): Promise<Response> {
 describe('browser authorization-code login', () => {
   it('accepts the GitHub authorization issuer and ignores response extensions without exposing them', async () => {
     const instance = await setup();
-    const client = await pairFixture(instance.origin, instance.services.auth.pairingCode);
+    const client = await initializeClientFixture(instance.origin);
     const started = await begin(instance, client);
     started.callback.searchParams.set('iss', 'https://github.com/login/oauth');
     started.callback.searchParams.set('scope', 'read:user');
@@ -195,7 +195,7 @@ describe('browser authorization-code login', () => {
     'rejects the mismatched authorization issuer %s before exchanging the code',
     async (issuer) => {
       const instance = await setup();
-      const client = await pairFixture(instance.origin, instance.services.auth.pairingCode);
+      const client = await initializeClientFixture(instance.origin);
       const started = await begin(instance, client);
       started.callback.searchParams.set('iss', issuer);
       const returned = await callback(started.callback, started.cookie);
@@ -213,7 +213,7 @@ describe('browser authorization-code login', () => {
 
   it('rejects a mismatched issuer on an error response instead of accepting the denial', async () => {
     const instance = await setup();
-    const client = await pairFixture(instance.origin, instance.services.auth.pairingCode);
+    const client = await initializeClientFixture(instance.origin);
     const started = await begin(instance, client);
     started.callback.searchParams.delete('code');
     started.callback.searchParams.set('error', 'access_denied');
@@ -228,7 +228,7 @@ describe('browser authorization-code login', () => {
     'rejects repeated known callback field %s without contacting GitHub',
     async (field) => {
       const instance = await setup();
-      const client = await pairFixture(instance.origin, instance.services.auth.pairingCode);
+      const client = await initializeClientFixture(instance.origin);
       const started = await begin(instance, client);
       if (!started.callback.searchParams.has(field))
         started.callback.searchParams.set(field, 'synthetic-value');
@@ -244,7 +244,7 @@ describe('browser authorization-code login', () => {
     'rejects an empty or oversized authorization issuer',
     async (issuer) => {
       const instance = await setup();
-      const client = await pairFixture(instance.origin, instance.services.auth.pairingCode);
+      const client = await initializeClientFixture(instance.origin);
       const started = await begin(instance, client);
       started.callback.searchParams.set('iss', issuer);
       const returned = await callback(started.callback, started.cookie);
@@ -256,7 +256,7 @@ describe('browser authorization-code login', () => {
 
   it('verifies S256 with a callback-only cookie then issues a Strict application session in a same-origin POST', async () => {
     const instance = await setup();
-    const client = await pairFixture(instance.origin, instance.services.auth.pairingCode);
+    const client = await initializeClientFixture(instance.origin);
     const started = await begin(instance, client);
     expect(started.flow.deviceCode).toBeNull();
     expect(started.authorization.origin).toBe('https://github.com');
@@ -312,8 +312,8 @@ describe('browser authorization-code login', () => {
 
   it('rejects forged state, wrong browser nonce, missing proof, cross-client completion and cross-origin callback', async () => {
     const instance = await setup();
-    const a = await pairFixture(instance.origin, instance.services.auth.pairingCode);
-    const b = await pairFixture(instance.origin, instance.services.auth.pairingCode);
+    const a = await initializeClientFixture(instance.origin);
+    const b = await initializeClientFixture(instance.origin);
     const first = await begin(instance, a);
     const second = await begin(instance, b);
     instance.github.authorization = first.authorization;
@@ -342,7 +342,7 @@ describe('browser authorization-code login', () => {
 
   it('records safe denial and never exchanges a denied authorization code', async () => {
     const instance = await setup();
-    const client = await pairFixture(instance.origin, instance.services.auth.pairingCode);
+    const client = await initializeClientFixture(instance.origin);
     const started = await begin(instance, client);
     started.callback.searchParams.delete('code');
     started.callback.searchParams.set('error', 'access_denied');
@@ -365,7 +365,7 @@ describe('browser authorization-code login', () => {
     'does not accept a late code exchange after %s',
     async (operation) => {
       const instance = await setup();
-      const client = await pairFixture(instance.origin, instance.services.auth.pairingCode);
+      const client = await initializeClientFixture(instance.origin);
       const started = await begin(instance, client);
       instance.github.holdToken = true;
       const returning = callback(started.callback, started.cookie);
@@ -394,7 +394,7 @@ describe('browser authorization-code login', () => {
 
   it('requires web configuration without falling back to Device Flow', async () => {
     const instance = await setup(false);
-    const client = await pairFixture(instance.origin, instance.services.auth.pairingCode);
+    const client = await initializeClientFixture(instance.origin);
     const response = await send(instance, client, '/auth/login', 'POST', {
       providerId: 'github',
       method: 'web',
@@ -410,7 +410,7 @@ describe('browser authorization-code login', () => {
 
   it('restarts an abandoned browser authorization and rejects the previous state and nonce', async () => {
     const instance = await setup();
-    const client = await pairFixture(instance.origin, instance.services.auth.pairingCode);
+    const client = await initializeClientFixture(instance.origin);
     const first = await begin(instance, client);
     const next = await begin(instance, client);
     expect(next.flow.id).not.toBe(first.flow.id);
@@ -434,7 +434,7 @@ describe('browser authorization-code login', () => {
 
   it('aborts and waits for a replaced Web exchange before issuing the next challenge', async () => {
     const instance = await setup();
-    const client = await pairFixture(instance.origin, instance.services.auth.pairingCode);
+    const client = await initializeClientFixture(instance.origin);
     const first = await begin(instance, client);
     instance.github.holdToken = true;
     const returning = callback(first.callback, first.cookie);
@@ -458,7 +458,7 @@ describe('browser authorization-code login', () => {
     const instance = await setup(true, {
       MY_PI_HARNESS_GITHUB_CALLBACK_URL: 'http://localhost:4311/api/auth/callback/github',
     });
-    const client = await pairFixture(instance.origin, instance.services.auth.pairingCode);
+    const client = await initializeClientFixture(instance.origin);
     const response = await send(instance, client, '/auth/login', 'POST', {
       providerId: 'github',
       method: 'web',
@@ -476,7 +476,7 @@ describe('browser authorization-code login', () => {
       MY_PI_HARNESS_DEVELOPMENT_ORIGIN: webOrigin,
       MY_PI_HARNESS_GITHUB_CALLBACK_URL: registeredCallback,
     });
-    const client = await pairFixture(instance.origin, instance.services.auth.pairingCode);
+    const client = await initializeClientFixture(instance.origin);
     const response = await fetch(`${instance.origin}/api/auth/login`, {
       method: 'POST',
       headers: {

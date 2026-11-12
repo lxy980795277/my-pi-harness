@@ -26,6 +26,7 @@ import type { ExternalTools } from '../../src/tools/external';
 import type { WebFetchGatewayAccess } from '@my-pi-harness/tools';
 import type { SkillsPort, ToolDiscoveryPort } from '../../src/capabilities/ports';
 import { WorkRuntime } from '../../src/work/runtime';
+import type { RunMemoryPort } from '../../src/runs/ports';
 
 interface WorkFixture {
   directory: string;
@@ -50,6 +51,7 @@ interface WorkFixtureOptions {
   sessionTools?: boolean;
   tools?: boolean;
   context?: boolean;
+  memory?: RunMemoryPort;
 }
 
 export async function fixture(
@@ -115,6 +117,7 @@ export async function fixture(
     const runtimeOptions: ConstructorParameters<typeof SessionRuntime>[0] = {
       store,
       gateway,
+      ...(options.memory ? { memory: options.memory } : {}),
       onError: (error) => {
         errors.push(error);
       },

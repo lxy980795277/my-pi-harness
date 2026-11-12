@@ -1,6 +1,7 @@
 import { Value } from 'typebox/value';
 import type {
   InputRequest,
+  SearchSourceSelection,
   SessionSummary,
   SkillSelection,
   ToolDiscoveryDiagnostic,
@@ -18,6 +19,7 @@ import { freezeSkillMentions } from './skill-mentions';
 import { availableSkillHistory, type SkillContextDiagnostic } from './skill-history';
 
 export interface FrozenInputCapabilities {
+  searchQuotes?: readonly SearchSourceSelection[];
   external: readonly FrozenMcpTool[];
   candidates: readonly FrozenMcpTool[];
   skills: readonly FrozenSkill[];
@@ -82,6 +84,7 @@ export function combinedSkills(
 
 export function encodeInputCapabilities(input: FrozenInputCapabilities): InputCapabilityData {
   return {
+    ...(input.searchQuotes?.length ? { searchQuotes: [...input.searchQuotes] } : {}),
     mcpBindings: input.external,
     candidateBindings: input.candidates,
     skillBindings: [...input.skills],
@@ -112,6 +115,7 @@ export class InputCapabilityResolver {
   public queued(sessionId: string, inputId: string): FrozenInputCapabilities {
     const metadata = this.metadata(sessionId, inputId);
     return {
+      ...(metadata.searchQuotes?.length ? { searchQuotes: metadata.searchQuotes } : {}),
       external: metadata.mcpBindings,
       candidates: metadata.candidateBindings,
       skills: metadata.skillBindings,
@@ -124,7 +128,9 @@ export class InputCapabilityResolver {
 
   public async freeze(
     session: SessionSummary,
-    input: Pick<InputRequest, 'mcpTools' | 'skills'> & { text?: string },
+    input: Pick<InputRequest, 'mcpTools' | 'skills' | 'searchQuotes'> & {
+      text?: string;
+    },
     signal: AbortSignal,
   ): Promise<FrozenInputCapabilities> {
     const skillCandidates = this.options.skills
@@ -166,6 +172,7 @@ export class InputCapabilityResolver {
       signal,
     );
     const frozen = Value.Clone({
+      ...(input.searchQuotes?.length ? { searchQuotes: input.searchQuotes } : {}),
       external,
       candidates,
       skills,
@@ -203,6 +210,7 @@ export class InputCapabilityResolver {
       await this.options.skills.validateBindings(skills, signal);
     }
     return {
+      ...(input.searchQuotes?.length ? { searchQuotes: input.searchQuotes } : {}),
       external,
       candidates,
       skills: input.skills,

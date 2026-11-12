@@ -3,6 +3,7 @@ import type {
   DefaultModel,
   InputRequest,
   WorkspaceIcon,
+  SearchSourceSelection,
 } from '@my-pi-harness/protocol';
 import type { CompositionEventHandler, KeyboardEventHandler, ReactNode } from 'react';
 import type { SelectOption } from '@/components/ui/select-field';
@@ -14,6 +15,11 @@ import type { Action, FormSubmit, TextChange, ValueChange } from '@/types/events
 export interface ComposerCompositionState {
   active: boolean;
   endedAt: number | null;
+}
+
+export interface ComposerQuoteState {
+  searchQuotes: readonly SearchSourceSelection[];
+  removeSearchQuote: ValueChange<string>;
 }
 
 export type ComposerKey = Pick<
@@ -48,6 +54,8 @@ export interface ComposerChoices {
 }
 
 export interface ComposerSurfaceProps {
+  searchQuotes: readonly SearchSourceSelection[];
+  removeSearchQuote: ValueChange<string>;
   id: string;
   draft: string;
   changeDraft: TextChange;

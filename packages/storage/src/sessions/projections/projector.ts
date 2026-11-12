@@ -1,4 +1,6 @@
 import { and, asc, eq, max } from 'drizzle-orm';
+import { isDeepStrictEqual } from 'node:util';
+import { Type } from 'typebox';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import {
   BranchViewSchema,
@@ -10,6 +12,7 @@ import {
   type HarnessEvent,
   type MessageView,
   type SessionSummary,
+  SearchSourceSelectionSchema,
 } from '@my-pi-harness/protocol';
 import { QueueCapabilityMetadataSchema } from '@my-pi-harness/protocol/internal';
 import { StorageError } from '../../shared/errors';
@@ -27,6 +30,8 @@ import {
   RunAcceptedSchema,
   RunFinishedSchema,
 } from '../event-validation';
+
+const searchQuotes = Type.Array(SearchSourceSelectionSchema, { maxItems: 4, uniqueItems: true });
 
 /** Updates reconstructable projections inside the event append transaction. */
 export class ProjectionWriter {
@@ -91,6 +96,19 @@ export class ProjectionWriter {
     }
     const session = this.session(event.sessionId);
     const run = event.runId === null ? undefined : this.run(event);
+    if (privateData?.['searchQuotes'] !== undefined) {
+      checked(searchQuotes, privateData['searchQuotes']);
+      if (
+        !run ||
+        message.role !== 'user' ||
+        message.agentMessageId !== undefined ||
+        run.taskId !== undefined
+      )
+        throw new StorageError(
+          'INVALID_EVENT',
+          'Search quotations require an actually consumed direct root input',
+        );
+    }
     if (
       message.branchId !== session.activeBranchId ||
       (run?.taskId === undefined && message.runId !== session.activeRunId) ||
@@ -153,6 +171,7 @@ export class ProjectionWriter {
     const accepted = checked(RunAcceptedSchema, event.data);
     const run = accepted.run;
     const session = this.session(event.sessionId);
+
     if (
       run.sessionId !== event.sessionId ||
       run.id !== event.runId ||
@@ -447,6 +466,11 @@ export class ProjectionWriter {
               throw new StorageError(
                 'CONFLICT',
                 'Queued input cannot replace its acceptance identity',
+              );
+            if (!isDeepStrictEqual(original.searchQuotes, nextMetadata.searchQuotes))
+              throw new StorageError(
+                'CONFLICT',
+                'Queued input cannot replace its frozen search quotations',
               );
           }
         }

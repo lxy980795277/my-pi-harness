@@ -76,6 +76,7 @@ describe('answer metadata', () => {
     });
     expect(footers.has('preamble')).toBe(false);
     expect(footers.has('tool-only')).toBe(false);
+    expect(footers.get('answer')?.memoryMessage).toBe(messages[3]);
   });
 
   it('counts empty tool steps and uses provider totals without adding cache tokens twice', () => {

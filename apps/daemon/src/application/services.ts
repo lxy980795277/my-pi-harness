@@ -1,3 +1,6 @@
+import { SearchService } from '../search/service';
+import { SessionSearchService } from '../search/runtime';
+import { MemoryApplicationService } from '../memory/service';
 import { BUNDLED_SKILL_RESOURCES } from '../skills/resources';
 import { PLUGIN_CONNECTION_DEFINITIONS } from '@my-pi-harness/plugins';
 import { CommandManager, type ToolSearchEmbedder } from '@my-pi-harness/tools';
@@ -39,7 +42,8 @@ import { ConnectionService } from '../connections/service';
 import { PluginConnectionService } from '@my-pi-harness/plugins';
 import { OAuthLaunchTickets } from '../http/oauth-launch-tickets';
 import type { RemoteMcpManager } from '@my-pi-harness/integrations';
-import { LocalToolSearchEmbedder } from '../search/local-embedder';
+import { LocalSearchModelResource } from '../search/local-model-resource';
+import { LocalToolSearchEmbedder } from '../search/tool-search-embedder';
 
 /** Resources have one daemon owner and close in dependency order. */
 export interface ApplicationServices {
@@ -50,6 +54,8 @@ export interface ApplicationServices {
   workspaces: WorkspaceService;
   tools: ToolRuntime;
   work: WorkRuntime;
+  memory: MemoryApplicationService;
+  search: SearchService;
   attachments: AttachmentService;
   login: LoginService;
   mcp: McpService;
@@ -101,7 +107,8 @@ export async function createApplicationServices(
   let plugins: PluginService | undefined;
   let connections: ConnectionService | undefined;
   let pluginConnections: PluginConnectionService | undefined;
-  let toolSearchEmbedder: LocalToolSearchEmbedder | undefined;
+  let models: LocalSearchModelResource | undefined;
+  let search: SearchService | undefined;
   let resolveOrigin = (): string => `http://127.0.0.1:${config.port}`;
   const listenerOrigin = (): string => resolveOrigin();
   const webOrigin = (): string => config.developmentOrigin ?? listenerOrigin();
@@ -220,9 +227,17 @@ export async function createApplicationServices(
     const ownedPluginConnections = pluginConnections;
     await ownedPlugins.synchronize(new AbortController().signal);
     ownedRemoteMcp.initializeCatalogs();
-    toolSearchEmbedder = new LocalToolSearchEmbedder({
-      cacheDirectory: join(profileDirectory, 'models'),
+    models = new LocalSearchModelResource({ cacheDirectory: join(profileDirectory, 'models') });
+    const embedding = models.embedding;
+    const reranker = models.reranker;
+    const toolSearchEmbedder = new LocalToolSearchEmbedder(embedding);
+    search = new SearchService({
+      store,
+      embedding,
+      reranker,
+      onError: options.onError ?? (() => undefined),
     });
+    const ownedSearch = search;
     oauthLaunchTickets = new OAuthLaunchTickets((target, id) => {
       const owner = store.auth.profileOwner();
       if (owner === undefined) throw new Error('Application identity is required');
@@ -298,6 +313,7 @@ export async function createApplicationServices(
         context: (id, taskId) => approvalContext(store, id, taskId),
       }),
     });
+    const memory = new MemoryApplicationService(store, workspaces, ownedSearch, reranker);
     const runtime = new SessionRuntime({
       store,
       subagentStore: store,
@@ -309,6 +325,8 @@ export async function createApplicationServices(
       discovery: externalTools,
       skills: skillPort,
       toolSearchEmbedder: options.toolSearchEmbedder ?? toolSearchEmbedder,
+      memory,
+      search: new SessionSearchService(store, ownedSearch),
     });
     runtimeRef.current = runtime;
     const login = new LoginService([
@@ -335,6 +353,7 @@ export async function createApplicationServices(
         ),
       ],
     });
+    ownedSearch.start();
     let closing: Promise<void> | undefined;
     const ownedAttachments = attachments;
     const ownedWork = work;
@@ -346,6 +365,8 @@ export async function createApplicationServices(
       workspaces,
       tools,
       work: ownedWork,
+      memory,
+      search: ownedSearch,
       attachments: ownedAttachments,
       login,
       mcp: ownedMcp,
@@ -384,7 +405,8 @@ export async function createApplicationServices(
             () => runtime.close(),
             () => tools.close(),
             () => ownedArtifacts.close(),
-            async () => await toolSearchEmbedder?.close(),
+            () => ownedSearch.close(),
+            async () => await models?.close(),
             () => ownedMcp.close(),
             () => ownedRemoteMcp.close(),
             () => ownedConnections.close(),
@@ -417,7 +439,8 @@ export async function createApplicationServices(
       async () => await artifacts?.close(),
       async () => await attachments?.close(),
       async () => await pluginConnections?.close(),
-      async () => await toolSearchEmbedder?.close(),
+      async () => await search?.close(),
+      async () => await models?.close(),
       async () => await connections?.close(),
       async () => await mcp?.close(),
       async () => await remoteMcp?.close(),

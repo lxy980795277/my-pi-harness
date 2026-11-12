@@ -5,6 +5,8 @@ import type {
   AgentToolHandlers,
   CommandManager,
   ArtifactToolHandlers,
+  MemoryToolHandlers,
+  SearchToolHandlers,
 } from '@my-pi-harness/tools';
 import type { Artifact, RunView, SessionSummary, Workspace } from '@my-pi-harness/protocol';
 import type { ApprovalReviewer } from './approval-review';
@@ -17,6 +19,8 @@ import type { StreamFn } from '@earendil-works/pi-agent-core';
 export interface ToolRunContext {
   controls?: RunControls;
   agents?: AgentToolHandlers;
+  memory?: MemoryToolHandlers;
+  search?: SearchToolHandlers;
   modelStream?: StreamFn;
   beforeTool?(this: void, mutating: boolean, signal: AbortSignal): Promise<() => void>;
   session: SessionSummary;

@@ -2,7 +2,12 @@ import { PI_AI_VERSION, type Message } from '@earendil-works/pi-ai';
 import { Type } from 'typebox';
 import { Value } from 'typebox/value';
 import { RuntimeError } from '../errors';
+import { SearchSourceSelectionSchema, type SearchSourceSelection } from '@my-pi-harness/protocol';
 import { StoredToolResultSchema, type StoredToolResult } from '@my-pi-harness/protocol/internal';
+
+export interface ContextMessageMetadata {
+  searchQuotes?: readonly SearchSourceSelection[];
+}
 
 const jsonObject = Type.Record(Type.String(), Type.Unknown());
 const text = Type.Object({
@@ -103,6 +108,9 @@ const envelope = Type.Object({
   codecVersion: Type.Literal(1),
   sdkVersion: Type.String({ minLength: 1 }),
   message: Type.Union([message, toolResult]),
+  searchQuotes: Type.Optional(
+    Type.Array(SearchSourceSelectionSchema, { maxItems: 4, uniqueItems: true }),
+  ),
 });
 
 /** Detach private audit values and omit undefined fields before the journal JSON boundary. */
@@ -114,11 +122,20 @@ export function snapshotPrivateData(input: Record<string, unknown>): Record<stri
 }
 
 /** Preserve final provider-native fields privately; this is not a client DTO. */
-export function encodeContextMessage(input: Message): Record<string, unknown> {
+export function encodeContextMessage(
+  input: Message,
+  metadata?: ContextMessageMetadata,
+): Record<string, unknown> {
+  if (metadata?.searchQuotes?.length && input.role !== 'user')
+    throw new RuntimeError(
+      'CONTEXT_CORRUPT',
+      'Only consumed user inputs can carry private input references',
+    );
   const snapshot = snapshotPrivateData({
     codecVersion: 1,
     sdkVersion: PI_AI_VERSION,
     message: input,
+    ...metadata,
   });
   if (!Value.Check(envelope, snapshot))
     throw new RuntimeError('CONTEXT_CORRUPT', 'Stored model context has an unsupported format');

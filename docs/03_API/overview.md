@@ -6,7 +6,7 @@
 
 应用版本与协议版本用途不同：应用版本来自根版本生成流程；`PROTOCOL_VERSION` 管理跨端协议兼容。修改协议时更新所有消费者和相应检查，不能用产品版本代替兼容判定。
 
-当前协议为25，Provider公开配置只包含界面所需字段与认证状态，不返回内部credentialRef。协议还包含本地/远程MCP、工具目录与动态加载、Skill选择及插件/服务连接、子Agent任务与看板，以及持久seq和实时liveRevision分离的会话快照。宿主internal中的FrozenSkill可记录本Run物化后的resourceDirectory，ToolCallView可记录宿主注册的artifacts，产物按artifact ID下载不可变字节。AgentLimits不含累计tokenBudget或maxTurns；设置、委派参数和任务详情不提供累计预算或请求轮数限制，原用量计量保留。任务详情移除无消费者的messagesQueue，正文和相关工具按页读取，内部通信事实与查询保持。客户端与daemon必须采用相同协议版本，开发期不保留旧协议兼容。SQLite schema为10，公开持久事件envelope为1；Session JSONL外层仅有records/checksum，不设批次版本，实际磁盘格式见[存储说明](../../packages/storage/README.md)。这些职责不随HTTP版本机械变化。
+当前协议版本由[PROTOCOL_VERSION](../../packages/protocol/src/host/runtime.ts)唯一定义，Provider公开配置只包含界面所需字段与认证状态，不返回内部credentialRef。协议还包含本地/远程MCP、工具目录与动态加载、Skill选择及插件/服务连接、子Agent任务与看板，以及持久seq和实时liveRevision分离的会话快照。宿主internal中的FrozenSkill可记录本Run物化后的resourceDirectory，ToolCallView可记录宿主注册的artifacts，产物按artifact ID下载不可变字节。AgentLimits不含累计tokenBudget或maxTurns；设置、委派参数和任务详情不提供累计预算或请求轮数限制，原用量计量保留。任务详情移除无消费者的messagesQueue，正文和相关工具按页读取，内部通信事实与查询保持。客户端与daemon必须采用相同协议版本，开发期不保留旧协议兼容。SQLite schema版本由[SCHEMA_VERSION](../../packages/storage/src/sqlite/schema.ts)定义，公开持久事件envelope为1；Session JSONL外层仅有records/checksum，不设批次版本，实际磁盘格式见[存储说明](../../packages/storage/README.md)。这些职责不随HTTP版本机械变化。
 
 ## HTTP错误
 
@@ -41,11 +41,11 @@ preload暴露 `DesktopBridge.getInfo()`、固定目录选择 `chooseWorkspaceDir
 
 `DesktopBridge.openExternal(url)`由用户点击明确发起，仅接受不含凭据、控制字符且长度不超过4096的绝对HTTP(S)地址，交给系统浏览器。preload与main分别校验输入，main同时校验所属窗口、主frame和本机origin；窗口关闭移除handler。它不复用认证流程、不导航应用窗口，也不打开文件或自定义协议。
 
-[应用身份与登录协议](application-auth.md)拥有本机信任、GitHub登录、Cookie、profile归属、恢复和撤销。
+[应用身份与登录协议](application-auth.md)拥有客户端自动初始化、GitHub登录、Cookie、profile归属、恢复和撤销。
 
 ## M1协议
 
-模型、会话、输入队列、分支、本机授权与OAuth见[模型与会话协议](model-session.md)。M0的runtime/events继续只表示进程状态，不承担Session事件；私有会话使用受保护的独立订阅。
+模型、会话、输入队列、分支与模型OAuth见[模型与会话协议](model-session.md)。M0的runtime/events继续只表示进程状态，不承担Session事件；私有会话使用受保护的独立订阅。
 
 ## M2协议
 
@@ -72,3 +72,7 @@ Skills创建/安装、插件管理接口见[Skills与插件协议](skills-plugin
 子Agent角色、执行树、任务看板、任务通信与停止、独立人工交互及共享摘要事件见[子Agent协议](agents.md)。执行结果与任务状态由同一会话日志投影，摘要通知不代替会话有序事件。
 
 HTTP/SSE传输、MCP OAuth与目录管理见[远程MCP协议](remote-mcp.md)；工具动态schema始终在宿主解析，不将外部schema直接交给HTTP验证器。
+
+## M6记忆与搜索协议
+
+独立记忆、设置、对话直接保存与自动学习、实际采用记录、本地模型资源、持久混合检索、只读来源窗口及精确输入引用见[长期记忆与历史搜索协议](memory-search.md)。它们不复用M3当前会话工具搜索权限，也不把人类跨范围阅读变为模型的整个工作区授权。

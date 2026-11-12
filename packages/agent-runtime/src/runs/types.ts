@@ -1,7 +1,14 @@
 import type { Message, UserMessage } from '@earendil-works/pi-ai';
-import type { QueueInput, RunView, SessionSummary } from '@my-pi-harness/protocol';
+import type {
+  QueueInput,
+  RunView,
+  SessionSummary,
+  MemoryMessageSource,
+} from '@my-pi-harness/protocol';
 import type { LiveMessageDelta } from '@my-pi-harness/protocol/internal';
-import type { RunHooks } from './ports';
+import type { RunHooks, RunMemoryPort, RunSearchPort } from './ports';
+import type { SearchSourceSelection } from '@my-pi-harness/protocol';
+import type { SearchToolHandlers } from '@my-pi-harness/tools';
 import type { RunCapabilities } from '../capabilities/run';
 import type { FrozenInputCapabilities } from '../capabilities/inputs';
 import type { ResolvedModel } from '../models/gateway';
@@ -36,6 +43,11 @@ export interface RunExecutionOptions {
   work?: WorkRuntime;
   externalTools?: ExternalTools;
   hooks?: RunHooks;
+  memory?: RunMemoryPort;
+  search?: RunSearchPort;
+  initialSearchQuotes?: readonly SearchSourceSelection[];
+  initialMemorySource?: MemoryMessageSource;
+  userMemoryIds?: readonly string[];
 }
 
 /** Lifecycle decisions stay with the Run rather than SDK or projection helpers. */
@@ -43,6 +55,11 @@ export interface RunAgentHost {
   signal: AbortSignal;
   recorded: Set<string>;
   assistantMessageId(): string;
+  memoryQuery(): string;
+  currentTask(): string;
+  memorySource(): MemoryMessageSource | undefined;
+  searchTools?: SearchToolHandlers;
+  assertSearchQuotes?(): void;
   commit(events: readonly EventInput[]): void;
   failPersistence(error: unknown): never;
   rememberFailure(error: unknown): void;

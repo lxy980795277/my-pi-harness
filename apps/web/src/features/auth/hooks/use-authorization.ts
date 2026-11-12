@@ -3,7 +3,7 @@ import { useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-q
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useResetClientState } from '@/app/hooks/use-reset-client-state';
-import { logoutBrowser, pairBrowser } from '@/features/auth/services/auth';
+import { logoutBrowser } from '@/features/auth/services/auth';
 import {
   AUTH_STATUS_QUERY_KEY,
   createAuthorizationStatus,
@@ -15,7 +15,6 @@ import { subscribeAuthorizationCheck, subscribeAuthorizationLoss } from '@/servi
 
 interface Authorization {
   query: UseQueryResult<AuthStatus, Error>;
-  pair: (code: string) => Promise<void>;
   logout: () => Promise<void>;
   reconnect: () => Promise<void>;
   receive: (status: AuthStatus) => void;
@@ -115,18 +114,6 @@ export const useAuthorization = (): Authorization => {
     };
   }, [expiresAt, revoke]);
 
-  const pair = useCallback(
-    async (code: string): Promise<void> => {
-      await task(async (signal): Promise<void> => {
-        const status = await pairBrowser(code, signal);
-        if (!loggingOut.current) {
-          await statusOwner.receive(status, signal);
-        }
-      });
-    },
-    [statusOwner, task],
-  );
-
   const reconnect = useCallback(async (): Promise<void> => {
     if (loggingOut.current) {
       return;
@@ -156,5 +143,5 @@ export const useAuthorization = (): Authorization => {
     }
   }, [client, recover, resetClientState, statusOwner, task]);
 
-  return { query, pair, logout, reconnect, receive, revoked };
+  return { query, logout, reconnect, receive, revoked };
 };

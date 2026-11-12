@@ -15,6 +15,7 @@
     "test": "vitest run --config vitest.config.ts"
   },
   "dependencies": {
+    "@my-pi-harness/memory": "workspace:*",
     "@my-pi-harness/protocol": "workspace:*",
     "@napi-rs/keyring": "catalog:",
     "better-sqlite3": "catalog:",

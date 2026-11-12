@@ -104,6 +104,17 @@ export class WorkRuntime {
     runId: string | null = null,
     privateData?: Record<string, unknown>,
   ): WorkState {
+    return this.saveWithEvents(sessionId, state, runId, [], privateData);
+  }
+
+  /** Commit request usage and its final audit snapshot as one durable batch. */
+  public saveWithEvents(
+    sessionId: string,
+    state: WorkState,
+    runId: string | null,
+    events: readonly EventInput[],
+    privateData?: Record<string, unknown>,
+  ): WorkState {
     const current = this.workState(sessionId, state.branchId);
     const next = { ...state, revision: current.revision + 1 };
     this.options.commit(sessionId, [
@@ -114,6 +125,7 @@ export class WorkRuntime {
         data: { state: next, ...(this.scope ? { taskId: this.scope.taskId } : {}) },
         ...(privateData === undefined ? {} : { privateData }),
       },
+      ...events,
     ]);
     return next;
   }

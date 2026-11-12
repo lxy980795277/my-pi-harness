@@ -7,3 +7,5 @@ export * from './session-records';
 export * from './plugin-state';
 export * from './provider-record';
 export * from './queue-capabilities';
+export * from './memory';
+export * from './search';

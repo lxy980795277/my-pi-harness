@@ -2,7 +2,7 @@ import type { ApiError } from '@my-pi-harness/protocol';
 import type { FastifyInstance } from 'fastify';
 import type { ApplicationServices } from '../application/services';
 
-/** Enforce source trust, application login and CSRF before protected routes. */
+/** Enforce request sources, application login and client-bound CSRF before protected routes. */
 export function registerRequestAccess(
   server: FastifyInstance,
   services: Pick<ApplicationServices, 'auth' | 'authorizeSkillGateway'>,
@@ -48,21 +48,21 @@ export function registerRequestAccess(
       return;
     }
     const publicRoute =
-      ['/api/auth/status', '/api/auth/pair'].includes(path) ||
+      ['/api/auth/status', '/api/auth/client'].includes(path) ||
       bootstrap ||
       callback ||
       skillGateway ||
       oauthLaunch;
-    const trustOnly =
+    const clientOnly =
       ['/api/auth/login', '/api/auth/logout'].includes(path) ||
       /^\/api\/auth\/login-flows\/login_[A-Za-z0-9_-]+(?:\/complete)?$/.test(path);
     if (!publicRoute && !auth.client(request)) {
       void reply
         .code(401)
-        .send({ code: 'LOCAL_AUTH_REQUIRED', message: '请先完成本机授权。' } satisfies ApiError);
+        .send({ code: 'CLIENT_REQUIRED', message: '请重新连接本机服务。' } satisfies ApiError);
       return;
     }
-    if (!publicRoute && !trustOnly && !auth.isAuthorized(request)) {
+    if (!publicRoute && !clientOnly && !auth.isAuthorized(request)) {
       void reply
         .code(401)
         .send({ code: 'LOGIN_REQUIRED', message: '请先登录。' } satisfies ApiError);

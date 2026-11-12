@@ -190,6 +190,55 @@ it('rejects removing an already loaded native tool', async () => {
   expect(() => entry.store.append('session', [load([], [], 3)])).toThrow('silently remove');
 });
 
+it('rejects obsolete withdrawal fields', async () => {
+  const entry = await fixture([native]);
+  entry.store.append('session', [load([native])]);
+  const obsolete = load([], [], 3);
+  obsolete.data['removed'] = [native.definition.name];
+  expect(() => entry.store.append('session', [obsolete])).toThrow();
+});
+
+it('replays consumed exact quotation metadata without looking up or recreating its historical source', async () => {
+  const entry = await fixture();
+  const quote = {
+    source: {
+      id: 'memory:historical-source',
+      kind: 'memory' as const,
+      contentHash: 'd'.repeat(64),
+    },
+    target: { kind: 'memory' as const, memoryId: 'historical-source' },
+    start: 2,
+    end: 8,
+  };
+  const message = {
+    id: 'quoted-human',
+    sessionId: 'session',
+    branchId: 'main',
+    runId: 'run',
+    role: 'user',
+    text: 'Exact quoted material already accepted',
+    thinking: '',
+    createdAt: 3,
+    status: 'complete',
+    stopReason: null,
+  };
+  entry.store.append('session', [
+    event('message.started', message, {
+      codecVersion: 1,
+      sdkVersion: 'fixture',
+      message: { role: 'user', content: message.text, timestamp: 3 },
+      searchQuotes: [quote],
+    }),
+    event('run.finished', { status: 'completed', finishedAt: 4, error: null }),
+  ]);
+  entry.store.close();
+  entry.store = await openProfileStore(entry.directory);
+  expect(entry.store.getModelContext('session', 'main', [message.id])[0]?.['searchQuotes']).toEqual(
+    [quote],
+  );
+  expect(entry.store.getSnapshot('session').messages[0]?.text).toBe(message.text);
+});
+
 it('does not let candidate metadata replace an initially declared schema', async () => {
   const replacement = structuredClone(native);
   replacement.definition.parameters = { type: 'object' };

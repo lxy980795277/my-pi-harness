@@ -2,10 +2,7 @@ import {
   AuthStatusSchema,
   LoginFlowSchema,
   LoginInputSchema,
-  PairingInputSchema,
-  PairingCodeResponseSchema,
   type LoginInput,
-  type PairingInput,
 } from '@my-pi-harness/protocol';
 import type { FastifyInstance } from 'fastify';
 import { Type } from 'typebox';
@@ -19,7 +16,7 @@ const IdParams = Type.Object(
 );
 const OkSchema = Type.Object({ ok: Type.Literal(true) }, { additionalProperties: false });
 
-/** Install trust, identity verification and application-session endpoints separately. */
+/** Install client initialization, identity verification and application-session endpoints. */
 export function registerAuthRoutes(
   server: FastifyInstance,
   auth: LocalAuth,
@@ -29,16 +26,16 @@ export function registerAuthRoutes(
   server.get('/api/auth/status', { schema: { response: { 200: AuthStatusSchema } } }, (request) =>
     auth.status(request),
   );
-  server.post<{ Body: PairingInput }>(
-    '/api/auth/pair',
+  server.post(
+    '/api/auth/client',
     {
       schema: {
-        body: PairingInputSchema,
+        body: EmptySchema,
         response: { 200: AuthStatusSchema },
       },
     },
     (request, reply) => {
-      const grant = auth.pair(request.body.code);
+      const grant = auth.initialize(request);
       reply.header('set-cookie', grant.cookie);
       return grant.status;
     },
@@ -155,10 +152,5 @@ export function registerAuthRoutes(
       reply.header('set-cookie', [auth.clearLoginCookie(), clearLoginCallbackCookie()]);
       return { ok: true };
     },
-  );
-  server.post(
-    '/api/auth/pairing-code',
-    { schema: { body: EmptySchema, response: { 200: PairingCodeResponseSchema } } },
-    () => ({ code: auth.getPairingCode() }),
   );
 }

@@ -9,7 +9,7 @@ export const hasValidApplicationSession = (
   if (
     !status ||
     revoked ||
-    !status.localAuthorized ||
+    !status.clientInitialized ||
     !status.authenticated ||
     !status.user ||
     !status.session

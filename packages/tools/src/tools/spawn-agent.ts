@@ -22,13 +22,16 @@ const SpawnAgentParameters = strictObjectSchema({
   attachmentIds: Type.Optional(
     Type.Array(Type.String({ minLength: 1, maxLength: 160 }), { maxItems: 8, uniqueItems: true }),
   ),
+  userMemoryIds: Type.Optional(
+    Type.Array(Type.String({ minLength: 1, maxLength: 160 }), { maxItems: 100, uniqueItems: true }),
+  ),
   limits: Type.Optional(Type.Partial(AgentLimitsSchema, { additionalProperties: false })),
 });
 
 export const spawnAgentTool = completeToolRegistration({
   name: 'spawn_agent',
   description:
-    'Delegate a bounded task to an enabled role with independent context. Only explicitly supplied task text and attachment references are forwarded. Returns a task ID, not a completed result. Wait for results before your final answer.',
+    'Delegate a bounded task to an enabled role with independent context. Only explicitly supplied task text, attachment references and authorized userMemoryIds are forwarded. Returns a task ID, not a completed result. Wait for results before your final answer.',
   parameters: SpawnAgentParameters,
   scope: 'session',
   loading: 'default',

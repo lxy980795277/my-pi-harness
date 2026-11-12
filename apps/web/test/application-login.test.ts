@@ -3,7 +3,6 @@ import type { AuthStatus, LoginFlow } from '@my-pi-harness/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   completeLogin,
-  createPairingCode,
   fetchAuthStatus,
   logoutBrowser,
   startLogin,
@@ -44,7 +43,7 @@ const flow = (status: LoginFlow['status'] = 'pending'): LoginFlow => {
   };
 };
 const authenticated: AuthStatus = {
-  localAuthorized: true,
+  clientInitialized: true,
   authenticated: true,
   csrfToken: 'local-csrf',
   profileBound: true,
@@ -63,12 +62,112 @@ afterEach(() => {
 });
 
 describe('application login transport', () => {
+  it('initializes an anonymous browser with one POST before presenting application login', async () => {
+    const anonymous: AuthStatus = {
+      ...authenticated,
+      clientInitialized: false,
+      authenticated: false,
+      csrfToken: null,
+      user: null,
+      session: null,
+    };
+    const initialized: AuthStatus = {
+      ...anonymous,
+      clientInitialized: true,
+      csrfToken: 'initialized-csrf',
+    };
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(response(anonymous))
+      .mockResolvedValueOnce(response(initialized))
+      .mockResolvedValueOnce(response(flow()));
+    vi.stubGlobal('fetch', fetch);
+    const signal = new AbortController().signal;
+    expect(await fetchAuthStatus(signal)).toEqual(initialized);
+    await startLogin('github', 'web', signal);
+    expect(fetch.mock.calls.map(([path]) => path)).toEqual([
+      '/api/auth/status',
+      '/api/auth/client',
+      '/api/auth/login',
+    ]);
+    expect(fetch.mock.calls[1]?.[1]).toMatchObject({
+      method: 'POST',
+      body: '{}',
+      credentials: 'same-origin',
+      cache: 'no-store',
+    });
+    expect(fetch.mock.calls[2]?.[1]).toMatchObject({
+      headers: { 'X-CSRF-Token': 'initialized-csrf' },
+    });
+  });
+
+  it('keeps an initialized browser and its application session without a bootstrap write', async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(response(authenticated));
+    vi.stubGlobal('fetch', fetch);
+    expect(await fetchAuthStatus(new AbortController().signal)).toEqual(authenticated);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch.mock.calls[0]?.[1]).toMatchObject({ method: 'GET' });
+  });
+
+  it('reports a failed initialization without retrying or presenting an anonymous login state', async () => {
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(
+        response({ ...authenticated, clientInitialized: false, csrfToken: null }),
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 403 }));
+    vi.stubGlobal('fetch', fetch);
+    await expect(fetchAuthStatus(new AbortController().signal)).rejects.toThrow('HTTP 403');
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('stops cancelled status checks before initializing a missing browser client', async () => {
+    const delayed = Promise.withResolvers<Response>();
+    const fetch = vi.fn<typeof globalThis.fetch>().mockReturnValueOnce(delayed.promise);
+    vi.stubGlobal('fetch', fetch);
+    const controller = new AbortController();
+    const pending = fetchAuthStatus(controller.signal);
+    const cancelled = expect(pending).rejects.toThrow();
+    controller.abort();
+    delayed.resolve(response({ ...authenticated, clientInitialized: false, csrfToken: null }));
+    await cancelled;
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not install CSRF from a client initialization that settles after cancellation', async () => {
+    const delayed = Promise.withResolvers<Response>();
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(
+        response({ ...authenticated, clientInitialized: false, csrfToken: null }),
+      )
+      .mockReturnValueOnce(delayed.promise)
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetch);
+    setCsrfToken('current-csrf');
+    const controller = new AbortController();
+    const pending = fetchAuthStatus(controller.signal);
+    const cancelled = expect(pending).rejects.toThrow();
+    await vi.waitFor(() => {
+      expect(fetch).toHaveBeenCalledTimes(2);
+    });
+    expect(fetch.mock.calls[1]?.[1]?.signal?.aborted).toBe(false);
+    controller.abort();
+    expect(fetch.mock.calls[1]?.[1]?.signal?.aborted).toBe(true);
+    delayed.resolve(response({ ...authenticated, csrfToken: 'stale-csrf' }));
+    await cancelled;
+    await logoutBrowser(new AbortController().signal);
+    expect(fetch.mock.calls[2]?.[1]).toMatchObject({
+      headers: { 'X-CSRF-Token': 'current-csrf' },
+    });
+  });
+
   it('does not replace the CSRF token with a cancelled authorization response', async () => {
     const delayed = Promise.withResolvers<Response>();
     const fetch = vi
       .fn<typeof globalThis.fetch>()
       .mockReturnValueOnce(delayed.promise)
-      .mockResolvedValueOnce(response({ code: 'one-time-code' }));
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
     vi.stubGlobal('fetch', fetch);
     setCsrfToken('current-csrf');
     const controller = new AbortController();
@@ -77,7 +176,7 @@ describe('application login transport', () => {
     controller.abort();
     delayed.resolve(response(authenticated));
     await cancelled;
-    await createPairingCode(new AbortController().signal);
+    await logoutBrowser(new AbortController().signal);
     expect(fetch.mock.calls[1]?.[1]).toMatchObject({
       headers: { 'X-CSRF-Token': 'current-csrf' },
     });
@@ -88,25 +187,18 @@ describe('application login transport', () => {
       .fn<typeof globalThis.fetch>()
       .mockResolvedValueOnce(response(flow()))
       .mockResolvedValueOnce(response(authenticated))
-      .mockResolvedValueOnce(response({ code: 'one-time-code' }))
       .mockResolvedValueOnce(new Response(null, { status: 204 }));
     vi.stubGlobal('fetch', fetch);
     setCsrfToken('trusted-csrf');
     const signal = new AbortController().signal;
     await startLogin('github', 'web', signal);
     await completeLogin('login_test', signal);
-    expect(await createPairingCode(signal)).toBe('one-time-code');
     await logoutBrowser(signal);
     expect(
       fetch.mock.calls.map(([path]) => {
         return path;
       }),
-    ).toEqual([
-      '/api/auth/login',
-      '/api/auth/login-flows/login_test/complete',
-      '/api/auth/pairing-code',
-      '/api/auth/logout',
-    ]);
+    ).toEqual(['/api/auth/login', '/api/auth/login-flows/login_test/complete', '/api/auth/logout']);
     expect(fetch.mock.calls[0]?.[1]).toMatchObject({
       method: 'POST',
       body: '{"providerId":"github","method":"web"}',
@@ -118,8 +210,6 @@ describe('application login transport', () => {
       body: '{}',
       headers: { 'X-CSRF-Token': 'local-csrf' },
     });
-    // Local trust and its CSRF token remain available for the next login after logout.
-    expect(fetch.mock.calls[3]?.[1]).toMatchObject({ headers: { 'X-CSRF-Token': 'local-csrf' } });
   });
 
   it('rejects a legacy model flow and reports a protected 401 to the authorization owner', async () => {

@@ -70,6 +70,7 @@ export const useSettingsDialog = (): SettingsDialogState => {
         value === 'mcp' ||
         value === 'skills' ||
         value === 'plugins' ||
+        value === 'memory' ||
         value === 'agents' ||
         value === 'connections'
       ) {

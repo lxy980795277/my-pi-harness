@@ -8,8 +8,6 @@ export type AuthStatus = Static<typeof AuthStatusSchema>;
 export type LoginFlowStatus = Static<typeof LoginFlowStatusSchema>;
 export type LoginFlow = Static<typeof LoginFlowSchema>;
 export type AuthFlow = Static<typeof AuthFlowSchema>;
-export type PairingCodeResponse = Static<typeof PairingCodeResponseSchema>;
-export type PairingInput = Static<typeof PairingInputSchema>;
 export type LoginInput = Static<typeof LoginInputSchema>;
 export type AuthFlowResponseInput = Static<typeof AuthFlowResponseInputSchema>;
 
@@ -47,10 +45,10 @@ export const LoginSessionInfoSchema = Type.Object(
   { additionalProperties: false },
 );
 
-/** Local machine trust and application login are independent authorization requirements. */
+/** Client initialization binds login flows and CSRF without granting application access. */
 export const AuthStatusSchema = Type.Object(
   {
-    localAuthorized: Type.Boolean(),
+    clientInitialized: Type.Boolean(),
     authenticated: Type.Boolean(),
     csrfToken: Type.Union([Type.String(), Type.Null()]),
     providers: Type.Array(LoginProviderSchema),
@@ -129,18 +127,6 @@ export const AuthFlowSchema = Type.Object(
     message: Type.Union([Type.String(), Type.Null()]),
     error: Type.Union([Type.String(), Type.Null()]),
   },
-  { additionalProperties: false },
-);
-
-/** An authorized desktop owner can request the browser pairing challenge. */
-export const PairingCodeResponseSchema = Type.Object(
-  { code: Type.String() },
-  { additionalProperties: false },
-);
-
-/** A one-use pairing code grants local client trust independently of application login. */
-export const PairingInputSchema = Type.Object(
-  { code: Type.String({ minLength: 1, maxLength: 128 }) },
   { additionalProperties: false },
 );
 

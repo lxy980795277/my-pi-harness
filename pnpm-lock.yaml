@@ -302,6 +302,9 @@ importers:
       '@my-pi-harness/integrations':
         specifier: workspace:*
         version: link:../../packages/integrations
+      '@my-pi-harness/memory':
+        specifier: workspace:*
+        version: link:../../packages/memory
       '@my-pi-harness/plugins':
         specifier: workspace:*
         version: link:../../packages/plugins
@@ -494,6 +497,9 @@ importers:
       '@earendil-works/pi-ai':
         specifier: 'catalog:'
         version: 1.4.0(@aws-sdk/credential-provider-node@3.972.86)(@smithy/signature-v4@5.7.4)(undici@7.30.0)(ws@8.22.0)(zod@4.6.7)
+      '@my-pi-harness/memory':
+        specifier: workspace:*
+        version: link:../memory
       '@my-pi-harness/protocol':
         specifier: workspace:*
         version: link:../protocol
@@ -554,6 +560,28 @@ importers:
         specifier: 'catalog:'
         version: 4.1.11(@types/node@24.19.2)(vite@7.3.7(@types/node@24.19.2)(jiti@2.7.0)(lightningcss@1.33.0)(tsx@4.23.15)(yaml@2.9.1))
 
+  packages/memory:
+    dependencies:
+      '@my-pi-harness/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+      typebox:
+        specifier: 'catalog:'
+        version: 1.3.30
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.19.2
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
+      vite:
+        specifier: 'catalog:'
+        version: 7.3.7(@types/node@24.19.2)(jiti@2.7.0)(lightningcss@1.33.0)(tsx@4.23.15)(yaml@2.9.1)
+      vitest:
+        specifier: 'catalog:'
+        version: 4.1.11(@types/node@24.19.2)(vite@7.3.7(@types/node@24.19.2)(jiti@2.7.0)(lightningcss@1.33.0)(tsx@4.23.15)(yaml@2.9.1))
+
   packages/plugins:
     dependencies:
       '@my-pi-harness/integrations':
@@ -609,6 +637,9 @@ importers:
 
   packages/storage:
     dependencies:
+      '@my-pi-harness/memory':
+        specifier: workspace:*
+        version: link:../memory
       '@my-pi-harness/protocol':
         specifier: workspace:*
         version: link:../protocol

@@ -10,6 +10,7 @@ export type SettingsSection =
   | 'skills'
   | 'plugins'
   | 'connections'
+  | 'memory'
   | 'agents';
 
 export interface SettingsDialogState {

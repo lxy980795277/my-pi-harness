@@ -6,15 +6,25 @@ import { CompactionPanel } from '@/features/work/components/compaction-panel';
 import { usageCategories, usageSourceLabel } from '@/features/work/utils/context-view';
 import { useContextPanel } from '@/features/work/hooks/use-context-panel';
 import { formatCount } from '@/features/work/utils/work-view';
+import { MemoryUsagePanel } from '@/features/memory/components/memory-usage';
 
 interface ContextPanelProps {
   work: WorkSnapshot;
   running: boolean;
   workspaceId: string | null;
+  sessionId: string;
+  runId: string | null;
   onCommand: (command: string, input: unknown) => Promise<void>;
 }
 /** Shows the frozen rule bodies and context projection used by the latest run. */
-export const ContextPanel: FC<ContextPanelProps> = ({ work, running, workspaceId, onCommand }) => {
+export const ContextPanel: FC<ContextPanelProps> = ({
+  work,
+  running,
+  workspaceId,
+  sessionId,
+  runId,
+  onCommand,
+}) => {
   const state = work.state;
   const view = useContextPanel(state, workspaceId, onCommand);
   const { compact } = view;
@@ -50,6 +60,7 @@ export const ContextPanel: FC<ContextPanelProps> = ({ work, running, workspaceId
           </div>
         </div>
       )}
+      <MemoryUsagePanel sessionId={sessionId} runId={runId} running={running} />
       <div className="flex items-center justify-between gap-3">
         <span className="text-sm font-medium">上下文摘要</span>
         <Button

@@ -103,6 +103,10 @@ export function loadDaemonConfig(
     process.platform === 'win32'
       ? (environment.LOCALAPPDATA ?? join(homedir(), 'AppData', 'Local'))
       : join(homedir(), 'Library', 'Application Support');
+  const defaultProfile =
+    process.platform === 'darwin'
+      ? join(defaultData, '@my-pi-harness', 'desktop', 'profiles', 'default')
+      : join(defaultData, 'My Pi Harness', 'profiles', 'default');
   const developmentOrigin = environment.MY_PI_HARNESS_DEVELOPMENT_ORIGIN;
   if (developmentOrigin !== undefined && developmentOrigin !== 'http://127.0.0.1:5174')
     throw new DaemonConfigError('Development origin must be the owned local Web application');
@@ -115,8 +119,7 @@ export function loadDaemonConfig(
   const candidate = {
     skillOAuthClients: skillOAuthClients(environment),
     ...(pythonPath === undefined ? {} : { pythonPath }),
-    profileDirectory:
-      configuredProfile ?? join(defaultData, 'My Pi Harness', 'profiles', 'default'),
+    profileDirectory: configuredProfile ?? defaultProfile,
     sessionLogRoot: configuredLogRoot ?? repositorySessionLogRoot(),
     ownerSecret: environment.MY_PI_HARNESS_DESKTOP_SECRET ?? null,
     developmentOrigin: developmentOrigin ?? null,

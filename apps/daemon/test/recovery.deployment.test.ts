@@ -159,8 +159,8 @@ async function startDaemon(
   const status: unknown = await response.json();
   const authorization = checked(AuthStatusSchema, status);
   const csrf = authorization.csrfToken;
-  if (!response.ok || !csrf || !authorization.localAuthorized)
-    throw new Error('Artifact owner has no local trust');
+  if (!response.ok || !csrf || !authorization.clientInitialized)
+    throw new Error('Artifact owner has no initialized client');
   let granted: FixtureAuthorization;
   if (previous) {
     expect(authorization.authenticated).toBe(true);

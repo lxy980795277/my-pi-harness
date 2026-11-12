@@ -9,12 +9,12 @@ export interface FixtureAuthorization {
   csrf: string;
 }
 
-/** Pair through HTTP and require local trust without granting application login. */
-export async function pairFixture(origin: string, code: string): Promise<FixtureAuthorization> {
-  const response = await fetch(`${origin}/api/auth/pair`, {
+/** Initialize a browser client through HTTP without granting application login. */
+export async function initializeClientFixture(origin: string): Promise<FixtureAuthorization> {
+  const response = await fetch(`${origin}/api/auth/client`, {
     method: 'POST',
     headers: { Origin: origin, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ code }),
+    body: JSON.stringify({}),
     signal: AbortSignal.timeout(5000),
   });
   const body: unknown = await response.json();
@@ -22,28 +22,27 @@ export async function pairFixture(origin: string, code: string): Promise<Fixture
   if (
     !response.ok ||
     !Value.Check(AuthStatusSchema, body) ||
-    !body.localAuthorized ||
+    !body.clientInitialized ||
     body.authenticated ||
     body.user !== null ||
     body.session !== null ||
     body.csrfToken === null ||
     !cookie
   )
-    throw new Error('Fixture pairing must grant local trust only');
+    throw new Error('Fixture initialization must not grant application login');
   return { cookie, csrf: body.csrfToken };
 }
 
 /**
- * Seed a verified test identity after real local pairing for unrelated API regressions.
+ * Seed a verified test identity after real client initialization for unrelated API regressions.
  * Device Flow itself is exercised by dedicated login HTTP and browser cases.
  */
 export async function loginFixture(
   origin: string,
   services: ApplicationServices,
-  code = services.auth.pairingCode,
 ): Promise<FixtureAuthorization> {
-  const paired = await pairFixture(origin, code);
-  const token = paired.cookie.slice(paired.cookie.indexOf('=') + 1);
+  const client = await initializeClientFixture(origin);
+  const token = client.cookie.slice(client.cookie.indexOf('=') + 1);
   const local = services.store.auth.findLocalClient(
     createHash('sha256').update(token).digest('hex'),
     Date.now(),
@@ -67,5 +66,5 @@ export async function loginFixture(
       expiresAt: createdAt + 60_000,
     },
   );
-  return { cookie: `${paired.cookie}; my_pi_session=${loginToken}`, csrf: paired.csrf };
+  return { cookie: `${client.cookie}; my_pi_session=${loginToken}`, csrf: client.csrf };
 }

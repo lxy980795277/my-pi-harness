@@ -97,6 +97,7 @@ describe('context versions and measurements', () => {
         attachments: 40,
         summary: 50,
         workingState: 50,
+        memory: 0,
       },
     };
     expect(
@@ -104,6 +105,7 @@ describe('context versions and measurements', () => {
         return row.label === '对话与工具结果';
       }),
     ).toEqual({ label: '对话与工具结果', tokens: '300' });
+    expect(usageCategories(usage)).toContainEqual({ label: '长期记忆', tokens: '0' });
     expect(usageLabel(null)).toBe('上下文 —');
     expect(usageLabel(usage)).toBe('上下文 5%');
     expect(usageLabel({ ...usage, estimatedTokens: 0 })).toBe('上下文 0%');

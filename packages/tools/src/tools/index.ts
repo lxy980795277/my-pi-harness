@@ -43,3 +43,17 @@ export type { PublishArtifactInput, PublishArtifactHandler } from './publish-art
 export { readDocumentTool } from './read-document';
 export { viewImageTool } from './view-image';
 export { viewPdfPageTool } from './view-pdf-page';
+export { searchMemoriesTool } from './search-memories';
+export type { SearchMemoriesHandler } from './search-memories';
+export { saveMemoryTool } from './save-memory';
+export { learnMemoryTool } from './learn-memory';
+export { updateMemoryTool } from './update-memory';
+export { deleteMemoryTool } from './delete-memory';
+export type { SaveMemoryHandler } from './save-memory';
+export type { LearnMemoryHandler } from './learn-memory';
+export type { UpdateMemoryHandler } from './update-memory';
+export type { DeleteMemoryHandler } from './delete-memory';
+export { searchSessionsTool } from './search-sessions';
+export type { SearchSessionsHandler } from './search-sessions';
+export { readSearchSourceTool } from './read-search-source';
+export type { ReadSearchSourceHandler } from './read-search-source';

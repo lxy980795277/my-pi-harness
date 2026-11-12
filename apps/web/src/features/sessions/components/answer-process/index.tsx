@@ -1,4 +1,9 @@
-import type { ApprovalMode, EditInput, ToolDecisionInput } from '@my-pi-harness/protocol';
+import type {
+  ApprovalMode,
+  EditInput,
+  MessageView,
+  ToolDecisionInput,
+} from '@my-pi-harness/protocol';
 import { ChevronRight } from 'lucide-react';
 import { memo, type FC } from 'react';
 import { Button } from '@/components/ui/button';
@@ -6,10 +11,13 @@ import { TimelineContent } from '@/features/sessions/components/timeline-content
 import { useAnswerProcess } from '@/features/sessions/hooks/use-answer-process';
 import type { TimelineProcessEntry } from '@/features/sessions/types/session';
 import { cn } from '@/utils/cn';
+import type { MessageElementRef } from '@/features/sessions/types/timeline-target';
 
 interface AnswerProcessProps {
   entry: TimelineProcessEntry;
   workspaceId: string | null;
+  onSaveMemory: (message: MessageView) => void;
+  onMessageElement: MessageElementRef;
   approvalMode: ApprovalMode;
   canEdit: boolean;
   onBeforeToggle: () => void;
@@ -19,7 +27,17 @@ interface AnswerProcessProps {
 
 /** Closed processes unmount their contents; the virtual row measures the resulting natural height. */
 export const AnswerProcess: FC<AnswerProcessProps> = memo(
-  ({ entry, workspaceId, approvalMode, canEdit, onBeforeToggle, onEdit, onDecide }) => {
+  ({
+    entry,
+    workspaceId,
+    onSaveMemory,
+    onMessageElement,
+    approvalMode,
+    canEdit,
+    onBeforeToggle,
+    onEdit,
+    onDecide,
+  }) => {
     const state = useAnswerProcess(entry.sessionId, entry.inputId, onBeforeToggle);
     return (
       <div className="min-w-0" aria-label="回答过程">
@@ -51,6 +69,8 @@ export const AnswerProcess: FC<AnswerProcessProps> = memo(
                   key={content.id}
                   entry={content}
                   workspaceId={workspaceId}
+                  onSaveMemory={onSaveMemory}
+                  onMessageElement={onMessageElement}
                   approvalMode={approvalMode}
                   canEdit={canEdit}
                   onEdit={onEdit}

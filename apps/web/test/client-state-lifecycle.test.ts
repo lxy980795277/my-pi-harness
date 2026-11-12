@@ -12,6 +12,8 @@ import { useSettingsStore } from '../src/features/settings/stores/settings';
 import { useTaskPresentationStore } from '../src/features/tasks/stores/tasks';
 import { taskMessageKey, useTaskMessageStore } from '../src/features/tasks/stores/messages';
 import { useWorkDraftStore } from '../src/features/work/stores/drafts';
+import { useSearchStore } from '../src/features/search/stores/search';
+import { SOURCE_SELECTION } from './fixtures/search';
 
 const DRAFT_ATTACHMENT: Attachment = {
   id: 'draft-attachment',
@@ -100,6 +102,13 @@ describe('private client state lifecycle', () => {
   });
 
   it('authorization cleanup clears every private domain and invalidates an older creation attempt', () => {
+    useSearchStore.getState().show();
+    useSearchStore.getState().change({ query: '私有检索词', archived: true });
+    useSearchStore.getState().select(SOURCE_SELECTION);
+    useComposerStore.getState().addSearchQuote('source-session', SOURCE_SELECTION);
+    useTimelineStore
+      .getState()
+      .locate('source-session', { id: 'locate', branchId: 'branch', messageId: 'message' });
     const navigation = useNavigationStore.getState();
     const composer = useComposerStore.getState();
     const generation = composer.newConversationGeneration;
@@ -147,6 +156,7 @@ describe('private client state lifecycle', () => {
       newConversationModel: null,
       newConversationApproval: 'full-access',
       newConversationAttempt: null,
+      searchQuotes: {},
     });
     expect(useComposerStore.getState().newConversationGeneration).not.toBe(generation);
     expect(useSettingsStore.getState()).toMatchObject({
@@ -160,6 +170,12 @@ describe('private client state lifecycle', () => {
     expect(useAttachmentDrafts.getState()).toMatchObject({ drafts: {}, busy: {} });
     expect(useTimelineStore.getState().expandedTools).toEqual({});
     expect(useTimelineStore.getState().expandedProcesses).toEqual({});
+    expect(useTimelineStore.getState().targets).toEqual({});
+    expect(useSearchStore.getState()).toMatchObject({
+      open: false,
+      selected: null,
+      filters: { query: '', archived: false },
+    });
     expect(useTaskPresentationStore.getState()).toMatchObject({
       sessionId: null,
       taskId: null,

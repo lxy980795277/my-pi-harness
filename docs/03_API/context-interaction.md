@@ -17,7 +17,7 @@ Attachment包含id、name、mediaType、kind、byteLength、preview、sourcePath
 
 HTTP上传体上限12MiB；UTF-8文本最多256000字节，PNG/JPEG/GIF/WebP最多2MiB，PDF/文档最多8MiB。PDF提取最多20页、约100000字符；Office/开放文档提取最多约250000字符，均无OCR。支持DOCX/DOCM、XLSX/XLSM、PPTX/PPTM、ODT/ODS/ODP、RTF和EPUB；不执行宏。解析有独立worker、内存、解压与时间限制，请求断开及关闭取消并等待worker退出。限制在上传时验证，不常驻显示说明文案。
 
-输入text可以为空，但必须有非空文字或1–8个不重复附件ID。发送、排队和编辑重发保持冻结附件，缺失内容或不支持图片的模型明确拒绝。图片可从剪贴板上传；前端不恢复已移除的工作区引用入口，MCP工具选择与授权见[本地MCP协议](local-mcp.md)，Skill选择、冻结与资源管理见[Skills与插件协议](skills-plugins.md)。
+输入text可以为空，但必须有非空文字、1–8个不重复附件ID或[M6精确来源引用](memory-search.md)。发送、排队和编辑重发保持冻结附件，缺失内容或不支持图片的模型明确拒绝。图片可从剪贴板上传；前端不恢复已移除的工作区引用入口，MCP工具选择与授权见[本地MCP协议](local-mcp.md)，Skill选择、冻结与资源管理见[Skills与插件协议](skills-plugins.md)。
 
 引用复用M2真实路径、敏感目录和链接检查；行号从1开始且含结束行。跨工作区显式复用冻结附件不授予原目录访问，仅同工作区引用参与祖先AGENTS发现。AGENTS最多16份、总量64KiB，按由浅到深冻结文本/hash，下一Run重载。
 
@@ -53,13 +53,15 @@ Plan有稳定id、runId、title/content、结构化steps、status、review、fee
 
 Todo有id/title/status、planStepId、evidenceToolCallIds和completionNote。状态为pending/in_progress/completed/blocked/cancelled；引用步骤必须存在，新计划遗漏现有Todo引用的步骤时，在保存和创建审核等待前返回TODO_PLAN_STEP_INVALID，原工作状态与revision不变，需先更新或清理任务关联。工具证据必须是实际成功的相关工具记录。完成也可填写明确文本结论，人工确认通过completionNote记录，纯分析任务不要求虚构工具。
 
-会话模型工具包括ask_user、update_plan、update_plan_steps、update_todos、search_session_history和read_tool_result，均不授予工作区权限。非必备入口按需声明，当前工作状态或可恢复裁剪结果所需入口由宿主直接提供，规则见[运行时能力](capability-runtime.md)。摘要选择和工作状态重置由上述用户命令/API拥有，不提供对应模型工具。历史搜索仅限当前会话、有限匹配和有界片段，不实现M6跨会话索引。
+会话模型工具包括ask_user、update_plan、update_plan_steps、update_todos、search_session_history和read_tool_result，均不授予工作区权限。非必备入口按需声明，当前工作状态或可恢复裁剪结果所需入口由宿主直接提供，规则见[运行时能力](capability-runtime.md)。摘要选择和工作状态重置由上述用户命令/API拥有，不提供对应模型工具。search_session_history仅限当前会话、有限匹配和有界片段；M6的独立持久检索及跨会话授权见[记忆与搜索协议](memory-search.md)。
 
 ## 每请求上下文与摘要
 
-每次模型请求前投影有效历史、处理附件和过长工具输出、估算预算、必要时压缩、检查完整工具调用/结果组及最终预算。ContextUsage记录estimatedTokens、windowTokens、reservedOutput、inputBudget、trimmedMessages、prunedMessages、source、providerInputTokens和categories。分类system/rules/tools/messages/attachments/summary/workingState为估算，真实Usage可用时仅辅助总量校准，不代表下一请求准确账单。
+每次模型请求前投影有效历史、处理附件和过长工具输出、估算预算、必要时压缩、检查完整工具调用/结果组及最终预算。ContextUsage记录estimatedTokens、windowTokens、reservedOutput、inputBudget、trimmedMessages、prunedMessages、source、providerInputTokens和categories。分类system/rules/tools/messages/attachments/summary/workingState/memory为估算，真实Usage可用时仅辅助总量校准，不代表下一请求准确账单。
 
 Compaction保存id、parentId、throughMessageId、summary、structured、strategy、beforeTokens、afterTokens、sourceMessages、runId、createdAt和reason。structured保存objective、constraints、decisions、completed、pending、blockers和nextAction。自动摘要支持同Run连续工具循环；失败可用本地fallback，取消不提交半成品。最终仍超预算明确拒绝，不发残缺工具组。
+
+记忆分类不与system重复计入总量，旧历史未记录memory时不回填当时采用。
 
 context.prepared公开模型请求关联、用量和附件ID，完整system/messages仅进入宿主日志私有记录。原历史不删除；压缩不是文件撤销。上下文检查点选择旧摘要并确定新的有效尾部，历史仍可检索；会话快照保存消息前缀及WorkState并恢复为新分支，两种恢复入口独立。
 

@@ -26,6 +26,7 @@ export const ConversationBody: FC<ConversationBodyProps> = ({
   return (
     <>
       <MessageTimeline
+        sessionId={snapshot.session.id}
         workspaceId={snapshot.session.workspaceId}
         approvalMode={snapshot.session.approvalMode}
         messages={snapshot.messages}

@@ -7,6 +7,7 @@ import { RunInputDelivery } from './inputs';
 import { RunMessageRecorder } from './messages';
 import { runFailureMessage } from './failure';
 import type { RunExecutionOptions } from './types';
+import { RunSourceAccess, runSearchContext } from './search';
 
 /** One Pi execution owns cancellation, durable failure and coordinated settlement. */
 export class RunExecution {
@@ -22,8 +23,18 @@ export class RunExecution {
   private readonly unsubscribe: () => void;
   private readonly messages: RunMessageRecorder;
   private readonly inputs: RunInputDelivery;
+  private readonly sources: RunSourceAccess | undefined;
 
   public constructor(public readonly options: RunExecutionOptions) {
+    this.sources =
+      options.search && !options.run.taskId
+        ? new RunSourceAccess(
+            options.search,
+            runSearchContext(options),
+            this.toolAbort.signal,
+            options.initialSearchQuotes,
+          )
+        : undefined;
     this.messages = new RunMessageRecorder(options, {
       cancelled: () => this.cancelled,
       commit: (events) => this.commit(events),
@@ -39,11 +50,21 @@ export class RunExecution {
       isOutcomeUnknown: () => this.unknownOutcome,
       fail: (error) => this.fail(this.failure ?? error),
       commit: (events) => this.commit(events),
+      consumeSearchQuotes: (quotes) => this.sources?.consume(quotes),
     });
     this.agent = createRunAgent(options, {
       signal: this.toolAbort.signal,
       recorded: this.messages.recordedTools,
       assistantMessageId: () => this.messages.assistantMessageId(),
+      memoryQuery: () => this.inputs.memoryQuery(),
+      currentTask: () => this.inputs.currentTask(),
+      memorySource: () => this.inputs.memorySource(),
+      ...(this.sources
+        ? {
+            searchTools: this.sources.handlers(),
+            assertSearchQuotes: () => this.sources?.validate(),
+          }
+        : {}),
       commit: (events) => this.commit(events),
       failPersistence: (error): never => this.failPersistence(error),
       rememberFailure: (error) => {
@@ -71,6 +92,11 @@ export class RunExecution {
         this.failPersistence(error);
       }
     });
+  }
+
+  /** The input owner updates this only after durable queue or task-message consumption. */
+  public memoryQuery(): string {
+    return this.inputs.memoryQuery();
   }
 
   public start(): Promise<void> {

@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { loadDaemonConfig } from '../src/application/config';
 import { createApplicationServices, type ApplicationServices } from '../src/application/services';
 import { createDaemonApplication, type DaemonApplication } from '../src/http/server';
-import { loginFixture, pairFixture } from './support/login';
+import { loginFixture, initializeClientFixture } from './support/login';
 
 const owned: {
   directory: string;
@@ -39,18 +39,18 @@ async function setup(): Promise<{ origin: string; services: ApplicationServices 
   return { origin, services };
 }
 describe('M1 application authorization and settings', () => {
-  it('requires application login after pairing and hides private data from trusted clients', async () => {
-    const { origin, services } = await setup();
-    const trust = await pairFixture(origin, services.auth.pairingCode);
-    const status = await fetch(`${origin}/api/auth/status`, { headers: { Cookie: trust.cookie } });
+  it('requires application login after client initialization and hides private data', async () => {
+    const { origin } = await setup();
+    const client = await initializeClientFixture(origin);
+    const status = await fetch(`${origin}/api/auth/status`, { headers: { Cookie: client.cookie } });
     expect(await status.json()).toMatchObject({
-      localAuthorized: true,
+      clientInitialized: true,
       authenticated: false,
       user: null,
       session: null,
     });
     for (const path of ['/api/providers', '/api/settings', '/api/workspaces', '/api/sessions'])
-      expect((await fetch(`${origin}${path}`, { headers: { Cookie: trust.cookie } })).status).toBe(
+      expect((await fetch(`${origin}${path}`, { headers: { Cookie: client.cookie } })).status).toBe(
         401,
       );
   });
@@ -64,8 +64,8 @@ describe('M1 application authorization and settings', () => {
       'Content-Type': 'application/json',
     };
     const invalid: [string, string, unknown][] = [
-      ['/api/auth/pair', 'POST', { code: '' }],
-      ['/api/auth/pair', 'POST', { code: 'x'.repeat(129) }],
+      ['/api/auth/client', 'POST', { code: 'removed-input' }],
+      ['/api/auth/client', 'POST', []],
       ['/api/auth/login', 'POST', { providerId: 'github', method: 'unsupported' }],
       ['/api/auth/login', 'POST', { providerId: 'x'.repeat(101) }],
       ['/api/providers/missing/enabled', 'PUT', { enabled: true, expectedRevision: 0 }],
@@ -206,17 +206,16 @@ describe('M1 application authorization and settings', () => {
   it('rejects private reads, foreign origins, DNS rebinding and missing CSRF', async () => {
     const { origin, services } = await setup();
     expect((await fetch(`${origin}/api/providers`)).status).toBe(401);
-    const code = services.auth.pairingCode;
     expect(
       (
-        await fetch(`${origin}/api/auth/pair`, {
+        await fetch(`${origin}/api/auth/client`, {
           method: 'POST',
           headers: { Origin: 'https://foreign.example', 'Content-Type': 'application/json' },
-          body: JSON.stringify({ code }),
+          body: JSON.stringify({}),
         })
       ).status,
     ).toBe(403);
-    const granted = await loginFixture(origin, services, code);
+    const granted = await loginFixture(origin, services);
     const rebound = await new Promise<number>((resolve, reject) => {
       const request = httpRequest(
         `${origin}/api/providers`,
@@ -242,15 +241,6 @@ describe('M1 application authorization and settings', () => {
     expect(
       (await fetch(`${origin}/api/providers`, { headers: { Cookie: granted.cookie } })).status,
     ).toBe(200);
-    expect(
-      (
-        await fetch(`${origin}/api/auth/pair`, {
-          method: 'POST',
-          headers: { Origin: origin, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ code }),
-        })
-      ).status,
-    ).toBe(401);
   });
 
   it('rejects unknown fields and types, returns six native integrations and revokes the cookie', async () => {
@@ -300,7 +290,7 @@ describe('M1 application authorization and settings', () => {
     expect((await fetch(`${origin}/api/sessions`, { headers })).status).toBe(401);
     const loggedOut = await fetch(`${origin}/api/auth/status`, { headers });
     expect(await loggedOut.json()).toMatchObject({
-      localAuthorized: true,
+      clientInitialized: true,
       authenticated: false,
       user: null,
       session: null,

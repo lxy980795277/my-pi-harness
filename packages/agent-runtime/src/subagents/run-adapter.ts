@@ -86,54 +86,46 @@ export function createSubagentRunAdapter(owner: SubagentRunHost, node: SubagentN
         node.tree.writes.set(id, (node.tree.writes.get(id) ?? 1) - 1);
       });
     },
+    async acquireRequest(signal) {
+      const combined = AbortSignal.any([node.controller.signal, signal]);
+      combined.throwIfAborted();
+      if (node.task || node.tree.nodes.size > 1) owner.checkDeadline(node);
+      const scopes = [];
+      for (let entry: SubagentNode | undefined = node; entry; entry = entry.parent)
+        if (entry.task)
+          scopes.push({ id: entry.task.id, concurrency: entry.limits.maxConcurrentRequests });
+      owner.waiting(node, 'model');
+      try {
+        return await node.tree.scheduler.request(scopes, combined);
+      } finally {
+        owner.waiting(node, null);
+      }
+    },
     async stream(model, context, options) {
       const signal = options?.signal
         ? AbortSignal.any([node.controller.signal, options.signal])
         : node.controller.signal;
-      let release: (() => void) | undefined;
       try {
         signal.throwIfAborted();
-        const delegated =
-          node.task !== undefined || [...node.tree.nodes].some((entry) => entry.task !== undefined);
-        if (delegated) owner.checkDeadline(node);
-        const maxTokens = Math.min(
-          options?.maxTokens ?? model.maxTokens,
-          outputTokens(model.maxTokens),
-        );
-        const scopes = [];
-        for (let entry: SubagentNode | undefined = node; entry; entry = entry.parent)
-          if (entry.task)
-            scopes.push({
-              id: entry.task.id,
-              concurrency: entry.limits.maxConcurrentRequests,
-            });
-        owner.waiting(node, 'model');
-        release = await node.tree.scheduler.request(scopes, signal);
-        owner.waiting(node, null);
+        if (node.task || node.tree.nodes.size > 1) owner.checkDeadline(node);
         const execution = node.execution;
         if (!execution) throw new RuntimeError('AGENT_NOT_READY', '执行尚未完成初始化。');
-        const stream = await execution.options.resolved.streamFn(model, context, {
+        return await execution.options.resolved.streamFn(model, context, {
           ...options,
           signal,
-          maxTokens,
+          maxTokens: Math.min(options?.maxTokens ?? model.maxTokens, outputTokens(model.maxTokens)),
         });
-        const releaseSlot = release;
-        const completion = stream
-          .result()
-          .then(releaseSlot, (error: unknown) => {
-            releaseSlot();
-            owner.options.onError(error);
-          })
-          .finally(() => {
-            node.requests.delete(completion);
-          });
-        node.requests.add(completion);
-        return stream;
       } catch (error) {
-        release?.();
         node.error = error;
         return failedStream(model, error, signal, failures);
       }
+    },
+    trackRequest(completion) {
+      node.requests.add(completion);
+      const settled = (): void => {
+        node.requests.delete(completion);
+      };
+      void completion.then(settled, settled);
     },
     outputTokens,
     failure: (message) => failures.get(message),
@@ -142,6 +134,7 @@ export function createSubagentRunAdapter(owner: SubagentRunHost, node: SubagentN
         const message = communicationMessage(input);
         return {
           message,
+          taskQuery: input.text,
           consume() {
             const at = Date.now();
             const view: MessageView = {

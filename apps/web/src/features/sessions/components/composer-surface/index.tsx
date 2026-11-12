@@ -13,6 +13,8 @@ import { McpToolPicker } from '@/features/mcp/components/mcp-tool-picker';
 import { ComposerControls } from '@/features/sessions/components/composer-controls';
 import type { ComposerSurfaceProps } from '@/features/sessions/types/composer';
 import { cn } from '@/utils/cn';
+import { ComposerSource } from '@/features/search/components/composer-source';
+import { sourceSelectionKey } from '@/features/search/utils/search';
 
 /** A shared rounded surface keeps the empty and ongoing conversation controls consistent. */
 export const ComposerSurface: FC<ComposerSurfaceProps> = ({
@@ -35,6 +37,8 @@ export const ComposerSurface: FC<ComposerSurfaceProps> = ({
   removeAttachment,
   mcp,
   skills,
+  searchQuotes,
+  removeSearchQuote,
 }) => {
   const keyboard = useComposerKeyboard();
   const attachment = useAttachmentComposer(
@@ -54,6 +58,20 @@ export const ComposerSurface: FC<ComposerSurfaceProps> = ({
       <SkillPicker state={skills} />
       {skills.blocked && <Notice tone="error">Skill 选择已失效，请重新选择。</Notice>}
       <div className="rounded-3xl border border-border/50 bg-card p-3 text-card-foreground shadow-[0_6px_32px_-12px_var(--border)] has-[textarea:focus]:border-ring/40">
+        {searchQuotes.length > 0 && (
+          <div className="mb-2 grid gap-2 px-2 sm:grid-cols-2" aria-label="待发送的原文引用">
+            {searchQuotes.map((selection) => {
+              return (
+                <ComposerSource
+                  key={sourceSelectionKey(selection)}
+                  selection={selection}
+                  locked={pending || draftLocked}
+                  onRemove={removeSearchQuote}
+                />
+              );
+            })}
+          </div>
+        )}
         <Label htmlFor={`message-draft-${id}`} className="sr-only">
           消息
         </Label>

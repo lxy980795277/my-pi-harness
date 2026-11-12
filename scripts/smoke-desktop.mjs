@@ -60,7 +60,7 @@ await access(
     'daemon',
     'node_modules',
     '@my-pi-harness',
-    'tools',
+    'plugins',
     'src',
     'plugins',
     'github',
@@ -75,7 +75,7 @@ await access(
     'daemon',
     'node_modules',
     '@my-pi-harness',
-    'tools',
+    'plugins',
     'src',
     'plugins',
     'documents',
@@ -131,11 +131,29 @@ await mkdir(output, { recursive: true });
 let application;
 let stderr = '';
 const env = {
-  ...process.env,
+  ...Object.fromEntries(
+    [
+      'PATH',
+      'HOME',
+      'USERPROFILE',
+      'APPDATA',
+      'LANG',
+      'LC_ALL',
+      'SystemRoot',
+      'WINDIR',
+      'COMSPEC',
+      'DISPLAY',
+      'WAYLAND_DISPLAY',
+      'XDG_RUNTIME_DIR',
+      'DBUS_SESSION_BUS_ADDRESS',
+    ].flatMap((key) => (process.env[key] === undefined ? [] : [[key, process.env[key]]])),
+  ),
+  TMPDIR: temporary,
   ...(process.platform === 'win32' ? { LOCALAPPDATA: temporary } : {}),
   MY_PI_HARNESS_NODE_PATH: '/missing-development-node',
   MY_PI_HARNESS_RENDERER_URL: 'http://127.0.0.1:1',
   MY_PI_HARNESS_DEVELOPMENT_ORIGIN: 'http://127.0.0.1:5174',
+  MY_PI_HARNESS_PROFILE_DIRECTORY: profileDirectory,
   MY_PI_HARNESS_SESSION_LOG_ROOT: join(temporary, '.my-pi-harness'),
 };
 delete env['ELECTRON_RUN_AS_NODE'];
@@ -166,10 +184,10 @@ try {
   assert.equal(
     await realpath(userData),
     await realpath(temporary),
-    'Smoke profile must be isolated',
+    'Electron Cookie storage must be isolated',
   );
   const initialStatus = await page.evaluate(async () => (await fetch('/api/auth/status')).json());
-  assert.equal(initialStatus.localAuthorized, true);
+  assert.equal(initialStatus.clientInitialized, true);
   assert.equal(initialStatus.authenticated, false);
   await expect(page.getByTestId('login-page')).toBeVisible();
   await expect(page.getByTestId('workspace-shell')).toHaveCount(0);
@@ -240,7 +258,102 @@ try {
   await expect(editor).toBeVisible();
   await editor.getByRole('button', { name: '取消', exact: true }).click();
   await page.screenshot({ path: join(output, 'desktop-settings.png'), fullPage: true });
+  await settings.getByRole('tab', { name: '记忆与搜索', exact: true }).click();
+  await expect(settings.getByRole('switch', { name: '使用记忆', exact: true })).toBeChecked();
+  await expect(settings.getByRole('switch', { name: '从对话中学习', exact: true })).toBeChecked();
+  await expect(settings.getByRole('button', { name: '准备语义模型', exact: true })).toBeEnabled();
+  await expect(
+    settings.getByRole('button', { name: '准备相关性复核模型', exact: true }),
+  ).toBeEnabled();
+  const modelStatuses = await page.evaluate(async () => {
+    return await Promise.all(
+      ['/api/search/model', '/api/search/reranker'].map(async (path) => {
+        const response = await fetch(path);
+        if (!response.ok) throw new Error(`Packaged local model status failed: ${response.status}`);
+        return await response.json();
+      }),
+    );
+  });
+  assert.equal(modelStatuses[0].state, 'unprepared');
+  assert.equal(modelStatuses[1].state, 'unprepared');
+  assert.notEqual(modelStatuses[0].signature, modelStatuses[1].signature);
+  assert.equal(modelStatuses[0].dimensions, 384);
+  assert.equal('dimensions' in modelStatuses[1], false);
+  const originalMemory = '桌面验证记忆：回答时使用简洁中文。';
+  const editedMemory = '桌面验证记忆：先给结论，再给两个简洁要点。';
+  await settings.getByRole('button', { name: '添加记忆', exact: true }).click();
+  const memoryEditor = page.getByRole('dialog', { name: '保存到长期记忆', exact: true });
+  await memoryEditor.getByLabel('记忆内容', { exact: true }).fill(originalMemory);
+  await memoryEditor.getByRole('button', { name: '保存记忆', exact: true }).click();
+  await expect(memoryEditor).not.toBeVisible();
+  const memoryRow = settings.getByRole('article').filter({ hasText: originalMemory });
+  await expect(memoryRow).toHaveCount(1);
+  await memoryRow.getByRole('switch', { name: '启用此条记忆', exact: true }).click();
+  await expect(memoryRow.getByRole('switch')).not.toBeChecked();
+  await memoryRow.getByRole('switch').click();
+  await expect(memoryRow.getByRole('switch')).toBeChecked();
+  await memoryRow.getByRole('button', { name: '编辑', exact: true }).click();
+  const editMemory = page.getByRole('dialog', { name: '编辑记忆', exact: true });
+  await editMemory.getByLabel('记忆内容', { exact: true }).fill(editedMemory);
+  await editMemory.getByRole('button', { name: '保存记忆', exact: true }).click();
+  await expect(editMemory).not.toBeVisible();
+  await expect(settings.getByRole('article').filter({ hasText: editedMemory })).toHaveCount(1);
+  await page.screenshot({ path: join(output, 'desktop-memory.png'), fullPage: true });
   assert.deepEqual(policyErrors, [], 'Settings styles must satisfy the packaged CSP');
+  await page.getByRole('button', { name: '关闭设置', exact: true }).click();
+  const composer = page.getByRole('textbox', { name: '消息', exact: true });
+  await composer.fill('桌面搜索期间保留这份草稿');
+  await expect
+    .poll(
+      async () => {
+        return await page.evaluate(async () => {
+          const index = await (await fetch('/api/search/index')).json();
+          return (
+            index.lexicalReady &&
+            index.sourceCount === 1 &&
+            index.chunkCount > 0 &&
+            index.pendingSources === 0
+          );
+        });
+      },
+      { timeout: 10_000 },
+    )
+    .toBe(true);
+  await page.getByRole('button', { name: '搜索记忆与对话', exact: true }).click();
+  const search = page.getByRole('dialog', { name: '搜索记忆与对话', exact: true });
+  await search.getByLabel('内容', { exact: true }).click();
+  await page.getByRole('option', { name: '长期记忆', exact: true }).click();
+  await search.getByRole('textbox', { name: '搜索内容', exact: true }).fill('桌面验证记忆');
+  await search.getByRole('button', { name: '搜索', exact: true }).click();
+  await search.getByRole('button').filter({ hasText: editedMemory }).click();
+  await expect(search.getByRole('article', { name: '只读原文片段', exact: true })).toContainText(
+    editedMemory,
+  );
+  await expect(search.getByRole('button', { name: '编辑', exact: true })).toHaveCount(0);
+  await page.screenshot({ path: join(output, 'desktop-search.png'), fullPage: true });
+  await search.getByRole('button', { name: '引用命中片段', exact: true }).click();
+  await expect(search).not.toBeVisible();
+  await expect(composer).toHaveValue('桌面搜索期间保留这份草稿');
+  await expect(page.getByLabel('待发送的原文引用', { exact: true })).toContainText('桌面验证记忆');
+  await page.getByRole('button', { name: '移除这条引用', exact: true }).click();
+  await expect(page.getByLabel('待发送的原文引用', { exact: true })).toHaveCount(0);
+  await composer.fill('');
+  await page.getByRole('button', { name: '用户信息，打开菜单', exact: true }).click();
+  await page
+    .getByRole('dialog', { name: '用户菜单', exact: true })
+    .getByRole('button', { name: '设置', exact: true })
+    .click();
+  await settings.getByRole('tab', { name: '记忆与搜索', exact: true }).click();
+  await settings
+    .getByRole('article')
+    .filter({ hasText: editedMemory })
+    .getByRole('button', { name: '忘记', exact: true })
+    .click();
+  await page
+    .getByRole('alertdialog', { name: '忘记这条记忆？', exact: true })
+    .getByRole('button', { name: '忘记记忆', exact: true })
+    .click();
+  await expect(settings.getByRole('article').filter({ hasText: editedMemory })).toHaveCount(0);
   await page.getByRole('button', { name: '关闭设置', exact: true }).click();
   const workspaceDirectory = join(temporary, 'workspace');
   await mkdir(workspaceDirectory);

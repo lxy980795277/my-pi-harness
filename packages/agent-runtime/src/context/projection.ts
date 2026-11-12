@@ -141,6 +141,7 @@ export function requestUsage(
   contextWindow: number,
   maxOutput: number,
   tools: readonly ContextToolDefinition[],
+  memoryTokens = 0,
 ): ContextUsage {
   const usage = estimateContextUsage(
     messages.filter(({ role }) => role !== 'system'),
@@ -164,8 +165,9 @@ export function requestUsage(
   }
   usage.categories = {
     ...usage.categories,
-    system: Math.max(0, usage.categories.system - rules - summary - workingState),
+    system: Math.max(0, usage.categories.system - rules - summary - workingState - memoryTokens),
     rules,
+    memory: memoryTokens,
     summary,
     workingState,
     attachments,

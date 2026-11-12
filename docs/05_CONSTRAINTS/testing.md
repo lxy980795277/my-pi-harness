@@ -28,6 +28,10 @@
 
 CI桌面打包步骤显式提供合成GitHub Client ID，验证资源装配与独立临时身份的smoke，不依赖未提交的根 `.env`，也不执行真实GitHub授权。供用户登录的发布产物仍按[登录配置](../07_USER_GUIDE/application-login.md)使用实际OAuth App配置。
 
+本地检索的真实质量和性能验收分别使用MY_PI_HARNESS_TEST_EMBEDDING_CACHE与MY_PI_HARNESS_TEST_SEARCH_PERFORMANCE_CACHE，必须指向已显式准备的绝对模型缓存；缺配置自跳过，配置不完整则失败，测试不下载。质量使用冻结校准/留出查询，性能使用完整一万片段、单独运行测量并报告实际语料、宿主、冷加载及P95；普通源码测试不以假向量代替这些证据。可复现命令与结果由[M6验证记录](../04_FEATURES/202610301722_feature_m6-memory-search/verify.md)维护。
+
+大数据性能观察只保留必要计数和耗时，避免spy调用记录长期持有分页向量或大正文而干扰被测内存与延迟。
+
 ## 机械规则与审查
 
 ESLint根入口加载scripts/eslint中的本地配置与规则，相关依赖位于根devDependencies；规则/覆盖回归位于tests/unit，workspace执行继续使用同一根配置。
@@ -59,6 +63,7 @@ ESLint根入口加载scripts/eslint中的本地配置与规则，相关依赖位
 ## 并发与清理
 
 - 每个用例独占临时目录、动态端口和身份，不污染用户 profile、Keychain 或开发端口；不输出认证头和秘密。测试凭据用明确假值或独立临时 namespace。
+- 桌面smoke显式设置临时`MY_PI_HARNESS_PROFILE_DIRECTORY`与`MY_PI_HARNESS_SESSION_LOG_ROOT`，同时隔离Electron用户目录；`--user-data-dir`只隔离Cookie和缓存，不能隔离daemon业务数据。profile目录归属与覆盖优先级见[启动配置](../01_ARCHITECTURE/overview.md#启动配置)。
 - 源码Vitest最多4个worker，限制真实ESLint/TypeScript编译面与子进程测试的冷启动资源争用；平台超时仍是失败，不通过跳过断言或全局延长时限掩盖。
 - 所有失败路径在 finally/afterEach 关闭请求、流、child、server、计时器与句柄，不仅清空变量。超时必须使测试失败，不能伪装自跳过。
 - 等明确事件或有界状态轮询，不用任意 sleep 代替就绪。fetch 超时不能证明端口关闭，child.killed 不等于退出；观察所属 PID、真实控制关闭和连接拒绝，避免误测另一实例。

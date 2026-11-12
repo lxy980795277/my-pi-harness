@@ -105,6 +105,16 @@ export function importViolation(file, specifier, repoRoot = root) {
   }
 
   if (
+    path.startsWith('packages/memory/src/') &&
+    (/^@my-pi-harness\/(?:storage|agent-runtime|tools|plugins|integrations|daemon|web|desktop)(?:\/|$)/.test(
+      specifier,
+    ) ||
+      /^(?:@earendil-works\/|fastify(?:\/|$)|react(?:\/|$)|electron(?:\/|$))/.test(specifier) ||
+      serverPackages.has(packageName(specifier)))
+  )
+    return 'Memory领域只能通过窄端口访问存储、模型与宿主';
+
+  if (
     path.startsWith('packages/integrations/src/') &&
     (/^@my-pi-harness\/(?:tools|storage|agent-runtime|daemon)(?:\/|$)/.test(specifier) ||
       /^(?:fastify|react|react-dom|better-sqlite3|drizzle-orm)(?:\/|$)/.test(specifier))
@@ -132,7 +142,9 @@ export function importViolation(file, specifier, repoRoot = root) {
 
   if (
     path.startsWith('packages/tools/src/') &&
-    /^@my-pi-harness\/(?:agent-runtime|storage|integrations|plugins|daemon)(?:\/|$)/.test(specifier)
+    /^@my-pi-harness\/(?:agent-runtime|storage|integrations|plugins|memory|daemon)(?:\/|$)/.test(
+      specifier,
+    )
   )
     return 'Tools只能通过窄端口访问宿主领域';
   if (

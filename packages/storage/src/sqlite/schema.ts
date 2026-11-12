@@ -16,8 +16,9 @@ import type {
   AgentMessage,
   AgentSettings,
   Artifact,
+  MemorySelection,
 } from '@my-pi-harness/protocol';
-import type { ProviderRecord } from '@my-pi-harness/protocol/internal';
+import type { MemoryRequestSnapshot, ProviderRecord } from '@my-pi-harness/protocol/internal';
 
 /** Private SQLite columns never serve as HTTP responses without protocol validation. */
 export const providers = sqliteTable('provider_configs', {
@@ -61,6 +62,18 @@ export const sessions = sqliteTable('sessions', {
   archived: integer('archived', { mode: 'boolean' }).notNull().default(false),
   workspaceId: text('workspace_id'),
   data: text('data', { mode: 'json' }).$type<SessionSummary>().notNull(),
+});
+
+/** Latest prepared memory for each run, rebuilt from the exact logged prompt block. */
+export const memoryAdoptions = sqliteTable('memory_adoptions', {
+  sessionId: text('session_id').notNull(),
+  runId: text('run_id').primaryKey(),
+  branchId: text('branch_id').notNull(),
+  taskId: text('task_id'),
+  preparedSeq: integer('prepared_seq').notNull(),
+  preparedAt: integer('prepared_at').notNull(),
+  snapshot: text('snapshot', { mode: 'json' }).$type<MemoryRequestSnapshot>(),
+  selection: text('selection', { mode: 'json' }).$type<MemorySelection>(),
 });
 
 export const branches = sqliteTable('branches', {

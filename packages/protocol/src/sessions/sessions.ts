@@ -3,6 +3,7 @@ import { SkillSelectionsSchema } from '../extensions/skills';
 import { type Static, Type } from 'typebox';
 import { ThinkingLevelSchema } from '../application/models';
 import { ApprovalModeSchema, ToolCallViewSchema } from '../tools/tools';
+import { SearchSourceSelectionSchema } from '../search/search';
 
 export type SessionSummary = Static<typeof SessionSummarySchema>;
 export type MessageUsage = Static<typeof MessageUsageSchema>;
@@ -194,6 +195,9 @@ export const SessionPatchInputSchema = Type.Object(
 
 export const InputRequestSchema = Type.Object(
   {
+    searchQuotes: Type.Optional(
+      Type.Array(SearchSourceSelectionSchema, { maxItems: 4, uniqueItems: true }),
+    ),
     mcpTools: Type.Optional(McpToolSelectionsSchema),
     skills: Type.Optional(SkillSelectionsSchema),
     text,

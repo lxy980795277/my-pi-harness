@@ -265,6 +265,7 @@ describe('M3 durable work state', () => {
         attachments: 0,
         summary: 0,
         workingState: 0,
+        memory: 0,
       },
     };
     store.append('session', [
@@ -272,6 +273,13 @@ describe('M3 durable work state', () => {
         version: 1,
         systemPrompt: 'private-rules',
         messages: [{ marker: 'private-codec' }],
+        memorySelection: {
+          retrieval: 'fixed',
+          candidateCount: 1,
+          matchedCount: 0,
+          omittedCount: 1,
+          omissions: [{ id: 'unselected', revision: 1, mode: 'relevant', reason: 'no-query' }],
+        },
       }),
     ]);
     expect(JSON.stringify(store.readEvents('session'))).not.toContain('private-rules');
@@ -308,6 +316,14 @@ describe('M3 durable work state', () => {
       });
       expect(prepared).toHaveLength(1);
       expect(prepared[0]?.data).toEqual({ branchId: 'main', usage, messageIds: ['user'] });
+      expect(value.store.getMemoryUsage('session', 'run')).toMatchObject({
+        entries: [],
+        selection: {
+          retrieval: 'fixed',
+          candidateCount: 1,
+          omissions: [{ id: 'unselected', reason: 'no-query' }],
+        },
+      });
       expect(JSON.stringify(prepared)).not.toContain('private-rules');
     };
     expectPreparedProjection();

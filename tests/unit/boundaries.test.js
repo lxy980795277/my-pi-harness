@@ -83,6 +83,34 @@ describe('workspace source imports', () => {
   });
 
   it.each([
+    '@my-pi-harness/storage',
+    '@my-pi-harness/agent-runtime',
+    '@my-pi-harness/tools',
+    'fastify',
+    'better-sqlite3',
+    '@earendil-works/pi-ai',
+  ])('rejects memory domain dependency %s', async (dependency) => {
+    const root = await fixture({
+      'packages/memory/src/service.ts': `import value from '${dependency}';`,
+    });
+    await expect(checkBoundaries(root)).rejects.toThrow(
+      'Memory领域只能通过窄端口访问存储、模型与宿主',
+    );
+  });
+
+  it('allows memory domain contracts and the pure snapshot codec without host services', async () => {
+    const root = await fixture({
+      'packages/memory/src/service.ts':
+        "import type { MemoryEntry } from '@my-pi-harness/protocol';\nimport type { MemoryAccess } from '@my-pi-harness/protocol/internal';\nimport { encode } from './snapshot';",
+      'packages/memory/src/snapshot.ts':
+        "import { Value } from 'typebox/value';\nexport function encode() {}",
+      'packages/storage/src/memory/query.ts':
+        "import { decodeMemoryBlock } from '@my-pi-harness/memory/snapshot';",
+    });
+    await expect(checkBoundaries(root)).resolves.toBe(3);
+  });
+
+  it.each([
     'fs',
     'node:path',
     'electron',
@@ -363,6 +391,7 @@ describe('tool and sandbox ownership', () => {
     '@my-pi-harness/integrations',
     '@my-pi-harness/plugins',
     '@my-pi-harness/plugins/auth',
+    '@my-pi-harness/memory',
     '@my-pi-harness/daemon',
   ])('rejects host implementation %s from tools', async (dependency) => {
     const root = await fixture({

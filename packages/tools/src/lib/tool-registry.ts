@@ -27,6 +27,9 @@ export interface ToolAvailability {
   skillDirectory: boolean;
   agents: boolean;
   canSpawn: boolean;
+  memory?: boolean;
+  memoryMutations?: boolean;
+  sessionSearch?: boolean;
   images: boolean;
   platform: NodeJS.Platform;
 }

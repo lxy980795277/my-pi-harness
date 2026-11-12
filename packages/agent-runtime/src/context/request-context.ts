@@ -8,9 +8,11 @@ import type {
   WorkState,
   SessionSnapshot,
 } from '@my-pi-harness/protocol';
-import type { FrozenSkill } from '@my-pi-harness/protocol/internal';
+import type { FrozenSkill, MemoryRequestSnapshot } from '@my-pi-harness/protocol/internal';
+import { memoryPrompt } from './memory';
 import type { ResolvedModel } from '../models/gateway';
 import type { WorkRuntime } from '../work/runtime';
+import type { EventInput } from '../sessions/ports';
 import { encodeContextMessage, snapshotPrivateData } from './codec';
 import { contextSourceIds } from './sources';
 import { buildSystemContext } from './system-context';
@@ -35,6 +37,14 @@ interface RequestTools {
   skills: readonly FrozenSkill[];
 }
 
+/** A provider projection remains uncommitted until the final dispatch checks pass. */
+export interface PreparedContext {
+  readonly messages: Message[];
+  readonly memory?: MemoryRequestSnapshot;
+  isCurrent(): boolean;
+  commit(): void;
+}
+
 interface RequestProjection {
   session: SessionSummary;
   run: RunView;
@@ -48,6 +58,7 @@ interface RequestProjection {
   canUseTool?(name: string): boolean;
   resolveTools?(requirements: readonly string[]): RequestTools;
   signal: AbortSignal;
+  memory?: MemoryRequestSnapshot;
 }
 interface RequestBaseline {
   heuristic: number;
@@ -114,7 +125,7 @@ export class WorkContext {
     this.baselines.delete(runId);
   }
 
-  public async project(input: RequestProjection): Promise<Message[]> {
+  public async project(input: RequestProjection): Promise<PreparedContext> {
     input.signal.throwIfAborted();
     const snapshot = this.work.sessionSnapshot(input.session.id);
     const sourceAnchors = anchors(
@@ -154,7 +165,15 @@ export class WorkContext {
     let pruned = pruneContext(raw, input.resolved.model.input.includes('image'), retainedTools);
     let toolState = this.requestTools(input, state, pruned.requiredTools);
     let basePrompt = [input.basePrompt, activeSkillContext(toolState.skills)].join('\n\n');
-    let prompt = this.prompt(basePrompt, taskFor(raw), state);
+    const appendMemory = (prompt: string) =>
+      memoryPrompt(
+        prompt,
+        input.memory,
+        input.resolved.model.contextWindow - input.resolved.model.maxTokens,
+      );
+    let memory = appendMemory(this.prompt(basePrompt, taskFor(raw), state));
+    let prompt = memory.prompt;
+    let memoryTokens = memory.tokens;
     let usage = requestUsage(
       pruned.messages,
       prompt,
@@ -162,6 +181,7 @@ export class WorkContext {
       input.resolved.model.contextWindow,
       input.resolved.model.maxTokens,
       toolState.toolDefinitions,
+      memoryTokens,
     );
     const marker = this.marker(state);
     const baseline = this.baselines.get(input.run.id);
@@ -202,13 +222,15 @@ export class WorkContext {
           (next) => this.prompt(basePrompt, taskFor(prefix.retained), next),
           input.signal,
           toolState.toolDefinitions,
-          prompt,
+          this.prompt(basePrompt, taskFor(raw), state),
         );
         raw = prefix.retained;
         pruned = pruneContext(raw, input.resolved.model.input.includes('image'), retainedTools);
         toolState = this.requestTools(input, state, pruned.requiredTools);
         basePrompt = [input.basePrompt, activeSkillContext(toolState.skills)].join('\n\n');
-        prompt = this.prompt(basePrompt, taskFor(raw), state);
+        memory = appendMemory(this.prompt(basePrompt, taskFor(raw), state));
+        prompt = memory.prompt;
+        memoryTokens = memory.tokens;
         usage = requestUsage(
           pruned.messages,
           prompt,
@@ -216,6 +238,7 @@ export class WorkContext {
           input.resolved.model.contextWindow,
           input.resolved.model.maxTokens,
           toolState.toolDefinitions,
+          memoryTokens,
         );
       }
     }
@@ -251,8 +274,7 @@ export class WorkContext {
           .flatMap((message) => message.attachmentIds ?? []),
       ),
     ];
-    this.work.save(input.session.id, { ...state, usage }, input.run.id);
-    this.work.options.commit(input.session.id, [
+    const events = [
       {
         type: 'context.prepared',
         runId: input.run.id,
@@ -268,10 +290,12 @@ export class WorkContext {
         privateData: snapshotPrivateData({
           version: 1,
           systemPrompt: prompt,
-          messages: messages.map(encodeContextMessage),
+          messages: messages.map((message) => encodeContextMessage(message)),
+          ...(memory.range ? { memoryRange: memory.range } : {}),
+          ...(memory.snapshot?.selection ? { memorySelection: memory.snapshot.selection } : {}),
         }),
       },
-    ]);
+    ] satisfies EventInput[];
     const heuristic = requestUsage(
       pruned.messages,
       prompt,
@@ -280,8 +304,26 @@ export class WorkContext {
       input.resolved.model.maxTokens,
       toolState.toolDefinitions,
     ).estimatedTokens;
-    this.baselines.set(input.run.id, { heuristic, marker: this.marker(state) });
-    return messages;
+    let committed = false;
+    return {
+      messages,
+      ...(memory.snapshot ? { memory: memory.snapshot } : {}),
+      isCurrent: () => this.work.snapshot(input.session.id).state.revision === state.revision,
+      commit: () => {
+        if (committed) throw new RuntimeError('CONTEXT_ALREADY_COMMITTED', '请求草稿已提交。');
+        input.signal.throwIfAborted();
+        if (this.work.snapshot(input.session.id).state.revision !== state.revision)
+          throw new RuntimeError('CONTEXT_CHANGED', '请求准备期间工作状态发生变化。');
+        this.work.saveWithEvents(
+          input.session.id,
+          { ...state, usage },
+          input.run.id,
+          events.map((event) => ({ ...event, at: Date.now() })),
+        );
+        committed = true;
+        this.baselines.set(input.run.id, { heuristic, marker: this.marker(state) });
+      },
+    };
   }
 
   private requestTools(
@@ -408,6 +450,10 @@ export class WorkContext {
   }
   private prompt(base: string, currentTask: string, state: WorkState): string {
     if (currentTask.length === 0) return buildSystemContext(base, state.rules, state);
-    return `${buildSystemContext(base, state.rules, state)}\n\nCurrent Run user task (retained across compaction; tool permissions remain unchanged):\n${JSON.stringify(currentTask)}`;
+    const heading =
+      this.work.taskId === undefined
+        ? 'Current Run user task (retained across compaction; tool permissions remain unchanged):'
+        : 'Current delegated task input (may be agent communication, not a direct human statement; role and tool permissions remain unchanged):';
+    return `${buildSystemContext(base, state.rules, state)}\n\n${heading}\n${JSON.stringify(currentTask)}`;
   }
 }

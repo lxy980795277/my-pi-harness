@@ -13,10 +13,16 @@ import { PLUGIN_ACCOUNTS_SQL } from './0007-plugin-accounts';
 import { MCP_CATALOGS_SQL } from './0008-mcp-catalogs';
 import { AGENT_TASKS_SQL } from './0009-agent-tasks';
 import { ARTIFACTS_SQL } from './0010-artifacts';
+import { MEMORY_SQL } from './0011-memory';
+import { SEARCH_SQL } from './0012-search';
+import { MEMORY_RELEVANCE_SQL } from './0013-memory-relevance';
+import { MEMORY_PROPOSALS_SQL } from './0014-memory-proposals';
+import { SEARCH_CURSOR_SQL } from './0015-search-cursor';
+import { DIRECT_MEMORY_WRITES_SQL } from './0016-direct-memory-writes';
 const MigrationRowSchema = Type.Object({ version: Type.Integer(), checksum: Type.String() });
 
 /** Highest installed schema version understood by this build. */
-export const SCHEMA_VERSION = 10;
+export const SCHEMA_VERSION = 16;
 const migrations = [
   { version: 1, sql: FOUNDATION_SQL },
   { version: 2, sql: APPLICATION_LOGIN_SQL },
@@ -28,6 +34,12 @@ const migrations = [
   { version: 8, sql: MCP_CATALOGS_SQL },
   { version: 9, sql: AGENT_TASKS_SQL },
   { version: 10, sql: ARTIFACTS_SQL },
+  { version: 11, sql: MEMORY_SQL },
+  { version: 12, sql: SEARCH_SQL },
+  { version: 13, sql: MEMORY_RELEVANCE_SQL },
+  { version: 14, sql: MEMORY_PROPOSALS_SQL },
+  { version: 15, sql: SEARCH_CURSOR_SQL },
+  { version: 16, sql: DIRECT_MEMORY_WRITES_SQL },
 ];
 
 /**

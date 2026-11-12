@@ -1,6 +1,6 @@
 # 工作区与工具协议
 
-共享协议版本见[API入口](overview.md)；Session公开事件信封为1，宿主JSONL批格式与fresh SQLite schema分别管理版本。当前开发阶段不保留旧格式兼容。所有接口复用本机授权、Host/Origin和写请求CSRF校验，公开DTO由`protocol/application/workspaces.ts`、`tools/tools.ts`与`sessions/sessions.ts`拥有。
+共享协议版本见[API入口](overview.md)；Session公开事件信封为1，宿主JSONL批格式与fresh SQLite schema分别管理版本。当前开发阶段不保留旧格式兼容。所有接口复用[应用登录](application-auth.md)、Host/Origin和写请求CSRF校验，公开DTO由`protocol/application/workspaces.ts`、`tools/tools.ts`与`sessions/sessions.ts`拥有。
 
 ## 工作区与会话
 

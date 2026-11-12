@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect } from 'react';
 import { useStartNewConversation } from '@/app/hooks/use-start-new-conversation';
 import { useApplicationInitialization } from '@/app/hooks/use-application-initialization';
 import { useNavigationStore } from '@/app/stores/navigation';
@@ -6,7 +6,6 @@ import { useTheme } from '@/app/hooks/use-theme';
 import type { ApplicationShellState, WorkspacePage } from '@/app/types/application';
 import { getUserProfile } from '@/app/utils/user-profile';
 import { useAuthorization } from '@/features/auth/hooks/use-authorization';
-import { createPairingCode } from '@/features/auth/services/auth';
 import { hasValidApplicationSession } from '@/features/auth/utils/application-session';
 import { readLoginCallback } from '@/features/auth/utils/login-entry';
 import { useSettingsStore } from '@/features/settings/stores/settings';
@@ -24,7 +23,6 @@ export const useApplicationShell = (): ApplicationShellState => {
   const { theme, toggleTheme } = useTheme();
   const {
     query: auth,
-    pair,
     logout,
     reconnect: reconnectAuthorization,
     receive,
@@ -46,7 +44,6 @@ export const useApplicationShell = (): ApplicationShellState => {
   const openSettings = useSettingsStore((state) => {
     return state.openSettings;
   });
-  const [pairingCode, setPairingCode] = useState<string | null>(null);
   const authorized = hasValidApplicationSession(auth.data, revoked, Date.now());
   const initialization = useApplicationInitialization(authorized);
   useEffect(() => {
@@ -58,39 +55,20 @@ export const useApplicationShell = (): ApplicationShellState => {
       window.history.replaceState(window.history.state, '', callback.cleanUrl);
     }
   }, [authorized]);
-  useEffect(() => {
-    if (!authorized) {
-      setPairingCode(null);
-    }
-  }, [authorized]);
   const signOut = useAsyncEvent(
     useCallback(async (): Promise<void> => {
       await logout();
-      setPairingCode(null);
     }, [logout]),
-  );
-  const pairing = useAsyncEvent(
-    useCallback(async (signal: AbortSignal): Promise<void> => {
-      const code = await createPairingCode(signal);
-      signal.throwIfAborted();
-      setPairingCode(code);
-    }, []),
   );
   const reconnect = useAsyncEvent(
     useCallback(async (): Promise<void> => {
       await reconnectAuthorization();
     }, [reconnectAuthorization]),
   );
-  const hideCode = useCallback((): void => {
-    setPairingCode(null);
-  }, []);
   const settings = useCallback((): void => {
     openSettings('models');
   }, [openSettings]);
   let actionError = signOut.error;
-  if (actionError === null) {
-    actionError = pairing.error;
-  }
   if (actionError === null) {
     actionError = reconnect.error;
   }
@@ -104,19 +82,14 @@ export const useApplicationShell = (): ApplicationShellState => {
     themeLabel: THEME_LABELS[theme],
     toggleTheme,
     auth,
-    pair,
     receiveLogin: receive,
-    localAuthorized: auth.data?.localAuthorized === true,
     checkingAuthorization: revoked && auth.data?.authenticated === true,
     page,
     pageLabel: PAGE_LABELS[page],
     navigate,
     authorized,
-    pairingCode,
-    hideCode,
     settings,
     signOut: signOut.run,
-    pairing: pairing.run,
     reconnect: reconnect.run,
     actionError: actionError,
   };

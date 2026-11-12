@@ -14,6 +14,8 @@ import {
 import { useComposerMcpSelection } from '@/features/mcp/hooks/use-composer-mcp-selection';
 import { EMPTY_MCP_SELECTIONS } from '@/features/mcp/utils/mcp-selection';
 import { isRejectedInput } from '@/utils/input-outcome';
+import { useComposerQuotes } from '@/features/sessions/hooks/use-composer-quotes';
+import { quotedInputText, searchQuoteFields } from '@/features/sessions/utils/search-quotes';
 
 /** Uncertain retries keep their request id; successful submission clears only that session's draft. */
 export const useComposer = (
@@ -85,6 +87,7 @@ export const useComposer = (
     ),
   );
   const { pending: sendPending } = send;
+  const quotes = useComposerQuotes(sessionId, pendingInput !== null, pendingInput?.searchQuotes);
   let frozen = pendingInput?.mcpTools;
   if (running && pendingInput === null) {
     frozen = activeRun?.mcpTools ?? EMPTY_MCP_SELECTIONS;
@@ -113,11 +116,11 @@ export const useComposer = (
         attachmentBusy ||
         ((mcp.blocked || skills.blocked) && pendingInput === null) ||
         (running && activeRun === undefined) ||
-        (draft.trim().length === 0 && attachments.length === 0)
+        (draft.trim().length === 0 && attachments.length === 0 && quotes.searchQuotes.length === 0)
       ) {
         return;
       }
-      const text = draft.trim();
+      const text = quotedInputText(draft, quotes.searchQuotes);
       let submittedMode: InputRequest['mode'] = 'send';
       if (running) {
         submittedMode = 'follow-up';
@@ -126,6 +129,7 @@ export const useComposer = (
         text,
         mode: submittedMode,
         requestId: crypto.randomUUID(),
+        ...searchQuoteFields(quotes.searchQuotes),
         mcpTools: mcp.selected,
         skills: skills.selected,
         attachmentIds: attachments.map((attachment) => {
@@ -144,6 +148,7 @@ export const useComposer = (
       skills.blocked,
       skills.selected,
       pendingInput,
+      quotes.searchQuotes,
       prepareInput,
       running,
       sendPending,
@@ -184,6 +189,7 @@ export const useComposer = (
     error = stop.error;
   }
   return {
+    ...quotes,
     attachmentDraftKey: sessionId,
     mcp,
     skills,
@@ -201,7 +207,7 @@ export const useComposer = (
       attachmentBusy ||
       ((mcp.blocked || skills.blocked) && pendingInput === null) ||
       (running && activeRun === undefined) ||
-      (draft.trim().length === 0 && attachments.length === 0),
+      (draft.trim().length === 0 && attachments.length === 0 && quotes.searchQuotes.length === 0),
     error: error,
     draftLocked: pendingInput !== null,
     uncertain: pendingInput !== null && !sendPending,

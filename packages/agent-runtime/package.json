@@ -20,7 +20,8 @@
     "@my-pi-harness/protocol": "workspace:*",
     "typebox": "catalog:",
     "@my-pi-harness/sandbox": "workspace:*",
-    "@my-pi-harness/tools": "workspace:*"
+    "@my-pi-harness/tools": "workspace:*",
+    "@my-pi-harness/memory": "workspace:*"
   },
   "devDependencies": {
     "@my-pi-harness/storage": "workspace:*",

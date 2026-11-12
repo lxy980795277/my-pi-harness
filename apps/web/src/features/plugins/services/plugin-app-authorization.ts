@@ -52,7 +52,7 @@ export const startPluginAppAuthorization = async (
   } else {
     const status = await fetchAuthStatus(signal);
     signal.throwIfAborted();
-    if (!status.localAuthorized || !status.authenticated)
+    if (!status.clientInitialized || !status.authenticated)
       throw new Error('应用登录已失效，请返回应用重新登录后授权。');
     const server = parseResponse(RemoteMcpViewSchema, await getJson(path, signal));
     result = await requestJson(

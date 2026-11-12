@@ -29,7 +29,7 @@ const SERVER: RemoteMcpView = {
   updatedAt: 2,
 };
 const AUTH: AuthStatus = {
-  localAuthorized: true,
+  clientInitialized: true,
   authenticated: true,
   csrfToken: 'synthetic-csrf',
   providers: [],

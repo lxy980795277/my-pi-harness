@@ -35,7 +35,7 @@ export const setCsrfToken = (token: string | null): void => {
   csrfToken = token;
 };
 
-/** HTTP failure retains status so authorization failures can reopen pairing. */
+/** HTTP failure retains status so authorization failures can trigger session recovery. */
 export class RequestError extends Error {
   constructor(
     message: string,

@@ -24,6 +24,40 @@ const tool = (overrides: Partial<ToolCallView> = {}): ToolCallView => {
 };
 
 describe('compact tool presentation', () => {
+  it.each([
+    {
+      name: 'save_memory',
+      label: '保存记忆',
+      arguments: { body: '偏好简洁回答' },
+      summary: '偏好简洁回答',
+    },
+    {
+      name: 'learn_memory',
+      label: '学习记忆',
+      arguments: { body: '长期项目事实' },
+      summary: '长期项目事实',
+    },
+    {
+      name: 'update_memory',
+      label: '修改记忆',
+      arguments: { body: '更新后的偏好' },
+      summary: '更新后的偏好',
+    },
+    {
+      name: 'delete_memory',
+      label: '删除记忆',
+      arguments: { memoryId: 'memory' },
+      summary: 'memory',
+    },
+  ])('keeps $name in the ordinary compact tool presentation', (input) => {
+    const view = toolPresentation(tool({ name: input.name, arguments: input.arguments }));
+    expect(view).toMatchObject({
+      name: input.label,
+      summary: input.summary,
+      busy: false,
+      showStatus: false,
+    });
+  });
   it('keeps the requested target visible after the recorded execution summary changes', () => {
     const pending = tool({ status: 'running', summary: 'read_file: src/main.ts' });
     const completed = tool();

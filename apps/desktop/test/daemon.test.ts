@@ -21,17 +21,18 @@ interface Fixture {
   statePath: string;
 }
 
+type FixtureState = Static<typeof FixtureStateSchema>;
+
 const FixtureStateSchema = Type.Object({
   pid: Type.Integer({ minimum: 1 }),
   origin: Type.String({ minLength: 1 }),
   shutdownCount: Type.Integer({ minimum: 0 }),
   exitCode: Type.Union([Type.Integer(), Type.Null()]),
   sessionLogRoot: Type.String(),
+  profileDirectory: Type.Optional(Type.String()),
   githubClientId: Type.String(),
   developmentOrigins: Type.Array(Type.Object({ key: Type.String(), value: Type.String() })),
 });
-
-type FixtureState = Static<typeof FixtureStateSchema>;
 
 const originalResourcesPath = Object.getOwnPropertyDescriptor(process, 'resourcesPath');
 let fixture: Fixture | undefined;
@@ -65,7 +66,6 @@ async function prepareFixture(mode: FixtureMode): Promise<Fixture> {
     `import { createServer } from 'node:http';
 import { renameSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-
 const mode: string = ${JSON.stringify(mode)};
 const statePath = fileURLToPath(new URL('../../fixture-state.json', import.meta.url));
 let shutdownCount = 0;
@@ -74,6 +74,7 @@ const save = (exitCode) => {
   writeFileSync(statePath + '.tmp', JSON.stringify({
     pid: process.pid, origin, shutdownCount, exitCode,
     sessionLogRoot: process.env.MY_PI_HARNESS_SESSION_LOG_ROOT,
+    profileDirectory: process.env.MY_PI_HARNESS_PROFILE_DIRECTORY,
     githubClientId: process.env.MY_PI_HARNESS_GITHUB_CLIENT_ID,
     developmentOrigins: Object.entries(process.env)
       .filter(([key]) => key.toUpperCase() === 'MY_PI_HARNESS_DEVELOPMENT_ORIGIN')
@@ -172,6 +173,49 @@ afterEach(async () => {
 });
 
 describe('desktop daemon supervisor', { concurrent: false }, () => {
+  it('leaves default profile selection to the daemon independently of Electron userData', async () => {
+    vi.stubEnv('MY_PI_HARNESS_PROFILE_DIRECTORY', undefined);
+    const current = await prepareFixture('valid-ready');
+    const daemon = await startDaemon();
+    try {
+      expect((await readState(current)).profileDirectory).toBeUndefined();
+    } finally {
+      await daemon.stop();
+    }
+  });
+
+  it('loads an explicit profile from its child env file', async () => {
+    vi.stubEnv('MY_PI_HARNESS_PROFILE_DIRECTORY', undefined);
+    const current = await prepareFixture('valid-ready');
+    const profile = join(current.resources, 'env-file-profile');
+    await writeFile(
+      join(current.resources, 'daemon', 'desktop-oauth.env'),
+      `MY_PI_HARNESS_GITHUB_CLIENT_ID=fixture-packaged-client\nMY_PI_HARNESS_PROFILE_DIRECTORY=${profile}\n`,
+    );
+    const daemon = await startDaemon();
+    try {
+      expect((await readState(current)).profileDirectory).toBe(profile);
+    } finally {
+      await daemon.stop();
+    }
+  });
+
+  it('preserves a process profile override ahead of the child env file', async () => {
+    const current = await prepareFixture('valid-ready');
+    const profile = join(current.resources, 'process-profile');
+    vi.stubEnv('MY_PI_HARNESS_PROFILE_DIRECTORY', profile);
+    await writeFile(
+      join(current.resources, 'daemon', 'desktop-oauth.env'),
+      `MY_PI_HARNESS_GITHUB_CLIENT_ID=fixture-packaged-client\nMY_PI_HARNESS_PROFILE_DIRECTORY=${join(current.resources, 'other-profile')}\n`,
+    );
+    const daemon = await startDaemon();
+    try {
+      expect((await readState(current)).profileDirectory).toBe(profile);
+    } finally {
+      await daemon.stop();
+    }
+  });
+
   it('loads packaged public OAuth configuration in the independent Node child', async () => {
     vi.stubEnv('MY_PI_HARNESS_GITHUB_CLIENT_ID', undefined);
     const current = await prepareFixture('valid-ready');

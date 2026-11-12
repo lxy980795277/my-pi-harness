@@ -14,7 +14,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { loadDaemonConfig } from '../src/application/config';
 import { createApplicationServices, type ApplicationServices } from '../src/application/services';
 import { createDaemonApplication, type DaemonApplication } from '../src/http/server';
-import { pairFixture, type FixtureAuthorization } from './support/login';
+import { initializeClientFixture, type FixtureAuthorization } from './support/login';
 import { readSseRecord } from './support/sse';
 
 const OWNER_SECRET = 'login-api-test-owner-000000000000000000000000000000';
@@ -153,9 +153,106 @@ async function login(
 }
 
 describe('persistent application login over HTTP', () => {
+  it('keeps status read-only and initializes a cookie-bound client without signing in', async () => {
+    const instance = await setup();
+    const initial = await fetch(`${instance.origin}/api/auth/status`);
+    expect(initial.headers.get('set-cookie')).toBeNull();
+    expect(await status(initial)).toMatchObject({
+      clientInitialized: false,
+      authenticated: false,
+      csrfToken: null,
+      user: null,
+      session: null,
+    });
+    const initialized = await fetch(`${instance.origin}/api/auth/client`, {
+      method: 'POST',
+      headers: { Origin: instance.origin, 'Content-Type': 'application/json' },
+      body: '{}',
+    });
+    expect(initialized.status).toBe(200);
+    expect(initialized.headers.get('set-cookie')).toContain('HttpOnly; SameSite=Strict; Path=/api');
+    const cookie = initialized.headers.get('set-cookie')?.split(';')[0];
+    if (!cookie) throw new Error('Client initialization did not issue its cookie');
+    const first = await status(initialized);
+    expect(first).toMatchObject({
+      clientInitialized: true,
+      authenticated: false,
+      user: null,
+      session: null,
+    });
+    expect(first.csrfToken).toEqual(expect.any(String));
+    const observed = await fetch(`${instance.origin}/api/auth/status`, {
+      headers: { Cookie: cookie },
+    });
+    expect(observed.headers.get('set-cookie')).toBeNull();
+    expect(await status(observed)).toEqual(first);
+    expect(
+      (await fetch(`${instance.origin}/api/sessions`, { headers: { Cookie: cookie } })).status,
+    ).toBe(401);
+  });
+
+  it('requires an accepted Host and Origin for initialization and rejects obsolete input', async () => {
+    const instance = await setup();
+    for (const origin of [undefined, 'https://evil.example', 'null']) {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (origin !== undefined) headers['Origin'] = origin;
+      const response = await fetch(`${instance.origin}/api/auth/client`, {
+        method: 'POST',
+        headers,
+        body: '{}',
+      });
+      expect(response.status).toBe(403);
+      expect(response.headers.get('set-cookie')).toBeNull();
+    }
+    const rebound = await instance.application.server.inject({
+      method: 'POST',
+      url: '/api/auth/client',
+      headers: { Host: 'evil.example', Origin: instance.origin },
+      payload: {},
+    });
+    expect(rebound.statusCode).toBe(403);
+    expect(rebound.headers['set-cookie']).toBeUndefined();
+    const obsolete = await fetch(`${instance.origin}/api/auth/client`, {
+      method: 'POST',
+      headers: { Origin: instance.origin, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: 'removed-manual-challenge' }),
+    });
+    expect(obsolete.status).toBe(400);
+    expect(obsolete.headers.get('set-cookie')).toBeNull();
+    expect(await obsolete.json()).toMatchObject({ code: 'INVALID_REQUEST' });
+  });
+
+  it('reuses initialized identity and CSRF without restoring a revoked application session', async () => {
+    const instance = await setup();
+    const client = await initializeClientFixture(instance.origin);
+    const signed = await login(instance, client);
+    const repeated = await send(instance, signed.grant, '/auth/client', 'POST', {});
+    expect(repeated.status).toBe(200);
+    expect(repeated.headers.get('set-cookie')?.split(';')[0]).toBe(client.cookie);
+    expect(await status(repeated)).toEqual(signed.status);
+    expect((await send(instance, signed.grant, '/sessions')).status).toBe(200);
+    for (const path of ['/auth/pair', '/auth/pairing-code'])
+      expect((await send(instance, signed.grant, path, 'POST', {})).status).toBe(404);
+    expect((await send(instance, signed.grant, '/auth/logout', 'POST', {})).status).toBe(200);
+    const reinitialized = await send(instance, signed.grant, '/auth/client', 'POST', {});
+    expect(reinitialized.headers.get('set-cookie')?.split(';')[0]).toBe(client.cookie);
+    expect(await status(reinitialized)).toMatchObject({
+      clientInitialized: true,
+      authenticated: false,
+      csrfToken: client.csrf,
+      user: null,
+      session: null,
+    });
+    expect((await send(instance, signed.grant, '/sessions')).status).toBe(401);
+    const next = await login(instance, client);
+    expect(next.status.authenticated).toBe(true);
+    expect(next.status.user?.id).toBe(signed.status.user?.id);
+    expect(next.status.session?.id).not.toBe(signed.status.session?.id);
+  });
+
   it('requires login for all private surfaces and checks Origin/CSRF before starting a flow', async () => {
     const instance = await setup();
-    const grant = await pairFixture(instance.origin, instance.services.auth.pairingCode);
+    const grant = await initializeClientFixture(instance.origin);
     for (const path of [
       '/providers',
       '/settings',
@@ -195,13 +292,12 @@ describe('persistent application login over HTTP', () => {
       (await send(instance, grant, '/auth/login', 'POST', { providerId: 'github', extra: true }))
         .status,
     ).toBe(400);
-    expect((await send(instance, grant, '/auth/pairing-code', 'POST', {})).status).toBe(401);
   });
 
   it('binds a flow to its client, signs in once, and rejects another account without changing profile data', async () => {
     const instance = await setup();
-    const a = await pairFixture(instance.origin, instance.services.auth.pairingCode);
-    const b = await pairFixture(instance.origin, instance.services.auth.pairingCode);
+    const a = await initializeClientFixture(instance.origin);
+    const b = await initializeClientFixture(instance.origin);
     const started = await flow(
       await send(instance, a, '/auth/login', 'POST', { providerId: 'github' }),
     );
@@ -250,8 +346,8 @@ describe('persistent application login over HTTP', () => {
 
   it('restores both cookies after restart while offline, and bootstrap never restores logout', async () => {
     let instance = await setup();
-    const paired = await pairFixture(instance.origin, instance.services.auth.pairingCode);
-    const signed = await login(instance, paired);
+    const client = await initializeClientFixture(instance.origin);
+    const signed = await login(instance, client);
     const directory = instance.directory;
     const github = instance.github;
     await instance.application.server.close();
@@ -265,12 +361,12 @@ describe('persistent application login over HTTP', () => {
     const bootstrap = await send(instance, signed.grant, '/auth/desktop', 'POST', {
       secret: OWNER_SECRET,
     });
-    expect(bootstrap.headers.get('set-cookie')?.split(';')[0]).toBe(paired.cookie);
+    expect(bootstrap.headers.get('set-cookie')?.split(';')[0]).toBe(client.cookie);
     expect((await send(instance, signed.grant, '/auth/logout', 'POST', {})).status).toBe(200);
     expect((await send(instance, signed.grant, '/sessions')).status).toBe(401);
     await send(instance, signed.grant, '/auth/desktop', 'POST', { secret: OWNER_SECRET });
     const loggedOut = await status(await send(instance, signed.grant, '/auth/status'));
-    expect(loggedOut.localAuthorized).toBe(true);
+    expect(loggedOut.clientInitialized).toBe(true);
     expect(loggedOut.authenticated).toBe(false);
     expect(loggedOut.user).toBeNull();
     await instance.application.server.close();
@@ -283,14 +379,8 @@ describe('persistent application login over HTTP', () => {
 
   it('immediately closes private SSE on logout and retains another client login', async () => {
     const instance = await setup();
-    const a = await login(
-      instance,
-      await pairFixture(instance.origin, instance.services.auth.pairingCode),
-    );
-    const b = await login(
-      instance,
-      await pairFixture(instance.origin, instance.services.auth.pairingCode),
-    );
+    const a = await login(instance, await initializeClientFixture(instance.origin));
+    const b = await login(instance, await initializeClientFixture(instance.origin));
     instance.services.store.createSession({
       id: 'private-session',
       branchId: 'main',
@@ -325,8 +415,8 @@ describe('persistent application login over HTTP', () => {
 
   it('rejects expired login cookies without revoking the local client', async () => {
     const instance = await setup();
-    const paired = await pairFixture(instance.origin, instance.services.auth.pairingCode);
-    const token = paired.cookie.slice(paired.cookie.indexOf('=') + 1);
+    const grant = await initializeClientFixture(instance.origin);
+    const token = grant.cookie.slice(grant.cookie.indexOf('=') + 1);
     const client = instance.services.store.auth.findLocalClient(
       createHash('sha256').update(token).digest('hex'),
       Date.now(),
@@ -350,9 +440,9 @@ describe('persistent application login over HTTP', () => {
         expiresAt: now - 1000,
       },
     );
-    const stale = { ...paired, cookie: `${paired.cookie}; my_pi_session=${loginToken}` };
+    const stale = { ...grant, cookie: `${grant.cookie}; my_pi_session=${loginToken}` };
     const current = await status(await send(instance, stale, '/auth/status'));
-    expect(current.localAuthorized).toBe(true);
+    expect(current.clientInitialized).toBe(true);
     expect(current.authenticated).toBe(false);
     expect((await send(instance, stale, '/settings')).status).toBe(401);
   });

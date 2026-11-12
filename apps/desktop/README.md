@@ -14,6 +14,8 @@ Electron main 负责窗口、有限 preload 桥，以及独立 Node daemon 的�
 
 `pnpm package:desktop` 构建Web和Electron main/preload，校验并缓存官方Node分发包，部署daemon源码、生产依赖tsx、Web和Node到桌面资源，再生成当前平台的未签名应用目录。daemon使用随包Node和tsx运行src/bootstrap.ts；main/preload将协议源码打入JS/CJS产物。`pnpm smoke:desktop`在完成打包后启动该应用目录，检查真实服务、有限桥、Renderer隔离、来源拒绝和退出后的服务关闭；截图保存在`output/playwright/desktop.png`。
 
-桌面启动使用私有随机secret建立HttpOnly页面Cookie，不向Renderer暴露该秘密。daemon数据在macOS位于userData/profiles/default，Windows位于LocalAppData/My Pi Harness/profiles/default，与独立daemon一致；安装资源保持只读。原生模块为独立Node24构建，不重建为Electron ABI。
+桌面smoke显式配置临时`MY_PI_HARNESS_PROFILE_DIRECTORY`与`MY_PI_HARNESS_SESSION_LOG_ROOT`，另行隔离Electron的Cookie和缓存，不继承模型或OAuth凭据；仅设置`--user-data-dir`不能隔离业务profile。原生凭据查询仅使用由临时profile派生的新命名空间。它还检查记忆新建、启停、编辑和遗忘，双模型独立未准备状态，以及搜索原文只读展示、引用待发和草稿保留。此流程不下载模型、不发送付费请求，记忆和搜索截图分别保存为`desktop-memory.png`与`desktop-search.png`。部署测试另外验证生产依赖中的记忆snapshot出口与真实本地模型Worker；无缓存查询保持未准备并正常关闭。
+
+桌面启动使用私有随机secret建立或复用HttpOnly客户端Cookie，不向Renderer暴露该秘密；客户端初始化不签发应用登录。普通浏览器自动初始化自己的客户端，无需通信码，两端的应用登录Cookie独立。客户端和应用会话规则见[应用登录协议](../../docs/03_API/application-auth.md)。业务profile统一由daemon解析，main不使用`app.getPath('userData')`或应用名称生成目录；显式环境配置可覆盖默认值，进程环境优先于开发根`.env`或发布随包`desktop-oauth.env`。数据位置与配置规则由[启动配置](../../docs/01_ARCHITECTURE/overview.md#启动配置)维护。Electron的`userData`仅保存Cookie和缓存；安装资源保持只读。原生模块为独立Node24构建，不重建为Electron ABI。
 
 当前没有签名、安装器、自动更新或Computer Use。M1范围见[模型与会话Spec](../../docs/04_FEATURES/202610131100_feature_model-session/spec.md)；工程底座记录见 [M0 Spec](../../docs/04_FEATURES/202610130900_feature_project-foundation/spec.md)，已执行结果与平台限制见 [验证记录](../../docs/04_FEATURES/202610130900_feature_project-foundation/verify.md)。

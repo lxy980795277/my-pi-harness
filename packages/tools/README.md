@@ -10,7 +10,7 @@ ToolResult使用protocol/internal的ToolContent文本/图像块，不重复定�
 
 | 目录      | 负责的内容                                                         |
 | --------- | ------------------------------------------------------------------ |
-| tools/    | 27个工具分别平铺为独立文件；各自拥有参数、描述、策略及执行入口     |
+| tools/    | 34个工具分别平铺为独立文件；各自拥有参数、描述、策略及执行入口     |
 | lib/      | 注册契约、执行上下文及多个工具实际复用的文件操作、输入与传输机制   |
 | utils/    | 工具目录检索及工具、附件共用的文档正文提取                         |
 | skills/   | YAML解析、发现优先级、安装文件、不可变快照、共享依赖及独立资源租约 |
@@ -27,6 +27,10 @@ lib/提供注册与上下文契约和有实际共同消费者的操作，不承�
 bind接收当前Run的ToolContext，返回异步调用入口；注册工厂同时接纳同步和异步实现，同步异常也通过返回Promise拒绝。lib/tool-context.ts拥有公共执行上下文及各类工具回调组合，具体工具的回调接口和输入类型随对应工具文件定义；回调仅提供实际领域操作，不传Run、Coordinator或数据库。主子执行器各自重绑session/run/task、Work上下文与角色上限。执行闭包不进入日志，模型可见定义、来源指纹和授权版本由runtime冻结。新增工具同时设计参数校验、结果内容、效果策略和真实服务可用性。
 
 默认及按需加载由注册项声明。tool_search和load_skill暂存能力，runtime持久化run.tools_loaded后才用于下一模型请求；工具注册、Skill加载和插件安装分别保持各自权限，实际执行仍经过角色及逐次审批。入口清单与参数由[运行时能力协议](../../docs/03_API/capability-runtime.md)拥有。
+
+记忆与跨会话来源共七个工具。`search_memories`及`save_memory`、`learn_memory`、`update_memory`、`delete_memory`在宿主装配时默认提供；`search_sessions`与`read_search_source`沿用按需发现、激活和执行链。save直接处理明确记忆请求，learn在当前学习开关允许时记录稳定偏好、长期指令或事实，update按精确ID和revision纠正已有条目。四个写工具均声明mutating及非readOnly；save、learn、update不需要额外审批，delete经过普通审批且full-access可自动批准。结果仅返回写入回执，不重复正文。当前分支的`search_session_history`与留存工具结果的`read_tool_result`继续承担各自原有范围。
+
+这七个工具通过lib/tool-context.ts的窄回调调用宿主，不导入记忆库、索引或会话实现。模型参数不能自报来源授权、hash、所属用户或任意工作区ID；宿主绑定实际消费的人类输入及持久工具调用，记忆领域再次检查来源、开关和revision。引用资料不能触发自动学习，明确保存仍由用户输入和宿主校验约束；没有一次性学习动作或待确认提案。子任务只有授权范围内的记忆读取，不继承记忆写入、历史搜索或引用能力。`spawn_agent.userMemoryIds`只转交父级当前可读的精确用户记忆引用，宿主在创建和子请求派发时复核。具体协议见[记忆与搜索](../../docs/03_API/memory-search.md)。
 
 ## Skill资源与插件声明
 

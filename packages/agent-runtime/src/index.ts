@@ -38,3 +38,5 @@ export type {
   ApprovalReviewInput,
   ApprovalReviewResult,
 } from './tools/approval-review';
+export type { RunMemoryPort, RunMemoryRequest, RunMemoryMutationContext } from './runs/ports';
+export type { RunSearchPort, RunSearchContext, RunSearchGrant } from './runs/ports';

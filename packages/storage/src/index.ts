@@ -1,4 +1,6 @@
 export { ProfileStore } from './profile/store';
+export { MemoryRepository } from './memory/repository';
+export { SearchRepository } from './search/repository';
 export { openProfileStore } from './profile/open';
 export { StorageError, type StorageErrorCode } from './shared/errors';
 export { ProfileLockedError, acquireProfileLock, type ProfileLock } from './profile/profile-lock';

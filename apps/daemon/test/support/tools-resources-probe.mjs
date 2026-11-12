@@ -1,6 +1,7 @@
+import { encodeMemoryBlock, decodeMemoryBlock } from '@my-pi-harness/memory/snapshot';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { access, mkdir, readFile, realpath, stat, writeFile } from 'node:fs/promises';
+import { access, mkdir, readFile, readdir, realpath, stat, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import '@my-pi-harness/daemon';
@@ -69,6 +70,8 @@ async function main() {
     '@my-pi-harness/daemon',
     '@my-pi-harness/protocol',
     '@my-pi-harness/storage',
+    '@my-pi-harness/memory',
+    '@my-pi-harness/memory/snapshot',
     '@my-pi-harness/agent-runtime',
     '@my-pi-harness/integrations',
     '@my-pi-harness/tools',
@@ -98,6 +101,58 @@ async function main() {
   }
   for (const helper of ['render_pdf_pages.py', 'pdf_safety.py'])
     await access(join(DOCUMENT_VIEW_RESOURCE_DIRECTORY, helper));
+  const memory = {
+    fingerprint: 'a'.repeat(64),
+    entries: [
+      {
+        id: 'deployed-memory',
+        scope: { kind: 'user' },
+        category: 'preference',
+        body: '简洁中文 🌱',
+        revision: 1,
+        source: { kind: 'manual' },
+      },
+    ],
+  };
+  const block = encodeMemoryBlock(memory);
+  const prompt = `instructions\n${block}`;
+  assert.deepEqual(
+    decodeMemoryBlock(prompt, { start: 'instructions\n'.length, end: prompt.length }),
+    memory,
+  );
+  const transformersPath = await realpath(
+    fileURLToPath(import.meta.resolve('@huggingface/transformers')),
+  );
+  assert(!relative(deployment, transformersPath).startsWith('..'));
+  const transformers = await import('@huggingface/transformers');
+  assert.equal(typeof transformers.pipeline, 'function');
+  assert.equal(typeof transformers.AutoTokenizer.from_pretrained, 'function');
+  assert.equal(typeof transformers.AutoModelForSequenceClassification.from_pretrained, 'function');
+  const { LocalSearchModelResource } = await import('./src/search/local-model-resource');
+  const cacheDirectory = join(fixture, 'local-models');
+  await mkdir(cacheDirectory);
+  const localModels = new LocalSearchModelResource({ cacheDirectory });
+  try {
+    assert.equal(localModels.embedding.status().state, 'unprepared');
+    assert.equal(localModels.reranker.status().state, 'unprepared');
+    const options = { priority: 'foreground', signal: AbortSignal.timeout(15_000) };
+    await assert.rejects(
+      localModels.embedding.embed(['deployed local model'], { ...options, kind: 'query' }),
+      { code: 'SEARCH_MODEL_NOT_PREPARED' },
+    );
+    await assert.rejects(localModels.reranker.rerank('deployed', ['local model'], options), {
+      code: 'SEARCH_MODEL_NOT_PREPARED',
+    });
+    assert.equal(localModels.embedding.status().state, 'unprepared');
+    assert.equal(localModels.reranker.status().state, 'unprepared');
+    assert.deepEqual(
+      await readdir(cacheDirectory),
+      [],
+      'Ordinary queries must not download models',
+    );
+  } finally {
+    await localModels.close();
+  }
   assert(StoredToolResultSchema);
   for (const name of [
     'StoredToolResultSchema',
@@ -227,6 +282,8 @@ async function main() {
     console.log(
       JSON.stringify({
         packages: 'deployed-source',
+        memorySnapshot: true,
+        localModels: 'dual-view-local-only',
         pdfText: true,
         materializedSkills: frozen.length,
         office: reports,

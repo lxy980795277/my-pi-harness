@@ -51,6 +51,8 @@ export function createToolContext(
     workspace,
     ...(work ? { work: createWorkToolHandlers(work, context.session.id, context.run.id) } : {}),
     ...(context.agents ? { agents: context.agents } : {}),
+    ...(context.memory ? { memory: context.memory } : {}),
+    ...(context.search ? { search: context.search } : {}),
     ...(context.controls ? { capabilities: context.controls } : {}),
     ...(options.skillGateway ? { skillGateway: options.skillGateway } : {}),
     ...(options.artifacts ? { artifacts: options.artifacts(context) } : {}),

@@ -4,6 +4,46 @@ import { Value } from 'typebox/value';
 import { test, expect } from './fixture';
 import { openLogoutConfirmation } from './ui-controls';
 
+test('首次浏览器访问自动初始化客户端并直接进入应用登录', async ({ page, daemon }) => {
+  await page.context().clearCookies();
+  const privateRequests: string[] = [];
+  page.on('request', (request) => {
+    const pathname = new URL(request.url()).pathname;
+    if (/^\/api\/(?:sessions|providers|workspaces|settings|attachments)(?:\/|$)/.test(pathname))
+      privateRequests.push(pathname);
+  });
+  const initialization = page.waitForResponse((response) => {
+    return new URL(response.url()).pathname === '/api/auth/client';
+  });
+  await page.goto(daemon.origin);
+  expect((await initialization).status()).toBe(200);
+  await expect(page.getByTestId('login-page')).toBeVisible();
+  await expect(page.getByTestId('workspace-shell')).toHaveCount(0);
+  await expect(page.getByText('一次性配对码', { exact: true })).toHaveCount(0);
+  expect(privateRequests).toEqual([]);
+  const initialized: unknown = await (
+    await page.request.get(`${daemon.origin}/api/auth/status`)
+  ).json();
+  if (!Value.Check(AuthStatusSchema, initialized)) throw new Error('Invalid initialized client');
+  expect(initialized).toMatchObject({
+    clientInitialized: true,
+    authenticated: false,
+    user: null,
+    session: null,
+  });
+  const clientCookie = (await page.context().cookies()).find(
+    (cookie) => cookie.name === 'my_pi_local',
+  );
+  expect(clientCookie).toMatchObject({ httpOnly: true, sameSite: 'Strict', path: '/api' });
+  await page.reload();
+  await expect(page.getByTestId('login-page')).toBeVisible();
+  expect(privateRequests).toEqual([]);
+  const restored: unknown = await (
+    await page.request.get(`${daemon.origin}/api/auth/status`)
+  ).json();
+  expect(restored).toEqual(initialized);
+});
+
 test('GitHub浏览器授权拒绝后可重试，登录后恢复身份且退出清理草稿', async ({
   page,
   daemon,
@@ -23,7 +63,7 @@ test('GitHub浏览器授权拒绝后可重试，登录后恢复身份且退出�
   const statusResponse = await page.request.get(`${daemon.origin}/api/auth/status`);
   const status: unknown = await statusResponse.json();
   if (!Value.Check(AuthStatusSchema, status)) throw new Error('Invalid logged-out status');
-  expect(status.localAuthorized).toBe(true);
+  expect(status.clientInitialized).toBe(true);
   expect(status.authenticated).toBe(false);
   expect(status.user).toBeNull();
   expect((await page.request.get(`${daemon.origin}/api/sessions`)).status()).toBe(401);
@@ -92,10 +132,7 @@ test('GitHub浏览器授权拒绝后可重试，登录后恢复身份且退出�
   ).toBe(false);
 });
 
-test('本机信任仍在时缺失应用Cookie进入登录页，不加载私有数据', async ({
-  page,
-  daemon,
-}, testInfo) => {
+test('客户端仍在时缺失应用Cookie进入登录页，不加载私有数据', async ({ page, daemon }, testInfo) => {
   await page.context().clearCookies({ name: 'my_pi_session' });
   const privateRequests: string[] = [];
   page.on('request', (request) => {
@@ -120,13 +157,13 @@ test('服务端撤销后私有请求触发重新登录并清理页面草稿', as
   const response = await page.request.get(`${daemon.origin}/api/auth/status`);
   const status: unknown = await response.json();
   if (!Value.Check(AuthStatusSchema, status) || status.csrfToken === null)
-    throw new Error('The revoked-session test requires current local trust');
+    throw new Error('The revoked-session test requires an initialized client');
   const logout = await page.request.post(`${daemon.origin}/api/auth/logout`, {
     headers: { Origin: daemon.origin, 'X-CSRF-Token': status.csrfToken },
     data: {},
   });
   expect(logout.ok()).toBe(true);
-  await page.getByRole('button', { name: '生成浏览器配对码', exact: true }).click();
+  await page.getByRole('button', { name: '任务看板', exact: true }).click();
   await expect(page.getByTestId('login-page')).toBeVisible();
   await expect(page.getByRole('dialog', { name: '设置', exact: true })).toHaveCount(0);
   await expect(page.getByTestId('workspace-shell')).toHaveCount(0);

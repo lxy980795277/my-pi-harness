@@ -47,6 +47,7 @@ contextBridge.exposeInMainWorld('desktop', {
 - 开发等待真实HTTP就绪，发布等待经过schema校验的daemon.ready。等待有总时限、单次请求时限和取消；进程退出、spawn error或无效记录立即失败，不用固定sleep代替。
 - daemon使用独立Node；发布按process.resourcesPath定位随包Node、daemon/src/bootstrap.ts及生产依赖tsx。生产只加载随包源码和loader，忽略开发可执行文件、页面URL与源码覆盖项，不要求用户预装Node、pnpm或tsx。Electron main/preload仍构建为JS/CJS，并将源码协议包及必要依赖打入产物。
 - Electron启动入口清除ELECTRON_RUN_AS_NODE等改变启动模式的宿主覆盖项；不得用Electron的process.execPath冒充独立Node。开发和发布准备共用已校验的Node资源流程。
+- profile配置只由daemon解析；main传递已有环境并由Node加载对应环境文件，不从Electron的`userData`、应用名称或`--user-data-dir`派生业务目录，不覆盖用户显式配置。默认命名空间、覆盖优先级及数据位置见[启动配置](../01_ARCHITECTURE/overview.md#启动配置)。Electron用户目录仅拥有Cookie与缓存。
 - stop幂等，重复请求共享关闭结果；先IPC正常关闭，再有界等待，超时按平台强制回收。确认真实exit/close，child.killed仅表示已发送信号。[Node子进程](https://nodejs.org/download/release/v24.20.0/docs/api/child_process.html)
 - before-quit阻止重复退出绕过清理；启动失败回收已获得资源，窗口关闭清除引用。当前关闭最后窗口即退出，不隐式增加托盘或macOS驻留模式。
 - daemon监测所有者IPC失联和父进程存活，不仅依靠before-quit；Windows注销和关机不保证发出该事件。[Electron应用生命周期](https://www.electronjs.org/docs/latest/api/app)
@@ -62,7 +63,7 @@ Windows环境变量名不区分大小写，env不能同时保留Path和PATH。`.
 
 原生模块按实际加载宿主构建：better-sqlite3在独立Node daemon中使用，面向随包Node版本和平台架构；main/preload中的原生模块才面向Electron ABI。禁止混用两套二进制。[Electron原生模块说明](https://www.electronjs.org/docs/latest/tutorial/using-native-node-modules)
 
-安装资源只读；SQLite与缓存沿用明确用户profile，会话JSONL按[架构](../01_ARCHITECTURE/overview.md)使用仓库根隐藏目录，独立安装包要求显式指定日志根，不写app.asar或安装路径。下载缓存使用独立临时目录，校验和解压完成后原子发布manifest；命中仍检查实际资源，失败不留可命中的半成品。生产依赖的符号链接不得指向源码仓库或应用资源之外。
+安装资源只读；SQLite与模型缓存沿用daemon解析的用户profile，会话JSONL按[架构](../01_ARCHITECTURE/overview.md)使用仓库根隐藏目录，独立安装包要求显式指定日志根，不写app.asar或安装路径。下载缓存使用独立临时目录，校验和解压完成后原子发布manifest；命中仍检查实际资源，失败不留可命中的半成品。生产依赖的符号链接不得指向源码仓库或应用资源之外。
 
 ## 发布与验收
 

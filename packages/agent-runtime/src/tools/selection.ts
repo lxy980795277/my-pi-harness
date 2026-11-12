@@ -13,6 +13,9 @@ export interface ToolSelectionInput {
   skillDirectory: boolean;
   agents: boolean;
   canSpawn?: boolean;
+  memory?: boolean;
+  memoryMutations?: boolean;
+  sessionSearch?: boolean;
   allows?(tool: RunToolSelection): boolean;
   required?: readonly string[];
   inherited?: RunToolset;
@@ -44,6 +47,9 @@ export function selectRunTools(input: ToolSelectionInput): {
     skillDirectory: input.skillDirectory,
     agents: input.agents,
     canSpawn: input.canSpawn !== false,
+    memory: input.memory === true,
+    memoryMutations: input.memoryMutations === true,
+    sessionSearch: input.sessionSearch === true,
     images: input.images ?? true,
     platform: process.platform,
   };

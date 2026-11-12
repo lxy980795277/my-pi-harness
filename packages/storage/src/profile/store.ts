@@ -22,6 +22,7 @@ import type {
   AgentSettingsInput,
   ToolCallView,
   Artifact,
+  MemoryUsage,
 } from '@my-pi-harness/protocol';
 import type {
   EventInput,
@@ -66,6 +67,8 @@ import { ArtifactBlobs, type ArtifactDownload, type ArtifactBlob } from '../arti
 import { ArtifactRepository } from '../artifacts/repository';
 import { SessionQueries } from '../sessions/queries';
 import { SessionRecovery } from '../sessions/recovery';
+import { MemoryRepository } from '../memory/repository';
+import { SearchRepository } from '../search/repository';
 
 /** JSONL session facts, immutable attachments and SQLite configuration/projections for one daemon. */
 export class ProfileStore {
@@ -74,6 +77,8 @@ export class ProfileStore {
   public readonly extensions: ExtensionRepository;
   public readonly remoteMcp: RemoteMcpRepository;
   public readonly connections: ConnectionRepository;
+  public readonly memory: MemoryRepository;
+  public readonly search: SearchRepository;
   private readonly db: BetterSQLite3Database<typeof schema>;
   private readonly projector: ProjectionWriter;
   private readonly workspaces: WorkspaceRepository;
@@ -106,6 +111,17 @@ export class ProfileStore {
     this.extensions = new ExtensionRepository(sqlite, () => this.assertOpen());
     this.remoteMcp = new RemoteMcpRepository(sqlite, () => this.assertOpen());
     this.connections = new ConnectionRepository(sqlite, () => this.assertOpen());
+    this.search = new SearchRepository(
+      sqlite,
+      (operation, readOnly) => this.transaction(operation, readOnly),
+      () => this.auth.profileOwner()?.id,
+    );
+    this.memory = new MemoryRepository(
+      sqlite,
+      (operation, readOnly) => this.transaction(operation, readOnly),
+      () => this.auth.profileOwner()?.id,
+      (id) => this.search.forgetMemory(id),
+    );
     this.db = drizzle(sqlite, { schema });
     this.projector = new ProjectionWriter(this.db);
     this.workspaces = new WorkspaceRepository(this.db);
@@ -143,7 +159,11 @@ export class ProfileStore {
         this.blobs,
         this.artifactBlobs,
       );
-      this.sqlite.transaction(() => recovery.rebuild()).immediate();
+      this.sqlite
+        .transaction(() => {
+          recovery.rebuild();
+        })
+        .immediate();
     } catch (error) {
       this.files.close();
       throw error;
@@ -311,6 +331,12 @@ export class ProfileStore {
   public getSession(id: string): SessionSummary | undefined {
     this.assertOpen();
     return this.sessions.getSession(id);
+  }
+
+  /** Latest bounded actual adoption for a Run in the selected root or task branch. */
+  public getMemoryUsage(sessionId: string, runId: string): MemoryUsage | null {
+    this.assertOpen();
+    return this.work.memoryUsage(sessionId, runId);
   }
 
   /** Export this session's original committed JSONL across all branches; credentials are separate. */

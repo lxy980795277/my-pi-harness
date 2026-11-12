@@ -99,8 +99,14 @@ export function spawn(
   id: string,
   parentRunId = 'root',
   roleId = 'researcher',
+  userMemoryIds?: string[],
 ): AgentTask {
-  const args = { title: id, task: `Read ${id}`, roleId };
+  const args = {
+    title: id,
+    task: `Read ${id}`,
+    roleId,
+    ...(userMemoryIds === undefined ? {} : { userMemoryIds }),
+  };
   const assistantId = `delegate-${id}`;
   const callId = `call-${id}`;
   const sourceToolCallId = storedToolCallId(parentRunId, assistantId, callId);
@@ -113,6 +119,7 @@ export function spawn(
     role,
     limits: agentSettingsFixture().limits,
     createdAt: 2,
+    ...(userMemoryIds === undefined ? {} : { userMemoryIds }),
   };
   const tool: ToolCallRecord = {
     id: sourceToolCallId,

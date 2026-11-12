@@ -1,6 +1,7 @@
 import { Type } from 'typebox';
-import type { HarnessEvent } from '@my-pi-harness/protocol';
-import { StoredToolResultSchema } from '@my-pi-harness/protocol/internal';
+import { MemorySelectionSchema, type HarnessEvent } from '@my-pi-harness/protocol';
+import { StoredToolResultSchema, MemoryPromptRangeSchema } from '@my-pi-harness/protocol/internal';
+import { preparedMemory } from './memory-adoption';
 import { StorageError } from '../shared/errors';
 import { checked } from '../shared/validation';
 import {
@@ -36,6 +37,8 @@ const contextStored = Type.Object(
   {
     version: Type.Literal(1),
     systemPrompt: Type.Union([Type.String(), Type.Literal(0)]),
+    memoryRange: Type.Optional(MemoryPromptRangeSchema),
+    memorySelection: Type.Optional(MemorySelectionSchema),
     messages: Type.Array(Type.Union([object, Type.Integer({ minimum: 0 })])),
   },
   { additionalProperties: false },
@@ -152,6 +155,7 @@ export function encodeJournalRecords(
     const owner = contextOwner(record.event);
     const payload = record.privateData ?? invalid('Journal request requires private data');
     const context = checked(PreparedPrivateSchema, payload);
+    preparedMemory(context);
     const baseline = state.get(owner.runId)?.get(owner.branchId);
     const references = new Map(baseline?.map((message, index) => [JSON.stringify(message), index]));
     const messages = context.messages.map(
@@ -195,6 +199,7 @@ export function decodeJournalRecords(
       context['systemPrompt'] = prompt;
     }
     context['messages'] = messages;
+    preparedMemory(checked(PreparedPrivateSchema, context));
     saveBaseline(state, owner, messages);
   }
   transformToolResults(records, true);

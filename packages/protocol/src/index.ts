@@ -1,4 +1,7 @@
 export * from './sessions/context';
+export * from './memory/memory';
+export * from './memory/mutations';
+export * from './search/search';
 export * from './sessions/attachment-capabilities';
 export * from './extensions/mcp';
 export * from './extensions/skills';
@@ -89,8 +92,6 @@ export {
   LoginFlowSchema,
   AuthStatusSchema,
   AuthFlowSchema,
-  PairingCodeResponseSchema,
-  PairingInputSchema,
   LoginInputSchema,
   AuthFlowResponseInputSchema,
 } from './application/auth';
@@ -103,8 +104,6 @@ export type {
   LoginFlow,
   AuthStatus,
   AuthFlow,
-  PairingCodeResponse,
-  PairingInput,
   LoginInput,
   AuthFlowResponseInput,
 } from './application/auth';

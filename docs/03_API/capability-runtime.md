@@ -6,18 +6,19 @@
 
 工具包的ToolRegistration统一模型schema、来源、默认/按需加载、可用条件、参数效果策略及执行绑定。runtime的tools/selection根据实际领域端口、工作区、平台、模型视觉能力和角色生成初始集合与候选。注册函数留在内存，日志只保存实际模型可见定义、来源、稳定指纹及授权版本；主子Run分别绑定自己的会话、任务和执行范围。
 
-| 领域        | 模型入口                                                                                         | 初始加载                                                   |
-| ----------- | ------------------------------------------------------------------------------------------------ | ---------------------------------------------------------- |
-| 工作区文件  | read_file、list_files、search_files、write_file、edit_file                                       | 默认                                                       |
-| 命令        | run_command、wait_command、stop_command                                                          | macOS且有工作区时默认                                      |
-| Web         | web_fetch                                                                                        | 默认，服务网关访问不要求工作区                             |
-| 工作状态    | ask_user；update_plan、update_plan_steps、update_todos、search_session_history、read_tool_result | ask_user默认，其余按需或由已有状态提供                     |
-| 子任务      | spawn_agent、wait_agents；get_agent_status、send_agent_message、stop_agent                       | 可委派时spawn_agent默认，wait_agents默认，其余按需         |
-| 目录与Skill | tool_search、load_skill、read_skill_resource                                                     | tool_search默认，有Skill目录时load_skill默认，资源读取按需 |
-| 正文与视觉  | read_document、view_image、view_pdf_page                                                         | 按需，视觉入口要求模型支持图片                             |
-| 交付        | publish_artifact                                                                                 | 按需                                                       |
+| 领域        | 模型入口                                                                                                      | 初始加载                                                   |
+| ----------- | ------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| 工作区文件  | read_file、list_files、search_files、write_file、edit_file                                                    | 默认                                                       |
+| 命令        | run_command、wait_command、stop_command                                                                       | macOS且有工作区时默认                                      |
+| Web         | web_fetch                                                                                                     | 默认，服务网关访问不要求工作区                             |
+| 工作状态    | ask_user；update_plan、update_plan_steps、update_todos、search_session_history、read_tool_result              | ask_user默认，其余按需或由已有状态提供                     |
+| 记忆与历史  | search_memories、save_memory、learn_memory、update_memory、delete_memory、search_sessions、read_search_source | 五个记忆工具默认；历史搜索/精读按需，按Run范围收窄         |
+| 子任务      | spawn_agent、wait_agents；get_agent_status、send_agent_message、stop_agent                                    | 可委派时spawn_agent默认，wait_agents默认，其余按需         |
+| 目录与Skill | tool_search、load_skill、read_skill_resource                                                                  | tool_search默认，有Skill目录时load_skill默认，资源读取按需 |
+| 正文与视觉  | read_document、view_image、view_pdf_page                                                                      | 按需，视觉入口要求模型支持图片                             |
+| 交付        | publish_artifact                                                                                              | 按需                                                       |
 
-以上当前原生入口共27项。实际声明随可用端口和角色收窄，动态能力只从本Run获准候选选择，不构成跨平台固定数量。办公流程由四个插件Skill及其资源CLI提供，通用读取、命令和交付入口分别拥有自己的模型schema。
+以上当前原生入口共34项。实际声明随可用端口和角色收窄，动态能力只从本Run获准候选选择，不构成跨平台固定数量。办公流程由四个插件Skill及其资源CLI提供，通用读取、命令和交付入口分别拥有自己的模型schema。
 
 run.accepted私有记录保存初始tools/toolSources、MCP绑定/候选和诊断、nativeCandidates、skillCandidates及显式或继承的Skill正文。原生候选记录definition/source/fingerprint，准确区分session与workspace；SkillCandidate只保存selection、authorization、name、description、scope和source，不含正文、资源或活动租约。供应商schema、预算与执行使用同一可见集合，来源和加载策略不混入供应商schema。
 
@@ -31,7 +32,9 @@ run.accepted私有记录保存初始tools/toolSources、MCP绑定/候选和诊�
 
 run.tools_loaded先持久化递增revision、完整可调用定义/来源及激活正文，再更新下一模型请求的工具入口、声明和预算。公开数据为`{revision,names,skills}`，完整定义和正文留privateData。同一assistant工具批次保持原快照，不能立即调用刚发现的工具；context.prepared记录最终capabilityRevision及实际模型输入。提交失败停止Run，不使用未提交集合继续调用。
 
-动态集合在当前Run只追加，压缩不卸载。Run结束释放自身能力引用；仍在执行的根命令保留独立资源租约，新Run按当前环境和有效选择重建能力。子Run继承父可继承项并筛选当前集合与候选，初始提供父通信；其新增不传播到父或兄弟。spawn的深度限制不连带关闭收集已有后代的wait。
+普通动态加载在当前Run追加，压缩不卸载；记忆学习设置和来源由写入事务再次校验，不通过临时卸载工具表达。Run结束释放自身能力引用；仍在执行的根命令保留独立资源租约，新Run按当前环境和有效选择重建能力。子Run继承父可继承项并筛选当前集合与候选，初始提供父通信；其新增不传播到父或兄弟。spawn的深度限制不连带关闭收集已有后代的wait。
+
+search_session_history仍只查询当前会话的合法历史；search_sessions面向当前工作区其他可见Root会话，排除整个当前Session。read_search_source只精读本Run真实命中或已消费人类引用授予的范围，不接收模型自报授权；search_memories服从allowUse和精确子任务授权。save/learn/update直接执行宿主记忆事务，delete沿统一审批；五个记忆工具默认提供，根/子范围由宿主约束。完整参数、只读来源和引用协议由[记忆与搜索](memory-search.md)维护。
 
 ## Skill正文与资源
 

@@ -22,6 +22,7 @@ import type { ApprovalReviewer } from '../../src/tools/approval-review';
 import type { SkillsPort, ToolDiscoveryPort } from '../../src/capabilities/ports';
 import { WorkRuntime } from '../../src/work/runtime';
 import { defaultAgentSettings } from '../../src/subagents/default-settings';
+import type { RunMemoryPort, RunSearchPort } from '../../src/runs/ports';
 
 interface AgentFixtureOptions {
   model?(original: Model<Api>, modelId: string): Model<Api>;
@@ -40,6 +41,8 @@ interface AgentFixtureOptions {
   reviewer?: ApprovalReviewer;
   skills?: SkillsPort;
   discovery?: ToolDiscoveryPort;
+  memory?: RunMemoryPort;
+  search?: RunSearchPort;
 }
 
 export interface AgentGate {
@@ -202,6 +205,8 @@ export async function agentFixture(options: AgentFixtureOptions): Promise<AgentF
     gateway,
     tools,
     work,
+    ...(options.memory ? { memory: options.memory } : {}),
+    ...(options.search ? { search: options.search } : {}),
     ...(options.externalTools ? { externalTools: options.externalTools } : {}),
     ...(options.skills ? { skills: options.skills } : {}),
     ...(options.discovery ? { discovery: options.discovery } : {}),

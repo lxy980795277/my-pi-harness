@@ -71,7 +71,7 @@ afterEach(async () => {
 });
 
 describe('desktop authorization ownership', () => {
-  it('reuses local trust without replacing an existing application session', async () => {
+  it('reuses the initialized client without replacing an existing application session', async () => {
     let cookie: string | undefined;
     const origin = await serve((request) => {
       cookie = request.headers.cookie;
@@ -172,7 +172,7 @@ describe('desktop authorization ownership', () => {
       };
     });
     const auth = createDesktopAuthorization(origin, 'owner');
-    await expect(auth.openAuth('login_test-flow')).rejects.toThrow('桌面尚未授权');
+    await expect(auth.openAuth('login_test-flow')).rejects.toThrow('桌面尚未连接');
     await auth.authorizeRenderer(origin);
     await expect(auth.openAuth('login_test-flow')).rejects.toThrow();
     expect(desktop.openExternal).not.toHaveBeenCalled();
@@ -190,7 +190,7 @@ describe('registered Skill directory reveal', () => {
         if (request.url === '/api/auth/status')
           return {
             body: {
-              localAuthorized: true,
+              clientInitialized: true,
               authenticated: true,
               csrfToken: 'fixture-csrf',
               providers: [],
@@ -226,7 +226,7 @@ describe('registered Skill directory reveal', () => {
         if (request.url === '/api/auth/status')
           return {
             body: {
-              localAuthorized: true,
+              clientInitialized: true,
               authenticated: true,
               csrfToken: 'csrf',
               providers: [],
@@ -252,7 +252,7 @@ describe('registered Skill directory reveal', () => {
       if (request.url === '/api/auth/status')
         return {
           body: {
-            localAuthorized: true,
+            clientInitialized: true,
             authenticated: true,
             csrfToken: 'csrf',
             providers: [],

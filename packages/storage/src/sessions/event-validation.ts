@@ -1,4 +1,5 @@
-import { Type, type TSchema } from 'typebox';
+import { Type, type Static, type TSchema } from 'typebox';
+import { MemoryPromptRangeSchema } from '@my-pi-harness/protocol/internal';
 import {
   BranchViewSchema,
   CheckpointSchema,
@@ -16,7 +17,10 @@ import {
   AgentTaskWaitingSchema,
   AgentMessageQueuedSchema,
   ArtifactPublishedSchema,
+  MemorySelectionSchema,
 } from '@my-pi-harness/protocol';
+export type PreparedPrivateContext = Static<typeof PreparedPrivateSchema>;
+
 export const SessionCreatedSchema = Type.Object(
   { session: SessionSummarySchema, branch: BranchViewSchema },
   { additionalProperties: false },
@@ -83,6 +87,8 @@ export const PreparedPrivateSchema = Type.Object(
   {
     version: Type.Literal(1),
     systemPrompt: Type.String(),
+    memoryRange: Type.Optional(MemoryPromptRangeSchema),
+    memorySelection: Type.Optional(MemorySelectionSchema),
     messages: Type.Array(Type.Record(Type.String(), Type.Unknown())),
   },
   { additionalProperties: false },
@@ -103,6 +109,7 @@ export const CapabilityLoadSchema = Type.Object(
   {
     revision: Type.Integer({ minimum: 2 }),
     names: Type.Array(Type.String(), { maxItems: 128, uniqueItems: true }),
+
     skills: SkillSelectionsSchema,
   },
   { additionalProperties: false },

@@ -1,6 +1,6 @@
 # 附件
 
-AttachmentService拥有上传和显式工作区引用的校验、解析、取消与冻结；存储通过ProfileStore不可变附件文件和可重建索引实现。附件元数据、内容与工作区文件列表接口均需本机信任和有效应用登录，普通快照和SSE只返回元数据/ID。
+AttachmentService拥有上传和显式工作区引用的校验、解析、取消与冻结；存储通过ProfileStore不可变附件文件和可重建索引实现。附件元数据、内容与工作区文件列表接口均需有效客户端和应用登录，普通快照和SSE只返回元数据/ID。
 
 支持UTF-8文本、PNG/JPEG/GIF/WebP、PDF，以及DOCX/DOCM、XLSX/XLSM、PPTX/PPTM、ODT/ODS/ODP、RTF、EPUB文本提取；不提供OCR或宏执行。格式、MIME和上传字节上限由protocol的attachment-capabilities声明，前端选择/预检与宿主共用；文件名/MIME匹配、签名、UTF-8、解压和输出预算仍由宿主在保存前校验。解析复用tools的受限worker，关闭等待在途解析结束，损坏和超限明确失败。
 

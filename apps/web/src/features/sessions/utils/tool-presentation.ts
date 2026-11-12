@@ -18,6 +18,9 @@ import {
   Send,
   Square,
   Clock,
+  BookmarkPlus,
+  Brain,
+  BookmarkX,
   type LucideIcon,
 } from 'lucide-react';
 import type { ToolPresentation } from '@/features/sessions/types/tool';
@@ -56,6 +59,13 @@ const TOOL_DEFINITIONS: Record<string, ToolDefinition> = {
   update_todos: { name: '更新任务', Icon: ListTodo },
   search_session_history: { name: '搜索对话', Icon: History, argument: 'query' },
   read_tool_result: { name: '读取工具结果', Icon: History },
+  search_memories: { name: '搜索记忆', Icon: Search, argument: 'query' },
+  search_sessions: { name: '搜索对话', Icon: History, argument: 'query' },
+  read_search_source: { name: '读取来源', Icon: FileText, argument: 'sourceId' },
+  save_memory: { name: '保存记忆', Icon: BookmarkPlus, argument: 'body' },
+  learn_memory: { name: '学习记忆', Icon: Brain, argument: 'body' },
+  update_memory: { name: '修改记忆', Icon: FilePenLine, argument: 'body' },
+  delete_memory: { name: '删除记忆', Icon: BookmarkX, argument: 'memoryId' },
 };
 
 const TOOL_STATUS_LABELS: Record<ToolCallView['status'], string> = {

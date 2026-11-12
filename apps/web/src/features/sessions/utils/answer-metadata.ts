@@ -121,6 +121,7 @@ export const buildAnswerFooters = (
     footers.set(tail.id, {
       inputId: turn.user.id,
       copyText: body.join('\n\n'),
+      memoryMessage: answer,
       metadata: {
         ...describeUsage(turn.assistants),
         durationLabel,

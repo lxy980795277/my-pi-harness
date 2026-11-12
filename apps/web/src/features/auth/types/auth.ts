@@ -1,13 +1,5 @@
 import type { LoginFlow, LoginMethod } from '@my-pi-harness/protocol';
-import type { Action, FormSubmit, InputChange } from '@/types/events';
-
-export interface PairingFormState {
-  code: string;
-  change: InputChange;
-  submit: FormSubmit;
-  pending: boolean;
-  error: string | null;
-}
+import type { Action } from '@/types/events';
 
 export interface LoginPageState {
   flow: LoginFlow | null;

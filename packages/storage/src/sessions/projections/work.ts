@@ -9,17 +9,23 @@ import {
   type HarnessEvent,
   type WorkState,
   type Compaction,
+  type MemoryUsage,
+  MemoryUsageSchema,
+  MemorySelectionSchema,
+  AgentTaskSchema,
 } from '@my-pi-harness/protocol';
 import { StorageError } from '../../shared/errors';
 import * as schema from '../../sqlite/schema';
 import { checked } from '../../shared/validation';
 import { currentCapabilityRevision } from './capabilities';
+import { preparedMemory } from '../memory-adoption';
+import { MemoryRequestSnapshotSchema } from '@my-pi-harness/protocol/internal';
 import {
   CheckpointEventSchema,
   PreparedEventSchema,
-  PreparedPrivateSchema,
   RestoreEventSchema,
   WorkEventSchema,
+  PreparedPrivateSchema,
 } from '../event-validation';
 
 /** Branch-local context facts and frozen content; writes run inside the store transaction. */
@@ -413,7 +419,88 @@ export class WorkRepository {
     }
     if (privateData === undefined)
       throw new StorageError('INVALID_EVENT', 'Prepared context requires its private request');
-    checked(PreparedPrivateSchema, privateData);
+    const prepared = checked(PreparedPrivateSchema, privateData);
+    const adoption = preparedMemory(prepared);
+    let grantedUserIds = new Set<string>();
+    if (input.taskId !== undefined) {
+      const task = this.db
+        .select({ data: schema.agentTasks.data })
+        .from(schema.agentTasks)
+        .where(eq(schema.agentTasks.id, input.taskId))
+        .get();
+      if (!task) throw new StorageError('INVALID_EVENT', 'Prepared memory task is unavailable');
+      grantedUserIds = new Set(checked(AgentTaskSchema, task.data).userMemoryIds ?? []);
+    }
+    for (const entry of adoption?.entries ?? []) {
+      if (
+        (entry.scope.kind === 'user' &&
+          input.taskId !== undefined &&
+          !grantedUserIds.has(entry.id)) ||
+        (entry.scope.kind === 'workspace' && entry.scope.workspaceId !== session.workspaceId)
+      )
+        throw new StorageError(
+          'INVALID_EVENT',
+          'Prepared memory scope is outside this root or task request',
+        );
+    }
+    const value = {
+      sessionId: event.sessionId,
+      runId: run.id,
+      branchId: input.branchId,
+      taskId: input.taskId ?? null,
+      preparedSeq: event.seq,
+      preparedAt: event.at,
+      snapshot: adoption,
+      selection: prepared.memorySelection ?? null,
+    };
+    this.db
+      .insert(schema.memoryAdoptions)
+      .values(value)
+      .onConflictDoUpdate({ target: schema.memoryAdoptions.runId, set: value })
+      .run();
+  }
+
+  /** Return only this visible Run's final adopted snapshot, never today's edited memory body. */
+  public memoryUsage(sessionId: string, runId: string): MemoryUsage | null {
+    const session = this.db
+      .select()
+      .from(schema.sessions)
+      .where(eq(schema.sessions.id, sessionId))
+      .get();
+    const run = this.db
+      .select()
+      .from(schema.runs)
+      .where(and(eq(schema.runs.id, runId), eq(schema.runs.sessionId, sessionId)))
+      .get();
+    if (!session || !run)
+      throw new StorageError('SESSION_NOT_FOUND', 'Session or Run does not exist');
+    if (session.archived || run.branchId !== session.data.activeBranchId)
+      throw new StorageError('CONFLICT', 'Memory usage is outside the selected session branch');
+    const row = this.db
+      .select()
+      .from(schema.memoryAdoptions)
+      .where(
+        and(
+          eq(schema.memoryAdoptions.sessionId, sessionId),
+          eq(schema.memoryAdoptions.runId, runId),
+        ),
+      )
+      .get();
+    if (!row) return null;
+    if (row.branchId !== run.branchId || row.taskId !== (run.data.taskId ?? null))
+      throw new StorageError('INVALID_RECORD', 'Memory adoption owner is inconsistent');
+    return checked(MemoryUsageSchema, {
+      sessionId,
+      runId,
+      ...(row.taskId === null ? {} : { taskId: row.taskId }),
+      preparedSeq: row.preparedSeq,
+      preparedAt: row.preparedAt,
+      entries:
+        row.snapshot === null ? [] : checked(MemoryRequestSnapshotSchema, row.snapshot).entries,
+      ...(row.selection === null
+        ? {}
+        : { selection: checked(MemorySelectionSchema, row.selection) }),
+    });
   }
 
   public restore(event: HarnessEvent): void {

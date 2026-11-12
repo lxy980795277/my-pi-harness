@@ -1,5 +1,12 @@
 import { ToolError } from './tool-registry';
 import type { AskUserHandler } from '../tools/ask-user';
+import type { SearchMemoriesHandler } from '../tools/search-memories';
+import type { SearchSessionsHandler } from '../tools/search-sessions';
+import type { ReadSearchSourceHandler } from '../tools/read-search-source';
+import type { SaveMemoryHandler } from '../tools/save-memory';
+import type { LearnMemoryHandler } from '../tools/learn-memory';
+import type { UpdateMemoryHandler } from '../tools/update-memory';
+import type { DeleteMemoryHandler } from '../tools/delete-memory';
 import type { UpdatePlanHandler } from '../tools/update-plan';
 import type { UpdatePlanStepsHandler } from '../tools/update-plan-steps';
 import type { UpdateTodosHandler } from '../tools/update-todos';
@@ -43,6 +50,17 @@ export interface WorkToolHandlers {
   searchHistory: SessionHistorySearchHandler;
   readToolResult: ToolResultReadHandler;
 }
+export interface MemoryToolHandlers {
+  search: SearchMemoriesHandler;
+  save?: SaveMemoryHandler;
+  learn?: LearnMemoryHandler;
+  update?: UpdateMemoryHandler;
+  delete?: DeleteMemoryHandler;
+}
+export interface SearchToolHandlers {
+  search: SearchSessionsHandler;
+  read: ReadSearchSourceHandler;
+}
 export interface AgentToolHandlers {
   spawn: SpawnAgentHandler;
   status: GetAgentStatusHandler;
@@ -69,6 +87,8 @@ export interface ToolContext {
   readOnly: boolean;
   workspace(signal: AbortSignal): Promise<WorkspaceToolContext>;
   work?: WorkToolHandlers;
+  memory?: MemoryToolHandlers;
+  search?: SearchToolHandlers;
   agents?: AgentToolHandlers;
   capabilities?: CapabilityToolHandlers;
   commands?: CommandToolHandlers;
@@ -80,6 +100,15 @@ export interface ToolContext {
 export function requireWorkHandlers(context: ToolContext): WorkToolHandlers {
   if (!context.work) throw new ToolError('TOOL_NOT_AVAILABLE', '会话工具不可用。');
   return context.work;
+}
+export function requireMemoryHandlers(context: ToolContext): MemoryToolHandlers {
+  if (!context.memory) throw new ToolError('MEMORY_UNAVAILABLE', '当前记忆操作不可用。');
+  return context.memory;
+}
+export function requireSearchHandlers(context: ToolContext): SearchToolHandlers {
+  if (!context.search)
+    throw new ToolError('SEARCH_UNAVAILABLE', '当前执行未获准搜索或读取会话来源。');
+  return context.search;
 }
 export function requireAgentHandlers(context: ToolContext): AgentToolHandlers {
   if (!context.agents) throw new ToolError('TOOL_NOT_AVAILABLE', '子任务工具不可用。');

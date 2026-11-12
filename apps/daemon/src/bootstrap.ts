@@ -38,8 +38,6 @@ async function main(): Promise<void> {
     throw error;
   }
   const { server, identity } = application;
-  if (config.ownerSecret === null && process.stderr.isTTY)
-    process.stderr.write(`浏览器一次性配对码（10分钟有效）：${services.auth.pairingCode}\n`);
   let stopParentMonitor: (() => void) | undefined;
   let shutdownPromise: Promise<void> | undefined;
   const shutdown = (reason: string): Promise<void> => {

@@ -30,6 +30,8 @@ import { useComposerMcpSelection } from '@/features/mcp/hooks/use-composer-mcp-s
 import { isRejectedInput } from '@/utils/input-outcome';
 import { useWorkspaces } from '@/features/workspaces/hooks/use-workspaces';
 import { useAsyncEvent } from '@/hooks/use-async-event';
+import { useComposerQuotes } from '@/features/sessions/hooks/use-composer-quotes';
+import { quotedInputText, searchQuoteFields } from '@/features/sessions/utils/search-quotes';
 
 /** The volatile attempt survives page switches; only explicit New Conversation starts another creation. */
 export const useNewSession = (
@@ -85,6 +87,11 @@ export const useNewSession = (
   const attempt = useComposerStore((state) => {
     return state.newConversationAttempt;
   });
+  const quotes = useComposerQuotes(
+    attachmentDraftKey,
+    attempt !== null,
+    attempt?.input.searchQuotes,
+  );
   const beginAttempt = useComposerStore((state) => {
     return state.beginNewAttempt;
   });
@@ -163,8 +170,8 @@ export const useNewSession = (
         }
         let current = attempt;
         if (!current) {
-          const text = draft.trim();
-          if (text.length === 0 && attachments.length === 0) {
+          const text = quotedInputText(draft, quotes.searchQuotes);
+          if (text.length === 0 && attachments.length === 0 && quotes.searchQuotes.length === 0) {
             return;
           }
           current = beginAttempt(generation, {
@@ -177,6 +184,7 @@ export const useNewSession = (
               mcpTools: mcp.selected,
               skills: skills.selected,
               requestId: crypto.randomUUID(),
+              ...searchQuoteFields(quotes.searchQuotes),
               attachmentIds: attachments.map((attachment) => {
                 return attachment.id;
               }),
@@ -260,6 +268,7 @@ export const useNewSession = (
         markUnknown,
         onCreated,
         prepareInput,
+        quotes.searchQuotes,
         selection,
         valid,
         workspaceId,
@@ -370,6 +379,7 @@ export const useNewSession = (
     error = workspaces.error.message;
   }
   return {
+    ...quotes,
     attachmentDraftKey,
     mcp,
     skills,
@@ -388,7 +398,7 @@ export const useNewSession = (
       attempt?.phase === 'unknown' ||
       attempt?.phase === 'creating' ||
       (!attempt && valid === null) ||
-      (draft.trim().length === 0 && attachments.length === 0),
+      (draft.trim().length === 0 && attachments.length === 0 && quotes.searchQuotes.length === 0),
     error: error,
     invalid: selection !== null && valid === null && attempt === null,
     uncertain: attempt?.phase === 'created' && !send.pending,

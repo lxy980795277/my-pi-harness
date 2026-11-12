@@ -4,9 +4,9 @@
 
 Web 源码与测试面使用 Bundler 解析，模块导入无后缀，样式和本地静态资产保留实际扩展。手写组件使用 `FC<Props>`、具名导出和独立的 `index.tsx` 目录；Hook 与状态规则见 [前端规范](../../docs/05_CONSTRAINTS/frontend.md)。HTTP/SSE 统一客户端位于 `src/services/`，领域 DTO 在 Feature Service 中校验；Query 拥有服务器快照，Zustand 只保存导航、会话选择和未提交草稿。
 
-M1 提供本机配对、Provider/模型配置、专用凭据写入、连接测试、OAuth 交互；进入工作台要求有效的 GitHub 应用登录态，与模型认证分别管理。会话工作台包含保存的历史、流式文字/推理内容、停止、后续输入/引导、持久队列编辑删除与显式恢复、编辑重发和JSONL日志下载。全宽header左侧显示标题、右侧下载当前会话已提交日志，模型和推理选项由输入框拥有。运行状态页保留健康检查、服务元数据、`runtime.ready`、浅深主题和手动重连。
+M1 提供自动客户端初始化、Provider/模型配置、专用凭据写入、连接测试、OAuth 交互；进入工作台要求有效的 GitHub 应用登录态，与模型认证分别管理。会话工作台包含保存的历史、流式文字/推理内容、停止、后续输入/引导、持久队列编辑删除与显式恢复、编辑重发和JSONL日志下载。全宽header左侧显示标题、右侧下载当前会话已提交日志，模型和推理选项由输入框拥有。运行状态页保留健康检查、服务元数据、`runtime.ready`、浅深主题和手动重连。
 
-模型Provider的OAuth请求、轮询、秘密挑战与面板由features/models拥有；features/auth只管理应用登录与本机信任。模型授权结束只刷新模型配置与模型流程，不触发独立的应用登录校验。会话日志、产物和MCP配置导出共用useBlobDownload管理临时链接、URL与取消，各领域仍负责取得和校验下载字节及命名。
+模型Provider的OAuth请求、轮询、秘密挑战与面板由features/models拥有；features/auth只管理应用登录与浏览器客户端初始化。模型授权结束只刷新模型配置与模型流程，不触发独立的应用登录校验。会话日志、产物和MCP配置导出共用useBlobDownload管理临时链接、URL与取消，各领域仍负责取得和校验下载字节及命名。
 
 ## 工作区与对话
 
@@ -68,7 +68,7 @@ API Key 表单只显示未保存的输入；已有凭据只显示脱敏状态，
 
 ## 数据与生命周期
 
-浏览器以同源 HttpOnly cookie 授权，写请求使用当前授权的 CSRF token；配对码、API Key、OAuth prompt 回复只留在专用表单和提交请求中，不进入 Store、Query、LocalStorage 或 URL。收到 HTTP 401 时立即收回私有页面访问并检查授权；显式退出先卸载私有订阅，再清除请求缓存和草稿。
+浏览器先读取授权状态，缺少客户端时通过同源 POST 自动初始化 HttpOnly Cookie 和 CSRF，再进入应用登录；写请求使用当前客户端的 CSRF token。API Key、OAuth prompt 回复只留在专用表单和提交请求中，不进入 Store、Query、LocalStorage 或 URL。收到 HTTP 401 时立即收回私有页面访问并检查授权；显式退出先卸载私有订阅，再清除请求缓存和草稿。
 
 `features/sessions/queries/projection.ts` 是 HTTP、命令响应和 SSE 的共用合并入口。它按单会话`(snapshotSeq,liveRevision)`保留较新的公开快照，较旧refetch和重复更新不能覆盖实时正文或分支；SSE连接先建立含当前内存片段的权威快照，patch同时校验持久和实时基线，文本追加只传变化；分支变化或增量超界重新建立快照。具体序号及重连规则由[会话协议](../../docs/03_API/model-session.md#事件快照与断线)拥有。页面按32ms批次呈现，缺口重连校准。切换会话时关闭订阅并取消视图持有的请求，断线通过EventSource重连后的完整基线恢复，断线本身不会停止后台运行。
 

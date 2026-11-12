@@ -2,6 +2,8 @@
 
 先按[应用登录](application-login.md)配置GitHub并进入工作台。当前提供模型设置、持久会话、队列与历史分支、工作区与审批工具，以及M3附件、项目规则、上下文压缩、提问、计划和检查点。操作见[模型与会话](model-session.md)、[工作区与工具](workspace-execution.md)及[上下文、计划与检查点](context-interaction.md)。本地外部工具配置与调用见[本地MCP](本地MCP.md)，远端OAuth、目录和导入导出见[MCP扩展](MCP扩展.md)。各平台与真实供应商状态见[里程碑](../00_OVERVIEW/roadmap.md)及所属功能验证记录；Windows Shell与浏览器新增目录仍保留原暂缓范围，Computer Use属于后续专项。
 
+对话直接保存、自动学习、记忆管理与只读历史定位操作见[记忆与历史搜索](记忆与历史搜索.md)。
+
 ## 开发启动
 
 子任务委派、角色配置、执行树和待处理操作见[子Agent与任务看板](子Agent与任务看板.md)。

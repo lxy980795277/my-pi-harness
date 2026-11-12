@@ -58,6 +58,7 @@ export const usageCategories = (usage: ContextUsage): { label: string; tokens: s
     attachments: '附件',
     summary: '上下文摘要',
     workingState: '计划与任务',
+    memory: '长期记忆',
   };
   return Object.entries(usage.categories).map(([key, value]) => {
     return { label: labels[key as keyof typeof labels], tokens: formatCount(value) };

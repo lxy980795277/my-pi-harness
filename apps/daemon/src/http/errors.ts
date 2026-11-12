@@ -1,3 +1,4 @@
+import { MemoryError } from '@my-pi-harness/memory';
 import type { ApiError } from '@my-pi-harness/protocol';
 import { RuntimeError } from '@my-pi-harness/agent-runtime';
 import { StorageError } from '@my-pi-harness/storage';
@@ -10,7 +11,11 @@ import { OAuthLaunchError } from './oauth-launch-tickets';
 /** Map application failures to bounded public errors without disclosing host details. */
 export function registerRequestErrors(server: FastifyInstance): void {
   server.setErrorHandler((error, request, reply) => {
-    if (error instanceof SkillError || error instanceof PluginError) {
+    if (
+      error instanceof SkillError ||
+      error instanceof PluginError ||
+      error instanceof MemoryError
+    ) {
       const status = /NOT_FOUND/.test(error.code)
         ? 404
         : /CONFLICT|BUSY|STALE|CLOSED|REVOKED/.test(error.code)
@@ -35,7 +40,7 @@ export function registerRequestErrors(server: FastifyInstance): void {
     if (error instanceof StorageError && error.code === 'LOCAL_CLIENT_EXPIRED') {
       void reply
         .code(401)
-        .send({ code: error.code, message: '本机授权已过期，请重新授权。' } satisfies ApiError);
+        .send({ code: error.code, message: '本机连接已过期，请重新连接。' } satisfies ApiError);
       return;
     }
     if (error instanceof StorageError && error.code === 'AGENT_SETTINGS_INVALID') {

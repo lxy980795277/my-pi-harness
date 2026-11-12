@@ -4,6 +4,7 @@ import type {
   RunView,
   SessionSnapshot,
   ToolCallView,
+  SearchSourceSelection,
 } from '@my-pi-harness/protocol';
 import type { UseQueryResult } from '@tanstack/react-query';
 import type { RefObject, UIEvent } from 'react';
@@ -12,6 +13,7 @@ import type { AnswerFooter } from '@/features/sessions/types/answer-metadata';
 import type { SkillSelectionState } from '@/features/skills/types/skill';
 import type { McpSelectionState } from '@/features/mcp/types/mcp';
 import type { Action, FormSubmit, TextChange, ValueChange } from '@/types/events';
+import type { MessageElementRef } from '@/features/sessions/types/timeline-target';
 
 export type SessionCommandMethod = 'POST' | 'PUT' | 'DELETE';
 
@@ -58,6 +60,8 @@ export interface LiveSession {
 }
 
 export interface ComposerState {
+  searchQuotes: readonly SearchSourceSelection[];
+  removeSearchQuote: ValueChange<string>;
   draft: string;
   changeDraft: TextChange;
   submit: FormSubmit;
@@ -117,6 +121,8 @@ export interface SessionNavigationState {
   createdAtTitle: string;
 }
 export interface MessageTimelineState {
+  registerMessage: MessageElementRef;
+  seekError: string | null;
   scrollElement: RefObject<HTMLDivElement | null>;
   contentElement: RefObject<HTMLDivElement | null>;
   empty: boolean;

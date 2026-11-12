@@ -13,6 +13,7 @@ import { selectRunTools } from '../tools/selection';
 import { capabilityContext } from '../capabilities/context';
 import { agentContext } from './definitions';
 import { createSubagentRunAdapter } from './run-adapter';
+import { canSearchMemories } from '../runs/memory';
 
 /** A child uses the same RunExecution and durable acceptance as a root conversation. */
 export async function launchAgentRun(
@@ -72,6 +73,14 @@ export async function launchAgentRun(
       skillDirectory: skillCandidates.length > 0 || skills.length > 0,
       agents: true,
       canSpawn,
+      memory: canSearchMemories(source.memory, {
+        sessionId: session.id,
+        workspaceId: session.workspaceId,
+        taskId: task.id,
+        userMemoryIds: task.userMemoryIds ?? [],
+        query: text,
+        signal,
+      }),
       allows: (tool) => allowedTaskTool(tool, task.role.access, owner.options.tools.registrations),
       required: ['send_agent_message'],
       inherited: current,
@@ -92,7 +101,7 @@ export async function launchAgentRun(
         nativeCandidates,
         skillCandidates,
         skills,
-        ...(owner.options.search ? { search: owner.options.search } : {}),
+        ...(owner.options.toolSearch ? { search: owner.options.toolSearch } : {}),
         ...(owner.options.skills ? { skillPort: owner.options.skills } : {}),
         commit: (events) => owner.commit(session.id, events),
       });
@@ -183,6 +192,8 @@ export async function launchAgentRun(
       basePrompt,
       instructionsPrompt: source.instructionsPrompt ?? source.basePrompt,
       eligibleInputIds: [],
+      userMemoryIds: task.userMemoryIds ?? [],
+      ...(source.memory ? { memory: source.memory } : {}),
       toolset,
       acceptedCapabilities: { external, candidates, skills, skillCandidates },
       ...(capabilities ? { capabilities } : {}),

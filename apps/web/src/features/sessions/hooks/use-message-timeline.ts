@@ -4,12 +4,14 @@ import { useVirtualizer, type VirtualizerOptions } from '@tanstack/react-virtual
 import { useCallback, useLayoutEffect, useMemo, useRef, useState, type UIEvent } from 'react';
 import { buildTimelineEntries } from '@/features/sessions/utils/timeline-entries';
 import { estimateTimelineEntry } from '@/features/sessions/utils/timeline-layout';
+import { useTimelineSeek } from '@/features/sessions/hooks/use-timeline-seek';
 
 type TimelineAnchor = NonNullable<VirtualizerOptions<HTMLDivElement, HTMLDivElement>['anchorTo']>;
-type TimelineScrollMode = 'follow' | 'read' | 'process';
+type TimelineScrollMode = 'follow' | 'read' | 'process' | 'seek';
 
 /** Virtualize measured rows and follow the end only while the reader has not scrolled away. */
 export const useMessageTimeline = (
+  sessionId: string,
   messages: MessageView[],
   tools: ToolCallView[],
   activeRunId: string | null,
@@ -54,7 +56,7 @@ export const useMessageTimeline = (
     lastScrollTop.current = element.scrollTop;
   }, []);
   let anchorTo: TimelineAnchor = 'end';
-  if (scrollMode === 'process') anchorTo = 'start';
+  if (scrollMode === 'process' || scrollMode === 'seek') anchorTo = 'start';
   const virtualizer = useVirtualizer<HTMLDivElement, HTMLDivElement>({
     count: entries.length,
     getScrollElement: () => {
@@ -76,6 +78,26 @@ export const useMessageTimeline = (
     },
     [virtualizer],
   );
+  const changeLocating = useCallback(
+    (active: boolean): void => {
+      if (active) setScrollMode('seek');
+      else {
+        setScrollMode('read');
+        const element = scrollElement.current;
+        if (element !== null) lastScrollTop.current = element.scrollTop;
+      }
+    },
+    [setScrollMode],
+  );
+  const seek = useTimelineSeek(
+    sessionId,
+    branchId,
+    entries,
+    virtualizer,
+    scrollElement,
+    changeLocating,
+  );
+  const { cancel: cancelSeek, locating } = seek;
   useLayoutEffect(() => {
     const viewport = scrollElement.current;
     const content = contentElement.current;
@@ -92,27 +114,30 @@ export const useMessageTimeline = (
   }, [follow]);
   useLayoutEffect(follow, [entries, follow]);
   const beforeProcessToggle = useCallback((): void => {
+    cancelSeek();
     setScrollMode('process');
     const viewport = scrollElement.current;
     if (viewport !== null) lastScrollTop.current = viewport.scrollTop;
-  }, [setScrollMode]);
+  }, [cancelSeek, setScrollMode]);
   const jump = useCallback((): void => {
+    cancelSeek();
     setScrollMode('follow');
     follow();
-  }, [follow, setScrollMode]);
+  }, [cancelSeek, follow, setScrollMode]);
   const scroll = useCallback(
     (event: UIEvent<HTMLDivElement>): void => {
       const element = event.currentTarget;
       const atEnd = element.scrollHeight - element.scrollTop - element.clientHeight <= 4;
       const moved = Math.abs(element.scrollTop - lastScrollTop.current) > 1;
       lastScrollTop.current = element.scrollTop;
+      if (locating.current) return;
       if (atEnd && (moved || scrollModeRef.current === 'follow')) {
         setScrollMode('follow');
       } else if (moved) {
         setScrollMode('read');
       }
     },
-    [setScrollMode],
+    [locating, setScrollMode],
   );
   const rows = virtualizer.getVirtualItems().flatMap((item) => {
     const entry = entries[item.index];
@@ -130,5 +155,7 @@ export const useMessageTimeline = (
     beforeProcessToggle,
     jump,
     scroll,
+    registerMessage: seek.registerMessage,
+    seekError: seek.error,
   };
 };

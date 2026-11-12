@@ -2,6 +2,18 @@
 
 Node 24 宿主使用的同步存储。JSONL保存会话执行事实，独立不可变文件保存冻结附件和产物字节，better-sqlite3/Drizzle保存应用配置和会话查询投影。Renderer不得导入本包。
 
+## 记忆与搜索
+
+`memory/`拥有独立事实、设置、receipt和遗忘抑制的SQL事务。`mutation-access.ts`复核当前根Run、实际消费的用户输入与真实工具意图；`sources.ts`统一复核当前来源。Agent写入复用人工CRUD的CAS和receipt实现，不另建提交路径。精确重复仅复用启用且采用方式一致的原事实，已停用或方式不同时拒绝隐式更改；来源只累积指纹，遗忘仍能抑制旧来源迟到写入。这些事实不参与Session投影删除与重建。schema16移除提案表、启用新的自动学习默认设置，保留原独立事实与来源抑制。
+
+`search/`拥有可重建片段、FTS、向量、代际和持久来源查询。scope与成员关系在候选排序和分页前过滤；`source-window.ts`读取精确来源与有限窗口，只返回公开持久正文，不读取live覆盖层、thinking或原始工具结果，也不切换分支。模型引用读取保持精确范围，人类窗口与Unicode安全文本翻页由各自宿主策略调用。领域选择策略见[memory](../memory/README.md)，索引和推理调度归daemon。
+
+`activeGeneration()`只读取当前生效代际，供查询发布前复核。`queryReadiness()`与`status()`复用来源水位、待索引片段和FTS就绪判断；查询只读取完整性，传入模型签名时额外检查缺失向量，资源面板与索引编排通过`status()`读取统计。
+
+准备请求在日志编解码和投影入口各自校验结构，`memory-adoption.ts`只接收已校验上下文，复核实际system消息与精确记忆范围。向量页使用独立的持久行schema校验候选字段、维度和二进制，不引入词法排名字段。
+
+向量页按`(generation,id)`索引顺序读取并在LIMIT前复核当前来源与scope，游标不要求排序剩余全集。索引通过schema迁移安装，既有开发profile无需删除事实或重算向量。
+
 ## 源码职责
 
 `src/index.ts`是唯一公开入口。`profile/`拥有宿主options、打开、锁、关闭和跨JSONL与SQLite的唯一事务编排；`sqlite/`保存Drizzle表和按版本校验的迁移；`sessions/`保存日志、附件、上下文查询和事件校验，`sessions/projections/`维护可重建的会话、工具、能力及工作状态投影。`repositories/`保存身份、模型配置、工作区、MCP、扩展及高级账户的SQLite仓储；`credentials/`拥有系统凭据和插件私有凭据；`shared/`仅放存储错误和通用持久数据校验。
@@ -91,11 +103,11 @@ SQLite的private_data列使用JSON对象映射，字段与表版本不变。完�
 
 ## 应用身份与登录
 
-`ProfileStore.auth`拥有应用User、稳定外部身份、单profile账号归属、本机信任和登录会话。首次`completeLogin()`在同一短事务内验证未过期客户端、绑定用户和身份、签发会话；任一步失败全部回滚。GitHub昵称/头像更新不改变内部userId，不同provider/issuer/subject拒绝接管已有profile，不自动关联相同邮箱。
+`ProfileStore.auth`拥有应用User、稳定外部身份、单profile账号归属、本机客户端和登录会话。首次`completeLogin()`在同一短事务内验证未过期客户端、绑定用户和身份、签发会话；任一步失败全部回滚。GitHub昵称/头像更新不改变内部userId，不同provider/issuer/subject拒绝接管已有profile，不自动关联相同邮箱。
 
-本机信任和应用登录分别按哈希查找，两个有效期都必须通过且登录属于原clientId。这里仅保存小写SHA-256摘要，不接收GitHub token，也不把认证事实写到会话JSONL；CSRF token随本机客户端持久化。凭据创建、GitHub验证、Cookie和会话有效期政策由daemon拥有。持久化读取校验字段、用户JSON和关联，损坏时明确失败。
+客户端和应用登录分别按哈希查找，两个有效期都必须通过且登录属于原clientId。这里仅保存小写SHA-256摘要，不接收GitHub token，也不把认证事实写到会话JSONL；CSRF token随本机客户端持久化。凭据创建、GitHub验证、Cookie和会话有效期政策由daemon拥有。持久化读取校验字段、用户JSON和关联，损坏时明确失败。
 
-`revokeClientSessions(clientId)`撤销当前客户端所有登录而保留本机信任、profile归属与业务数据，另一客户端不受影响。有效会话可跨daemon重启及离线恢复，但不声明已检测GitHub侧撤销。每次写入最多清理100个过期登录及100个无会话引用的过期客户端，读取只校验有效期，不产生写入；退出按指定客户端撤销全部会话。
+`revokeClientSessions(clientId)`撤销当前客户端所有登录而保留客户端、profile归属与业务数据，另一客户端不受影响。有效会话可跨daemon重启及离线恢复，但不声明已检测GitHub侧撤销。每次写入最多清理100个过期登录及100个无会话引用的过期客户端，读取只校验有效期，不产生写入；退出按指定客户端撤销全部会话。
 
 ## 开发期schema与凭据
 

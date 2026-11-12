@@ -9,7 +9,7 @@ import type {
 import type { FastifyRequest } from 'fastify';
 import { LoginError } from './errors';
 
-/** Private bootstrap and persistent application authorization for one local profile. */
+/** Client initialization and persistent application authorization for one local profile. */
 export interface LocalAuthOptions {
   store: AuthRepository;
   providers: () => LoginProvider[];
@@ -23,7 +23,6 @@ const LOCAL_COOKIE = 'my_pi_local';
 const LOGIN_COOKIE = 'my_pi_session';
 const CLIENT_LIFETIME = 90 * 24 * 60 * 60 * 1000;
 const SESSION_LIFETIME = 30 * 24 * 60 * 60 * 1000;
-const PAIR_LIFETIME = 10 * 60 * 1000;
 
 function equalSecret(actual: string, expected: string): boolean {
   const left = Buffer.from(actual);
@@ -35,17 +34,11 @@ function hash(token: string): string {
   return createHash('sha256').update(token).digest('hex');
 }
 
-/** Checks local client trust and separately issued, client-bound application sessions. */
+/** Binds login flows and application sessions to initialized local clients. */
 export class LocalAuth {
-  private challenge = this.newChallenge();
-  private attempts = { count: 0, until: 0 };
   private readonly watchers = new Map<() => void, () => void>();
 
   public constructor(private readonly options: LocalAuthOptions) {}
-
-  public get pairingCode(): string {
-    return this.challenge.code;
-  }
 
   public trustedSource(request: FastifyRequest, requireOrigin: boolean): boolean {
     const address = request.server.server.address();
@@ -81,7 +74,7 @@ export class LocalAuth {
 
   public requireClient(request: FastifyRequest): LocalClient {
     const client = this.client(request);
-    if (!client) throw new LoginError('LOCAL_AUTH_REQUIRED', '请先完成本机授权。', 401);
+    if (!client) throw new LoginError('CLIENT_REQUIRED', '请重新连接本机服务。', 401);
     return client;
   }
 
@@ -113,7 +106,7 @@ export class LocalAuth {
         expiresAt: session.expiresAt,
       };
     return {
-      localAuthorized: client !== undefined,
+      clientInitialized: client !== undefined,
       authenticated: session !== undefined,
       csrfToken: client?.csrfToken ?? null,
       providers: this.options.providers(),
@@ -123,32 +116,23 @@ export class LocalAuth {
     };
   }
 
-  public pair(code: string): { cookie: string; status: AuthStatus } {
-    const now = Date.now();
-    if (this.attempts.until < now) this.attempts = { count: 0, until: now + 60_000 };
-    this.attempts.count += 1;
-    if (this.attempts.count > 5)
-      throw new LoginError('PAIR_RATE_LIMIT', '尝试次数过多，请稍后再试。', 429);
-    if (now > this.challenge.expiresAt || !equalSecret(code, this.challenge.code))
-      throw new LoginError('PAIR_INVALID', '配对码无效或已过期。', 401);
+  /** Reuse a valid client without renewing its expiry or changing its application session. */
+  public initialize(request: FastifyRequest): { cookie: string; status: AuthStatus } {
+    const token = this.cookieToken(request, LOCAL_COOKIE);
+    const client = this.client(request);
+    if (token && client)
+      return {
+        cookie: cookieValue(LOCAL_COOKIE, token, client.expiresAt),
+        status: this.describe(client, this.session(request)),
+      };
     const grant = this.grant();
-    this.challenge = this.newChallenge();
-    this.attempts = { count: 0, until: 0 };
     return { cookie: grant.cookie, status: this.describe(grant.client, undefined) };
   }
 
   public bootstrap(secret: string, request: FastifyRequest): string {
     if (!this.options.ownerSecret || !equalSecret(secret, this.options.ownerSecret))
       throw new LoginError('OWNER_INVALID', '桌面授权失败。', 401);
-    const token = this.cookieToken(request, LOCAL_COOKIE);
-    const client = this.client(request);
-    if (token && client) return cookieValue(LOCAL_COOKIE, token, client.expiresAt);
-    return this.grant().cookie;
-  }
-
-  public getPairingCode(): string {
-    if (this.challenge.expiresAt < Date.now()) this.challenge = this.newChallenge();
-    return this.challenge.code;
+    return this.initialize(request).cookie;
   }
 
   public login(
@@ -230,10 +214,6 @@ export class LocalAuth {
     const token = this.cookieToken(request, LOGIN_COOKIE);
     if (!client || !token) return undefined;
     return this.options.store.findLoginSession(hash(token), client.id, Date.now());
-  }
-
-  private newChallenge(): { code: string; expiresAt: number } {
-    return { code: randomBytes(8).toString('hex'), expiresAt: Date.now() + PAIR_LIFETIME };
   }
 
   private cookieToken(request: FastifyRequest, name: string): string | undefined {

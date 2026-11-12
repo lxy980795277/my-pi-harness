@@ -2,7 +2,7 @@
 
 基于 Pi 的本地优先 PC Agent Runtime，独立实现，支持 Electron 与浏览器共用界面。第一阶段逐步对齐标杆功能，第二阶段迭代自己的产品能力；Computer Use 延后。
 
-当前提供GitHub应用登录、模型设置、持久会话、队列/分支、工作区与受控工具、上下文管理，以及MCP、Skills、插件和办公能力。M5已加入独立上下文的子Agent、并行/嵌套任务、通信与停止、角色预算及任务看板，正在完成整体验证。权限提供请求批准、独立AI帮我批准与完全访问，macOS Shell按策略隔离；会话执行事实保存为宿主JSONL，SQLite保存配置与可重建投影。Windows/Linux Shell仍不可用，真实账号和平台验收独立记录；范围及状态见[路线图](docs/00_OVERVIEW/roadmap.md)。
+当前提供GitHub应用登录、模型设置、持久会话、队列/分支、工作区与受控工具、上下文管理，以及MCP、Skills、插件和办公能力。M5提供独立上下文的子Agent、并行/嵌套任务、通信与停止、角色配置及任务看板。M6已完成独立长期记忆、本地混合检索、对话直接保存与默认自动学习、只读历史定位的开发和本机验证。权限提供请求批准、独立AI帮我批准与完全访问，macOS Shell按策略隔离；会话执行事实保存为宿主JSONL，SQLite保存配置与可重建投影。Windows/Linux Shell仍不可用，真实账号和平台验收独立记录；范围及状态见[路线图](docs/00_OVERVIEW/roadmap.md)。
 
 ## 开始开发
 
@@ -20,7 +20,7 @@ GitHub 登录配置放在仓库根 `.env`，开发入口自动加载。新克隆
 pnpm dev
 ```
 
-打开 `http://127.0.0.1:5174`，填写启动终端显示的一次性配对码，然后完成GitHub登录。Vite 将 `/api` 代理到 `127.0.0.1:4311` 的独立 daemon。
+打开 `http://127.0.0.1:5174`，页面自动初始化客户端连接，再完成GitHub登录，无需通信码。Vite 将 `/api` 代理到 `127.0.0.1:4311` 的独立 daemon。
 
 桌面入口：
 
@@ -28,7 +28,7 @@ pnpm dev
 pnpm dev:desktop
 ```
 
-该命令启动 Vite 和 Electron；Electron 启动自己的 daemon，等待 Web 就绪后打开窗口，退出时关闭后台服务。两种入口共用默认开发端口，分别运行即可。桌面启动链自动建立本机信任，然后由GitHub验证应用身份；已登录页面可以生成另一个浏览器的配对码。
+该命令启动 Vite 和 Electron；Electron 启动自己的 daemon，等待 Web 就绪后打开窗口，退出时关闭后台服务。两种入口共用默认开发端口，分别运行即可。桌面启动链自动初始化客户端，然后由GitHub验证应用身份；普通浏览器也自动初始化自己的连接，两端的应用登录Cookie独立。
 
 会话JSONL在开发和正式运行时统一写入仓库根目录的`.my-pi-harness/`，其下按profile路径摘要隔离。独立安装包通过`MY_PI_HARNESS_SESSION_LOG_ROOT`指定该仓库中的隐藏目录。配置数据库与系统凭据使用应用profile；会话从JSONL恢复，不以SQLite反向补日志。开发阶段不保留旧格式兼容。目录和配置细节见[架构](docs/01_ARCHITECTURE/overview.md)与[存储说明](packages/storage/README.md)。
 
@@ -43,11 +43,12 @@ apps/
   desktop/         Electron main/preload、daemon 监督、打包
 packages/
   agent-runtime/   Pi模型网关、Run/工具、上下文与会话工作状态
-  tools/           27个原生工具、通用Skill能力与受管理命令
+  tools/           34个原生工具、通用Skill能力与受管理命令
   plugins/         插件声明/资源、安装启停更新、服务授权与贡献
   sandbox/         宿主文件/网络守卫、平台隔离与受监管进程
   integrations/    MCP、通用OAuth、受控网络与高级账户协议适配
-  storage/         JSONL批日志、SQLite/Drizzle配置和投影、附件、凭据与profile锁
+  memory/          独立记忆规则、直接保存/学习与固定/相关选择
+  storage/         JSONL批日志、SQLite/Drizzle独立事实和投影、附件、凭据与profile锁
   protocol/        公开跨端DTO/schema、宿主internal数据与协议版本
   tsconfig/        Node / Browser 编译配置
 scripts/           开发、版本、ESLint规则、依赖边界及产物检查
@@ -89,6 +90,7 @@ pnpm smoke:desktop                # 启动应用目录，验证桥、隔离、�
 - [M1 Spec与统一验收范围](docs/04_FEATURES/202610131100_feature_model-session/spec.md)
 - [M1统一验证与待验收项](docs/04_FEATURES/202610131100_feature_model-session/verify.md)
 - [模型与会话协议](docs/03_API/model-session.md)
+- [记忆与历史搜索](docs/07_USER_GUIDE/记忆与历史搜索.md)
 - [M3上下文与交互Spec](docs/04_FEATURES/202610151655_feature_m3-context-interaction/spec.md)
 - [M3统一验证与平台限制](docs/04_FEATURES/202610151655_feature_m3-context-interaction/verify.md)
 - [M2分步收尾与验收范围](docs/04_FEATURES/202610151515_feature_m2-completion/spec.md)

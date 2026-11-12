@@ -7,6 +7,7 @@ import { useSettingsStore } from '@/features/settings/stores/settings';
 import { useTaskPresentationStore } from '@/features/tasks/stores/tasks';
 import { useTaskMessageStore } from '@/features/tasks/stores/messages';
 import { useWorkDraftStore } from '@/features/work/stores/drafts';
+import { useSearchStore } from '@/features/search/stores/search';
 
 /** Clears every private client domain when authorization ends; Query is cleared by its owner. */
 export const useResetClientState = (): (() => void) => {
@@ -34,6 +35,9 @@ export const useResetClientState = (): (() => void) => {
   const resetWorkDrafts = useWorkDraftStore((state) => {
     return state.reset;
   });
+  const resetSearch = useSearchStore((state) => {
+    return state.reset;
+  });
   return useCallback((): void => {
     resetNavigation();
     resetComposer();
@@ -43,6 +47,7 @@ export const useResetClientState = (): (() => void) => {
     resetTasks();
     resetTaskMessages();
     resetWorkDrafts();
+    resetSearch();
   }, [
     resetAttachments,
     resetComposer,
@@ -52,5 +57,6 @@ export const useResetClientState = (): (() => void) => {
     resetTaskMessages,
     resetTimeline,
     resetWorkDrafts,
+    resetSearch,
   ]);
 };

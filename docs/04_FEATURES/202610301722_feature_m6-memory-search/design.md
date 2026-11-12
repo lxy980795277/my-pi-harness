@@ -1,132 +1,65 @@
-# M6 数据、检索与请求设计
+# M6 模块、数据与请求设计
 
-本文为[Spec](spec.md)的实施建议，尚未实现。复用Pi执行、profile身份、SQLite与已有本地embedding；接口/schema变化在实现阶段同步协议，不在本轮预先改代码。
+2026-11-11按产品0.19.1和基线`320b46b`实施。M6.1–M6.6已逐节完成开发与本机验证；实际证据与未验范围见[验证记录](verify.md)，完成门槛见[任务](tasks.md)。长期有效机制由[技术专题](../../09_TECHNICAL/长期记忆与搜索设计.md)拥有，公开字段与HTTP由[协议](../../03_API/memory-search.md)拥有，本文记录本轮范围、实现位置和已采纳的设计取舍。
 
-## 现有入口
+## 基线缺口与处理
 
-| 入口                                                                                                                                                  | 当前能力与M6接入点                                                           |
-| ----------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| [ProfileStore](../../../packages/storage/src/profile/store.ts) / [打开profile](../../../packages/storage/src/profile/open.ts)                         | 持锁、迁移、JSONL重建及中断恢复；独立记忆事实不能纳入会话投影清空列表        |
-| [应用身份](../../../packages/storage/src/repositories/auth.ts)                                                                                        | profileOwner稳定AppUser.id；从认证上下文取得owner，不用昵称/邮箱推断         |
-| [WorkContext](../../../packages/agent-runtime/src/context/request-context.ts) / [RunExecution](../../../packages/agent-runtime/src/runs/execution.ts) | 每请求准备、预算、摘要和context.prepared；加入召回、最终有效性检查与私有快照 |
-| [WorkRuntime](../../../packages/agent-runtime/src/work/runtime.ts) / [任务上下文](../../../packages/storage/src/sessions/model-context.ts)            | 当前分支/Task原文读取和search_session_history，不改成跨会话扫描              |
-| [工具目录搜索](../../../packages/tools/src/utils/tool-search.ts)                                                                                      | MiniSearch、中文分词、精确名称优先、向量及RRF；保留冻结目录、授权和自动加载  |
-| [本地embedding](../../../apps/daemon/src/search/local-embedder.ts) / [Worker](../../../apps/daemon/src/search/local-embedding-worker.ts)              | 固定多语言E5、CPU/q8、384维；提取多文本用途接口，补队列及资源状态            |
-| [宿主装配](../../../apps/daemon/src/application/services.ts) / [桌面资源](../../../scripts/prepare-desktop.mjs)                                       | daemon拥有者及profile模型缓存；目前没有随包权重，准备与查询需要分开          |
+| 基线风险                                                   | 实际处理                                                                                 |
+| ---------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| 请求投影立即记录，随后才等模型名额，期间资料可能变化       | `runs/request.ts`区分草稿与最终提交，等待后复核，失效先释放再重备，已交出请求不重发      |
+| 只有每Run工具目录临时向量，没有独立记忆事实与历史索引      | 新增memory领域包、storage独立事实及派生search，保持M4目录加载语义                        |
+| 首次查询可能下载，Worker FIFO且活动取消缺少实际settled追踪 | 共享模型资源唯一拥有者、两个固定模型视图、显式prepare及本地专用普通加载、优先级/公平队列 |
+| 当前查询可能沿用Run首问，任务/通信容易混同直接人类声明     | 按实际消费输入更新，独立保留任务/通信来源，含历史引用不作为自动学习来源                  |
+| 普通分支选择是写操作，Task详情从首页加载且带操作按钮       | 新增只读精确来源窗口与around-message分页，历史阅读不用执行分支或TaskDialog               |
+| 虚拟列表没有来源跳转入口                                   | 按稳定message/entry退出follow、展开过程、scrollToIndex及测高校准，定位前校验全文hash     |
 
-## 事实与派生数据
+## 实际模块
 
-会话JSONL拥有执行事实；长期记忆独立存入profile SQLite，像独立配置一样跨会话存在。画像、FTS和向量不成为另一套事实源。下表划分职责，实际表名/字段按实现查询需求确定，不为每项各建一张表。
+| 实现                                                                                                                                                      | 拥有职责                                                                 |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| [memory/service.ts](../../../packages/memory/src/service.ts)、[ports.ts](../../../packages/memory/src/ports.ts)                                           | 独立记忆规则、实际repository端口与revision/幂等用例                      |
+| [memory/selection.ts](../../../packages/memory/src/selection.ts)、[mutations.ts](../../../packages/memory/src/mutations.ts)                               | 固定/相关选择与直接写入规范，不持有SQL/Worker                            |
+| [memory/snapshot.ts](../../../packages/memory/src/snapshot.ts)                                                                                            | 纯JSON叶出口，复用最终prompt中的单一记忆块                               |
+| [storage/memory](../../../packages/storage/src/memory/repository.ts)                                                                                      | 事实/设置/receipt/直接写入事务、来源验证与无正文遗忘账本                 |
+| [storage/search](../../../packages/storage/src/search/repository.ts)、[source-window.ts](../../../packages/storage/src/search/source-window.ts)           | 派生来源、分块/FTS/向量、代际/水位、精确有界阅读                         |
+| [daemon/memory](../../../apps/daemon/src/memory/service.ts)、[retrieval.ts](../../../apps/daemon/src/memory/retrieval.ts)                                 | 身份/范围解析、检索与本地相关性复核、路由装配                            |
+| [daemon/search](../../../apps/daemon/src/search/service.ts)、[runtime.ts](../../../apps/daemon/src/search/runtime.ts)                                     | 人类用例与根Run窄权限、查询/索引生命周期                                 |
+| [local-model-resource.ts](../../../apps/daemon/src/search/local-model-resource.ts)                                                                        | 单Worker、双模型独立状态、有限优先级队列及真实取消                       |
+| [runs/request.ts](../../../packages/agent-runtime/src/runs/request.ts)                                                                                    | 模型名额、最后复核、最终提交和立即派发                                   |
+| [runs/input-references.ts](../../../packages/agent-runtime/src/runs/input-references.ts)、[search.ts](../../../packages/agent-runtime/src/runs/search.ts) | 可见来源输入、队列复验及每Run精确读取资格                                |
+| [34工具目录](../../../packages/tools/src/workspace-tool-registry.ts)                                                                                      | 七个M6操作各自单文件，注册策略和宿主窄handler，不在runtime定义工具schema |
+| [Web memory](../../../apps/web/src/features/memory)、[Web search](../../../apps/web/src/features/search)                                                  | Query事实、已保存记忆管理/画像、搜索只读窗口、精确引用及展示状态         |
 
-| 数据                 | 必要内容                                                                                       | 生命周期                                                     |
-| -------------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| 记忆条目             | id、scope判别联合、类别、正文、revision、有效状态、来源引用、创建/更新时间                     | 独立事实，重启/会话重建保留，人工编辑CAS，删除退出可召回集合 |
-| 待确认候选           | 来源定位/hash、建议内容/作用域、冲突目标、确认状态、幂等键                                     | 不参与回忆；拒绝、源失效或确认后不能重复消费                 |
-| 写操作结果与抑制标记 | 最小requestId/工具调用身份、结果ID/revision、已拒绝/忘记的旧来源指纹                           | 响应丢失时不重复写，不另存全文变更日志，不从旧来源复活       |
-| 搜索文档/片段        | source kind/id、owner/workspace、Session/branch/Task/message定位、原文hash、片段范围、索引签名 | 可重建，不从live overlay或私有请求提取                       |
-| FTS与向量            | 词法token、文本hash、模型/分块签名、维数及归一化向量                                           | 派生，缺失可恢复，不使业务事实失效                           |
-| 索引进度             | 活跃构建代际、源水位、积压/错误计数                                                            | 可取消及重启对账，只允许本地无副作用计算自动继续             |
+memory只依赖浏览器安全protocol与纯规则依赖。storage实现领域repository，daemon注入用例与本地模型；runtime通过窄端口取得当前资料，tools执行注册handler。没有integrations/search、第二消息体系、通用事件总线或空的记忆子package。文件拆分按现有职责，不以目录层数或文件数量为目标。
 
-scope建议为user(ownerUserId)或workspace(ownerUserId, workspaceId)，由宿主解析，非任意标签。无工作区会话不能隐式读取其他workspace。revision仅用于编辑及异步回写并发控制，不引入Session或通用事件版本。
+## 已确定的数据与权限
 
-来源可引用Session/branch/Task/message/seq/hash，但不能用rebuildProjections会DELETE的消息表作记忆事实的级联外键。独立记忆可保留已不存在的出处并标记“来源不可用”；JSONL重放不重新执行记忆变更。
+记忆及设置是同profile的独立SQLite事实，来源会话归档不删除已保存条目；JSONL继续拥有会话执行。直接写入由memory领域规则与storage事务执行，receipt绑定真实toolCallId，来源账本与遗忘抑制仅保留必要指纹；忘记清理各代际索引，旧来源不能复活事实，人类新手工保存不受旧指纹阻止。schema16清理原提案表，设置改为allowUse/allowLearning且默认均开启。
 
-记忆写入和幂等结果在同一SQLite短事务完成，FTS可见性同时更新。工具操作沿用原审批及副作用记录；若记忆写成功而会话日志收尾失败，不承诺跨介质回滚，需通过操作身份确认实际结果，避免重复创建。
+采用分为固定与相关。固定项不能因排名低被静默遗漏，相关项允许零命中；两者共用独立请求额度，不能恢复累计token或固定循环次数限制。实际采用正文只进入最终prompt的一块，采用说明及未采用原因不再保存第二份正文。最近每Run/Task的采用缓存由已提交prepared派生，完整Trace继续归M7。
 
-## 保存、学习与画像
+根请求可用user及当前workspace；子任务默认只用获准workspace，父显式转交user记忆ID后再校验当前有效性，兄弟和父完整历史不共享。模型历史检索默认仅当前workspace的其他可见Root；人类引用是精确source/hash/target/选区，不扩大为整个其他workspace，也不自动授予子任务。
 
-记忆变更必须关联真实用户保存/修改/遗忘动作、确认内容及scope；ask/auto/full-access只管理工具审批，不能替代长期记忆的产品授权。设置/消息菜单直接操作由认证API落盘；自然语言请求经根工具生成预览，用户确认同一提案后才写入，不采信模型自报“用户已授权”。子任务首版只产结论，不能直接变更长期记忆。
+根Agent在当前正常工具循环使用save_memory/learn_memory/update_memory/delete_memory。明确保存/纠正不增加确认步骤，删除沿统一审批；自动学习需要使用和学习开关均开启，写入事务再次校验。宿主绑定当前实际消费的人类消息、hash与真实工具意图，模型不能自报owner或Run；子任务不提供写入入口。工具说明要求明确意图才保存/纠正，自动学习只提取稳定偏好、长期指令及事实，不把秘密、临时任务状态、引用、网页、thinking或通信视为用户声明。默认保存固定采用，自动学习的偏好/指令默认固定、事实默认相关，由领域层唯一确定。
 
-未指定scope默认当前workspace。无workspace或需要user作用域时，预览要求用户明确选择，项目事实不能由模型自行提升为跨项目记忆。确认动作关联提案身份、正文hash和scope；内容/范围变化必须重新展示，不能拿旧确认批准新内容。
+不再保留pending提案、确认/拒绝API、单消息学习grant或TTL，也不在终态后单独调用模型抽取。设置页面管理已保存条目，聊天呈现普通折叠工具调用及实际结果。
 
-学习模式建议为“仅手动”（默认）与“自动建议”。后者允许根在当前真实Run中提出候选，不在root终态后私自创建学习Agent或收费请求。用户主动要求学习历史时是明确的新Run；请求限制、取消和失败沿原模型路径，不另建推理循环。
+## 检索与自动采用的区别
 
-候选保留真实用户原话或被明确选中/认可的资料来源；引用块、附件、网页和工具数据不因为包在user消息里就成为用户声明。thinking、摘要、assistant猜测、agentMessageId通信及失败探索不自动成为事实。没有用户确认，候选不进入有效记忆或画像。
+持久检索使用普通FTS5与独立的本地embedding候选，合法scope先于TopK与计数，RRF按来源去重，最后重验原文/hash/偏移。候选、扫描、tokenizer及覆盖限制显式标注，不随机截断语料。保持现有M4工具目录引擎，通过共享embedding资源整合本地推理，不把工具目录当历史数据库。
 
-自动候选创建前重验建议开关及设置代际，停用后的迟到自动提议拒绝；关闭自动建议不删除已有记忆，也不禁止用户显式确认/手工保存。所有确认仍重验来源可见性/hash、目标revision、scope及拒绝/遗忘标记。相同来源幂等，不按模型置信度或最后写入覆盖冲突；更正显示差异。用户明确新建/更新可覆盖抑制，旧后台返回不可覆盖。
+实测证明E5相似度与简单分差不足以同时满足正例覆盖和无关不采用，因此保留原small embedding，增加固定本地cross-encoder复核，不引入付费隐藏推理。删除旧余弦/强词法自动采用规则；人工搜索的相近候选不等于自动采用。模型、切块、阈值及正式70条分组质量基线见技术专题及verify，不另建评测平台。
 
-画像是有效记忆的分组视图：user展示语言/回答偏好等，workspace展示项目约定及已确认决策；每项均能定位原条目，不另存一份LLM自由总结。
+普通查询与索引不下载权重；模型状态根据固定缓存可用性判断，已有缓存可本地懒加载。显式prepare才补齐文件。新代际追平后激活，source/hash/signature CAS阻止迟到向量恢复失效正文，重启复用有效向量。
 
-## 回忆与主子权限
+## 只读定位与引用
 
-根根据当前输入从user及当前workspace召回；子使用自己的任务输入/历史，只能访问获准workspace及父明确转交的user记忆ID。父完整回忆包和兄弟消息不默认下放，委派记忆引用必须是父可读集合的子集。
+`SearchSourceSelection`复用稳定来源、精确target及UTF-16半开范围，客户端不自报引用正文。人类来源窗口最多9条、锚点最多8000字符、邻居各最多2000，按messageId分页；长正文以textOffset由宿主按真实Unicode边界切片。模型精读不返回邻居，只接受本Run真实搜索命中或已消费引用所允许的范围。
 
-自动回忆不搜索全部会话。普通历史经显式工具调用才进入上下文；跨会话检索默认排除本Session，当前分支原文继续使用search_session_history，避免找回编辑、reset或检查点已放弃的内容。
+当前时间线只在来源全文hash与最新活动分支匹配后按稳定entry定位，不能查询未挂载DOM或改全量渲染。其他会话/分支/归档/Task保持只读窗口，主对话/SSE/草稿不卸载。引用先加入输入草稿，显式发送后由宿主复验并保留可见原文；队列只保留精确引用元数据，不增加正文副本。
 
-```mermaid
-flowchart TD
-    A[当前真实输入或子任务输入] --> B[宿主解析身份及授予范围]
-    B --> C[合法记忆词法与语义召回]
-    C --> D[相关性去重与记忆预算]
-    D --> E[组装规则历史工具与摘要]
-    E --> F[模型名额与派发前有效性复核]
-    F -->|已修改或删除| D
-    F -->|有效| G[冻结实际采用内容并记录请求]
-    G --> H[原Provider请求]
-```
+## 实施与收口
 
-派发前复核需协调WorkContext.project与AgentRequestScheduler/Hooks：context.prepared早于并发名额等待，不能只在读取时检查。等待期间条目或权限改变，应释放名额、有界重新组装并重验单次上下文容量，准确记录最终输入；不暗改持久快照，不把纯本地重组算成新模型轮次。执行不再有累计token额度或预留/结算逻辑。
+按M6.1固定闭环→M6.2持久检索与资源→M6.3相关回忆→M6.4直接保存/学习/画像→M6.5历史定位逐节完成并验证，M6.6汇总回归、真实本地检索质量、一万片段性能、隔离部署与macOS Electron。未实测的平台/外部账号继续明确记录，不能以代码存在或旧M5证据替代。
 
-记忆使用明确的资料区，不冒充系统授权或用户新指令；独立预算类别计入总上下文，低相关、停用或额度不足可不注入。每请求替换上一集合，不无限叠加；不写入父子共享basePrompt，也不把注入段复制成规则/画像/摘要的另一份事实。缓存按scope、查询及有效记忆状态区分，每次发送前仍复核；子任务也不能绕过父已停用的回忆策略。
-
-context.prepared私有快照保留实际采用ID、revision、scope、来源、冻结正文及必要截断说明，不仅保存可变ID，也不把完整私有请求公开到搜索/SSE。codec和协议实现时同步，不另造完整Trace页面。
-
-## 检索与中文处理
-
-记忆和会话共用持久文档/片段索引，工具目录继续按Run冻结候选用MiniSearch，不强行落成全局FTS库。只抽取多消费者确需的文本/排名计算及embedding端口；工具参数、精确名、授权和自动加载仍归工具模块。
-
-建议普通FTS5与文档表由storage同一短事务更新，初版不加contentless/external-content触发器或原生ANN扩展。文档与查询统一Intl.Segmenter预分词，再交给unicode61；工具专用CamelCase/复数规则不直接套用人名和对话。中文短查询另外索引连续CJK的单字/相邻双字字段：明确的一字/两字查询走对应字段并核对原文，普通多词查询不把全部单字当OR条件。按Unicode码点处理，规则纳入索引签名；用真实语料检查大小/噪声，而非随机截断扫描。SQLite说明trigram全文查询不匹配不足三个Unicode字符的子串，不能只选trigram解决短词，见[FTS5官方文档](https://www.sqlite.org/fts5.html#the_trigram_tokenizer)。
-
-FTS表达式由宿主从校验后的token构造并正确引用，SQL参数化不能代替MATCH语法处理；片段按纯文本返回，不信任索引产生的HTML。分页游标绑定查询/scope/索引代际，条件变化不能拼接旧页。
-
-FTS与全部合法范围的语义排名独立产生候选，再按名次做RRF及去重，不直接相加不同引擎原始分数；只重排FTS命中会漏掉词法零重合的同义表达。自动回忆采用固定语料校准的相关性门槛，不照搬工具目录“最相近一批必选”的相对阈值，允许零采用。
-
-向量先用SQLite Float32数据及有界批次精确余弦，不新增向量数据库。CPU排序/推理不长时间占daemon事件循环，扫描范围与上限可观测；超预算明确报告词法模式或语义覆盖未完成，不静默随机截断。ANN是否必要由实测规模决定。
-
-切块保留原文hash及定位，按段落/句子和实际模型token上限处理，不用字符数冒充token。既有E5使用query/passage前缀，长输入会截断，见[模型说明](https://huggingface.co/intfloat/multilingual-e5-small)；长会话不能直接塞进16000字符接口后接受丢尾。缓存签名涵盖固定模型revision、dtype/维数、前缀/pooling与分词/切块规则。
-
-## 增量索引与恢复
-
-只索引持久完整正文或终态保存的部分正文；失败/取消部分可供历史搜索但标出状态，不自动学习。默认不索引思考、私有请求、原始工具大结果、任意附件或全盘文件。
-
-启动先由JSONL恢复投影，再按稳定sourceId/hash对账并复用向量，记忆独立事实不重建。源变化及FTS提交同事务，embedding在事务外计算，回写CAS校验源存在、revision/hash及索引代际。
-
-全量重建用新代际及变化补偿，完成后原子切换；期间仍按最新事实过滤旧结果，切换不复活已删内容。候选及被忘记来源有独立失效/抑制，迟到返回、重放旧Job和重启均不能恢复被拒绝事实。
-
-会话当前“删除”实际是归档：历史索引立即排除，未确认候选失效。独立确认的记忆继续由用户管理，来源不可用应显示；删会话不暗示忘记所有记忆或擦除JSONL。分支改变只调整可见来源；忘记则撤去画像、命中、回忆和旧缓存，原历史及已发送请求快照保留。
-
-## 模型资源与队列
-
-复用固定多语言E5及profile/models缓存，不接远端embedding。daemon唯一拥有模型，前台优先，后台索引小批、有界、可暂停；现有无优先级长FIFO不足以支持历史批索引。
-
-模型“未准备/准备中/就绪/不可用”和索引“追赶中/就绪/失败”分开显示。普通查询本地专用加载，空缓存提供词法；用户显式准备才下载固定版本。完整缓存后验证断网冷启动。官方支持关闭远程模型读取，见[Transformers.js环境配置](https://huggingface.co/docs/transformers.js/api/env)；实施仍核对当前锁定依赖，不擅自升级。
-
-取消移除排队任务并禁止迟到写入；原生推理若不可中断，需限制最多一个有界在途批次，不把AbortSignal当硬停计算。超时/关闭由拥有者终止并等待Worker，不影响其他进程；重试本地派生计算不重放收费请求或记忆写入。
-
-启动及首次发送不等权重下载/全历史向量化。关闭先停止新查询/索引、结算所属工作，再释放Worker和store；不向Worker传凭据或任意模型路径/可执行代码。
-
-## 搜索入口与界面
-
-设置新增“记忆与搜索”：user/workspace条目、候选/来源/冲突、画像、回忆/学习策略、模型准备及索引状态。消息菜单“记住这条”展示拟保存内容和scope；聊天工具结果复用轻量行。
-
-采用记忆放入现有上下文详情，不在header、输入框或固定统计行新增占高状态。上下文比例与对话次数仍保持两项，后台学习/索引不遮住工作台。
-
-侧栏统一搜索入口支持会话/记忆、工作区、时间。默认各Session当前可见分支根消息；显式历史分支或子任务时标来源并跳准确位置，复用任务详情及按目标定位查询，不全量拉取历史。
-
-人类全局搜索不等于模型权限。跨会话搜索工具首版仅给根Run，默认当前workspace（无workspace则未分配会话）；跨workspace由用户显式引用命中后按精确来源转交。打开命中和读取工具再次验证范围，不仅在UI隐藏越界项。
-
-Query拥有服务端事实，Store只保存筛选、选择和草稿；key包含身份/scope/查询，取消、失效及旧响应沿现有规则。注销清理客户端私有状态，不擅自取消原后台Run或删除记忆。
-
-## 模块建议
-
-| 模块                                                  | 职责                                                              |
-| ----------------------------------------------------- | ----------------------------------------------------------------- |
-| packages/protocol/src下memory/search领域              | 浏览器安全的记忆、来源、检索及索引schema；实际实现再声明          |
-| packages/storage/src/memory、search                   | 独立事实/候选/幂等及失效、FTS/片段/向量/代际和有界源查询          |
-| packages/agent-runtime/src/memory及context/work/tools | 记忆策略端口、请求召回/预算/审计、根工具及Task授予范围，不直接SQL |
-| agent-runtime检索纯计算                               | 仅抽取多消费者确需的分词/排名，不建万能框架                       |
-| packages/integrations/src/search                      | 本地embedding适配及Worker，不拥有用户事实/权限/数据库             |
-| apps/daemon/src/memory、search                        | 认证scope、服务/路由、索引对账/队列、模型准备及生命周期           |
-| apps/web/src/features/memory、search                  | 管理/候选/画像、搜索定位及上下文采用展示                          |
-
-包间沿既有端口及依赖方向，不新建空package。实现时区分schema的独立事实/派生索引，同步协议及消费者；规划不提前升版、清库或写未使用迁移。
+M7仍拥有完整请求Trace/费用、文件撤销、完整导入导出与正式发布；Computer Use、云同步、全盘文件RAG、知识图谱与统一评测平台不在本轮。用户要求提交时再走提交流程，本轮不自动清库、提交或推送。

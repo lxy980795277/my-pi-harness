@@ -111,6 +111,7 @@ export const ContextUsageSchema = Type.Object(
     categories: Type.Object(
       {
         system: Type.Integer({ minimum: 0 }),
+        memory: Type.Optional(Type.Integer({ minimum: 0 })),
         rules: Type.Integer({ minimum: 0 }),
         tools: Type.Integer({ minimum: 0 }),
         messages: Type.Integer({ minimum: 0 }),

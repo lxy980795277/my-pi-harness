@@ -2,6 +2,7 @@ import { Type, type Static } from 'typebox';
 import { ToolDiscoveryDiagnosticSchema } from '../extensions/mcp';
 import { FrozenMcpToolsSchema } from './frozen-tools';
 import { FrozenSkillSchema, SkillCandidatesSchema } from './skills';
+import { SearchSourceSelectionSchema } from '../search/search';
 
 export type QueueCapabilityMetadata = Static<typeof QueueCapabilityMetadataSchema>;
 
@@ -10,6 +11,9 @@ export const QueueCapabilityMetadataSchema = Type.Object(
   {
     version: Type.Literal(1),
     requestId: Type.String({ minLength: 1 }),
+    searchQuotes: Type.Optional(
+      Type.Array(SearchSourceSelectionSchema, { maxItems: 4, uniqueItems: true }),
+    ),
     mcpBindings: FrozenMcpToolsSchema,
     candidateBindings: FrozenMcpToolsSchema,
     skillBindings: Type.Array(FrozenSkillSchema, { maxItems: 16 }),

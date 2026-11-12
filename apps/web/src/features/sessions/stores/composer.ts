@@ -5,11 +5,17 @@ import type {
   InputRequest,
   McpToolSelection,
   SkillSelection,
+  SearchSourceSelection,
 } from '@my-pi-harness/protocol';
 import type {
   NewConversationAttempt,
   NewConversationIntent,
 } from '@/features/sessions/types/composer';
+import {
+  EMPTY_SEARCH_QUOTES,
+  remainingSearchQuotes,
+} from '@/features/sessions/utils/search-quotes';
+import { sourceSelectionKey } from '@/features/search/utils/search';
 
 interface ComposerState {
   newConversationDraft: string;
@@ -21,6 +27,9 @@ interface ComposerState {
   drafts: Readonly<Record<string, string>>;
   mcpSelections: Readonly<Record<string, McpToolSelection[]>>;
   skillSelections: Readonly<Record<string, SkillSelection[]>>;
+  searchQuotes: Readonly<Record<string, readonly SearchSourceSelection[]>>;
+  addSearchQuote: (draftKey: string, selection: SearchSourceSelection) => void;
+  removeSearchQuote: (draftKey: string, key: string) => void;
   setSkillSelections: (draftKey: string, skills: SkillSelection[]) => void;
   setMcpSelections: (draftKey: string, tools: McpToolSelection[]) => void;
   startNewConversation: () => void;
@@ -54,6 +63,40 @@ export const useComposerStore = create<ComposerState>((set, get) => {
     drafts: {},
     mcpSelections: {},
     skillSelections: {},
+    searchQuotes: {},
+    addSearchQuote: (draftKey, selection): void => {
+      const state = get();
+      if (
+        state.pendingInputs[draftKey] !== undefined ||
+        (draftKey === `new:${state.newConversationGeneration}` &&
+          state.newConversationAttempt !== null)
+      )
+        throw new Error('当前输入的提交结果尚未确认，请确认后再添加引用。');
+      if (selection.end <= selection.start || selection.end - selection.start > 8000)
+        throw new Error('每条引用须为 1–8,000 字符的明确原文范围。');
+      const entries = state.searchQuotes[draftKey] ?? EMPTY_SEARCH_QUOTES;
+      const key = sourceSelectionKey(selection);
+      if (
+        entries.some((entry) => {
+          return sourceSelectionKey(entry) === key;
+        })
+      )
+        return;
+      if (entries.length >= 4) throw new Error('每次输入最多引用 4 个片段，请先移除已有引用。');
+      set({ searchQuotes: { ...state.searchQuotes, [draftKey]: [...entries, selection] } });
+    },
+    removeSearchQuote: (draftKey, key): void => {
+      set((state): Partial<ComposerState> => {
+        return {
+          searchQuotes: {
+            ...state.searchQuotes,
+            [draftKey]: (state.searchQuotes[draftKey] ?? EMPTY_SEARCH_QUOTES).filter((entry) => {
+              return sourceSelectionKey(entry) !== key;
+            }),
+          },
+        };
+      });
+    },
     setSkillSelections: (draftKey, skills): void => {
       set((state): Partial<ComposerState> => {
         return { skillSelections: { ...state.skillSelections, [draftKey]: skills } };
@@ -68,11 +111,14 @@ export const useComposerStore = create<ComposerState>((set, get) => {
       const state = get();
       const mcpSelections = { ...state.mcpSelections };
       const skillSelections = { ...state.skillSelections };
+      const searchQuotes = { ...state.searchQuotes };
+      delete searchQuotes[`new:${state.newConversationGeneration}`];
       delete skillSelections[`new:${state.newConversationGeneration}`];
       delete mcpSelections[`new:${state.newConversationGeneration}`];
       set({
         mcpSelections,
         skillSelections,
+        searchQuotes,
         newConversationGeneration: crypto.randomUUID(),
         newConversationAttempt: null,
         newConversationDraft: '',
@@ -112,6 +158,14 @@ export const useComposerStore = create<ComposerState>((set, get) => {
       }
       const pendingInputs = { ...state.pendingInputs };
       const drafts = { ...state.drafts };
+      const searchQuotes = { ...state.searchQuotes };
+      const submitted = state.pendingInputs[sessionId]?.searchQuotes ?? EMPTY_SEARCH_QUOTES;
+      const remaining = remainingSearchQuotes(
+        searchQuotes[sessionId] ?? EMPTY_SEARCH_QUOTES,
+        submitted,
+      );
+      if (remaining.length === 0) delete searchQuotes[sessionId];
+      else searchQuotes[sessionId] = remaining;
       delete pendingInputs[sessionId];
       delete drafts[sessionId];
       const attempt = state.newConversationAttempt;
@@ -120,10 +174,17 @@ export const useComposerStore = create<ComposerState>((set, get) => {
         attempt.sessionId === sessionId &&
         attempt.input.requestId === requestId
       ) {
-        set({ pendingInputs, drafts, newConversationAttempt: null, newConversationDraft: '' });
+        delete searchQuotes[`new:${attempt.generation}`];
+        set({
+          pendingInputs,
+          drafts,
+          searchQuotes,
+          newConversationAttempt: null,
+          newConversationDraft: '',
+        });
         return;
       }
-      set({ pendingInputs, drafts });
+      set({ pendingInputs, drafts, searchQuotes });
     },
     beginNewAttempt: (
       generation: string,
@@ -157,6 +218,10 @@ export const useComposerStore = create<ComposerState>((set, get) => {
         drafts: { ...state.drafts, [sessionId]: attempt.input.text },
         mcpSelections: { ...state.mcpSelections, [sessionId]: attempt.input.mcpTools ?? [] },
         skillSelections: { ...state.skillSelections, [sessionId]: attempt.input.skills ?? [] },
+        searchQuotes: {
+          ...state.searchQuotes,
+          [sessionId]: attempt.input.searchQuotes ?? EMPTY_SEARCH_QUOTES,
+        },
       });
     },
     markNewAttemptUnknown: (generation: string): void => {
@@ -195,6 +260,7 @@ export const useComposerStore = create<ComposerState>((set, get) => {
         drafts: {},
         mcpSelections: {},
         skillSelections: {},
+        searchQuotes: {},
       });
     },
   };

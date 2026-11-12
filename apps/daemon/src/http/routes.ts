@@ -1,3 +1,5 @@
+import { registerSearchRoutes } from '../search/routes';
+import { registerMemoryRoutes } from '../memory/routes';
 import { registerRequestAccess } from './access';
 import { registerRequestErrors } from './errors';
 import type { FastifyInstance } from 'fastify';
@@ -44,6 +46,8 @@ export function registerApplicationRoutes(
   registerToolRoutes(server, services.tools);
   registerWorkRoutes(server, services.work);
   registerAgentRoutes(server, services);
+  registerMemoryRoutes(server, services.memory, services.store);
+  registerSearchRoutes(server, services.search);
   registerAttachmentRoutes(server, services.attachments);
   registerMcpRoutes(server, services.mcp);
   registerRemoteMcpRoutes(server, services.remoteMcp, () => services.webOrigin());

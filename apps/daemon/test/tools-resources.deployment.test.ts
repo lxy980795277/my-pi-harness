@@ -144,6 +144,8 @@ describe.skipIf(process.platform !== 'darwin')('deployed tool and sandbox resour
       const report: unknown = JSON.parse(last);
       expect(report).toMatchObject({
         packages: 'deployed-source',
+        memorySnapshot: true,
+        localModels: 'dual-view-local-only',
         pdfText: true,
         materializedSkills: 4,
       });

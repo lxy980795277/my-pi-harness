@@ -8,6 +8,33 @@ import { DaemonConfigError, loadDaemonConfig } from '../src/application/config';
 const temporaryLogRoot = join(tmpdir(), 'my-pi-config-fixture', '.my-pi-harness');
 
 describe('daemon startup configuration', () => {
+  it('uses one application profile default independently of the launcher working directory', () => {
+    const expected =
+      process.platform === 'win32'
+        ? join(homedir(), 'AppData', 'Local', 'My Pi Harness', 'profiles', 'default')
+        : process.platform === 'darwin'
+          ? join(
+              homedir(),
+              'Library',
+              'Application Support',
+              '@my-pi-harness',
+              'desktop',
+              'profiles',
+              'default',
+            )
+          : join(
+              homedir(),
+              'Library',
+              'Application Support',
+              'My Pi Harness',
+              'profiles',
+              'default',
+            );
+    expect(loadDaemonConfig({}).profileDirectory).toBe(expected);
+    expect(loadDaemonConfig({}, join(tmpdir(), 'desktop-launch')).profileDirectory).toBe(expected);
+    expect(loadDaemonConfig({}, join(tmpdir(), 'web-launch')).profileDirectory).toBe(expected);
+  });
+
   it('reads GitHub registration only from the loaded environment', () => {
     expect(
       loadDaemonConfig({}, join(tmpdir(), 'unrelated-launch-directory')).githubClientId,

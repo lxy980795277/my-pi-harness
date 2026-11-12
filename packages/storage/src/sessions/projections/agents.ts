@@ -73,6 +73,12 @@ export class AgentTaskProjection {
     let anchorMessageId = source.anchorMessageId;
     if (parent.taskId !== undefined) {
       const owner = this.tasks.row(event.sessionId, parent.taskId);
+      const granted = new Set(owner.data.userMemoryIds ?? []);
+      if ((task.userMemoryIds ?? []).some((id) => !granted.has(id)))
+        throw new StorageError(
+          'INVALID_EVENT',
+          'Task cannot expand its parent user memory selection',
+        );
       if (
         owner.closedAt !== null ||
         (owner.data.role.access === 'read-only' && task.role.access === 'write')

@@ -74,8 +74,8 @@ afterEach(async () => {
     await rm(directory, { recursive: true, force: true });
 });
 
-describe('durable application identity and local trust', () => {
-  it('retains separate trust and login facts across projection recovery without storing raw tokens', async () => {
+describe('durable application identity and client initialization', () => {
+  it('retains separate client and login facts across projection recovery without storing raw tokens', async () => {
     const value = await fixture();
     const local = client();
     value.store.auth.createLocalClient(local);
@@ -190,7 +190,7 @@ describe('durable application identity and local trust', () => {
     expect(store.auth.findLocalClient(client('browser').tokenHash, 1000)).toBeUndefined();
   });
 
-  it('revokes all logins for only one client while preserving local trust and another client', async () => {
+  it('revokes all logins for only one client while preserving client initialization and another client', async () => {
     const value = await fixture();
     value.store.auth.createLocalClient(client());
     value.store.auth.createLocalClient(client('browser'));

@@ -1,5 +1,5 @@
 import type { AuthStatus } from '@my-pi-harness/protocol';
-import { CircleDot, Cpu, GitBranch, Link2, MessageSquarePlus } from 'lucide-react';
+import { CircleDot, Cpu, GitBranch, MessageSquarePlus } from 'lucide-react';
 import type { FC } from 'react';
 
 import { NavigationItem } from '@/app/components/navigation-item';
@@ -7,33 +7,28 @@ import { UserProfileCard } from '@/app/components/user-profile-card';
 import { Button } from '@/components/ui/button';
 import type { WorkspacePage } from '@/app/types/application';
 import { WorkspaceTree } from '@/features/workspaces/components/workspace-tree';
+import { SearchEntry } from '@/features/search/components/search-entry';
 
 interface WorkspaceNavigationProps {
   page: WorkspacePage;
   newConversation: boolean;
   authorized: boolean;
   auth: AuthStatus | undefined;
-  pairingCode: string | null;
   onNavigate: (page: WorkspacePage) => void;
   onNewConversation: () => void;
   onSettings: () => void;
-  onPairing: () => void;
-  onHideCode: () => void;
   onLogout: () => void;
 }
 
-/** Desktop navigation and explicit authorization controls are shared by both entry points. */
+/** Workspace navigation and application-session controls are shared by both entry points. */
 export const WorkspaceNavigation: FC<WorkspaceNavigationProps> = ({
   page,
   newConversation,
   authorized,
   auth,
-  pairingCode,
   onNavigate,
   onNewConversation,
   onSettings,
-  onPairing,
-  onHideCode,
   onLogout,
 }) => {
   return (
@@ -53,6 +48,7 @@ export const WorkspaceNavigation: FC<WorkspaceNavigationProps> = ({
           <MessageSquarePlus width={18} height={18} aria-hidden />
           新对话
         </Button>
+        <SearchEntry />
         <NavigationItem
           page="tasks"
           activePage={page}
@@ -70,35 +66,10 @@ export const WorkspaceNavigation: FC<WorkspaceNavigationProps> = ({
       </nav>
       {authorized && <WorkspaceTree />}
       <div className="mt-auto space-y-3 border-t border-border p-3">
-        {authorized && pairingCode && (
-          <div className="space-y-2 px-2">
-            <p className="text-[11px] text-muted-foreground">短时一次性配对码</p>
-            <code className="block rounded border bg-background p-2 text-xs break-all">
-              {pairingCode}
-            </code>
-            <Button type="button" variant="ghost" onClick={onHideCode}>
-              隐藏配对码
-            </Button>
-          </div>
-        )}
-        <div className="flex items-center justify-between gap-2 px-2">
-          <p className="flex items-center gap-2 text-[11px] text-muted-foreground">
-            <CircleDot width={12} height={12} aria-hidden />
-            本机服务
-          </p>
-          {authorized && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              onClick={onPairing}
-              aria-label="生成浏览器配对码"
-              title="生成浏览器配对码"
-            >
-              <Link2 width={14} height={14} aria-hidden />
-            </Button>
-          )}
-        </div>
+        <p className="flex items-center gap-2 px-2 text-[11px] text-muted-foreground">
+          <CircleDot width={12} height={12} aria-hidden />
+          本机服务
+        </p>
         {authorized && <UserProfileCard auth={auth} onSettings={onSettings} onLogout={onLogout} />}
       </div>
     </aside>

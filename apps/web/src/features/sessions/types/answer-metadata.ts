@@ -1,3 +1,5 @@
+import type { MessageView } from '@my-pi-harness/protocol';
+
 /** Display-ready facts for one settled answer, including all of its model steps. */
 export interface AnswerMetadata {
   tokensLabel: string;
@@ -13,5 +15,6 @@ export interface AnswerMetadata {
 export interface AnswerFooter {
   inputId: string;
   copyText: string;
+  memoryMessage: MessageView;
   metadata: AnswerMetadata;
 }

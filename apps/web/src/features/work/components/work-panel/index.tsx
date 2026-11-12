@@ -50,6 +50,8 @@ export const WorkPanel: FC<WorkPanelProps> = ({ session, state, children }) => {
               <TabsContent value="context">
                 <ContextPanel
                   work={work}
+                  sessionId={session.session.id}
+                  runId={session.runs.at(-1)?.id ?? null}
                   workspaceId={session.session.workspaceId}
                   running={state.running || state.query.isFetching}
                   onCommand={state.command}

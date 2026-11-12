@@ -1,6 +1,18 @@
 # 里程碑与功能覆盖
 
+2026-11-12按用户授权将M6、[代码治理](../04_FEATURES/202611121101_refactor_m6-code-governance/verify.md)、自动客户端初始化与共享profile修复整理为[0.20.0](../06_RELEASES/0.20.0.md)本地提交。公开协议28、SQLite16，保留真实数据，Web/daemon/桌面须同步更新；M7及既有平台、账号与办公质量验收缺口保持，不重新生成桌面应用目录。
+
+2026-11-12按用户确认完成[Web与桌面共享profile](../04_FEATURES/202611121411_fix_shared-profile-directory/spec.md)，属于M0与M1配置维护：daemon统一解析默认目录和显式覆盖，保留既有桌面数据路径；定向回归、类型及构建证据见同目录[验证记录](../04_FEATURES/202611121411_fix_shared-profile-directory/verify.md)。不搬库、不改变M6或M7范围。
+
+2026-11-12按用户确认完成[自动初始化本机客户端](../04_FEATURES/202611121130_refactor_automatic-client-initialization/spec.md)，属于M0启动体验与M1登录维护：取消手工配对码，浏览器自动建立低权限客户端后进入应用登录；保留来源、CSRF、账号归属与桌面私有启动链，源码、构建和本机浏览器验证见同目录[验证记录](../04_FEATURES/202611121130_refactor_automatic-client-initialization/verify.md)；不扩展M6或M7范围。
+
+2026-11-12按用户授权开始[M6实现代码治理](../04_FEATURES/202611121101_refactor_m6-code-governance/spec.md)，属于M0与现有M6维护。已按职责清晰、真实去重和资源所有权完成本机治理，证据见同目录[验证记录](../04_FEATURES/202611121101_refactor_m6-code-governance/verify.md)；不扩大M6功能或进入M7，不清理真实数据。
+
+2026-11-12按用户授权简化M6保存策略：明确要求记住/纠正直接保存，默认从对话学习稳定偏好；删除待确认建议和单消息学习流程。直接模式重构与本机重新验收已完成，范围与门槛见[M6任务](../04_FEATURES/202610301722_feature_m6-memory-search/tasks.md#m64-对话直接保存自动学习与画像)，原M6检索和平台证据保留，本次保存链路证据追加到同一verify；未重跑检索基准和桌面打包，不扩大平台验收范围。
+
 本页管理功能范围与里程碑顺序，详细验收由各里程碑 Spec 承担。`规划` 不表示能力已经可用；只有实现与必要验证都完成后才能调整状态。
+
+2026-11-11基于产品0.19.1、`320b46b`重新规划[M6长期记忆与跨会话搜索](../04_FEATURES/202610301722_feature_m6-memory-search/spec.md)：先交付固定记忆与请求最终化，再分阶段建设持久检索/本地资源、相关回忆、受控学习画像和历史精确定位。独立memory领域包、现有模块分工、阶段依赖与验收门槛见[设计](../04_FEATURES/202610301722_feature_m6-memory-search/design.md)和[任务](../04_FEATURES/202610301722_feature_m6-memory-search/tasks.md)。按用户授权完成M6.1–M6.6顺序开发与本机验收，证据见[验证记录](../04_FEATURES/202610301722_feature_m6-memory-search/verify.md)。M1–M5原状态、既有外部验收缺口及M7范围保持；未验平台和真实外部账号不据此关闭。
 
 2026-11-09完成[共享规则与状态归属治理](../04_FEATURES/202611091051_refactor_shared-mechanisms/spec.md)的实现与本机工程验证：统一MCP当前授权、凭据清理与目录状态、队列私有契约、Skill有效目录、网络原语及前端资源生命周期。2142项源码回归、7项隔离部署、六条相关浏览器链路及类型/静态/构建检查通过，详见[验证记录](../04_FEATURES/202611091051_refactor_shared-mechanisms/verify.md)。属于M0与既有M1–M5维护，M6及原有真实账号、Office视觉和平台验收缺口保持。本轮按用户后续授权整理为[0.19.1](../06_RELEASES/0.19.1.md)本地提交，仅同步提交元数据，不重新打包。
 
@@ -79,7 +91,7 @@ Spec目录采用北京时间 `YYYYMMDDHHmm_category_name/`；历史补齐分钟�
 | M3.7 检查点与重置                                                                           | 摘要版本恢复、本会话检索、任务/上下文重置与手动会话快照                                                                       | 实现与macOS本机自动化验证完成；待用户统一体验验收                     |
 | M3.8 整体联调与验收                                                                         | JSONL恢复/质量用例、源码/HTTP/浏览器/桌面及M1/M2回归                                                                          | 实现与macOS本机自动化验证完成；待用户统一体验验收                     |
 | [对话渲染与交互](../04_FEATURES/202610191647_feature_conversation-rendering/spec.md)        | Streamdown Markdown、消息增量、动态虚拟列表、轻量工具行、回答统计、阅读滚动与单会话日志下载                                   | 实现与macOS定向验证完成；主体UI及输入框高度获用户认可，测量边界保留   |
-| [M4前置：用户身份与应用登录](../04_FEATURES/202610161500_feature_application-login/spec.md) | GitHub身份、单profile归属、持久应用会话、本机信任与统一API/SSE鉴权                                                            | 实现与macOS自动化交付完成；待真实GitHub及用户review                   |
+| [M4前置：用户身份与应用登录](../04_FEATURES/202610161500_feature_application-login/spec.md) | GitHub身份、单profile归属、持久应用会话、自动客户端初始化与统一API/SSE鉴权                                                    | 实现与macOS自动化交付完成；待真实GitHub及用户review                   |
 | [M4 MCP 与插件](../04_FEATURES/202610201932_feature_m4-capabilities/spec.md)                | stdio / HTTP / SSE、信任与凭据、OAuth、工具发现加载、Skills创建安装管理、插件市场、外部服务连接与办公文档工作流               | 工程实现与macOS自动化联调通过；必要视觉、账号及Windows适配/验收待完成 |
 | M4.1 本地MCP闭环                                                                            | 配置/信任、受监管stdio、统一Run工具集、发现/审批调用与基础设置                                                                | 本地SDK/Pi/JSONL/浏览器链路通过；平台与产物边界单列                   |
 | M4.2 工具目录与按需加载                                                                     | 目录/名称/schema、tool_search、Run内显式加载、工具级策略及导入导出                                                            | 实现与macOS定向验证完成；外部环境证据见本轮验证                       |
@@ -91,7 +103,7 @@ Spec目录采用北京时间 `YYYYMMDDHHmm_category_name/`；历史补齐分钟�
 | M4.8 办公文档工作流                                                                         | 文档读取/PDF页图、四类办公任务、独立资源、依赖检测及文件交付                                                                  | 实现及结构/PDF页图验证完成；Office必要视觉检查待完成                  |
 | M4.9 联调与交付                                                                             | Web/Electron、真实SDK/Pi、恢复/取消、M1–M3回归与平台/账号证据                                                                 | 本机源码/浏览器/桌面通过；平台、账号与正式发布待验收                  |
 | [M5 子 Agent 与看板](../04_FEATURES/202610281702_feature_m5-subagents-board/spec.md)        | 角色与执行限制、执行树、嵌套委派/等待/通信/停止、独立上下文、任务看板、进度/待处理/人工确认                                   | 开发与本机验收完成，用户确认收口；后续平台及完整产品验收单列          |
-| [M6 记忆与搜索](../04_FEATURES/202610301722_feature_m6-memory-search/spec.md)               | user / workspace 长期记忆、学习与增改删、画像、FTS与本地embedding混合召回、Session搜索、工具目录检索                          | 已形成方案与分阶段任务；尚未实现                                      |
+| [M6 记忆与搜索](../04_FEATURES/202610301722_feature_m6-memory-search/spec.md)               | user / workspace 长期记忆、学习与增改删、画像、FTS与本地embedding混合召回、Session搜索、工具目录检索                          | 开发与本机验收完成；未验平台/账号单列                                 |
 | M7 完整对齐验收                                                                             | 主/子Trace、请求快照、用量和费用估算、文件撤销重做、长会话恢复与JSONL导入导出、全功能回归、安装包与平台验收                   | 规划                                                                  |
 | 后续 Computer Use 专项                                                                      | 原生观察、语义树、窗口截图、输入、应用授权、受限脚本与AI光标                                                                  | 当前版本排除，不纳入 M0–M7 完成标准                                   |
 | 第二阶段                                                                                    | 根据独立产品需求新增或调整能力                                                                                                | 待规划                                                                |

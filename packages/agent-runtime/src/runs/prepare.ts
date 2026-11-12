@@ -4,6 +4,7 @@ import type {
   AgentMessage,
   InputRequest,
   MessageView,
+  MemoryMessageSource,
   RunView,
   SessionSummary,
 } from '@my-pi-harness/protocol';
@@ -15,6 +16,7 @@ import type { ModelGateway, ResolvedModel } from '../models/gateway';
 import type { EventInput } from '../sessions/ports';
 import type { WorkRuntime } from '../work/runtime';
 import { runAcceptanceEvent } from './acceptance';
+import { consumedMemorySource } from './memory';
 
 interface RunPreparationInput {
   session: SessionSummary;
@@ -42,6 +44,7 @@ type AcceptanceMetadata = Pick<
   | 'skills'
 >;
 interface PreparedRun {
+  memorySource?: MemoryMessageSource;
   history: Message[];
   user: UserMessage;
   systemPrompt: string;
@@ -114,7 +117,9 @@ export async function prepareRun(input: RunPreparationInput): Promise<PreparedRu
     status: 'complete',
     stopReason: null,
   };
+  const memorySource = run.taskId ? undefined : consumedMemorySource(message);
   return {
+    ...(memorySource ? { memorySource } : {}),
     history,
     user,
     systemPrompt,
@@ -147,7 +152,9 @@ export async function prepareRun(input: RunPreparationInput): Promise<PreparedRu
           runId: run.id,
           at,
           data: message,
-          privateData: encodeContextMessage(user),
+          privateData: encodeContextMessage(user, {
+            ...(input.input.searchQuotes?.length ? { searchQuotes: input.input.searchQuotes } : {}),
+          }),
         },
       ];
     },

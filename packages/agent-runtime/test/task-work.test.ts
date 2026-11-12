@@ -189,7 +189,9 @@ describe('task-local context and work', () => {
         toolDefinitions: [],
         signal: new AbortController().signal,
       });
-      expect(JSON.stringify(messages)).toContain('alpha private observation');
+      expect(alpha.snapshot(f.session.id).state.usage).toBeNull();
+      messages.commit();
+      expect(JSON.stringify(messages.messages)).toContain('alpha private observation');
       expect(JSON.stringify(messages)).not.toContain('beta private observation');
       expect(JSON.stringify(messages)).not.toContain('Delegate independent tasks');
       expect(alpha.snapshot(f.session.id).state.usage).not.toBeNull();

@@ -9,7 +9,7 @@ export interface VerifiedIdentity {
   avatarUrl: string | null;
 }
 
-/** Durable local trust; tokenHash is the lowercase SHA-256 digest of the bearer token. */
+/** Durable local client; tokenHash is the lowercase SHA-256 digest of the bearer token. */
 export interface LocalClient {
   id: string;
   tokenHash: string;

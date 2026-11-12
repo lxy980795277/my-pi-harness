@@ -1,46 +1,33 @@
 import {
   AuthStatusSchema,
-  PairingCodeResponseSchema,
   LoginFlowSchema,
   type LoginFlow,
   type LoginMethod,
   type AuthStatus,
-  type PairingInput,
   type LoginInput,
 } from '@my-pi-harness/protocol';
 
 import { getJson, requestJson, setCsrfToken } from '@/services/base-request';
 import { parseResponse } from '@/utils/parse-response';
 
-/** Reads current cookie authorization and installs its volatile CSRF token. */
+/** Reads authorization and initializes a missing browser client before exposing login. */
 export const fetchAuthStatus = async (signal: AbortSignal): Promise<AuthStatus> => {
-  const status = parseResponse(AuthStatusSchema, await getJson('/auth/status', signal));
+  let status = parseResponse(AuthStatusSchema, await getJson('/auth/status', signal));
   signal.throwIfAborted();
+  if (!status.clientInitialized) {
+    status = parseResponse(AuthStatusSchema, await requestJson('/auth/client', 'POST', {}, signal));
+    signal.throwIfAborted();
+    if (!status.clientInitialized || status.csrfToken === null) {
+      throw new Error('无法建立本机连接，请重试。');
+    }
+  }
   setCsrfToken(status.csrfToken);
   return status;
 };
 
-/** Exchanges a one-time code without retaining it beyond the write request. */
-export const pairBrowser = async (code: string, signal: AbortSignal): Promise<AuthStatus> => {
-  const status = parseResponse(
-    AuthStatusSchema,
-    await requestJson('/auth/pair', 'POST', { code } satisfies PairingInput, signal),
-  );
-  setCsrfToken(status.csrfToken);
-  return status;
-};
-
-/** Revokes application sessions while preserving this browser's local trust. */
+/** Revokes application sessions while preserving this browser's initialized client. */
 export const logoutBrowser = async (signal: AbortSignal): Promise<void> => {
   await requestJson('/auth/logout', 'POST', {}, signal);
-};
-
-/** Creates a short-lived code for authorizing an additional browser entry point. */
-export const createPairingCode = async (signal: AbortSignal): Promise<string> => {
-  return parseResponse(
-    PairingCodeResponseSchema,
-    await requestJson('/auth/pairing-code', 'POST', {}, signal),
-  ).code;
 };
 
 /** Begins application login independently of model-provider authorization. */
@@ -73,7 +60,7 @@ export const completeLogin = async (id: string, signal: AbortSignal): Promise<Au
   return status;
 };
 
-/** Cancels pending identity verification without changing local trust. */
+/** Cancels pending identity verification without changing the browser client. */
 export const cancelLogin = async (id: string, signal: AbortSignal): Promise<void> => {
   await requestJson(`/auth/login-flows/${encodeURIComponent(id)}`, 'DELETE', {}, signal);
 };

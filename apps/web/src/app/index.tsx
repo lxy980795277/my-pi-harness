@@ -7,15 +7,15 @@ import { ApplicationInitializationError } from '@/app/components/application-ini
 import { Button } from '@/components/ui/button';
 import { Notice } from '@/components/ui/notice';
 import { LoginPage } from '@/features/auth/components/login-page';
-import { PairingPage } from '@/features/auth/components/pairing-page';
 import { RuntimePage } from '@/features/runtime/components/runtime-page';
 import { SessionsPage } from '@/features/sessions/components/sessions-page';
 import { SettingsDialog } from '@/features/settings/components/settings-dialog';
 import { TaskHost } from '@/features/tasks/components/task-host';
 import { TasksPage } from '@/features/tasks/components/tasks-page';
 import { describeError } from '@/utils/describe-error';
+import { SearchHost } from '@/features/search/components/search-host';
 
-/** Private application surfaces mount only after local trust and application login succeed. */
+/** Private application surfaces mount only after automatic client initialization and application login succeed. */
 export const App: FC = () => {
   const state = useApplicationShell();
   if (state.auth.isPending || (state.checkingAuthorization && !state.auth.isError)) {
@@ -30,13 +30,6 @@ export const App: FC = () => {
             重新连接
           </Button>
         </div>
-      </div>
-    );
-  }
-  if (!state.localAuthorized) {
-    return (
-      <div className="min-h-svh bg-background text-foreground">
-        <PairingPage onPair={state.pair} />
       </div>
     );
   }
@@ -62,12 +55,9 @@ export const App: FC = () => {
         newConversation={state.newConversation}
         authorized={state.authorized}
         auth={state.auth.data}
-        pairingCode={state.pairingCode}
         onNavigate={state.navigate}
         onNewConversation={state.startNewConversation}
         onSettings={state.settings}
-        onPairing={state.pairing}
-        onHideCode={state.hideCode}
         onLogout={state.signOut}
       />
       <main className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
@@ -117,6 +107,7 @@ export const App: FC = () => {
         <SettingsDialog theme={state.theme} onToggleTheme={state.toggleTheme} />
       )}
       <TaskHost />
+      <SearchHost />
     </div>
   );
 };

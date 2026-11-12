@@ -15,11 +15,11 @@
 - 目录、依赖方向、源码与发布产物以 [架构](docs/01_ARCHITECTURE/overview.md) 为准。业务代码只放 `apps/` 或有明确职责的 `packages/`。
 - Renderer 不访问 Node、凭据、数据库、daemon 源码或 Pi 内部对象；preload 只提供 [协议](docs/03_API/overview.md) 中声明的有限桌面能力。
 - HTTP、IPC、模型工具参数、配置、文件和持久化数据在进入业务层前校验；同进程已声明类型的值不重复做无依据的运行时防御。
-- 本机信任与应用登录分开；业务HTTP/SSE由daemon统一验证持久应用会话，GitHub身份适配与模型/MCP授权不混用。单profile归属、恢复和撤销遵守[应用登录协议](docs/03_API/application-auth.md)。
+- 客户端初始化与应用登录分开；浏览器自动初始化只关联OAuth流程与CSRF，业务HTTP/SSE由daemon统一验证客户端绑定的持久应用会话，GitHub身份适配与模型/MCP授权不混用。单profile归属、恢复和撤销遵守[应用登录协议](docs/03_API/application-auth.md)。
 - 本地副作用必须经过统一策略、真实路径检查与取消/超时管理。安全规则见 [安全约束](docs/05_CONSTRAINTS/backend.md)。
 - 当前所有迭代处于开发阶段，不要求旧API、数据库、日志或codec兼容；允许重建schema和删除本项目旧开发数据，不触碰工作区源文件或其他项目数据。
 - 临时运行状态可保存在内存；持久事实和派生索引按 [存储约束](docs/05_CONSTRAINTS/backend.md) 管理。
-- 当前实现模型、授权、JSONL会话事实与SQLite配置/投影、队列/分支、M2工作区与审批、M3上下文与交互、M4 MCP/Skills/插件与办公能力，以及M5子Agent任务树、角色与请求调度、通信停止和看板。M5开发与本机验收已完成并获用户确认；后续统一验收和既有M4账号、视觉、Windows适配缺口见[里程碑](docs/00_OVERVIEW/roadmap.md)，不以开发收口或源码测试代替平台验收。检查点不回滚磁盘或外部副作用；长期记忆和Computer Use属于后续范围。
+- 当前实现模型、授权、JSONL会话事实与SQLite配置/投影、队列/分支、M2工作区与审批、M3上下文与交互、M4 MCP/Skills/插件与办公能力，以及M5子Agent任务树、角色与请求调度、通信停止和看板、M6独立长期记忆与本地混合检索及只读历史引用。M5开发与本机验收已完成并获用户确认，M6及直接保存/自动学习调整已完成开发与本机验证；后续统一验收和既有M4账号、视觉、Windows适配缺口见[里程碑](docs/00_OVERVIEW/roadmap.md)，不以开发收口或源码测试代替平台验收。检查点不回滚磁盘或外部副作用；完整Trace和发布收口属于M7，Computer Use属于后续专项。
 
 ## 质量与交付
 
