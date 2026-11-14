@@ -80,6 +80,7 @@ function task(changes: Partial<AgentTaskSummary> = {}): AgentTaskSummary {
     closeReason: null,
     error: null,
     usage: null,
+    usageCoverage: { requestCount: 0, recordedRequests: 0, unknownRequests: 0 },
     ...changes,
   };
 }

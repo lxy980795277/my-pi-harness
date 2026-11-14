@@ -14,6 +14,10 @@
 
 字段、失败语义和桌面桥见 [协议文档](../../docs/03_API/overview.md)。改变协议时同时更新所有消费者和相关行为验证。
 
+sessions/trace.ts定义执行时间线、最终请求摘要与分段正文、用量完整度和费用估算的公开DTO。列表cursor是不透明整数，watermark冻结已提交状态；同一事件派生的工具及审批条目都可独立翻页。正文通过条目cursor及字符offset续读，图片计数和受权二进制读取分开。internal/model-requests.ts定义宿主持久请求起止事实，实际Pi对象、认证信息及输入codec不进入公开响应。
+
+请求inputMessageId表达当前实际消费输入，answerInputMessageId冻结发起根人类输入；task.message_queued同样保存发送时的回答来源。SessionUsage和AgentTaskSummary.usageCoverage共用唯一请求口径，分别说明用量、计时及价格覆盖。ModelRequestSummary只公开目录来源、版本和已记录估算，完整费率规则保留宿主快照；costScope为model-requests，外部服务观察不表示供应商计费请求或完整账单。墙钟的execution-union、answer-span、request-span及observed-union由字段显式区分，未知返回null。
+
 `sessions/attachment-capabilities`集中声明附件格式、MIME别名和字节上限，供文件选择、客户端预检、公开schema及宿主解析选择复用；不承担文件签名、UTF-8或解压校验，也不扩展到产物格式。
 
 `web/web.ts`定义模型可见的公网搜索输入与联网服务配置DTO；字段说明随同一schema进入工具声明，设置仅公开是否配置。宿主端口的搜索条目、结果和网页输入/正文以`internal/web.ts`的纯接口共享，不作为公开HTTP/SSE响应，也不为同进程已验证结果增加校验副本。第三方响应schema和字段映射由integrations拥有，官方Key使用写入输入，不出现在状态、工具参数或结果；凭据存储由宿主拥有。联网服务与本地记忆/会话检索使用独立协议。
@@ -21,3 +25,7 @@
 应用身份使用`AppUser`、`LoginProvider`、`LoginSessionInfo`、`LoginFlow`，`AuthStatus.clientInitialized`表示已建立客户端，`authenticated`表示通过应用登录；客户端仅关联登录流程和CSRF，不授予业务访问。未登录不返回profile用户资料；公开登录流程只包含用户验证码，不含私有device_code、上游Token或应用bearer。模型授权继续使用独立`AuthFlow`。
 
 `sessions/agents.ts`定义子Agent角色与限制、任务摘要/分页详情、通信、停止命令及看板筛选。`RunView.taskId`省略表示根执行，存在时指向同Session的子任务；任务源仅持久化`sourceToolCallId`，公开摘要中的父子关系和用量由宿主投影，不要求日志重复保存。`MessageView.agentMessageId`标识通信形成的模型输入，关联原始通信，不能冒充用户提问或进入提问编辑入口。默认角色、指令与执行限制由agent-runtime的defaultAgentSettings拥有，宿主显式装配；协议仅定义配置字段及范围，包含任务数、深度、并发、时限和单请求输出，不设累计token额度，宿主保存设置时检查revision和模型选择关联。全局任务变更SSE只发送`ready/changed`失效通知，不携带任务正文或凭据。
+
+`sessions/file-changes.ts`定义原生文件历史的相对路径、前后像元数据、分页文本与用户undo/redo批量回执。批次选择区分明确change集合和完整根回答，未知结果保留同操作ID查询，分页结果不代表整答。`internal/file-changes.ts`独立保存发布请求摘要、目标键、根/父目录身份、revision和正逆链；本机可恢复资格属于宿主，不能由HTTP或导入历史声明。文件字节存内容地址资源，不嵌入事件或公开DTO。
+
+`sessions/archives.ts`定义完整归档manifest、有界预览、持久导入回执、当前执行依赖绑定与读取/执行状态。绑定显式包含provider、model、thinkingLevel和workspace，不迁移历史授权；归档条目流和本机路径仅由storage宿主接口表达，不进入Renderer协议。`sessions/archive-jobs.ts`另行表达上传、预检和导出的临时进度，不能替代storage的持久import receipt。归档格式与JSONL格式分别演进；原始日志下载不等于完整资源归档。

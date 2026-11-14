@@ -36,6 +36,8 @@ export interface ToolAvailability {
 export interface ToolInvocation {
   toolCallId: string;
   signal: AbortSignal;
+  beforePublish?(this: void, operationId: string): void;
+  confirmNotPublished?(this: void): void;
 }
 /** Executable functions are bound to one Run and never serialized with accepted declarations. */
 export interface ToolRegistration {

@@ -30,6 +30,7 @@ import { activeSkillContext } from '../capabilities/context';
 import { communicationMessage } from './agent-message';
 import { toolCallRecordId } from '../tools/ledger';
 import { workToolRequirements } from '../tools/selection';
+import type { RequestAdmission } from '../runs/request';
 
 interface RequestTools {
   toolDefinitions: readonly RunToolDefinition[];
@@ -42,7 +43,7 @@ export interface PreparedContext {
   readonly messages: Message[];
   readonly memory?: MemoryRequestSnapshot;
   isCurrent(): boolean;
-  commit(): void;
+  commit(modelRequestId?: string): void;
 }
 
 interface RequestProjection {
@@ -59,10 +60,19 @@ interface RequestProjection {
   resolveTools?(requirements: readonly string[]): RequestTools;
   signal: AbortSignal;
   memory?: MemoryRequestSnapshot;
+  requestAdmission?: RequestAdmission;
+  inputMessageId?: string | null;
+  answerInputMessageId?: string | null;
 }
 interface RequestBaseline {
   heuristic: number;
   marker: string;
+}
+interface CompactionRequest {
+  admission?: RequestAdmission;
+  inputMessageId: string | null;
+  answerInputMessageId: string | null;
+  providerId: string;
 }
 
 /** Only a terminal record in the selected task/branch can provide a retained-text reader identity. */
@@ -223,6 +233,12 @@ export class WorkContext {
           input.signal,
           toolState.toolDefinitions,
           this.prompt(basePrompt, taskFor(raw), state),
+          {
+            ...(input.requestAdmission ? { admission: input.requestAdmission } : {}),
+            inputMessageId: input.inputMessageId ?? null,
+            answerInputMessageId: input.answerInputMessageId ?? null,
+            providerId: input.run.providerId,
+          },
         );
         raw = prefix.retained;
         pruned = pruneContext(raw, input.resolved.model.input.includes('image'), retainedTools);
@@ -309,7 +325,7 @@ export class WorkContext {
       messages,
       ...(memory.snapshot ? { memory: memory.snapshot } : {}),
       isCurrent: () => this.work.snapshot(input.session.id).state.revision === state.revision,
-      commit: () => {
+      commit: (modelRequestId) => {
         if (committed) throw new RuntimeError('CONTEXT_ALREADY_COMMITTED', '请求草稿已提交。');
         input.signal.throwIfAborted();
         if (this.work.snapshot(input.session.id).state.revision !== state.revision)
@@ -318,7 +334,11 @@ export class WorkContext {
           input.session.id,
           { ...state, usage },
           input.run.id,
-          events.map((event) => ({ ...event, at: Date.now() })),
+          events.map((event) => ({
+            ...event,
+            at: Date.now(),
+            data: { ...event.data, ...(modelRequestId ? { modelRequestId } : {}) },
+          })),
         );
         committed = true;
         this.baselines.set(input.run.id, { heuristic, marker: this.marker(state) });
@@ -363,6 +383,7 @@ export class WorkContext {
     signal: AbortSignal,
     tools: readonly ContextToolDefinition[] = [],
     beforePrompt = promptForState(state),
+    request?: CompactionRequest,
   ): Promise<WorkState> {
     const before = requestUsage(
       pruneContext([...source, ...retained], resolved.model.input.includes('image')).messages,
@@ -378,19 +399,33 @@ export class WorkContext {
       state,
       resolved,
       signal,
-      audit: (systemPrompt, user) =>
-        this.work.save(
-          sessionId,
-          this.work.snapshot(sessionId).state,
-          runId,
-          snapshotPrivateData({
-            version: 1,
-            purpose: 'compaction',
-            modelId: resolved.model.id,
-            systemPrompt,
-            messages: [encodeContextMessage(user)],
-          }),
-        ),
+      ...(request?.admission ? { admission: request.admission } : {}),
+      observation: {
+        branchId: state.branchId,
+        runId,
+        providerId: request?.providerId ?? this.work.sessionSnapshot(sessionId).session.providerId,
+        purpose: 'compaction',
+        ...(resolved.priceSource ? { priceSource: resolved.priceSource } : {}),
+        inputMessageId: () => request?.inputMessageId ?? null,
+        answerInputMessageId: () => request?.answerInputMessageId ?? null,
+        commit: (events) => this.work.options.commit(sessionId, events),
+      },
+      audit: (systemPrompt, user, modelRequestId) =>
+        this.work.options.commit(sessionId, [
+          {
+            type: 'context.compaction.prepared',
+            runId,
+            at: Date.now(),
+            data: { branchId: state.branchId, ...(modelRequestId ? { modelRequestId } : {}) },
+            privateData: snapshotPrivateData({
+              version: 1,
+              purpose: 'compaction',
+              modelId: resolved.model.id,
+              systemPrompt,
+              messages: [encodeContextMessage(user)],
+            }),
+          },
+        ]),
     });
     signal.throwIfAborted();
     const compaction: Compaction = {

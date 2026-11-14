@@ -96,8 +96,33 @@ describe('AI approval model admission', () => {
     expect(f.leases()).toEqual({ acquired: 1, released: 1, unguarded: 0 });
     expect(f.events.map((event) => event.type)).toEqual([
       'tool.review.requested',
+      'model.request.started',
+      'model.request.completed',
       'tool.review.completed',
     ]);
+  });
+
+  it('propagates terminal audit failure instead of disguising it as a human-review fallback', async () => {
+    const f = fixture();
+    const failure = new Error('terminal journal unavailable');
+    f.faux.setResponses([
+      fauxAssistantMessage('{"decision":"allow","reason":"Matches the recorded request."}'),
+    ]);
+    await expect(
+      f.reviewer.review(
+        {
+          ...f.input,
+          modelStream: (model, context, options) => f.models.streamSimple(model, context, options),
+          commit: (events) => {
+            if (events[0]?.type === 'model.request.completed') throw failure;
+            f.input.commit(events);
+          },
+        },
+        new AbortController().signal,
+      ),
+    ).rejects.toBe(failure);
+    expect(f.leases()).toEqual({ acquired: 1, released: 1, unguarded: 0 });
+    expect(f.events.some((event) => event.type === 'tool.review.completed')).toBe(false);
   });
 
   it('requires human approval and releases the review lease when the Run guard refuses a request', async () => {

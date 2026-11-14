@@ -230,6 +230,7 @@ describe('ModelGateway protocol and credentials', () => {
         });
         const lease = await gateway.resolve(config.id, 'requested-model');
         try {
+          expect(lease.priceSource).toBeUndefined();
           const agent = new Agent({
             initialState: { model: lease.model, tools: [] },
             streamFn: lease.streamFn,
@@ -329,6 +330,12 @@ describe('ModelGateway protocol and credentials', () => {
     try {
       await gateway.initialize();
       await gateway.setApiKey('old-proxy', 'legacy-private-key');
+      const priced = await gateway.resolve('old-proxy', 'requested-model');
+      try {
+        expect(priced.priceSource).toBe('pi-catalog');
+      } finally {
+        priced.release();
+      }
       const canonical = (await gateway.listProviders()).find(
         (entry) => entry.builtinId === 'openai-codex',
       );

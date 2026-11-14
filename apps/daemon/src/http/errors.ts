@@ -8,10 +8,18 @@ import { PluginError } from '@my-pi-harness/plugins';
 import type { FastifyInstance } from 'fastify';
 import { LoginError } from '../auth/errors';
 import { OAuthLaunchError } from './oauth-launch-tickets';
+import { FileChangeError } from '../file-changes/errors';
+import { ArchiveError } from '../archives/errors';
 
 /** Map application failures to bounded public errors without disclosing host details. */
 export function registerRequestErrors(server: FastifyInstance): void {
   server.setErrorHandler((error, request, reply) => {
+    if (error instanceof FileChangeError || error instanceof ArchiveError) {
+      void reply
+        .code(error.status)
+        .send({ code: error.code, message: error.message } satisfies ApiError);
+      return;
+    }
     if (
       error instanceof SkillError ||
       error instanceof PluginError ||
@@ -53,6 +61,17 @@ export function registerRequestErrors(server: FastifyInstance): void {
       void reply.code(422).send({ code: error.code, message: error.message } satisfies ApiError);
       return;
     }
+    if (error instanceof StorageError && error.code === 'FILE_CHANGE_QUERY_INVALID') {
+      void reply.code(400).send({ code: error.code, message: error.message } satisfies ApiError);
+      return;
+    }
+    if (error instanceof StorageError && error.code === 'TRACE_QUERY_INVALID') {
+      void reply.code(400).send({
+        code: error.code,
+        message: '轨迹读取位置或筛选范围无效，请刷新后重试。',
+      } satisfies ApiError);
+      return;
+    }
     if (error instanceof Error && 'validation' in error && error.validation) {
       void reply
         .code(400)
@@ -74,7 +93,7 @@ export function registerRequestErrors(server: FastifyInstance): void {
     if (error instanceof RuntimeError || error instanceof StorageError) {
       const missing = error.code.endsWith('NOT_FOUND');
       const conflict =
-        /CONFLICT|BUSY|ACTIVE|CLOSED|SUSPENDED|DISABLED|CANCELLING|QUEUE_BRANCH_MISMATCH/.test(
+        /CONFLICT|BUSY|ACTIVE|CLOSED|SUSPENDED|DISABLED|CANCELLING|QUEUE_BRANCH_MISMATCH|SESSION_IMPORT_UNBOUND/.test(
           error.code,
         );
       const status =

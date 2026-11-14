@@ -69,9 +69,9 @@ export class SubagentCoordinator {
       inTree: (caller, taskId) => this.inTree(caller, taskId),
       checkDeadline: (node) => this.checkDeadline(node),
       commit: (sessionId, events) => this.commit(sessionId, events),
-      resume: (parent, task, text, messageId) => {
+      resume: (parent, task, text, messageId, answerInputMessageId) => {
         if (task.role.access === 'write') parent.tree.writer = task.id;
-        const node = this.createChild(parent, task);
+        const node = this.createChild(parent, task, answerInputMessageId);
         this.start(node, text, undefined, messageId);
       },
     });
@@ -423,7 +423,11 @@ export class SubagentCoordinator {
       },
     );
   }
-  private createChild(parent: SubagentNode, task: AgentTask): SubagentTaskNode {
+  private createChild(
+    parent: SubagentNode,
+    task: AgentTask,
+    answerInputMessageId = parent.execution?.answerInputMessageId() ?? null,
+  ): SubagentTaskNode {
     const previous = this.tasks.get(task.id);
     if (previous) {
       parent.tree.nodes.delete(previous);
@@ -443,6 +447,7 @@ export class SubagentCoordinator {
     };
     const node: SubagentTaskNode = {
       ...this.node(parent.session, run, parent.tree, parent, task),
+      answerInputMessageId,
       parent,
       task,
     };
@@ -464,6 +469,7 @@ export class SubagentCoordinator {
       tree,
       parent,
       task,
+      answerInputMessageId: null,
       depth: parent ? parent.depth + 1 : 0,
       limits: task?.limits ?? tree.settings.limits,
       controller: new AbortController(),

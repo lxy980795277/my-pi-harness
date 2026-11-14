@@ -1,5 +1,7 @@
 export * from './lib/tool-registry';
 export * from './lib/tool-context';
+export * from './lib/file-changes';
+export { MAXIMUM_TEXT_BYTES as MAXIMUM_FILE_CHANGE_BYTES } from './lib/filesystem';
 export * from './workspace-tool-registry';
 export * from './utils/tool-search';
 export * from './skills/index';

@@ -8,7 +8,7 @@ import type { RunToolset } from '../tools/toolset';
 import type { RunAgentHost, RunExecutionOptions } from './types';
 import type { RunHooks } from './ports';
 import { runMemoryRequest, runMemoryMutationContext, memoryToolHandlers } from './memory';
-import { dispatchRequest, scheduledStream } from './request';
+import { dispatchRequest } from './request';
 import type { PreparedContext } from '../context/request-context';
 import { fitContext } from '../context/budget';
 import { encodeContextMessage } from '../context/codec';
@@ -44,7 +44,7 @@ function resolveProjectionModel(
       ...resolved.model,
       maxTokens: hooks.outputTokens(resolved.model.maxTokens),
     },
-    streamFn: scheduledStream(hooks.stream, hooks, () => undefined),
+    streamFn: hooks.stream,
   };
 }
 
@@ -57,11 +57,6 @@ export function createRunAgent(options: RunExecutionOptions, host: RunAgentHost)
   const identity = () => runMemoryRequest(options, host.memoryQuery(), host.signal);
   const mutationIdentity = () =>
     runMemoryMutationContext(options, host.memorySource(), host.signal);
-  const modelStream = scheduledStream(
-    options.hooks?.stream ?? options.resolved.streamFn,
-    options.hooks,
-    (error) => options.onError(error),
-  );
   if (options.tools) {
     toolContext = {
       session: options.session,
@@ -71,6 +66,8 @@ export function createRunAgent(options: RunExecutionOptions, host: RunAgentHost)
       supportsImages: options.resolved.model.input.includes('image'),
       recorded: host.recorded,
       assistantMessageId: () => host.assistantMessageId(),
+      inputMessageId: () => host.inputMessageId(),
+      answerInputMessageId: () => host.answerInputMessageId(),
       argumentsError: (input) => {
         for (let index = agent.state.messages.length - 1; index >= 0; index -= 1) {
           const message = agent.state.messages[index];
@@ -94,7 +91,8 @@ export function createRunAgent(options: RunExecutionOptions, host: RunAgentHost)
         ? {
             agents: options.hooks.controls,
             beforeTool: options.hooks.beforeTool,
-            modelStream,
+            modelStream: options.hooks.stream,
+            modelAdmission: options.hooks,
           }
         : {}),
     };
@@ -133,6 +131,16 @@ export function createRunAgent(options: RunExecutionOptions, host: RunAgentHost)
           },
           stream: options.hooks?.stream ?? options.resolved.streamFn,
           onError: (error) => options.onError(error),
+          observation: {
+            branchId: options.run.branchId,
+            runId: options.run.id,
+            providerId: options.run.providerId,
+            purpose: 'conversation',
+            ...(options.resolved.priceSource ? { priceSource: options.resolved.priceSource } : {}),
+            inputMessageId: () => host.inputMessageId(),
+            answerInputMessageId: () => host.answerInputMessageId(),
+            commit: (events) => host.commit(events),
+          },
         })(model, context, streamOptions);
       } catch (error) {
         host.rememberFailure(error);
@@ -212,6 +220,9 @@ export function createRunAgent(options: RunExecutionOptions, host: RunAgentHost)
           currentToolset(options).definitions.some((definition) => definition.name === name),
         resolveTools,
         signal,
+        ...(options.hooks ? { requestAdmission: options.hooks } : {}),
+        inputMessageId: host.inputMessageId(),
+        answerInputMessageId: host.answerInputMessageId(),
         ...(memory ? { memory } : {}),
       });
       requestDraft = {
@@ -220,9 +231,9 @@ export function createRunAgent(options: RunExecutionOptions, host: RunAgentHost)
           host.assertSearchQuotes?.();
           return projection.isCurrent();
         },
-        commit: () => {
+        commit: (modelRequestId) => {
           try {
-            projection.commit();
+            projection.commit(modelRequestId);
           } catch (error) {
             host.failPersistence(error);
           }
@@ -266,7 +277,7 @@ export function createRunAgent(options: RunExecutionOptions, host: RunAgentHost)
         host.assertSearchQuotes?.();
         return true;
       },
-      commit: () => {
+      commit: (modelRequestId) => {
         host.commit([
           {
             type: 'context.prepared',
@@ -278,6 +289,7 @@ export function createRunAgent(options: RunExecutionOptions, host: RunAgentHost)
               usage: projected.usage,
               messageIds: [],
               capabilityRevision: definitions.capabilityRevision,
+              ...(modelRequestId ? { modelRequestId } : {}),
             },
             privateData: {
               version: 1,

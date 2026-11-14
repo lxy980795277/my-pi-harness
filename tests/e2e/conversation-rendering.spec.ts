@@ -119,7 +119,10 @@ test('工具展开选择跨虚拟卸载与会话切换保留，输入草稿独�
       content: `正在检索第${index + 1}项。`,
     };
   });
-  const model = await startToolSequenceModel(calls, '状态生命周期验证完成。');
+  const model = await startToolSequenceModel(
+    [{ name: 'tool_search', arguments: { query: 'search_session_history', limit: 1 } }, ...calls],
+    '状态生命周期验证完成。',
+  );
   try {
     await page.goto(daemon.origin);
     // Keep all sixteen tool rounds in context; this case tests UI state rather than compaction.
@@ -147,7 +150,7 @@ test('工具展开选择跨虚拟卸载与会话切换保留，输入草稿独�
     for (let index = 0; index < 8; index += 1) {
       await draft.fill(`虚拟卸载后续${index + 1}`);
       await page.getByRole('button', { name: '发送', exact: true }).click();
-      await expect.poll(() => model.requests.length).toBe(18 + index);
+      await expect.poll(() => model.requests.length).toBe(19 + index);
       await expect(page.getByRole('button', { name: '停止', exact: true })).toBeHidden();
       await timeline.evaluate((element) => {
         element.scrollTop = element.scrollHeight;
@@ -171,7 +174,7 @@ test('工具展开选择跨虚拟卸载与会话切换保留，输入草稿独�
     await expect(
       firstTool.getByRole('button', { name: '收起 search_session_history 工具详情', exact: true }),
     ).toHaveAttribute('aria-expanded', 'true');
-    expect(model.requests).toHaveLength(25);
+    expect(model.requests).toHaveLength(26);
   } finally {
     await model.close();
   }
@@ -326,7 +329,7 @@ test('Markdown流式、完成与刷新一致，代码可复制且HTML和图片�
     await expect(page.getByRole('button', { name: '发送', exact: true })).toBeVisible();
     const statistics = page.getByLabel('回答统计');
     await expect(statistics).toContainText('用量 1.2K tok');
-    await expect(statistics.locator('[title^="总计 1,248 tok；"]')).toBeVisible();
+    await expect(statistics.locator('[title*="总计 1,248 tok；"]')).toBeVisible();
     await expect(statistics).toContainText('用时');
     await expect(statistics.locator('time')).toHaveAttribute('datetime', /\d{4}-\d{2}-\d{2}T/u);
     const timeline = page.getByLabel('对话记录', { exact: true });

@@ -135,6 +135,7 @@ export function createSubagentRunAdapter(owner: SubagentRunHost, node: SubagentN
         return {
           message,
           taskQuery: input.text,
+          answerInputMessageId: input.answerInputMessageId ?? null,
           consume() {
             const at = Date.now();
             const view: MessageView = {

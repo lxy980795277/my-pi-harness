@@ -1,5 +1,9 @@
 # 里程碑与功能覆盖
 
+2026-11-14按用户授权将M7实现及[代码治理](../04_FEATURES/202611141341_feature_m7-product-completion/governance.md)整理为[0.22.0](../06_RELEASES/0.22.0.md)本地提交，公开协议30、SQLite20，前后端须同步更新。原生文件撤销、完整归档与请求Trace已实现；真实A3办公质量、Windows实机、跨版本升级和签名/公证缺口保留，不将本地提交视为完整发布验收。
+
+2026-11-14基于191192d、产品0.21.0重新规划[M7执行可观测、数据恢复与产品验收](../04_FEATURES/202611141341_feature_m7-product-completion/spec.md)。[设计](../04_FEATURES/202611141341_feature_m7-product-completion/design.md)与[阶段任务](../04_FEATURES/202611141341_feature_m7-product-completion/tasks.md)覆盖请求追踪、统一用量和费用估算、文件撤销重做、完整会话归档及真实任务/安装平台验收；用户已授权顺序实施，M7功能实现与本机工程验证已收口，真实A1–A8已执行，办公内容质量及Windows/签名发布条件未全部通过，证据见[阶段验证](../04_FEATURES/202611141341_feature_m7-product-completion/verify.md)。沿用现有模块及请求/资源事实，Windows Shell暂缓、Computer Use后续专项和既有外部验收条件分别保留。
+
 2026-11-12按用户授权将联网工具重构与治理整理为[0.21.0](../06_RELEASES/0.21.0.md)本地提交，公开协议29、SQLite16，web_fetch使用显式page/raw模式，前后端须同步更新。真实数据保留，联网服务使用独立Key，M6/M7及原有外部验收缺口保持。
 
 2026-11-12按用户授权完成[联网工具重构](../04_FEATURES/202611121508_refactor_deepseek-web-tools/spec.md)：DeepSeek官方搜索和网页Markdown读取、显式原始HTTP模式、独立Key设置及插件网关保留，属于既有M2/M4维护；实现与本机隔离验证完成，真实API和平台未验项见同目录[验证记录](../04_FEATURES/202611121508_refactor_deepseek-web-tools/verify.md)。后续[代码治理](../04_FEATURES/202611121508_refactor_deepseek-web-tools/governance-verify.md)已完成，清理协议/网络/工具职责和重复请求并补齐边界回归。M6本地检索与M7范围保持。
@@ -108,7 +112,7 @@ Spec目录采用北京时间 `YYYYMMDDHHmm_category_name/`；历史补齐分钟�
 | M4.9 联调与交付                                                                             | Web/Electron、真实SDK/Pi、恢复/取消、M1–M3回归与平台/账号证据                                                                 | 本机源码/浏览器/桌面通过；平台、账号与正式发布待验收                  |
 | [M5 子 Agent 与看板](../04_FEATURES/202610281702_feature_m5-subagents-board/spec.md)        | 角色与执行限制、执行树、嵌套委派/等待/通信/停止、独立上下文、任务看板、进度/待处理/人工确认                                   | 开发与本机验收完成，用户确认收口；后续平台及完整产品验收单列          |
 | [M6 记忆与搜索](../04_FEATURES/202610301722_feature_m6-memory-search/spec.md)               | user / workspace 长期记忆、学习与增改删、画像、FTS与本地embedding混合召回、Session搜索、工具目录检索                          | 开发与本机验收完成；未验平台/账号单列                                 |
-| M7 完整对齐验收                                                                             | 主/子Trace、请求快照、用量和费用估算、文件撤销重做、长会话恢复与JSONL导入导出、全功能回归、安装包与平台验收                   | 规划                                                                  |
+| [M7 完整对齐验收](../04_FEATURES/202611141341_feature_m7-product-completion/spec.md)        | 主/子Trace、请求快照、用量和费用估算、文件撤销重做、长会话恢复与完整会话归档、全功能回归、安装包与平台验收                    | 开发与本机工程验证完成；A3内容质量及平台发布未全部通过                |
 | 后续 Computer Use 专项                                                                      | 原生观察、语义树、窗口截图、输入、应用授权、受限脚本与AI光标                                                                  | 当前版本排除，不纳入 M0–M7 完成标准                                   |
 | 第二阶段                                                                                    | 根据独立产品需求新增或调整能力                                                                                                | 待规划                                                                |
 

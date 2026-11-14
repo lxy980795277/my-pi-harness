@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { SessionSummary } from '@my-pi-harness/protocol';
+import type { SessionSummary, Workspace } from '@my-pi-harness/protocol';
 import { Type } from 'typebox';
 import { describe, expect, it, vi } from 'vitest';
 import { observeNativeTool } from './support/native-tool';
@@ -10,10 +10,11 @@ import type { EventInput } from '../src/sessions/ports';
 import { ToolRuntime } from '../src/tools/runtime';
 import { recordHostToolOutcome, toolCallRecordId } from '../src/tools/ledger';
 import { RunToolset } from '../src/tools/toolset';
-import { nativeTools } from '@my-pi-harness/tools';
+import { nativeTools, type FileChangeToolHandlers } from '@my-pi-harness/tools';
 import type { ToolRunContext } from '../src/tools/types';
+import { testFileChanges } from './support/file-changes';
 
-async function fixture() {
+async function fixture(decorateFiles?: (files: FileChangeToolHandlers) => FileChangeToolHandlers) {
   const temporary = await realpath(await mkdtemp(join(tmpdir(), 'my-pi-tool-owner-')));
   const directory = join(temporary, 'workspace');
   await mkdir(directory);
@@ -59,18 +60,24 @@ async function fixture() {
       throw new Error('Unexpected unknown tool result');
     },
   };
+  const resolveWorkspace = (): Promise<Workspace> =>
+    Promise.resolve({
+      id: 'workspace',
+      name: 'Temporary workspace',
+      rootPath: directory,
+      icon: 'folder',
+      revision: 1,
+      createdAt: 1,
+      updatedAt: 1,
+    });
+  const fileChanges = testFileChanges(join(temporary, 'profile'), resolveWorkspace);
   const runtime = new ToolRuntime({
     profileDirectory: join(temporary, 'profile'),
-    resolveWorkspace: () =>
-      Promise.resolve({
-        id: 'workspace',
-        name: 'Temporary workspace',
-        rootPath: directory,
-        icon: 'folder',
-        revision: 1,
-        createdAt: 1,
-        updatedAt: 1,
-      }),
+    resolveWorkspace,
+    fileChanges: (current) => {
+      const files = fileChanges(current);
+      return decorateFiles ? decorateFiles(files) : files;
+    },
   });
   return {
     directory,
@@ -181,6 +188,87 @@ describe('task tool ownership', () => {
       expect(result.isError, JSON.stringify(result)).not.toBe(true);
       expect(await readFile(join(f.directory, 'result.txt'), 'utf8')).toBe('owned output');
       expect(released).toBe(1);
+    } finally {
+      await f.close();
+    }
+  });
+
+  it('binds the native file barrier to the canonical tool id and treats failure after actual publication as unknown', async () => {
+    const ids: string[] = [];
+    const f = await fixture((files) => ({
+      async modify(input, invocation) {
+        ids.push(invocation.toolCallId);
+        await files.modify(input, invocation);
+        throw new Error('Final file history write failed');
+      },
+    }));
+    const unknown = vi.fn();
+    f.context.outcomeUnknown = unknown;
+    try {
+      const write = f.runtime
+        .createTools(f.context, f.toolset)
+        .find((tool) => tool.name === 'write_file');
+      if (!write) throw new Error('Missing file tool');
+      const result = await write.execute('provider-id', {
+        path: 'effect.txt',
+        content: 'published',
+        expectedHash: null,
+      });
+      const canonical = toolCallRecordId('run', 'assistant', 'provider-id');
+      expect(ids).toEqual([canonical]);
+      expect(await readFile(join(f.directory, 'effect.txt'), 'utf8')).toBe('published');
+      expect(result.isError).toBe(true);
+      expect(unknown).toHaveBeenCalledTimes(1);
+      const updates = f.events.flatMap((event) =>
+        event.type === 'tool.updated' ? [event.data.tool] : [],
+      );
+      expect(updates.at(-2)).toHaveProperty('id', canonical);
+      expect(updates.at(-2)).toHaveProperty('status', 'running');
+      expect(updates.at(-2)).toHaveProperty('dispatch.state', 'may_have_started');
+      expect(updates.at(-1)).toMatchObject({
+        status: 'unknown',
+        dispatch: { state: 'may_have_started' },
+      });
+      expect(updates.at(-1)).not.toMatchObject({ dispatch: { confirmedNotWritten: true } });
+    } finally {
+      await f.close();
+    }
+  });
+
+  it('confirms no publication only when the actual sandbox barrier refuses before the target write', async () => {
+    const f = await fixture((files) => ({
+      modify(input, invocation) {
+        return files.modify(input, {
+          ...invocation,
+          beforePublish(operationId) {
+            invocation.beforePublish(operationId);
+            throw new Error('Refused before target syscall');
+          },
+        });
+      },
+    }));
+    const unknown = vi.fn();
+    f.context.outcomeUnknown = unknown;
+    try {
+      const write = f.runtime
+        .createTools(f.context, f.toolset)
+        .find((tool) => tool.name === 'write_file');
+      if (!write) throw new Error('Missing file tool');
+      const result = await write.execute('provider-id', {
+        path: 'effect.txt',
+        content: 'refused',
+        expectedHash: null,
+      });
+      expect(result.isError).toBe(true);
+      await expect(stat(join(f.directory, 'effect.txt'))).rejects.toHaveProperty('code', 'ENOENT');
+      expect(unknown).not.toHaveBeenCalled();
+      const updates = f.events.flatMap((event) =>
+        event.type === 'tool.updated' ? [event.data.tool] : [],
+      );
+      expect(updates.at(-1)).toMatchObject({
+        status: 'failed',
+        dispatch: { state: 'may_have_started', confirmedNotWritten: true },
+      });
     } finally {
       await f.close();
     }

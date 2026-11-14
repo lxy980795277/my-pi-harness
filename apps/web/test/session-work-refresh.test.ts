@@ -27,6 +27,8 @@ const owned = vi.hoisted(() => {
     effects: [] as EffectCallback[],
     subscriptions: [] as Subscription[],
     invalidate: vi.fn<(filter: { queryKey: readonly unknown[] }) => Promise<void>>(),
+    invalidateUsage: vi.fn<(filter: { queryKey: readonly unknown[] }) => Promise<void>>(),
+    invalidateTrace: vi.fn<(filter: { queryKey: readonly unknown[] }) => Promise<void>>(),
     refreshMemory: vi.fn<() => Promise<void>>(),
   };
 });
@@ -45,7 +47,14 @@ vi.mock('@tanstack/react-query', () => {
       return {};
     },
     useQueryClient: () => {
-      return { invalidateQueries: owned.invalidate };
+      return {
+        invalidateQueries: (filter: { queryKey: readonly unknown[] }): Promise<void> => {
+          if (filter.queryKey[0] === 'usage') return owned.invalidateUsage(filter);
+          if (filter.queryKey[0] === 'trace' || filter.queryKey[0] === 'trace-content')
+            return owned.invalidateTrace(filter);
+          return owned.invalidate(filter);
+        },
+      };
     },
   };
 });
@@ -123,6 +132,8 @@ beforeEach(() => {
   owned.effects.length = 0;
   owned.subscriptions.length = 0;
   owned.invalidate.mockReset();
+  owned.invalidateUsage.mockReset().mockResolvedValue();
+  owned.invalidateTrace.mockReset().mockResolvedValue();
   owned.refreshMemory.mockReset().mockResolvedValue();
 });
 afterEach(() => {
@@ -131,6 +142,31 @@ afterEach(() => {
 });
 
 describe('session Work invalidation ownership', () => {
+  it('refreshes mounted usage with the latest committed position after a held statistics refresh', async () => {
+    const first = gate();
+    owned.invalidate.mockResolvedValue();
+    owned.invalidateUsage.mockReturnValueOnce(first.promise).mockResolvedValue();
+    const close = renderHook()();
+    try {
+      subscription().observer.snapshot(sessionProjection(3));
+      await vi.advanceTimersByTimeAsync(300);
+      expect(owned.invalidateUsage).toHaveBeenCalledWith({ queryKey: ['usage', 'session'] });
+      expect(owned.invalidateTrace.mock.calls.map(([filter]) => filter.queryKey)).toEqual([
+        ['trace', 'session'],
+        ['trace-content', 'session'],
+      ]);
+      subscription().observer.snapshot(sessionProjection(4));
+      await vi.advanceTimersByTimeAsync(300);
+      expect(owned.invalidateUsage).toHaveBeenCalledTimes(1);
+      first.release();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(owned.invalidateUsage).toHaveBeenCalledTimes(2);
+    } finally {
+      close();
+      first.release();
+    }
+    expect(vi.getTimerCount()).toBe(0);
+  });
   it('refreshes current memory facts on completed native writes, not running, failed or repeated tool snapshots', async () => {
     owned.invalidate.mockResolvedValue();
     const close = renderHook()();

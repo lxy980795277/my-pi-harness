@@ -44,6 +44,7 @@ type AcceptanceMetadata = Pick<
   | 'skills'
 >;
 interface PreparedRun {
+  inputMessageId: string;
   memorySource?: MemoryMessageSource;
   history: Message[];
   user: UserMessage;
@@ -54,7 +55,7 @@ interface PreparedRun {
   ): readonly EventInput[];
 }
 
-/** Root and delegated models satisfy the same input and reasoning requirements before acceptance. */
+/** New runs and imported-session bindings share text/reasoning checks and release failed model leases. */
 export async function resolveRunModel(
   gateway: Pick<ModelGateway, 'resolve'>,
   session: Pick<SessionSummary, 'providerId' | 'modelId' | 'thinkingLevel'>,
@@ -119,6 +120,7 @@ export async function prepareRun(input: RunPreparationInput): Promise<PreparedRu
   };
   const memorySource = run.taskId ? undefined : consumedMemorySource(message);
   return {
+    inputMessageId: message.id,
     ...(memorySource ? { memorySource } : {}),
     history,
     user,

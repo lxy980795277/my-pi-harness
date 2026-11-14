@@ -53,6 +53,15 @@ describe('memory recall follows actual input consumption', () => {
         release.release();
         await idle(f);
         expect(seen).toEqual(['First actual question', 'Edited consumed query']);
+        const inputs = f.runtime
+          .getSnapshot(f.session.id)
+          .messages.filter((message) => message.role === 'user');
+        const requests = f.store
+          .readEvents(f.session.id, 0, 200)
+          .filter((event) => event.type === 'model.request.started');
+        expect(requests.map((event) => event.data.inputMessageId)).toEqual(
+          inputs.map((message) => message.id),
+        );
         expect(f.errors).toEqual([]);
       } finally {
         release.release();
@@ -96,6 +105,17 @@ describe('memory recall follows actual input consumption', () => {
         requestId: 'communication-query',
       });
       await agentsIdle(f);
+      const snapshot = f.runtime.getSnapshot(f.session.id);
+      const human = snapshot.messages.find(
+        (message) => message.text === 'Actual human recall query',
+      );
+      const rootRun = snapshot.runs[0];
+      if (!human || !rootRun) throw new Error('Missing root input identity');
+      const rootRequests = f.store
+        .readEvents(f.session.id, 0, 200)
+        .filter((event) => event.type === 'model.request.started' && event.runId === rootRun.id);
+      expect(rootRequests.length).toBeGreaterThan(1);
+      expect(rootRequests.every((event) => event.data.inputMessageId === human.id)).toBe(true);
       expect(
         seen
           .filter((input) => !input.taskId)

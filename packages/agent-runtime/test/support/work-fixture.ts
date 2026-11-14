@@ -27,6 +27,7 @@ import type { WebFetchGatewayAccess, WebToolHandlers } from '@my-pi-harness/tool
 import type { SkillsPort, ToolDiscoveryPort } from '../../src/capabilities/ports';
 import { WorkRuntime } from '../../src/work/runtime';
 import type { RunMemoryPort } from '../../src/runs/ports';
+import { testFileChanges } from './file-changes';
 
 interface WorkFixture {
   directory: string;
@@ -109,6 +110,7 @@ export async function fixture(
       const toolOptions: ToolRuntimeOptions = {
         profileDirectory: profile,
         resolveWorkspace,
+        fileChanges: testFileChanges(profile, resolveWorkspace, store),
       };
       if (options.sessionTools !== false) toolOptions.work = work;
       if (options.externalTools) toolOptions.externalTools = options.externalTools;

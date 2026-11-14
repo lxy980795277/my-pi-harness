@@ -19,10 +19,14 @@ import { MEMORY_RELEVANCE_SQL } from './0013-memory-relevance';
 import { MEMORY_PROPOSALS_SQL } from './0014-memory-proposals';
 import { SEARCH_CURSOR_SQL } from './0015-search-cursor';
 import { DIRECT_MEMORY_WRITES_SQL } from './0016-direct-memory-writes';
+import { EXECUTION_TRACE_SQL } from './0017-execution-trace';
+import { EXECUTION_USAGE_SQL } from './0018-execution-usage';
+import { FILE_CHANGES_SQL } from './0019-file-changes';
+import { SESSION_ARCHIVES_SQL } from './0020-session-archives';
 const MigrationRowSchema = Type.Object({ version: Type.Integer(), checksum: Type.String() });
 
 /** Highest installed schema version understood by this build. */
-export const SCHEMA_VERSION = 16;
+export const SCHEMA_VERSION = 20;
 const migrations = [
   { version: 1, sql: FOUNDATION_SQL },
   { version: 2, sql: APPLICATION_LOGIN_SQL },
@@ -40,6 +44,10 @@ const migrations = [
   { version: 14, sql: MEMORY_PROPOSALS_SQL },
   { version: 15, sql: SEARCH_CURSOR_SQL },
   { version: 16, sql: DIRECT_MEMORY_WRITES_SQL },
+  { version: 17, sql: EXECUTION_TRACE_SQL },
+  { version: 18, sql: EXECUTION_USAGE_SQL },
+  { version: 19, sql: FILE_CHANGES_SQL },
+  { version: 20, sql: SESSION_ARCHIVES_SQL },
 ];
 
 /**

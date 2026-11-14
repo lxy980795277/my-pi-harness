@@ -177,6 +177,61 @@ async function reopen(value: Awaited<ReturnType<typeof fixture>>) {
 }
 
 describe('durable tool outcomes and private result atomicity', () => {
+  it('projects human approval without losing tied-sequence rows and reads the canonical result', async () => {
+    const { store } = await fixture();
+    const waiting = tool('call', 'awaiting_approval');
+    store.append('session', [event('tool.requested', { tool: waiting })]);
+    const first = store.listTrace('session', { limit: 1 });
+    expect(first.items).toMatchObject([{ kind: 'tool', status: 'awaiting_approval' }]);
+    const second = store.listTrace('session', {
+      cursor: first.nextCursor ?? 0,
+      watermark: first.watermark,
+      limit: 1,
+    });
+    expect(second.items).toMatchObject([{ kind: 'approval', status: 'awaiting_approval' }]);
+    const approved: ToolCallRecord = {
+      ...waiting,
+      status: 'running',
+      updatedAt: 5,
+      approval: { source: 'user', decision: 'allow', reason: 'Approved once' },
+    };
+    store.append('session', [event('tool.updated', { tool: approved })]);
+    expect(
+      store.listTrace('session', { kind: 'approval', watermark: first.watermark }).items[0]?.status,
+    ).toBe('awaiting_approval');
+    const approval = store.listTrace('session', { kind: 'approval' }).items[0];
+    expect(approval).toMatchObject({ status: 'approved', durationMs: 3 });
+    if (approval === undefined) throw new Error('Approval trace fixture is missing');
+    expect(
+      store.getTraceEntry('session', approval.id).items.find((item) => item.role === 'approval')
+        ?.text,
+    ).toContain('Approved once');
+    expect(
+      store.getTraceEntry('session', approval.id).items.some((item) => item.role === 'dispatch'),
+    ).toBe(true);
+    const finished: ToolCallRecord = {
+      ...approved,
+      status: 'completed',
+      updatedAt: 8,
+      result: 'Short preview',
+    };
+    const canonical = result(finished);
+    if (canonical.privateData === undefined) throw new Error('Canonical fixture is missing');
+    const full = 'Full canonical result '.repeat(6000);
+    canonical.privateData['content'] = [{ type: 'text', text: full }];
+    store.append('session', [event('tool.updated', { tool: finished }), canonical]);
+    let output = '';
+    let offset = 0;
+    while (true) {
+      const page = store.getTraceEntry('session', approval.id, { cursor: 1, offset, limit: 1 });
+      output += page.items[0]?.text ?? '';
+      if (page.nextCursor !== 1) break;
+      offset = page.nextOffset ?? 0;
+    }
+    expect(output).toBe(full);
+    expect(store.listTrace('session', { kind: 'approval' }).items[0]?.durationMs).toBe(3);
+  });
+
   it('projects call intents by codec fields rather than a particular SDK release', () => {
     for (const sdkVersion of ['1.4.0', 'different-sdk-source'])
       expect(assistantToolIntents(codec(['call'], sdkVersion)).map(({ id }) => id)).toEqual([

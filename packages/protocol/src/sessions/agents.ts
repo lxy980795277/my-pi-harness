@@ -115,6 +115,14 @@ export const AgentTaskSummarySchema = Type.Object(
     closeReason: Type.Union([AgentTaskOutcomeSchema, Type.Null()]),
     error: Type.Union([Type.String({ maxLength: 2000 }), Type.Null()]),
     usage: Type.Union([MessageUsageSchema, Type.Null()]),
+    usageCoverage: Type.Object(
+      {
+        requestCount: Type.Integer({ minimum: 0 }),
+        recordedRequests: Type.Integer({ minimum: 0 }),
+        unknownRequests: Type.Integer({ minimum: 0 }),
+      },
+      { additionalProperties: false },
+    ),
   },
   { additionalProperties: false },
 );
@@ -127,6 +135,7 @@ export const AgentMessageQueuedSchema = Type.Object(
   {
     id,
     sourceRunId: id,
+    answerInputMessageId: Type.Optional(nullableId),
     target: AgentMessageTargetSchema,
     text: Type.String({ minLength: 1, maxLength: 32_000 }),
     createdAt: timestamp,

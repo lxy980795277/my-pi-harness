@@ -1,11 +1,6 @@
 import { Type } from 'typebox';
-import { readStableFile, workspacePath } from '@my-pi-harness/sandbox';
-import {
-  decodeText,
-  hashBytes,
-  MAXIMUM_OUTPUT_CHARACTERS,
-  MAXIMUM_TEXT_BYTES,
-} from '../lib/filesystem';
+import { hashFileBytes, readStableFile, workspacePath } from '@my-pi-harness/sandbox';
+import { decodeText, MAXIMUM_OUTPUT_CHARACTERS, MAXIMUM_TEXT_BYTES } from '../lib/filesystem';
 import { ToolError, completeToolRegistration, strictObjectSchema } from '../lib/tool-registry';
 
 const parameters = strictObjectSchema({
@@ -44,7 +39,7 @@ export const readFileTool = completeToolRegistration({
       content: [
         {
           type: 'text',
-          text: `SHA-256: ${hashBytes(data)}\nLines: ${lines.length}\n${selected.slice(0, MAXIMUM_OUTPUT_CHARACTERS)}${truncated ? '\n[Output truncated]' : ''}`,
+          text: `SHA-256: ${hashFileBytes(data)}\nLines: ${lines.length}\n${selected.slice(0, MAXIMUM_OUTPUT_CHARACTERS)}${truncated ? '\n[Output truncated]' : ''}`,
         },
       ],
     };

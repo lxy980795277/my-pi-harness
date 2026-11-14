@@ -13,6 +13,10 @@ import { useTaskPresentationStore } from '../src/features/tasks/stores/tasks';
 import { taskMessageKey, useTaskMessageStore } from '../src/features/tasks/stores/messages';
 import { useWorkDraftStore } from '../src/features/work/stores/drafts';
 import { useSearchStore } from '../src/features/search/stores/search';
+import { useTraceStore } from '../src/features/trace/stores/trace';
+import { useFileChangesStore } from '../src/features/file-changes/stores/file-changes';
+import { useArchiveStore } from '../src/features/archives/stores/archives';
+import { markSessionReceived, readRenderDiagnostic } from '../src/utils/render-diagnostics';
 import { SOURCE_SELECTION } from './fixtures/search';
 
 const DRAFT_ATTACHMENT: Attachment = {
@@ -103,6 +107,18 @@ describe('private client state lifecycle', () => {
 
   it('authorization cleanup clears every private domain and invalidates an older creation attempt', () => {
     useSearchStore.getState().show();
+    useTraceStore.getState().open('private-session', 'private-branch');
+    useTraceStore.getState().select('private-trace');
+    useFileChangesStore.getState().open('private-session', { inputMessageId: 'private-input' });
+    useFileChangesStore.getState().begin('private-session', {
+      operationId: 'private-op',
+      action: 'undo',
+      selection: { kind: 'changes', changeIds: ['private-change'] },
+    });
+    useArchiveStore.getState().openImport();
+    useArchiveStore.getState().track('import', null, 'private-archive');
+    useArchiveStore.getState().rememberCommit('private-archive', 'a'.repeat(64));
+    markSessionReceived('private-session', 1, 0, 0);
     useSearchStore.getState().change({ query: '私有检索词', archived: true });
     useSearchStore.getState().select(SOURCE_SELECTION);
     useComposerStore.getState().addSearchQuote('source-session', SOURCE_SELECTION);
@@ -181,6 +197,21 @@ describe('private client state lifecycle', () => {
       taskId: null,
       filter: 'all',
     });
+    expect(useTraceStore.getState()).toMatchObject({ sessionId: null, entryId: null, filters: {} });
+    expect(useFileChangesStore.getState()).toMatchObject({
+      sessionId: null,
+      unconfirmed: {},
+      operationIds: {},
+      selectedIds: [],
+    });
+    expect(useArchiveStore.getState()).toMatchObject({
+      mode: null,
+      sessionId: null,
+      operationId: null,
+      lastOperations: {},
+      commitIntents: {},
+    });
+    expect(readRenderDiagnostic('private-session')).toBeNull();
     expect(useWorkDraftStore.getState()).toMatchObject({ questions: {}, feedback: {} });
     expect(useTaskMessageStore.getState()).toMatchObject({ drafts: {}, attempts: {} });
   });

@@ -1,4 +1,5 @@
-import { and, asc, eq, max } from 'drizzle-orm';
+import { and, asc, eq, max, sql } from 'drizzle-orm';
+import type Database from 'better-sqlite3';
 import { isDeepStrictEqual } from 'node:util';
 import { Type } from 'typebox';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
@@ -13,6 +14,7 @@ import {
   type MessageView,
   type SessionSummary,
   SearchSourceSelectionSchema,
+  SessionArchiveImportBindingSchema,
 } from '@my-pi-harness/protocol';
 import { QueueCapabilityMetadataSchema } from '@my-pi-harness/protocol/internal';
 import { StorageError } from '../../shared/errors';
@@ -23,6 +25,10 @@ import { AgentTaskProjection } from './agents';
 import { projectCapabilityLoad } from './capabilities';
 import * as schema from '../../sqlite/schema';
 import { checked } from '../../shared/validation';
+import { TraceProjection } from '../trace-projection';
+import type { ExecutionUsageQuery } from '../execution-usage';
+import { FileChangeProjection } from '../file-changes/projection';
+import { projectImportAccess, sessionExecutionAccess } from '../import-access';
 import {
   BranchSelectionSchema,
   InputIdSchema,
@@ -35,14 +41,33 @@ const searchQuotes = Type.Array(SearchSourceSelectionSchema, { maxItems: 4, uniq
 
 /** Updates reconstructable projections inside the event append transaction. */
 export class ProjectionWriter {
+  private readonly trace: TraceProjection;
+  private readonly fileChanges: FileChangeProjection;
   private readonly tools: ToolProjection;
   private readonly work: WorkRepository;
   private readonly agents: AgentTaskProjection;
 
-  public constructor(private readonly db: BetterSQLite3Database<typeof schema>) {
+  public constructor(
+    private readonly db: BetterSQLite3Database<typeof schema>,
+    private readonly sqlite: Database.Database,
+    usage: ExecutionUsageQuery,
+  ) {
+    this.trace = new TraceProjection(sqlite);
+    this.fileChanges = new FileChangeProjection(sqlite);
     this.tools = new ToolProjection(db);
     this.work = new WorkRepository(db);
-    this.agents = new AgentTaskProjection(db);
+    this.agents = new AgentTaskProjection(db, usage);
+  }
+
+  /** Startup rebuild discards trace versions with the other disposable session projections. */
+  public resetTrace(): void {
+    this.trace.clear();
+    this.fileChanges.clear();
+    this.db.run(sql`DELETE FROM session_import_access`);
+  }
+
+  public finishRebuild(): void {
+    this.fileChanges.finishRebuild();
   }
 
   /** Validate and load an existing session whose durable cursor agrees with its projection. */
@@ -64,7 +89,12 @@ export class ProjectionWriter {
     checked(SessionSummarySchema, session);
     this.db
       .update(schema.sessions)
-      .set({ data: session, activeRunId: session.activeRunId, snapshotSeq: session.snapshotSeq })
+      .set({
+        data: session,
+        activeRunId: session.activeRunId,
+        snapshotSeq: session.snapshotSeq,
+        workspaceId: session.workspaceId,
+      })
       .where(eq(schema.sessions.id, session.id))
       .run();
   }
@@ -358,6 +388,14 @@ export class ProjectionWriter {
    * @param privateData Host-only codec or request metadata, omitted from public events.
    */
   public apply(event: HarnessEvent, privateData?: Record<string, unknown>): void {
+    if (
+      (event.type === 'run.accepted' || event.type === 'queue.added') &&
+      !sessionExecutionAccess(this.sqlite, event.sessionId).bound
+    )
+      throw new StorageError(
+        'SESSION_BINDING_REQUIRED',
+        'Imported history requires explicit current execution dependencies',
+      );
     switch (event.type) {
       case 'artifact.published':
         projectArtifact(this.db, event);
@@ -519,6 +557,12 @@ export class ProjectionWriter {
         this.saveSession({ ...session, activeBranchId: selected.branchId });
         break;
       }
+      case 'session.history_bound':
+      case 'session.execution_bound': {
+        const binding = checked(SessionArchiveImportBindingSchema, event.data);
+        this.saveSession({ ...this.session(event.sessionId), ...binding, approvalMode: 'ask' });
+        break;
+      }
       case 'session.configured': {
         const update = checked(SessionPatchInputSchema, event.data);
         this.saveSession({ ...this.session(event.sessionId), ...update });
@@ -541,6 +585,9 @@ export class ProjectionWriter {
         // Future progress/audit event types have no projection until their owner defines one.
         if (event.runId !== null) this.run(event);
     }
+    projectImportAccess(this.sqlite, event, privateData);
+    this.trace.apply(event, privateData);
+    this.fileChanges.apply(event, privateData);
     this.saveSession({
       ...this.session(event.sessionId),
       snapshotSeq: event.seq,

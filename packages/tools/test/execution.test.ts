@@ -1,13 +1,17 @@
 import { mkdtemp, mkdir, readFile, writeFile, rm, symlink, link, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   executeRegistered as executeTool,
   describeRegistered as describeTool,
 } from './support/registered';
-import type { WorkspaceToolContext as ExecutionContext } from '../src/index';
-import { hashBytes } from '../src/lib/filesystem';
+import {
+  nativeTool,
+  type ToolContext,
+  type WorkspaceToolContext as ExecutionContext,
+} from '../src/index';
+import { hashFileBytes as hashBytes } from '@my-pi-harness/sandbox';
 
 let directory: string;
 let context: ExecutionContext;
@@ -71,6 +75,74 @@ describe('validated tool execution', () => {
     expect(await readFile(join(context.workspaceRoot, 'hello.txt'), 'utf8')).toBe(
       'hello\nworkspace\n',
     );
+  });
+
+  it('preserves a UTF-8 BOM and CRLF bytes while applying exact text edits', async () => {
+    const original = Buffer.from('\uFEFFfirst\r\nlast\r\n');
+    const path = join(context.workspaceRoot, 'bom.txt');
+    await writeFile(path, original);
+    await executeTool(
+      'edit_file',
+      { path: 'bom.txt', oldText: 'last', newText: 'edited', expectedHash: hashBytes(original) },
+      context,
+    );
+    expect(await readFile(path)).toEqual(Buffer.from('\uFEFFfirst\r\nedited\r\n'));
+  });
+
+  it('requires a host file service and never falls back to direct workspace writes', async () => {
+    const workspace = vi.fn(() => Promise.resolve(context));
+    const ports: ToolContext = {
+      owner: { sessionId: 'session', runId: 'run', taskId: null },
+      readOnly: false,
+      workspace,
+    };
+    const tool = nativeTool('write_file');
+    if (!tool) throw new Error('Missing write tool');
+    await expect(
+      tool.bind(ports)(
+        { path: 'missing.txt', content: 'never written', expectedHash: null },
+        { toolCallId: 'call', signal: context.signal },
+      ),
+    ).rejects.toMatchObject({ code: 'FILE_CHANGES_UNAVAILABLE' });
+    expect(workspace).not.toHaveBeenCalled();
+    await expect(readFile(join(context.workspaceRoot, 'missing.txt'))).rejects.toHaveProperty(
+      'code',
+      'ENOENT',
+    );
+  });
+
+  it('executes text preparation only through the host service with the bound invocation identity', async () => {
+    const prepare = vi.fn();
+    const barrier = vi.fn();
+    const ports: ToolContext = {
+      owner: { sessionId: 'session', runId: 'run', taskId: 'task' },
+      readOnly: false,
+      workspace: () => Promise.reject(new Error('The host owns snapshot reads')),
+      fileChanges: {
+        modify(input, invocation) {
+          expect(input).toMatchObject({ path: 'host.txt', expectedHash: '0'.repeat(64) });
+          expect(invocation.toolCallId).toBe('canonical-call');
+          expect(invocation.signal).toBe(context.signal);
+          const prepared = input.prepare(Buffer.from('before\r\n'));
+          prepare(prepared.content);
+          return Promise.resolve(prepared.result);
+        },
+      },
+    };
+    const tool = nativeTool('edit_file');
+    if (!tool) throw new Error('Missing edit tool');
+    const result = await tool.bind(ports)(
+      { path: 'host.txt', expectedHash: '0'.repeat(64), oldText: 'before', newText: 'after' },
+      {
+        toolCallId: 'canonical-call',
+        signal: context.signal,
+        beforePublish: barrier,
+        confirmNotPublished: () => undefined,
+      },
+    );
+    expect(prepare).toHaveBeenCalledExactlyOnceWith(Buffer.from('after\r\n'));
+    expect(result.diff).toContain('+after');
+    expect(barrier).not.toHaveBeenCalled();
   });
 
   it('rejects stale updates, accidental overwrites and ambiguous replacement', async () => {

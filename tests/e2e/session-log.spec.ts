@@ -49,6 +49,11 @@ const sendFirstMessage = async (page: Page, text: string): Promise<SessionSnapsh
   return snapshot;
 };
 
+const downloadSessionLog = async (page: Page): Promise<void> => {
+  await page.getByRole('button', { name: '对话日志与归档', exact: true }).click();
+  await page.getByRole('menuitem', { name: '下载 JSONL 日志', exact: true }).click();
+};
+
 test('会话标题栏全宽展示，下载完整 JSONL 并在失败后重试', async ({ page, daemon }, testInfo) => {
   const model = await startTestModel();
   try {
@@ -78,7 +83,9 @@ test('会话标题栏全宽展示，下载完整 JSONL 并在失败后重试', a
     await expect(
       header.getByRole('heading', { name: '对话日志下载验收', exact: true }),
     ).toBeVisible();
-    await expect(header.getByRole('button')).toHaveCount(2);
+    await expect(header.getByRole('button')).toHaveCount(4);
+    await expect(header.getByRole('button', { name: '打开执行轨迹', exact: true })).toBeVisible();
+    await expect(header.getByRole('button', { name: '文件变更', exact: true })).toBeVisible();
     await expect(header.getByRole('button', { name: '打开会话任务', exact: true })).toBeVisible();
     await expect(page.getByRole('combobox', { name: '历史分支', exact: true })).toHaveCount(0);
     await expect(page.getByRole('button', { name: '删除会话', exact: true })).toHaveCount(0);
@@ -112,13 +119,13 @@ test('会话标题栏全宽展示，下载完整 JSONL 并在失败后重试', a
         }),
       });
     });
-    const download = header.getByRole('button', { name: '下载对话日志', exact: true });
-    await download.click();
+    const logMenu = header.getByRole('button', { name: '对话日志与归档', exact: true });
+    await downloadSessionLog(page);
     await expect(page.getByRole('alert')).toContainText('会话日志暂不可用，请重试。');
-    await expect(download).toBeEnabled();
+    await expect(logMenu).toBeEnabled();
     await page.unroute(logPattern);
     const downloading = page.waitForEvent('download');
-    await download.click();
+    await downloadSessionLog(page);
     const file = await downloading;
     expect(file.suggestedFilename()).toBe(`${original.session.id}.jsonl`);
     const saved = testInfo.outputPath(file.suggestedFilename());
@@ -159,8 +166,8 @@ test('运行中下载固定已提交 JSONL 前缀，完成后再次下载包含�
     const original = await startSession(page, '运行中的日志快照');
     await expect(page.getByText(prefix, { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: '停止', exact: true })).toBeVisible();
-    const download = page.getByRole('button', { name: '下载对话日志', exact: true });
-    await expect(download).toBeEnabled();
+    const logMenu = page.getByRole('button', { name: '对话日志与归档', exact: true });
+    await expect(logMenu).toBeEnabled();
     const activeResponse = await page.request.get(
       `${daemon.origin}/api/sessions/${original.session.id}`,
     );
@@ -172,7 +179,7 @@ test('运行中下载固定已提交 JSONL 前缀，完成后再次下载包含�
     expect(active.liveRevision).toBeGreaterThan(0);
     expect(active.messages.at(-1)?.text).toContain(prefix);
     const firstDownloading = page.waitForEvent('download');
-    await download.click();
+    await downloadSessionLog(page);
     const firstFile = await firstDownloading;
     expect(firstFile.suggestedFilename()).toBe(`${original.session.id}.jsonl`);
     const firstPath = testInfo.outputPath('running-prefix.jsonl');
@@ -189,7 +196,7 @@ test('运行中下载固定已提交 JSONL 前缀，完成后再次下载包含�
     await expect(page.getByRole('button', { name: '停止', exact: true })).toHaveCount(0);
     expect((await readFile(firstPath)).equals(firstBytes)).toBe(true);
     const finalDownloading = page.waitForEvent('download');
-    await download.click();
+    await downloadSessionLog(page);
     const finalFile = await finalDownloading;
     const finalPath = testInfo.outputPath('completed-log.jsonl');
     await finalFile.saveAs(finalPath);
@@ -229,10 +236,14 @@ test('离开会话取消在途日志下载，不触发旧会话文件保存', as
       await gate;
       if (route.request().failure() === null) await route.continue();
     });
-    const download = page.getByRole('button', { name: '下载对话日志', exact: true });
-    await download.click();
-    await expect(download).toHaveAttribute('aria-busy', 'true');
-    await expect(download).toBeDisabled();
+    const logMenu = page.getByRole('button', { name: '对话日志与归档', exact: true });
+    await downloadSessionLog(page);
+    await expect(logMenu).toHaveAttribute('aria-busy', 'true');
+    await logMenu.click();
+    await expect(
+      page.getByRole('menuitem', { name: '下载 JSONL 日志', exact: true }),
+    ).toBeDisabled();
+    await page.keyboard.press('Escape');
     await page.getByRole('button', { name: '新对话', exact: true }).click();
     await expect(
       page.getByRole('heading', { name: '我们从哪里开始？', exact: true }),

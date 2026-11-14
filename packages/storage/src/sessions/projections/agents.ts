@@ -13,12 +13,16 @@ import {
   TaskWaitingSchema,
 } from '../event-validation';
 import { AgentTaskQuery } from '../agent-tasks';
+import type { ExecutionUsageQuery } from '../execution-usage';
 
 /** Validates task relations and projects their small lifecycle facts in the session transaction. */
 export class AgentTaskProjection {
   private readonly tasks: AgentTaskQuery;
-  public constructor(private readonly db: BetterSQLite3Database<typeof schema>) {
-    this.tasks = new AgentTaskQuery(db);
+  public constructor(
+    private readonly db: BetterSQLite3Database<typeof schema>,
+    usage: ExecutionUsageQuery,
+  ) {
+    this.tasks = new AgentTaskQuery(db, usage);
   }
 
   private run(sessionId: string, runId: string): RunView {

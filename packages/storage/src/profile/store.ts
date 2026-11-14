@@ -23,6 +23,25 @@ import type {
   ToolCallView,
   Artifact,
   MemoryUsage,
+  TraceQuery,
+  TracePage,
+  ModelRequestDetailQuery,
+  ModelRequestDetail,
+  TraceEntryDetail,
+  UsageQuery,
+  SessionUsage,
+  FileChangesQuery,
+  FileChangesPage,
+  FileChangeDetailQuery,
+  FileChangeDetail,
+  FileChangeBatchReceipt,
+  FileChangeBatchItem,
+  FileChangeBatchQuery,
+  FileChangeBatchPage,
+  SessionExecutionAccess,
+  SessionArchiveImportBinding,
+  SessionArchivePreview,
+  SessionArchiveImportReceipt,
 } from '@my-pi-harness/protocol';
 import type {
   EventInput,
@@ -32,6 +51,13 @@ import type {
   QueueCapabilityMetadata,
   SessionCreateRecord,
   ProviderRecord,
+  FileOperationPrepare,
+  FileOperationOutcome,
+  FileOperationObservation,
+  FileOperationRecord,
+  FileChangeRecord,
+  FileChangeHead,
+  FileChangeBatchAccept,
 } from '@my-pi-harness/protocol/internal';
 import { StorageError } from '../shared/errors';
 import { AuthRepository } from '../repositories/auth';
@@ -69,6 +95,20 @@ import { SessionQueries } from '../sessions/queries';
 import { SessionRecovery } from '../sessions/recovery';
 import { MemoryRepository } from '../memory/repository';
 import { SearchRepository } from '../search/repository';
+import { TraceRepository, type ModelRequestImage } from '../sessions/trace';
+import { ExecutionUsageQuery } from '../sessions/execution-usage';
+import { SessionArchiveRepository } from '../archives/repository';
+import type {
+  SessionArchiveInput,
+  SessionArchiveSource,
+  SessionArchiveOptions,
+  SessionArchiveImportsQuery,
+} from '../archives/types';
+import {
+  FileChangeRepository,
+  type PendingFileOperations,
+  type PendingFileBatches,
+} from '../sessions/file-changes/repository';
 
 /** JSONL session facts, immutable attachments and SQLite configuration/projections for one daemon. */
 export class ProfileStore {
@@ -90,6 +130,10 @@ export class ProfileStore {
   private readonly eventCommit: SessionEventCommit;
   private readonly live: LiveMessages;
   private readonly sessions: SessionQueries;
+  private readonly trace: TraceRepository;
+  private readonly executionUsage: ExecutionUsageQuery;
+  private readonly archives: SessionArchiveRepository;
+  private readonly fileChanges: FileChangeRepository;
   private readonly artifacts: ArtifactRepository;
   private readonly skillContext: SkillContextQuery;
   private closed = false;
@@ -100,6 +144,10 @@ export class ProfileStore {
   private pendingRecords: StoredSessionEvent[] = [];
   private transactionDepth = 0;
   private writeFailure: StorageError | undefined;
+  private readonly committedListeners = new Set<{
+    receive(events: readonly HarnessEvent[]): void;
+    failed(error: unknown): void;
+  }>();
 
   public constructor(
     private readonly sqlite: Database.Database,
@@ -123,7 +171,8 @@ export class ProfileStore {
       (id) => this.search.forgetMemory(id),
     );
     this.db = drizzle(sqlite, { schema });
-    this.projector = new ProjectionWriter(this.db);
+    this.executionUsage = new ExecutionUsageQuery(sqlite);
+    this.projector = new ProjectionWriter(this.db, sqlite, this.executionUsage);
     this.workspaces = new WorkspaceRepository(this.db);
     this.modelSettings = new ModelSettingsRepository(
       this.db,
@@ -134,7 +183,7 @@ export class ProfileStore {
     this.modelContext = new ModelContextQuery(this.db);
     this.skillContext = new SkillContextQuery(this.db);
     this.work = new WorkRepository(this.db);
-    this.agentTasks = new AgentTaskQuery(this.db);
+    this.agentTasks = new AgentTaskQuery(this.db, this.executionUsage);
     this.agentSettings = new AgentSettingsRepository(this.db, options.defaultAgentSettings);
     this.eventCommit = new SessionEventCommit(
       this.db,
@@ -146,12 +195,50 @@ export class ProfileStore {
     this.sessions = new SessionQueries(this.db, this.projector, tools, this.live);
     this.files = new PrivateSessionFiles(lock.directory, options.sessionLogRoot);
     this.journal = new SessionJournal(this.files);
+    this.trace = new TraceRepository(sqlite, this.journal);
     this.blobs = new AttachmentBlobs(this.files);
     this.artifactBlobs = new ArtifactBlobs(this.files, options.artifactLimits);
+    this.fileChanges = new FileChangeRepository(sqlite, this.artifactBlobs, (sessionId, inputs) =>
+      this.append(sessionId, inputs),
+    );
     this.artifacts = new ArtifactRepository(this.db, this.artifactBlobs, (sessionId, toolId) =>
       this.getVisibleTool(sessionId, toolId),
     );
     try {
+      this.archives = new SessionArchiveRepository({
+        db: sqlite,
+        files: this.files,
+        journal: this.journal,
+        blobs: this.blobs,
+        artifactBlobs: this.artifactBlobs,
+        ownerUserId: () => this.auth.profileOwner()?.id ?? null,
+        append: (sessionId, inputs) => {
+          this.append(sessionId, inputs);
+        },
+        replay: (sessionId, attachmentIds) => {
+          try {
+            this.transaction(() => {
+              const recovery = new SessionRecovery(
+                this.db,
+                this.projector,
+                this.journal,
+                this.blobs,
+                this.artifactBlobs,
+              );
+              recovery.replaySession(sessionId, attachmentIds);
+            });
+          } catch (cause) {
+            this.writeFailure = new StorageError(
+              'SESSION_LOG_UNAVAILABLE',
+              'Imported journal was published but its projection is not confirmed. Restart to recover the same operation.',
+              { cause },
+            );
+            throw this.writeFailure;
+          }
+        },
+      });
+      this.artifactBlobs.recoverTemporaryFiles();
+      this.archives.recoverPublications();
       const recovery = new SessionRecovery(
         this.db,
         this.projector,
@@ -162,6 +249,9 @@ export class ProfileStore {
       this.sqlite
         .transaction(() => {
           recovery.rebuild();
+          this.fileChanges.validateImages();
+          this.archives.finishRecovery();
+          this.archives.cleanupStages();
         })
         .immediate();
     } catch (error) {
@@ -180,6 +270,7 @@ export class ProfileStore {
     const outer = this.transactionDepth === 0;
     const previousLength = this.pendingRecords.length;
     let logged = false;
+    let committed: readonly HarnessEvent[] = [];
     this.transactionDepth += 1;
     try {
       const result = this.sqlite
@@ -210,7 +301,10 @@ export class ProfileStore {
           return result;
         })
         .immediate();
-      if (outer && logged) this.live.committed(this.pendingRecords.map(({ event }) => event));
+      if (outer && logged) {
+        committed = this.pendingRecords.map(({ event }) => event);
+        this.live.committed(committed);
+      }
       return result;
     } catch (error: unknown) {
       this.pendingRecords.length = previousLength;
@@ -236,13 +330,37 @@ export class ProfileStore {
     } finally {
       this.transactionDepth -= 1;
       if (outer) this.pendingRecords.length = previousLength;
+      for (const listener of this.committedListeners) {
+        if (committed.length === 0) break;
+        try {
+          listener.receive(committed);
+        } catch (error) {
+          try {
+            listener.failed(error);
+          } catch {
+            // Observers and their diagnostics have no authority to reject an already durable transaction.
+          }
+        }
+      }
     }
+  }
+
+  /** Observe committed outer transactions; observer failures never change durable commit state. */
+  public subscribeCommitted(
+    receive: (events: readonly HarnessEvent[]) => void,
+    failed: (error: unknown) => void,
+  ): () => void {
+    this.assertOpen();
+    const listener = { receive, failed };
+    this.committedListeners.add(listener);
+    return () => this.committedListeners.delete(listener);
   }
 
   /** Close the business database before releasing profile ownership; repeated close is safe. */
   public close(): void {
     if (this.closed) return;
     this.closed = true;
+    this.committedListeners.clear();
     this.live.clear();
     this.artifactBlobs.close();
     try {
@@ -339,6 +457,46 @@ export class ProfileStore {
     return this.work.memoryUsage(sessionId, runId);
   }
 
+  /** Read a committed timeline without loading message or request bodies. */
+  public listTrace(sessionId: string, query: TraceQuery = {}): TracePage {
+    return this.transaction(() => this.trace.list(sessionId, query), true);
+  }
+
+  /** Page final model-visible inputs from their existing journal snapshot. */
+  public getModelRequest(
+    sessionId: string,
+    requestId: string,
+    query: ModelRequestDetailQuery = {},
+  ): ModelRequestDetail {
+    return this.transaction(() => this.trace.request(sessionId, requestId, query), true);
+  }
+
+  /** Read bounded tool arguments, canonical results or a model request detail. */
+  public getTraceEntry(
+    sessionId: string,
+    entryId: string,
+    query: ModelRequestDetailQuery = {},
+  ): TraceEntryDetail {
+    return this.transaction(() => this.trace.entry(sessionId, entryId, query), true);
+  }
+
+  public getModelRequestImage(
+    sessionId: string,
+    requestId: string,
+    itemIndex: number,
+    imageIndex: number,
+  ): ModelRequestImage {
+    return this.transaction(
+      () => this.trace.image(sessionId, requestId, itemIndex, imageIndex),
+      true,
+    );
+  }
+
+  /** Sum unique invocation leaves, preserving missing usage and price coverage. */
+  public getSessionUsage(sessionId: string, query: UsageQuery = {}): SessionUsage {
+    return this.transaction(() => this.executionUsage.read(sessionId, query), true);
+  }
+
   /** Export this session's original committed JSONL across all branches; credentials are separate. */
   public exportSessionLog(id: string): SessionLogDownload {
     this.assertOpen();
@@ -363,6 +521,191 @@ export class ProfileStore {
   public getVisibleTool(sessionId: string, toolId: string): ToolCallView | undefined {
     if (this.writeFailure) throw this.writeFailure;
     return this.transaction(() => this.sessions.getVisibleTool(sessionId, toolId), true);
+  }
+
+  public createSessionArchive(
+    sessionId: string,
+    options: SessionArchiveOptions = {},
+  ): Promise<SessionArchiveSource> {
+    this.assertOpen();
+    if (this.writeFailure) throw this.writeFailure;
+    return this.archives.create(sessionId, options);
+  }
+  public previewSessionArchive(
+    source: SessionArchiveInput,
+    archiveSha256: string,
+    options: Pick<SessionArchiveOptions, 'signal'> = {},
+  ): Promise<SessionArchivePreview> {
+    this.assertOpen();
+    return this.archives.preview(source, archiveSha256, options);
+  }
+  public async importSessionArchive(
+    operationId: string,
+    source: SessionArchiveInput,
+    archiveSha256: string,
+    options: Pick<SessionArchiveOptions, 'signal'> = {},
+  ): Promise<SessionArchiveImportReceipt> {
+    this.assertOpen();
+    if (this.writeFailure) throw this.writeFailure;
+    try {
+      return await this.archives.import(operationId, source, archiveSha256, options);
+    } catch (cause) {
+      if (cause instanceof StorageError && cause.code === 'SESSION_LOG_UNAVAILABLE')
+        this.writeFailure = cause;
+      throw cause;
+    }
+  }
+  public getSessionArchiveImport(operationId: string): SessionArchiveImportReceipt | undefined {
+    this.assertOpen();
+    return this.archives.get(operationId);
+  }
+  public listSessionArchiveImports(
+    query: SessionArchiveImportsQuery = {},
+  ): SessionArchiveImportReceipt[] {
+    this.assertOpen();
+    return this.archives.list(query);
+  }
+
+  /** Imported history has no current execution authority until the host binds local dependencies. */
+  public getSessionExecutionAccess(sessionId: string): SessionExecutionAccess {
+    this.assertOpen();
+    return this.archives.executionAccess(sessionId);
+  }
+
+  public bindSessionArchive(
+    sessionId: string,
+    binding: SessionArchiveImportBinding,
+    at = Date.now(),
+  ): SessionExecutionAccess {
+    this.assertOpen();
+    return this.archives.bind(sessionId, binding, at);
+  }
+
+  /** Freeze exact file images. Each successful put needs one matching abandon after preparation. */
+  public putFileChangeBytes(bytes: Uint8Array): ArtifactBlob {
+    this.assertOpen();
+    if (this.writeFailure) throw this.writeFailure;
+    if (bytes.byteLength > 500_000)
+      throw new StorageError('INVALID_RECORD', 'File history image exceeds its byte limit');
+    return this.artifactBlobs.put(bytes, { allowEmpty: true });
+  }
+
+  public abandonFileChangeBytes(sha256: string): void {
+    this.assertOpen();
+    this.artifactBlobs.abandon(sha256);
+  }
+  public readFileChangeBytes(image: ArtifactBlob): Uint8Array {
+    this.assertOpen();
+    return this.artifactBlobs.read(image);
+  }
+  public prepareFileOperation(
+    sessionId: string,
+    input: FileOperationPrepare,
+    runId: string | null,
+    at: number,
+  ): FileOperationRecord {
+    this.assertOpen();
+    return this.fileChanges.prepare(sessionId, input, runId, at);
+  }
+  public completeFileOperation(
+    sessionId: string,
+    id: string,
+    result: FileOperationOutcome,
+    at: number,
+  ): FileOperationRecord {
+    this.assertOpen();
+    return this.fileChanges.complete(sessionId, id, result, at);
+  }
+  /** Record startup evidence even for archived history; observations never confirm disk publication. */
+  public observeFileOperation(
+    sessionId: string,
+    id: string,
+    observation: FileOperationObservation,
+    at: number,
+  ): FileOperationRecord {
+    this.assertOpen();
+    return this.fileChanges.observe(sessionId, id, observation, at);
+  }
+  public getFileOperation(sessionId: string, id: string): FileOperationRecord | undefined {
+    this.assertOpen();
+    return this.fileChanges.getOperation(sessionId, id);
+  }
+  public getFileChangeRecord(sessionId: string, id: string): FileChangeRecord {
+    this.assertOpen();
+    return this.fileChanges.getRecord(sessionId, id);
+  }
+  public getFileChangeHead(targetKey: string): FileChangeHead {
+    this.assertOpen();
+    return this.fileChanges.getHead(targetKey);
+  }
+  public listPendingFileOperations(limit = 50, cursor = 0): PendingFileOperations {
+    this.assertOpen();
+    return this.fileChanges.pending(limit, cursor);
+  }
+  public listFileChanges(sessionId: string, query: FileChangesQuery = {}): FileChangesPage {
+    return this.transaction(() => this.fileChanges.list(sessionId, query), true);
+  }
+  public getFileChange(
+    sessionId: string,
+    id: string,
+    query: FileChangeDetailQuery = {},
+  ): FileChangeDetail {
+    return this.transaction(() => this.fileChanges.detail(sessionId, id, query), true);
+  }
+  public acceptFileChangeBatch(
+    sessionId: string,
+    input: FileChangeBatchAccept,
+    at: number,
+  ): FileChangeBatchReceipt {
+    this.assertOpen();
+    return this.fileChanges.acceptBatch(sessionId, input, at);
+  }
+  public findFileChangeBatch(
+    sessionId: string,
+    id: string,
+    requestHash: string,
+  ): FileChangeBatchReceipt | undefined {
+    return this.transaction(() => this.fileChanges.findBatch(sessionId, id, requestHash), true);
+  }
+  public getFileChangeBatch(sessionId: string, id: string): FileChangeBatchReceipt {
+    return this.transaction(() => this.fileChanges.getBatch(sessionId, id), true);
+  }
+  public updateFileChangeBatchItem(
+    sessionId: string,
+    id: string,
+    item: FileChangeBatchItem,
+    at: number,
+  ): FileChangeBatchReceipt {
+    this.assertOpen();
+    return this.fileChanges.updateBatchItem(sessionId, id, item, at);
+  }
+  public finishFileChangeBatch(
+    sessionId: string,
+    id: string,
+    status: FileChangeBatchReceipt['status'],
+    error: string | null,
+    at: number,
+  ): FileChangeBatchReceipt {
+    this.assertOpen();
+    return this.fileChanges.finishBatch(sessionId, id, status, error, at);
+  }
+  public requestFileChangeBatchCancel(
+    sessionId: string,
+    id: string,
+    at: number,
+  ): FileChangeBatchReceipt {
+    this.assertOpen();
+    return this.fileChanges.cancelBatch(sessionId, id, at);
+  }
+  public listFileChangeBatches(
+    sessionId: string,
+    query: FileChangeBatchQuery = {},
+  ): FileChangeBatchPage {
+    return this.transaction(() => this.fileChanges.listBatches(sessionId, query), true);
+  }
+  public listPendingFileChangeBatches(limit = 50, cursor = 0): PendingFileBatches {
+    this.assertOpen();
+    return this.fileChanges.pendingBatches(limit, cursor);
   }
 
   /** Freeze exact host-read bytes before their metadata enters the session journal. */
@@ -397,7 +740,9 @@ export class ProfileStore {
   /** Archive and branch changes preserve every committed artifact reference. */
   public collectUnreferencedArtifacts(): number {
     this.assertOpen();
-    return this.artifacts.collectUnreferenced();
+    const references = this.fileChanges.references();
+    for (const hash of this.archives.references()) references.add(hash);
+    return this.artifacts.collectUnreferenced(references);
   }
 
   /** Read the selected branch's durable work state, or the empty revision-zero state. */
@@ -495,6 +840,7 @@ export class ProfileStore {
   public append(sessionId: string, inputs: readonly EventInput[]): HarnessEvent[] {
     for (const input of inputs) assertPersistentEvent(input.type);
     this.artifacts.validatePublications(inputs);
+    this.fileChanges.validatePreparations(inputs);
     const events = this.transaction(() => this.eventCommit.append(sessionId, inputs));
     this.artifacts.committed(events);
     return events;

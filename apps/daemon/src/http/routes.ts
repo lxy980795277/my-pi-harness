@@ -9,6 +9,8 @@ import { registerAuthRoutes } from '../auth/routes';
 import { registerModelRoutes } from '../models/routes';
 import { registerSessionRoutes } from '../sessions/routes';
 import { registerSessionLogRoute } from '../sessions/log-route';
+import { registerSessionTraceRoutes } from '../sessions/trace-route';
+import { registerSessionUsageRoute } from '../sessions/usage-route';
 import { registerArtifactRoute } from '../sessions/artifact-route';
 import { registerWorkspaceRoutes } from '../workspaces/routes';
 import { registerToolRoutes } from '../tools/routes';
@@ -24,6 +26,8 @@ import { registerMcpConfigurationRoutes } from '../mcp/configuration-routes';
 import { registerConnectionRoutes } from '../connections/routes';
 import { registerPluginConnectionRoutes } from '../plugin-connections/routes';
 import { registerAgentRoutes } from '../agents/routes';
+import { registerFileChangeRoutes } from '../file-changes/routes';
+import { registerSessionArchiveRoutes } from '../archives/routes';
 
 /** Install application routes; health and public process identity remain readable. */
 export function registerApplicationRoutes(
@@ -42,9 +46,13 @@ export function registerApplicationRoutes(
   registerModelRoutes(server, gateway);
   registerSessionRoutes(server, runtime, auth, gateway, services.workspaces);
   registerSessionLogRoute(server, services.store);
+  registerSessionTraceRoutes(server, services.store);
+  registerSessionUsageRoute(server, services.store);
+  registerFileChangeRoutes(server, services.store, services.fileChangeBatches);
+  registerSessionArchiveRoutes(server, services.archives, services.store);
   registerArtifactRoute(server, runtime, services.store);
   registerWorkspaceRoutes(server, services.workspaces);
-  registerToolRoutes(server, services.tools);
+  registerToolRoutes(server, services.tools, services.runtime);
   registerWorkRoutes(server, services.work);
   registerAgentRoutes(server, services);
   registerMemoryRoutes(server, services.memory, services.store);

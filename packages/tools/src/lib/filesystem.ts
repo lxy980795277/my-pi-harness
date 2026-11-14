@@ -1,20 +1,15 @@
-import { createHash, randomUUID } from 'node:crypto';
-import { constants } from 'node:fs';
-import { link, lstat, open, opendir, rename, rm } from 'node:fs/promises';
-import { dirname, resolve } from 'node:path';
+import { opendir } from 'node:fs/promises';
+import { resolve } from 'node:path';
 import { createPatch } from 'diff';
 import {
   checkCancelled,
-  isMissing,
+  hashFileBytes,
   isPortableFileName,
   isSensitiveName,
-  readStableFile,
   toWorkspaceRelativePath,
   workspacePath,
 } from '@my-pi-harness/sandbox';
 import { ToolError, type ToolResult } from './tool-registry';
-
-import type { WorkspaceToolContext } from './tool-context';
 
 interface ListedEntry {
   path: string;
@@ -24,14 +19,10 @@ interface ListedEntry {
 export const MAXIMUM_TEXT_BYTES = 500_000;
 export const MAXIMUM_OUTPUT_CHARACTERS = 100_000;
 
-export function hashBytes(content: Uint8Array): string {
-  return createHash('sha256').update(content).digest('hex');
-}
-
 export function decodeText(data: Uint8Array): string {
   if (data.includes(0)) throw new ToolError('BINARY_FILE', 'This file is not supported UTF-8 text');
   try {
-    return new TextDecoder('utf-8', { fatal: true }).decode(data);
+    return new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(data);
   } catch (cause) {
     throw new ToolError('BINARY_FILE', 'This file is not supported UTF-8 text', { cause });
   }
@@ -71,28 +62,6 @@ export async function walkWorkspace(
   return { entries, truncated: false };
 }
 
-export async function readCurrentContent(
-  path: string,
-  signal: AbortSignal,
-): Promise<Buffer | null> {
-  try {
-    return await readStableFile(path, signal, MAXIMUM_TEXT_BYTES);
-  } catch (error) {
-    if (isMissing(error)) return null;
-    throw error;
-  }
-}
-
-/** Compare the caller's accepted preimage, including create-only null, with current bytes. */
-export function assertPreimage(current: Buffer | null, expectedHash: string | null): void {
-  const digest = current === null ? null : hashBytes(current);
-  if (digest !== expectedHash)
-    throw new ToolError(
-      'PREIMAGE_MISMATCH',
-      'The file changed or its expected hash does not match. Read it again before writing',
-    );
-}
-
 /** Validate the resulting text and bounded diff before any write occurs. */
 export function fileChangeResult(path: string, before: string, after: string): ToolResult {
   if (Buffer.byteLength(after) > MAXIMUM_TEXT_BYTES)
@@ -106,52 +75,7 @@ export function fileChangeResult(path: string, before: string, after: string): T
     throw new ToolError('DIFF_LIMIT', 'The change is too large to produce a bounded diff');
   return {
     summary: `Wrote ${path}`,
-    content: [{ type: 'text', text: `SHA-256: ${hashBytes(Buffer.from(after))}\n${diff}` }],
+    content: [{ type: 'text', text: `SHA-256: ${hashFileBytes(Buffer.from(after))}\n${diff}` }],
     diff,
   };
-}
-
-/** Recheck the parent and preimage before an atomic create-or-replace in the workspace. */
-export async function writeTextFileAtomic(
-  path: string,
-  content: string,
-  original: Buffer | null,
-  context: WorkspaceToolContext,
-): Promise<void> {
-  checkCancelled(context.signal);
-  const parent = dirname(path);
-  const before = await lstat(parent);
-  const existing = original === null ? undefined : await lstat(path);
-  if (existing && existing.nlink !== 1)
-    throw new ToolError('HARDLINK_FILE', 'Files with multiple hard links cannot be modified');
-  const temporary = resolve(parent, `.my-pi-write-${randomUUID()}`);
-  const handle = await open(
-    temporary,
-    constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW,
-    existing ? existing.mode & 0o777 : 0o600,
-  );
-  try {
-    await handle.writeFile(content, { encoding: 'utf8', signal: context.signal });
-    await handle.sync();
-    await handle.close();
-    checkCancelled(context.signal);
-    await workspacePath(
-      context.workspaceRoot,
-      toWorkspaceRelativePath(context.workspaceRoot, path),
-      true,
-    );
-    const after = await lstat(parent);
-    if (before.dev !== after.dev || before.ino !== after.ino)
-      throw new ToolError('FILE_CHANGED', 'The parent directory changed before writing');
-    assertPreimage(
-      await readCurrentContent(path, context.signal),
-      original === null ? null : hashBytes(original),
-    );
-    // link() creates only when absent; rename() could replace a concurrent creation.
-    if (original === null) await link(temporary, path);
-    else await rename(temporary, path);
-  } finally {
-    await handle.close();
-    await rm(temporary, { force: true });
-  }
 }

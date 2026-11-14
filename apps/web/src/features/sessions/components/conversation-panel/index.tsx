@@ -1,5 +1,4 @@
 import type { ProviderConfig, RunView } from '@my-pi-harness/protocol';
-import { Download, LoaderCircle } from 'lucide-react';
 import { memo, type FC } from 'react';
 
 import { Badge } from '@/components/ui/badge';
@@ -9,6 +8,9 @@ import { ConversationBody } from '@/features/sessions/components/conversation-bo
 import { useConversation } from '@/features/sessions/hooks/use-conversation';
 import { describeError } from '@/utils/describe-error';
 import { SessionTaskEntry } from '@/features/tasks/components/session-task-entry';
+import { SessionTraceEntry } from '@/features/trace/components/trace-entry';
+import { FileChangeEntry } from '@/features/file-changes/components/file-change-entry';
+import { SessionLogMenu } from '@/features/archives/components/session-log-menu';
 
 interface ConversationPanelProps {
   sessionId: string;
@@ -68,6 +70,8 @@ export const ConversationPanel: FC<ConversationPanelProps> = memo(({ sessionId, 
               {snapshot.session.title}
             </h1>
             <div className="flex shrink-0 items-center gap-2">
+              <SessionTraceEntry key={sessionId} snapshot={snapshot} />
+              <FileChangeEntry sessionId={sessionId} closeOnUnmount />
               <SessionTaskEntry sessionId={sessionId} />
               {lastRun && lastRun.status !== 'completed' && (
                 <Badge>{RUN_LABELS[lastRun.status]}</Badge>
@@ -77,27 +81,11 @@ export const ConversationPanel: FC<ConversationPanelProps> = memo(({ sessionId, 
                   {CONNECTION_LABELS[connection]}
                 </span>
               )}
-              <Button
-                type="button"
-                variant="outline"
-                className="h-8 gap-2 rounded-full px-3 text-xs"
-                disabled={downloading}
-                aria-label="下载对话日志"
-                aria-busy={downloading}
-                onClick={download}
-              >
-                {!downloading && <Download width={14} height={14} aria-hidden />}
-                {downloading && (
-                  <LoaderCircle
-                    width={14}
-                    height={14}
-                    className="animate-spin motion-reduce:animate-none"
-                    aria-hidden
-                  />
-                )}
-                <span>对话日志</span>
-                {downloading && <span className="sr-only">正在下载</span>}
-              </Button>
+              <SessionLogMenu
+                sessionId={sessionId}
+                downloading={downloading}
+                onDownloadLog={download}
+              />
             </div>
           </header>
           {connectionError && (

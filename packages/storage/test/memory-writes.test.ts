@@ -325,7 +325,10 @@ describe('transactional direct Agent memory writes', () => {
       db.prepare(
         "UPDATE memory_settings SET data=json_object('allowUse',json('false'),'allowSuggestions',json('false'),'revision',revision)",
       ).run();
-      db.prepare('DELETE FROM schema_migrations WHERE version=16').run();
+      db.prepare('DELETE FROM schema_migrations WHERE version>=16').run();
+      db.exec(
+        'DROP TABLE trace_entries; DROP TABLE request_snapshots; DROP TABLE trace_tool_timings; DROP TABLE trace_human_waits; DROP INDEX events_message_identity; DROP TABLE file_operations; DROP TABLE file_changes; DROP TABLE file_change_heads; DROP TABLE file_image_refs; DROP TABLE file_change_batches; DROP TABLE session_import_access; DROP TABLE session_archive_imports;',
+      );
       db.pragma('user_version=15');
     });
     value.store = await openProfileStore(value.directory);

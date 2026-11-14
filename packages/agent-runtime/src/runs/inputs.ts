@@ -34,6 +34,8 @@ export class RunInputDelivery {
   private query: string;
   private source: MemoryMessageSource | undefined;
   private referenced: boolean;
+  private consumedId: string | null;
+  private answerId: string | null;
 
   public constructor(
     private readonly options: RunExecutionOptions,
@@ -45,6 +47,8 @@ export class RunInputDelivery {
       .reverse()
       .find((message) => message.runId === options.run.id && message.role === 'user');
     this.query = accepted?.text ?? this.text(options.user);
+    this.consumedId = options.inputMessageId ?? accepted?.id ?? null;
+    this.answerId = options.answerInputMessageId ?? null;
     this.referenced = (options.initialSearchQuotes?.length ?? 0) > 0;
     this.source = options.run.taskId
       ? undefined
@@ -56,7 +60,12 @@ export class RunInputDelivery {
     if (input && this.consumeInput(input, message)) this.query = input.text;
     const incoming = this.injected.get(message);
     if (incoming) {
-      this.host.commit(incoming.consume());
+      const events = incoming.consume();
+      this.host.commit(events);
+      const consumed = events.find((event) => event.type === 'message.started');
+      if (this.options.run.taskId && typeof consumed?.data.id === 'string')
+        this.consumedId = consumed.data.id;
+      if (this.options.run.taskId) this.answerId = incoming.answerInputMessageId ?? null;
       if (this.options.run.taskId) this.query = incoming.taskQuery ?? this.text(message);
     }
   }
@@ -74,6 +83,16 @@ export class RunInputDelivery {
 
   public memorySource(): MemoryMessageSource | undefined {
     return this.source;
+  }
+
+  /** Freeze this identity on each request; a later consumed input never reassigns old requests. */
+  public inputMessageId(): string | null {
+    return this.consumedId;
+  }
+
+  /** Root inputs advance on consumption; delegated inputs retain their sender's frozen provenance. */
+  public answerInputMessageId(): string | null {
+    return this.options.run.taskId ? this.answerId : this.consumedId;
   }
 
   private text(message: UserMessage): string {
@@ -176,6 +195,7 @@ export class RunInputDelivery {
     ]);
     this.options.capabilities?.stageSkills(skills);
     this.source = source;
+    this.consumedId = view.id;
     this.referenced = (frozen?.searchQuotes?.length ?? 0) > 0;
     this.host.consumeSearchQuotes(frozen?.searchQuotes ?? []);
     return true;

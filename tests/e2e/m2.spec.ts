@@ -85,7 +85,7 @@ for (const policy of ['请求批准', '只读'] as const) {
       await expect(page.getByText('已收到工具执行结果。', { exact: true })).toBeVisible();
       const statistics = page.getByLabel('回答统计', { exact: true });
       await expect(statistics).toContainText('用量 1.3K tok');
-      await expect(statistics.locator('[title^="总计 1,330 tok；"]')).toBeVisible();
+      await expect(statistics.locator('[title*="总计 1,330 tok；"]')).toBeVisible();
       const group = page.getByRole('group', { name: '测试项目', exact: true });
       await expect(group.getByRole('button', { name: /^创建工作区文件 / })).toBeVisible();
       expect(model.requests).toHaveLength(2);
@@ -96,10 +96,16 @@ for (const policy of ['请求批准', '只读'] as const) {
         expect(await readFile(join(directory, 'created.txt'), 'utf8')).toBe(
           'Workspace tool result\n',
         );
-        await expect(toolRow.getByRole('region', { name: '文件差异', exact: true })).toBeVisible();
-        await expect(
-          page.getByText('+Workspace tool result', { exact: false }).first(),
-        ).toBeVisible();
+        await toolRow.getByRole('button', { name: '查看此工具的文件变更', exact: true }).click();
+        const fileChanges = page.getByRole('dialog', { name: '文件变更', exact: true });
+        await fileChanges.getByRole('button', { name: /^created\.txt 主对话 已应用$/u }).click();
+        const difference = fileChanges
+          .getByRole('region', { name: '文件变更详情', exact: true })
+          .locator('pre');
+        await expect(difference).toBeVisible();
+        await expect(difference).toContainText('+Workspace tool result');
+        await fileChanges.getByRole('button', { name: '关闭文件变更', exact: true }).click();
+        await expect(fileChanges).toBeHidden();
         const toolCard = page.getByLabel('write_file 工具调用', { exact: true });
         const answer = page.getByRole('article', { name: 'Agent的消息', exact: true }).last();
         await expect

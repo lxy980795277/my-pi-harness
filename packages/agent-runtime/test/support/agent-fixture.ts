@@ -24,6 +24,7 @@ import { WorkRuntime } from '../../src/work/runtime';
 import { defaultAgentSettings } from '../../src/subagents/default-settings';
 import type { RunMemoryPort, RunSearchPort } from '../../src/runs/ports';
 import type { WebToolHandlers } from '@my-pi-harness/tools';
+import { testFileChanges } from './file-changes';
 
 interface AgentFixtureOptions {
   model?(original: Model<Api>, modelId: string): Model<Api>;
@@ -196,6 +197,7 @@ export async function agentFixture(options: AgentFixtureOptions): Promise<AgentF
   const tools: ToolRuntime = new ToolRuntime({
     profileDirectory: join(directory, 'profile'),
     resolveWorkspace,
+    fileChanges: testFileChanges(join(directory, 'profile'), resolveWorkspace, store),
     work,
     ...(options.externalTools ? { externalTools: options.externalTools } : {}),
     ...(options.reviewer ? { reviewer: options.reviewer } : {}),

@@ -112,8 +112,10 @@ export function registerAgentRoutes(server: FastifyInstance, services: Applicati
         response: { 200: AgentTaskDetailSchema },
       },
     },
-    (request) =>
-      runtime.subagents.stop(request.params.sessionId, request.params.taskId, request.body),
+    (request) => {
+      runtime.assertSessionExecutionAllowed(request.params.sessionId);
+      return runtime.subagents.stop(request.params.sessionId, request.params.taskId, request.body);
+    },
   );
   server.post<{ Params: TaskParams; Body: AgentMessageInput }>(
     '/api/sessions/:sessionId/agents/:taskId/messages',
@@ -124,12 +126,14 @@ export function registerAgentRoutes(server: FastifyInstance, services: Applicati
         response: { 200: AgentTaskDetailSchema },
       },
     },
-    (request) =>
-      runtime.subagents.messaging.message(
+    (request) => {
+      runtime.assertSessionExecutionAllowed(request.params.sessionId);
+      return runtime.subagents.messaging.message(
         request.params.sessionId,
         request.params.taskId,
         request.body,
-      ),
+      );
+    },
   );
   server.get<{ Params: TaskParams }>(
     '/api/sessions/:sessionId/agents/:taskId/work',
@@ -149,6 +153,7 @@ export function registerAgentRoutes(server: FastifyInstance, services: Applicati
       },
     },
     (request) => {
+      runtime.assertSessionExecutionAllowed(request.params.sessionId);
       runtime.subagents.detail(request.params.sessionId, request.params.taskId, 0, 1);
       return work.answer(
         request.params.sessionId,
@@ -168,6 +173,7 @@ export function registerAgentRoutes(server: FastifyInstance, services: Applicati
       },
     },
     (request) => {
+      runtime.assertSessionExecutionAllowed(request.params.sessionId);
       runtime.subagents.detail(request.params.sessionId, request.params.taskId, 0, 1);
       return work.answer(
         request.params.sessionId,
@@ -190,6 +196,7 @@ export function registerAgentRoutes(server: FastifyInstance, services: Applicati
       },
     },
     (request) => {
+      runtime.assertSessionExecutionAllowed(request.params.sessionId);
       runtime.subagents.detail(request.params.sessionId, request.params.taskId, 0, 1);
       return work.reviewPlan(
         request.params.sessionId,

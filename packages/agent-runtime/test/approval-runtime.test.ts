@@ -15,6 +15,7 @@ import { ModelApprovalReviewer } from '../src/tools/approval-review';
 import { SessionRuntime } from '../src/sessions/runtime';
 import { ToolRuntime } from '../src/tools/runtime';
 import type { EventInput } from '../src/sessions/ports';
+import { testFileChanges } from './support/file-changes';
 
 function gate() {
   let release = (): void => {};
@@ -98,9 +99,11 @@ async function fixture(
     updatedAt: 1,
   });
   const errors: unknown[] = [];
+  const resolveWorkspace = () => Promise.resolve(workspace);
   const tools = new ToolRuntime({
     profileDirectory: profile,
-    resolveWorkspace: () => Promise.resolve(workspace),
+    resolveWorkspace,
+    fileChanges: testFileChanges(profile, resolveWorkspace, store),
     reviewer,
   });
   const runtime = new SessionRuntime({
@@ -442,6 +445,8 @@ describe('isolated AI approval through real Pi tools and SQLite', () => {
       expect(requests).toBe(1);
       expect(audit.map((event) => event.type)).toEqual([
         'tool.review.requested',
+        'model.request.started',
+        'model.request.completed',
         'tool.review.completed',
       ]);
       expect(f.releases()).toBe(1);

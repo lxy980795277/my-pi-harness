@@ -110,20 +110,20 @@ TypeScript使用ESNext与Bundler解析并执行noEmit检查。Web、宿主、浏
 
 ## 启动配置
 
-| 环境变量                          | 含义                                                                |
-| --------------------------------- | ------------------------------------------------------------------- |
-| `MY_PI_HARNESS_PYTHON`            | 可选的绝对Python解释器路径，供固定文档读取/渲染入口使用             |
-| `MY_PI_HARNESS_PORT`              | daemon端口，默认4311；0申请动态端口                                 |
-| `MY_PI_HARNESS_WEB_DIST_PATH`     | 可选的已构建Web目录；配置后必须包含index.html                       |
-| `MY_PI_HARNESS_PARENT_PID`        | 可选的所有者进程ID，用于桌面启动链的退出回收                        |
-| `MY_PI_HARNESS_PROFILE_DIRECTORY` | 可选的绝对profile目录；Web与桌面由daemon统一解析                    |
-| `MY_PI_HARNESS_SESSION_LOG_ROOT`  | JSONL根覆盖；独立安装包必填，须为绝对路径且末级名为`.my-pi-harness` |
+| 环境变量                          | 含义                                                    |
+| --------------------------------- | ------------------------------------------------------- |
+| `MY_PI_HARNESS_PYTHON`            | 可选的绝对Python解释器路径，供固定文档读取/渲染入口使用 |
+| `MY_PI_HARNESS_PORT`              | daemon端口，默认4311；0申请动态端口                     |
+| `MY_PI_HARNESS_WEB_DIST_PATH`     | 可选的已构建Web目录；配置后必须包含index.html           |
+| `MY_PI_HARNESS_PARENT_PID`        | 可选的所有者进程ID，用于桌面启动链的退出回收            |
+| `MY_PI_HARNESS_PROFILE_DIRECTORY` | 可选的绝对profile目录；Web与桌面由daemon统一解析        |
+| `MY_PI_HARNESS_SESSION_LOG_ROOT`  | 可选JSONL根覆盖，须为绝对路径且末级名为`.my-pi-harness` |
 
 配置在监听、迁移或读取应用资源前校验。daemon的`loadDaemonConfig()`是profile目录的唯一解析者，Web与桌面入口都使用它。`MY_PI_HARNESS_PROFILE_DIRECTORY`显式指定绝对目录；未设置时，macOS固定使用`~/Library/Application Support/@my-pi-harness/desktop/profiles/default`，Windows使用`%LOCALAPPDATA%/My Pi Harness/profiles/default`。macOS路径中的`@my-pi-harness/desktop`是固定数据命名空间，不随开发/发布应用名称或Electron的`userData`变化，不探测其他目录作为回退。独立owner.sqlite持有排他事务，data.sqlite使用WAL，进程死亡由OS释放所有权。
 
 桌面main传递已有进程环境，由独立Node加载环境文件后交给daemon解析；开发使用仓库根`.env`，发布只使用随包`desktop-oauth.env`，进程环境优先于环境文件。main不从`app.getPath('userData')`生成或覆盖profile配置。Electron的`userData`只保存Cookie和缓存，`--user-data-dir`不改变业务profile；两个入口使用相同环境配置时访问同一套业务数据，仍各自维护登录Cookie。
 
-JSONL根与上述数据库位置独立：开发入口、仓库中的daemon源码和正式构建产物统一使用仓库根目录的`.my-pi-harness`，通过模块位置定位，不随cwd或自定义profile改变。独立安装包已脱离源码仓库，启动时必须通过`MY_PI_HARNESS_SESSION_LOG_ROOT`指定该仓库中的隐藏目录；缺失时明确报错。测试显式指定临时日志根。日志实际目录为`<logRoot>/sessions/<SHA256(canonicalProfilePath)>/`，避免Electron和独立daemon的不同profile混写；storage不猜测cwd或NODE_ENV。开发期旧数据按用户授权清理，不做旧格式兼容。JSONL是会话权威，新日志根不能从SQLite反向生成日志；缺失既有日志明确失败。运行数据不进入Git、发布资源或源码扫描。
+JSONL根由daemon统一解析。显式`MY_PI_HARNESS_SESSION_LOG_ROOT`优先；源码仓库入口默认使用模块位置所定位仓库的`.my-pi-harness`，独立部署或安装包默认使用`<resolvedProfile>/.my-pi-harness`，不依赖cwd、Electron用户目录或源码仓库。测试显式指定临时日志根。日志实际目录为`<logRoot>/sessions/<SHA256(canonicalProfilePath)>/`，不同profile不会混写。已有数据库若记录了其他日志根，必须继续显式配置原根或通过完整归档迁移；不自动搬移、探测或从SQLite补造权威日志，缺失时明确失败。运行数据不进入Git、发布资源或源码扫描。
 
 `MY_PI_HARNESS_DESKTOP_SECRET`仅由main私有启动链注入，不进入公开启动记录；`MY_PI_HARNESS_DEVELOPMENT_ORIGIN`只允许自有5174开发页面。浏览器自动初始化客户端后进入应用登录，无需通信码；初始化只关联客户端，不授予业务访问。GitHub登录配置来自仓库根`.env`，开发daemon启动时自动加载，进程环境优先。Web使用授权码+PKCE，桌面使用Device Flow；打包只提取Client ID至`desktop-oauth.env`，不分发根`.env`或Client Secret。字段、客户端、profile归属与恢复语义见[应用登录协议](../03_API/application-auth.md)。
 

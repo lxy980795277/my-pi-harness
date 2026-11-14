@@ -16,7 +16,7 @@ Node 24 宿主使用的同步存储。JSONL保存会话执行事实，独立不�
 
 ## 源码职责
 
-`src/index.ts`是唯一公开入口。`profile/`拥有宿主options、打开、锁、关闭和跨JSONL与SQLite的唯一事务编排；`sqlite/`保存Drizzle表和按版本校验的迁移；`sessions/`保存日志、附件、上下文查询和事件校验，`sessions/projections/`维护可重建的会话、工具、能力及工作状态投影。`repositories/`保存身份、模型配置、工作区、MCP、扩展及高级账户的SQLite仓储；`credentials/`拥有系统凭据和插件私有凭据；`shared/`仅放存储错误和通用持久数据校验。
+`src/index.ts`是唯一公开入口。`profile/`拥有宿主options、打开、锁、关闭和跨JSONL与SQLite的唯一事务编排；`sqlite/`保存Drizzle表和按版本校验的迁移；`sessions/`保存日志、附件、上下文查询和事件校验，`sessions/projections/`维护可重建的会话、工具、能力及工作状态投影。`repositories/`保存身份、模型配置、工作区、MCP、扩展及高级账户的SQLite仓储；`archives/`拥有完整资源闭包、受管临时文件、导入发布清单和回执，复用会话codec与投影校验；`credentials/`拥有系统凭据和插件私有凭据；`shared/`仅放存储错误和通用持久数据校验。
 
 SessionQueries拥有会话快照、输入队列来源、幂等接受结果及公开事件分页的SQL读取；队列私有接受数据使用protocol/internal的QueueCapabilityMetadataSchema，写入、回放与持久投影读取均校验，查询返回已校验类型。SessionRecovery在ProfileStore的启动事务内从日志与附件重建投影并核对产物引用。SessionEventCommit拥有会话创建与后续事件的校验和暂存，不自行提交事务；ArtifactRepository拥有已发布产物的元数据、可见性核对和blob引用。ProfileStore保留公开门面、资源所有权、提交顺序与失败冻结，所有查询与恢复共用同一数据库和内存流式覆盖层，没有第二份会话状态。
 
@@ -25,6 +25,22 @@ SessionQueries拥有会话快照、输入队列来源、幂等接受结果及公
 模型配置的宿主数据使用protocol/internal的ProviderRecord，保留credentialRef与既有持久状态字段，SQLite JSON布局不变。ModelGateway以明确字段投影生成公开ProviderConfig并计算凭据状态；公开数据不包含系统凭据引用，秘密字节仍只由凭据存储管理。
 
 AgentSettingsRepository读取持久JSON时只投影当前AgentSettingsSchema字段，校验必填值、revision与角色关联；废弃附加字段不改写原记录。新设置写入仍严格校验，不接受已删除的累计token额度。任务历史沿既有持久事件投影处理，不增设旧版本分支。
+
+## 执行追踪
+
+schema17增加可重建的Trace版本和最终输入锚点。model.request.started/completed以独立modelRequestId记录实际模型调用；TraceProjection从同Session事件关联准备快照、Run和task，不把大正文复制到索引。每次状态变化保存一个紧凑投影版本，冻结watermark内选择该实体的最后版本后再筛选和分页，后续完成不会改变旧分页链的状态。
+
+SessionJournal在已有重放和追加时建立日志字节位置及消息来源索引，重复请求的消息索引直接指向实际保存正文的批次。请求详情按位置读取并重新校验batch checksum，不从文件开头重放；索引只持有位置与引用。最终输入的system、messages和tools按需分页，正文带cursor及字符offset续读，图片只通过受权的单图入口返回有界安全类型字节。审批复核与压缩审计同样只在JSONL保存私有输入，SQLite events只存其公开引用。
+
+TraceRepository拥有当前Session读取、分页、主子筛选、请求及工具详情；工具详情复用既有canonical tool.context。API归属与客户端安全由daemon复核，Renderer只接收protocol公开投影。
+
+schema18增加工具执行、人工等待及请求归属的可重建索引。ExecutionUsageQuery以唯一modelRequestId叶记录迭代累计，同时供会话/回答接口和AgentTaskSummary使用；旧的递归消息Usage求和已移除。answerInputMessageId冻结发起根输入，inputMessageId保留实际消费输入，续作和通信不会在查询时按最新输入重分组。回答及实际消费输入的JSON表达式索引使单轮查询先缩小候选集合；分支筛选表示实际在该分支发生的调用，不重复计入共享上下文。
+
+Token保留供应商total与缓存口径，用量、单调模型/排队计时及价格分别报告覆盖数。价格规则随请求私有事实冻结，runtime结算生成带目录来源和版本的USD估算，storage只累计已记录估算；已知零费用与价格未知不同。costScope明确限定模型请求，外部服务只列本机调用观察及未知费用。服务身份最多展示200项，其余服务数与调用数单列；拒绝或确定未派发的调用不增加外部观察。
+
+工具执行从running到实际终态，人工等待从审批或工作状态的pending到结束。进程中断或墙钟回拨保留未知，不能用恢复时间补齐或夹为零。执行墙钟以所选Run的生命周期区间并集计算，排除不同Run之间闲置；回答从实际消费输入到该回答关联活动结束。manual辅助请求只有模型区间时明确标注请求区间，与Run区间混合时标注观测区间；累计模型/工具/等待可重叠，不相加冒充墙钟。
+
+性能生成器位于test/trace-performance.test.ts。显式MY_PI_HARNESS_TEST_TRACE_PERFORMANCE=1启用，MY_PI_HARNESS_TEST_TRACE_REQUESTS和MY_PI_HARNESS_TEST_TRACE_BODY_BYTES选择请求数及最少正文量；默认10000次请求、100000条增量事实和256MiB正文，普通回归不运行重型基准。生成数据仅使用独立临时profile，结束删除。
 
 ## 数据所有权
 
@@ -121,7 +137,7 @@ SQLite schema按版本和checksum校验：0001保存配置与会话投影，0002
 
 ## M4能力配置与会话事实
 
-当前SQLite schema为10；第7代迁移移除已退役插件默认账户的归属标记，保留原账户及系统凭据引用，第8代添加`mcp_catalog_snapshots`派生目录，第9代加入下述子任务投影与独立角色配置，第10代添加不可变产物的查询索引。目录按Server及作用域保存非秘密授权指纹、有界协议定义JSON和发现时间，不保存凭据字节或可执行TypeBox对象；宿主恢复时重验官方协议与当前授权。目录可重建，损坏或失效不能授予信任，也不能替代配置/秘密。MCP目录开关/精确只读授权、远程配置、Skill启停、插件安装及高级外部服务连接是SQLite配置事实；插件共享 OAuth 按上述私有 JSON 独立保存，其他秘密保留系统凭据库。Skill冻结文件保存于profile的不可变版本目录，资源使用hash校验和Run lease，不能仅备份会话日志替代这些资源。
+M4能力涉及第7至10代迁移；第7代迁移移除已退役插件默认账户的归属标记，保留原账户及系统凭据引用，第8代添加`mcp_catalog_snapshots`派生目录，第9代加入下述子任务投影与独立角色配置，第10代添加不可变产物的查询索引。目录按Server及作用域保存非秘密授权指纹、有界协议定义JSON和发现时间，不保存凭据字节或可执行TypeBox对象；宿主恢复时重验官方协议与当前授权。目录可重建，损坏或失效不能授予信任，也不能替代配置/秘密。MCP目录开关/精确只读授权、远程配置、Skill启停、插件安装及高级外部服务连接是SQLite配置事实；插件共享 OAuth 按上述私有 JSON 独立保存，其他秘密保留系统凭据库。Skill冻结文件保存于profile的不可变版本目录，资源使用hash校验和Run lease，不能仅备份会话日志替代这些资源。
 
 `run.accepted`私有数据保存初始工具、MCP绑定、带真实来源和指纹的原生候选、Skill候选元数据及已激活正文/授权；候选元数据不预加载正文。`run.tools_loaded`保存递增可见版本、完整定义/来源及冻结Skill。投影校验版本连续、公开名称对应私有定义，新增session/workspace工具必须与接受记录的schema、来源和指纹一致，初始工具/Skill不能悄悄丢失。新增Skill必须匹配接受目录或当前Run已消费输入的精确内容和绑定身份；消费按此前最近一次有效接受元数据校验，尚未消费、被删除或编辑移除的输入不作为新增激活依据。同内容插件重装不能替换旧generation。`context.prepared.capabilityRevision`必须等于当前可见版本。服务插件的只读网关地址保存在冻结Skill中，私有网关访问能力不进入日志。重建不连接上游或重做请求。
 
@@ -136,3 +152,27 @@ SQLite schema按版本和checksum校验：0001保存配置与会话投影，0002
 通信先保存`task.message_queued`，消费事件与对应目标模型输入必须同批，`MessageView.agentMessageId`唯一关联原通信，正文与目标Run同时核对；不能只凭相同文本匹配用户消息，也不允许一个消费关联多个输入。原通信是单独来源，不能作为真正的用户提问展示或编辑；未消费内容不会触发模型请求。父Run终态要求所属任务已经关闭，任务关闭要求本身与后代没有在途执行。启动按叶到根结束子Run和任务，将未消费通信结算为未送达，保留已完成消息及结果，不重做模型或工具副作用。
 
 `listAgentBoard()`在分页前按当前分支、工作区及执行/人工等待/终态筛选，详情按任务消息ordinal分页。角色配置通过独立`agent_settings`保存并检查revision；默认值由宿主通过ProfileStoreOptions.defaultAgentSettings显式提供，storage不定义角色或指令。无持久设置且未注入factory时读取明确失败；默认读取不写库，已有设置优先。完整配置的显式首写不依赖factory，按未保存revision0递增至1；后续保存拒绝过期revision，日志重建不删除用户配置。
+
+## 原生文件变更历史
+
+`prepareFileOperation()`先提交原始前后像的内容地址和宿主身份，再由daemon发布真实磁盘；`completeFileOperation()`记录确定结果，未确认发布只保留`unknown`。`observeFileOperation()`只记录启动时观察到的当前前像/后像匹配，不推断历史上是否执行，不恢复磁盘。工具后续取消或失败不会抹掉已确认的磁盘修改。内部host元数据与公开相对路径、来源、hash/大小/mode分开，HTTP/SSE不携带物理目标摘要和文件系统身份。
+
+文件像复用产物的不可变内容寻址池，允许空文件，保留原始UTF-8字节、BOM、换行和权限位；每像至多500000字节。每次`putFileChangeBytes()`由宿主在准备结束后对应一次`abandonFileChangeBytes()`，已提交操作引用独立阻止回收。GC与启动完整性校验覆盖全部历史前后像，包括归档、准备中和未知结果；不依赖工具卡片可见性。详情按字符offset续读，每页JSON至多64KiB；大编辑超出diff计算限额时可改读完整前像/后像，不会静默丢弃正文后半部分。
+
+同一物理目标通过revision、待发布ID、当前change链和redo栈串行推进。undo逆序、redo正序；新写入使旧redo失效。存在未知结果或外部文件变化时，新授权write可建立新的已确认基线，旧链不恢复权限。启动先回放每个Session事实，再按目标和revision有界重建跨会话全局链。归档Session的未结算文件操作仍参与启动观察；仅允许向其追加单条`file.operation.observed`，将准备中操作结算为未知并释放待发布锁，不恢复会话可见性或确认历史执行。导入器必须将导入的准备事实标为`fileOperationHost.local=false`并隔离其目标命名空间，导入历史只读，不能自动获得本机undo资格。
+
+用户undo/redo批次与单文件发布使用独立操作ID。accepted先落盘，随后保存逐项结果、取消请求和终态；同ID/同请求摘要复用原冻结集合，不重新解析新增历史，不重放副作用，不同请求明确冲突。批次最多50项；按回答选择由宿主冻结整答集合，超限报错。操作历史分页只返回摘要，详细回执按ID读取。pending批次仅枚举未归档Session，由daemon将重启遗留工作标为interrupted，storage不会继续执行。
+
+## 完整会话归档
+
+schema20增加导入读取/执行状态与回执查询投影。`archives/closure.ts`沿冻结cursor的全部分支、子Run和私有引用收集附件、产物、文件像及Skill资源；`validation.ts`在独立临时SQLite中复用正式journal codec、关系和投影校验；`files.ts`拥有路径、限额、hash及受管文件；`repository.ts`协调导出快照、发布清单、幂等回执和恢复。ProfileStore保留唯一事务、跨介质发布与失败冻结，不复制这些查询实现。
+
+归档只包含所引用的冻结内容，不读取配置全集、Keychain、插件凭据或独立记忆库。原始JSONL下载仍只是日志本体。以下为storage内层限制；daemon公开传输入口使用更严格的压缩流、展开总量和条目数限制，见[归档API](../../docs/03_API/session-archives.md#传输接口)。manifest使用独立formatVersion=1，每项有长度和SHA-256；至多20000项、解压总量2GiB、单日志512MiB、附件4MiB、blob32MiB及单Skill资源16MiB。manifest元数据至多8MiB，预览只返回摘要与前100条ID冲突。目标产物池还按实际单文件/总量quota在发布前重新预检。
+
+导出先固定已提交前缀并持有资源，随后生成独立受管快照；源流与快照由`release()`关闭/清理，后续事件不加入本次归档。Skill版本只从宿主给定的已知immutable snapshot根或本包受管历史资源读取，不按日志中的任意绝对路径打开文件。资源按冻结索引逐项核对，正文可能已有私人信息，归档不承诺自动完整脱敏。
+
+导入在临时区流式核对条目并逐批解析日志，不将整个日志加载为一个字节数组。完整ID预检先于正式发布，同一attachment ID只有完全相同冻结内容可复用；文件发布和批次的共享操作ID也交叉查重。相同操作ID/归档摘要复用原回执及在途工作，不同摘要拒绝。提交前可取消；持久发布清单开始后只结算/恢复本次受管资源，不因断线重新发起操作。
+
+`archives/receipts`的checksummed文件拥有权威导入回执与发布清单，SQLite只是查询投影；`archives/staging`保存独立临时区，启动清理无清单持有的目录；`archives/resources`保存内容版本隔离的历史Skill文件。资源先持久，日志排他发布并同步目标目录后再移除临时源，最后原子投影新Session。日志发布后投影失败会冻结写入；重启按原清单完成，不暴露半成品Session。尚未发布日志且临时材料已损坏时，回执明确failed，不阻塞其他Session启动。已发布资源损坏明确报错。孤立Skill版本当前保留，未为回收增加新的事实或授权机制。
+
+导入收口追加真实中断事实，清除旧队列、待答/待审和未关闭任务；旧文件准备只记不可核对的观察，不写工作区。历史文件像始终只读，缺少归档外Session的操作链不妨碍读取。旧seal与绑定映射为历史记录，当前用户由新宿主seal持有；原始正文及模型输入不做字符串替换，只有typed宿主路径与文件命名空间迁移。`getSessionExecutionAccess()`永久隔离旧Skill授权，显式绑定当前provider/model/thinking/workspace后仍从ask开始；后续新执行必须重新准入。历史记忆采用只恢复为会话投影，不保存为当前长期记忆。

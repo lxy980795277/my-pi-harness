@@ -119,6 +119,16 @@ describe('Agent usage facts through real Pi and temporary journals', () => {
         expect(leaf.parentTaskId).toBe(parent.id);
         const parentSnapshot = f.store.getTaskSnapshot(f.session.id, parent.id);
         const leafSnapshot = f.store.getTaskSnapshot(f.session.id, leaf.id);
+        expect(parent.usageCoverage).toEqual({
+          requestCount: 4,
+          recordedRequests: kind === 'reported' ? 4 : 0,
+          unknownRequests: kind === 'reported' ? 0 : 4,
+        });
+        expect(leaf.usageCoverage).toEqual({
+          requestCount: 1,
+          recordedRequests: kind === 'reported' ? 1 : 0,
+          unknownRequests: kind === 'reported' ? 0 : 1,
+        });
         expect(parentSnapshot.tools.find((tool) => tool.name === 'wait_agents')?.result).toContain(
           'Leaf usage observation',
         );
@@ -158,6 +168,30 @@ describe('Agent usage facts through real Pi and temporary journals', () => {
         expect(f.requests.filter((request) => request.task === 'USAGE_PARENT')).toHaveLength(3);
         expect(f.requests.filter((request) => request.task === 'USAGE_LEAF')).toHaveLength(1);
         expect(f.maxRequests()).toBe(1);
+        const input = root.messages.find((message) => message.role === 'user');
+        if (!input) throw new Error('Missing root usage input');
+        const aggregate = f.store.getSessionUsage(f.session.id, {
+          inputMessageId: input.id,
+          includeDescendants: true,
+        });
+        expect(aggregate.requestCount).toBe(f.requests.length);
+        expect(aggregate.recordedRequests).toBe(kind === 'reported' ? f.requests.length : 0);
+        expect(aggregate.unknownRequests).toBe(kind === 'reported' ? 0 : f.requests.length);
+        expect(aggregate.estimatedCostUsd).toBeNull();
+        expect(aggregate.pricedRequests).toBe(0);
+        const events = f.store.readEvents(f.session.id, 0, 1000);
+        const started = events.filter((event) => event.type === 'model.request.started');
+        const completed = events.filter((event) => event.type === 'model.request.completed');
+        expect(started).toHaveLength(f.requests.length);
+        expect(completed).toHaveLength(f.requests.length);
+        expect(new Set(started.map((event) => event.data.modelRequestId)).size).toBe(
+          f.requests.length,
+        );
+        expect(started.every((event) => typeof event.data.inputMessageId === 'string')).toBe(true);
+        expect(completed.every((event) => event.data.status === 'completed')).toBe(true);
+        if (kind === 'reported')
+          expect(completed.every((event) => event.data.usage !== undefined)).toBe(true);
+        else expect(completed.every((event) => event.data.usage === undefined)).toBe(true);
         expect(f.leases()).toEqual({ acquired: 3, released: 3 });
         expect(f.errors).toEqual([]);
       } finally {

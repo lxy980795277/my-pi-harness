@@ -4,6 +4,7 @@ import {
   constants,
   fchmodSync,
   fsyncSync,
+  fstatSync,
   linkSync,
   lstatSync,
   openSync,
@@ -24,6 +25,9 @@ export interface ArtifactDownload {
   readonly bytes: Buffer;
   release(): void;
 }
+export interface ArtifactBlobWriteOptions {
+  allowEmpty?: boolean;
+}
 export interface ArtifactBlob {
   readonly sha256: string;
   readonly bytes: number;
@@ -42,10 +46,10 @@ export class ArtifactBlobs {
     },
   ) {}
 
-  public put(bytes: Uint8Array): ArtifactBlob {
+  public put(bytes: Uint8Array, options: ArtifactBlobWriteOptions = {}): ArtifactBlob {
     this.assertOpen();
     if (
-      bytes.length === 0 ||
+      (bytes.length === 0 && options.allowEmpty !== true) ||
       bytes.length > this.limits.maximumFileBytes ||
       bytes.length > 33_554_432
     )
@@ -157,6 +161,120 @@ export class ArtifactBlobs {
         if (count === 0) this.downloads.delete(hash);
         else this.downloads.set(hash, count);
       },
+    };
+  }
+
+  /** Remove abandoned publisher temporaries under exclusive startup ownership, retaining linked final blobs. */
+  public recoverTemporaryFiles(): void {
+    this.assertOpen();
+    this.files.checkDirectories();
+    for (const name of this.files.names(this.files.artifactDirectory)) {
+      if (!/^[a-f0-9-]{36}\.tmp$/.test(name)) continue;
+      const path = join(this.files.artifactDirectory, name);
+      const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+      try {
+        const status = fstatSync(fd);
+        if (
+          !status.isFile() ||
+          (status.nlink !== 1 && status.nlink !== 2) ||
+          (process.getuid && status.uid !== process.getuid()) ||
+          (process.platform !== 'win32' && (status.mode & 0o077) !== 0)
+        )
+          throw new StorageError(
+            'SESSION_LOG_INVALID',
+            'Artifact temporary is not an owned private publisher file',
+          );
+        if (status.nlink === 2) {
+          const hash = createHash('sha256');
+          const chunk = Buffer.alloc(65536);
+          let total = 0;
+          for (;;) {
+            const length = readSync(fd, chunk, 0, chunk.length, null);
+            if (length === 0) break;
+            total += length;
+            if (total > 33554432)
+              throw new StorageError(
+                'SESSION_LOG_INVALID',
+                'Artifact temporary exceeds the publisher byte limit',
+              );
+            hash.update(chunk.subarray(0, length));
+          }
+          const target = this.path(hash.digest('hex'));
+          const finalFd = openSync(
+            target,
+            constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
+          );
+          try {
+            const final = fstatSync(finalFd);
+            if (
+              !final.isFile() ||
+              final.dev !== status.dev ||
+              final.ino !== status.ino ||
+              final.nlink !== 2
+            )
+              throw new StorageError(
+                'SESSION_LOG_INVALID',
+                'Artifact temporary hardlink does not identify its immutable final blob',
+              );
+          } finally {
+            closeSync(finalFd);
+          }
+        }
+        unlinkSync(path);
+      } finally {
+        closeSync(fd);
+      }
+    }
+    this.files.syncDirectory(this.files.artifactDirectory);
+  }
+
+  /** Reject an import before publication when its missing immutable blobs exceed the real pool quota. */
+  public assertPublicationCapacity(references: readonly ArtifactBlob[]): void {
+    this.assertOpen();
+    this.files.checkDirectories();
+    const names = this.files.names(this.files.artifactDirectory);
+    const available = new Set(names);
+    let total = 0;
+    for (const name of names) {
+      if (!/^(?:[a-f0-9]{64}\.blob|[a-f0-9-]{36}\.tmp)$/.test(name)) continue;
+      const path = join(this.files.artifactDirectory, name);
+      const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+      try {
+        total += this.files.checkFile(fd, path).size;
+      } finally {
+        closeSync(fd);
+      }
+    }
+    const unique = new Map(references.map((reference) => [reference.sha256, reference]));
+    for (const reference of unique.values()) {
+      this.path(reference.sha256);
+      if (reference.bytes > this.limits.maximumFileBytes || reference.bytes > 33_554_432)
+        throw new StorageError(
+          'CONFLICT',
+          'Imported artifact exceeds the target single-file byte quota',
+        );
+      if (available.has(`${reference.sha256}.blob`)) this.read(reference);
+      else total += reference.bytes;
+    }
+    if (total > this.limits.maximumProfileBytes)
+      throw new StorageError(
+        'CONFLICT',
+        'Imported resources exceed the target artifact pool byte quota',
+      );
+  }
+
+  /** Hold immutable bytes while an archive streams them without retaining their body in memory. */
+  public retain(sha256: string): () => void {
+    this.assertOpen();
+    this.path(sha256);
+    this.downloads.set(sha256, (this.downloads.get(sha256) ?? 0) + 1);
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      const count = (this.downloads.get(sha256) ?? 1) - 1;
+      if (count === 0) this.downloads.delete(sha256);
+      else this.downloads.set(sha256, count);
     };
   }
 

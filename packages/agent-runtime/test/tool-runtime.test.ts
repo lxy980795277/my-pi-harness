@@ -16,6 +16,7 @@ import { SessionRuntime } from '../src/sessions/runtime';
 import { decodeContextMessage, encodeContextMessage } from '../src/context/codec';
 import { completeToolHistory } from '../src/context/tool-history';
 import { fixture as workFixture } from './support/work-fixture';
+import { testFileChanges } from './support/file-changes';
 
 async function until(predicate: () => boolean): Promise<void> {
   const deadline = Date.now() + 5000;
@@ -42,9 +43,11 @@ async function fixture(mode: 'ask' | 'read-only' = 'ask') {
   const faux = fauxProvider({ tokensPerSecond: 0 });
   const models = createModels();
   models.setProvider(faux.provider);
+  const resolveWorkspace = () => Promise.resolve(workspace);
   const tools = new ToolRuntime({
     profileDirectory: profile,
-    resolveWorkspace: () => Promise.resolve(workspace),
+    resolveWorkspace,
+    fileChanges: testFileChanges(profile, resolveWorkspace, store),
     approvalTimeoutMs: 5000,
   });
   const errors: unknown[] = [];

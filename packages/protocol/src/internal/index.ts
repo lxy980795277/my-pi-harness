@@ -10,3 +10,5 @@ export * from './queue-capabilities';
 export * from './memory';
 export * from './search';
 export * from './web';
+export * from './model-requests';
+export * from './file-changes';

@@ -65,7 +65,7 @@ describe('session JSONL download transport', () => {
         ),
     );
     await expect(fetchSessionLog('session', new AbortController().signal)).rejects.toEqual(
-      new RequestError('会话日志暂不可用，请重试。', 503),
+      new RequestError('会话日志暂不可用，请重试。', 503, 'SESSION_LOG_UNAVAILABLE'),
     );
   });
 
@@ -116,7 +116,7 @@ describe('session JSONL download transport', () => {
           ),
       );
       await expect(fetchSessionLog('session', new AbortController().signal)).rejects.toEqual(
-        new RequestError('请重新登录。', 401),
+        new RequestError('请重新登录。', 401, 'LOGIN_REQUIRED'),
       );
       expect(lost).toHaveBeenCalledTimes(1);
     } finally {

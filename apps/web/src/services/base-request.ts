@@ -3,6 +3,10 @@ import { Value } from 'typebox/value';
 import type { HttpMethod } from '@/types/http';
 import { API_PREFIX } from '@/constants/api';
 
+type RequestPayload =
+  | { kind: 'json'; value: unknown }
+  | { kind: 'blob'; value: Blob; mediaType: string };
+
 const authorizationListeners = new Set<() => void>();
 const authorizationCheckListeners = new Set<() => void>();
 let csrfToken: string | null = null;
@@ -35,11 +39,12 @@ export const setCsrfToken = (token: string | null): void => {
   csrfToken = token;
 };
 
-/** HTTP failure retains status so authorization failures can trigger session recovery. */
+/** Retains HTTP status and validated host codes for authorization and explicit recovery. */
 export class RequestError extends Error {
   constructor(
     message: string,
     readonly status: number,
+    readonly code: string | null = null,
   ) {
     super(message);
     this.name = 'RequestError';
@@ -49,20 +54,23 @@ export class RequestError extends Error {
 const requestResponse = async (
   path: string,
   method: HttpMethod,
-  body: unknown,
+  payload: RequestPayload | undefined,
   signal: AbortSignal,
   timeoutMs: number,
 ): Promise<Response> => {
   const headers: Record<string, string> = {};
-  if (body !== undefined) {
-    headers['Content-Type'] = 'application/json';
-  }
   if (csrfToken !== null && method !== 'GET') {
     headers['X-CSRF-Token'] = csrfToken;
   }
   let serializedBody: Pick<RequestInit, 'body'> = {};
-  if (body !== undefined) {
-    serializedBody = { body: JSON.stringify(body) };
+  if (payload !== undefined) {
+    if (payload.kind === 'json') {
+      headers['Content-Type'] = 'application/json';
+      serializedBody = { body: JSON.stringify(payload.value) };
+    } else {
+      headers['Content-Type'] = payload.mediaType;
+      serializedBody = { body: payload.value };
+    }
   }
   const response = await fetch(`${API_PREFIX}${path}`, {
     method,
@@ -81,15 +89,17 @@ const requestResponse = async (
       }
     }
     let message = `本机服务返回错误（HTTP ${response.status}），请检查服务后重试。`;
+    let code: string | null = null;
     try {
       const failure: unknown = await response.json();
       if (Value.Check(ApiErrorSchema, failure)) {
         message = failure.message;
+        code = failure.code;
       }
     } catch {
       // Non-JSON gateway failures keep the HTTP status message.
     }
-    throw new RequestError(message, response.status);
+    throw new RequestError(message, response.status, code);
   }
 
   return response;
@@ -103,7 +113,9 @@ export const requestJson = async (
   signal: AbortSignal,
   timeoutMs = 8_000,
 ): Promise<unknown> => {
-  const response = await requestResponse(path, method, body, signal, timeoutMs);
+  let payload: RequestPayload | undefined;
+  if (body !== undefined) payload = { kind: 'json', value: body };
+  const response = await requestResponse(path, method, payload, signal, timeoutMs);
   if (response.status === 204) {
     return null;
   }
@@ -114,6 +126,24 @@ export const requestJson = async (
 /** Reads JSON through the same authenticated transport as mutations. */
 export const getJson = async (path: string, signal: AbortSignal): Promise<unknown> => {
   return requestJson(path, 'GET', undefined, signal);
+};
+
+/** Sends a browser-owned Blob without base64 copies through the shared authenticated transport. */
+export const uploadBlob = async (
+  path: string,
+  blob: Blob,
+  mediaType: string,
+  signal: AbortSignal,
+  timeoutMs: number,
+): Promise<unknown> => {
+  const response = await requestResponse(
+    path,
+    'POST',
+    { kind: 'blob', value: blob, mediaType },
+    signal,
+    timeoutMs,
+  );
+  return response.json();
 };
 
 /** Downloads an authenticated file, rejecting gateway HTML and unexpected media types. */

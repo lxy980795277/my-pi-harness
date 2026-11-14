@@ -8,6 +8,10 @@ import { useTaskPresentationStore } from '@/features/tasks/stores/tasks';
 import { useTaskMessageStore } from '@/features/tasks/stores/messages';
 import { useWorkDraftStore } from '@/features/work/stores/drafts';
 import { useSearchStore } from '@/features/search/stores/search';
+import { useTraceStore } from '@/features/trace/stores/trace';
+import { useFileChangesStore } from '@/features/file-changes/stores/file-changes';
+import { useArchiveStore } from '@/features/archives/stores/archives';
+import { resetRenderDiagnostics } from '@/utils/render-diagnostics';
 
 /** Clears every private client domain when authorization ends; Query is cleared by its owner. */
 export const useResetClientState = (): (() => void) => {
@@ -38,6 +42,15 @@ export const useResetClientState = (): (() => void) => {
   const resetSearch = useSearchStore((state) => {
     return state.reset;
   });
+  const resetTrace = useTraceStore((state) => {
+    return state.reset;
+  });
+  const resetFileChanges = useFileChangesStore((state) => {
+    return state.reset;
+  });
+  const resetArchives = useArchiveStore((state) => {
+    return state.reset;
+  });
   return useCallback((): void => {
     resetNavigation();
     resetComposer();
@@ -48,6 +61,10 @@ export const useResetClientState = (): (() => void) => {
     resetTaskMessages();
     resetWorkDrafts();
     resetSearch();
+    resetTrace();
+    resetFileChanges();
+    resetArchives();
+    resetRenderDiagnostics();
   }, [
     resetAttachments,
     resetComposer,
@@ -58,5 +75,8 @@ export const useResetClientState = (): (() => void) => {
     resetTimeline,
     resetWorkDrafts,
     resetSearch,
+    resetTrace,
+    resetFileChanges,
+    resetArchives,
   ]);
 };

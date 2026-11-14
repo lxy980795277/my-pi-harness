@@ -12,7 +12,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { readStableFile } from '../src/filesystem/read-file';
+import { readStableFile } from '../src/filesystem/file-image';
 import * as paths from '../src/filesystem/workspace-path';
 
 const directories: string[] = [];
@@ -54,7 +54,7 @@ describe('stable bounded file bytes', () => {
     const stat = handle.stat.bind(handle);
     vi.spyOn(paths, 'openRegular').mockResolvedValueOnce(handle);
     vi.spyOn(handle, 'stat').mockImplementationOnce(async () => {
-      const before = await stat();
+      const before = await stat({ bigint: true });
       await appendFile(f.path, 'expanded');
       return before;
     });
@@ -74,9 +74,9 @@ describe('stable bounded file bytes', () => {
     const stat = handle.stat.bind(handle);
     vi.spyOn(paths, 'openRegular').mockResolvedValueOnce(handle);
     vi.spyOn(handle, 'stat').mockImplementationOnce(async () => {
-      const before = await stat();
+      const before = await stat({ bigint: true });
       await writeFile(f.path, 'next');
-      await utimes(f.path, before.atimeMs / 1000, before.mtimeMs / 1000 + 2);
+      await utimes(f.path, Number(before.atimeMs) / 1000, Number(before.mtimeMs) / 1000 + 2);
       return before;
     });
     try {
@@ -95,7 +95,7 @@ describe('stable bounded file bytes', () => {
     const stat = handle.stat.bind(handle);
     vi.spyOn(paths, 'openRegular').mockResolvedValueOnce(handle);
     vi.spyOn(handle, 'stat').mockImplementationOnce(async () => {
-      const before = await stat();
+      const before = await stat({ bigint: true });
       await rename(f.path, join(f.directory, 'original.txt'));
       await writeFile(f.path, 'next');
       return before;
@@ -121,7 +121,7 @@ describe('stable bounded file bytes', () => {
     const during = new AbortController();
     opener.mockResolvedValueOnce(handle);
     vi.spyOn(handle, 'stat').mockImplementationOnce(async () => {
-      const before = await stat();
+      const before = await stat({ bigint: true });
       during.abort();
       return before;
     });

@@ -3,11 +3,21 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { DaemonConfigError, loadDaemonConfig } from '../src/application/config';
+import {
+  DaemonConfigError,
+  loadDaemonConfig,
+  defaultSessionLogRoot,
+} from '../src/application/config';
 
 const temporaryLogRoot = join(tmpdir(), 'my-pi-config-fixture', '.my-pi-harness');
 
 describe('daemon startup configuration', () => {
+  it('defaults installed logs to the resolved profile instead of requiring a source checkout', () => {
+    const profile = join(tmpdir(), 'installed-app-profile');
+    expect(defaultSessionLogRoot(profile, join(tmpdir(), 'no-source-installation'))).toBe(
+      join(profile, '.my-pi-harness'),
+    );
+  });
   it('uses one application profile default independently of the launcher working directory', () => {
     const expected =
       process.platform === 'win32'

@@ -28,7 +28,7 @@ const FixtureStateSchema = Type.Object({
   origin: Type.String({ minLength: 1 }),
   shutdownCount: Type.Integer({ minimum: 0 }),
   exitCode: Type.Union([Type.Integer(), Type.Null()]),
-  sessionLogRoot: Type.String(),
+  sessionLogRoot: Type.Optional(Type.String()),
   profileDirectory: Type.Optional(Type.String()),
   githubClientId: Type.String(),
   developmentOrigins: Type.Array(Type.Object({ key: Type.String(), value: Type.String() })),
@@ -237,11 +237,15 @@ describe('desktop daemon supervisor', { concurrent: false }, () => {
       await daemon.stop();
     }
   });
-  it('requires a repository log root before spawning a standalone packaged daemon', async () => {
+  it('leaves an unconfigured packaged log root to the daemon resolver', async () => {
     const current = await prepareFixture('valid-ready');
     vi.stubEnv('MY_PI_HARNESS_SESSION_LOG_ROOT', undefined);
-    await expect(startDaemon()).rejects.toThrow('MY_PI_HARNESS_SESSION_LOG_ROOT');
-    expect(await readAvailableState(current)).toBeUndefined();
+    const daemon = await startDaemon();
+    try {
+      expect((await readState(current)).sessionLogRoot).toBeUndefined();
+    } finally {
+      await daemon.stop();
+    }
   });
   it.each(['MY_PI_HARNESS_DEVELOPMENT_ORIGIN', 'My_Pi_Harness_Development_Origin'])(
     'removes inherited %s from the real packaged child',

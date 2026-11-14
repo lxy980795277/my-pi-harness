@@ -5,6 +5,7 @@ import { subscribeSse } from '@/services/base-sse';
 import { useAsyncEvent } from '@/hooks/use-async-event';
 import { parseResponse } from '@/utils/parse-response';
 import { drainInvalidations, type RefreshOwner } from '@/utils/invalidation-refresh';
+import { refreshLiveTrace } from '@/features/trace/queries/cache';
 
 interface AgentRefreshOwner extends RefreshOwner {
   pendingReconnect: boolean;
@@ -24,6 +25,8 @@ export const useAgentUpdates = (): boolean => {
             client.invalidateQueries({ queryKey: ['agent-tasks'] }),
             client.invalidateQueries({ queryKey: ['agent-detail'] }),
             client.invalidateQueries({ queryKey: ['agent-board'] }),
+            client.invalidateQueries({ queryKey: ['usage'] }),
+            refreshLiveTrace(client),
           ]);
           if (owner.closed || signal.aborted) return;
           if (reconnect) await client.invalidateQueries({ queryKey: ['agent-settings'] });

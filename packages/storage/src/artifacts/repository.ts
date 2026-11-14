@@ -67,7 +67,7 @@ export class ArtifactRepository {
   }
 
   /** Archive and branch changes keep references; only uncommitted or explicitly unreferenced blobs are reclaimed. */
-  public collectUnreferenced(): number {
+  public collectUnreferenced(additionalReferences: ReadonlySet<string> = new Set()): number {
     const referenced = new Set(
       this.db
         .select({ hash: schema.artifacts.sha256 })
@@ -75,6 +75,7 @@ export class ArtifactRepository {
         .all()
         .map(({ hash }) => hash),
     );
+    for (const hash of additionalReferences) referenced.add(hash);
     return this.artifactBlobs.collectUnreferenced(referenced);
   }
 

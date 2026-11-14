@@ -70,9 +70,13 @@ export class ToolApprovals {
             {
               session: context.session,
               runId: context.run.id,
+              branchId: context.run.branchId,
+              inputMessageId: context.inputMessageId?.() ?? null,
+              answerInputMessageId: context.answerInputMessageId?.() ?? null,
               ...(context.run.taskId ? { taskId: context.run.taskId } : {}),
               tool,
               ...(context.modelStream ? { modelStream: context.modelStream } : {}),
+              ...(context.modelAdmission ? { modelAdmission: context.modelAdmission } : {}),
               commit: (events) => context.commit(events),
             },
             signal,

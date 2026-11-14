@@ -4,6 +4,7 @@ export { SubagentCoordinator, type SubagentCoordinatorOptions } from './subagent
 export type { SubagentStore } from './subagents/ports';
 export { defaultAgentSettings } from './subagents/default-settings';
 export { RuntimeError } from './errors';
+export { resolveRunModel } from './runs/prepare';
 export { createPiCredentialStore, decodeCredential, type SecretStore } from './models/credentials';
 export { encodeContextMessage, decodeContextMessage } from './context/codec';
 export { BUILTIN_PROVIDER_IDS, loadBuiltinProvider } from './models/providers';

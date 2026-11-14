@@ -56,6 +56,8 @@ export class RunExecution {
       signal: this.toolAbort.signal,
       recorded: this.messages.recordedTools,
       assistantMessageId: () => this.messages.assistantMessageId(),
+      inputMessageId: () => this.inputs.inputMessageId(),
+      answerInputMessageId: () => this.inputs.answerInputMessageId(),
       memoryQuery: () => this.inputs.memoryQuery(),
       currentTask: () => this.inputs.currentTask(),
       memorySource: () => this.inputs.memorySource(),
@@ -97,6 +99,11 @@ export class RunExecution {
   /** The input owner updates this only after durable queue or task-message consumption. */
   public memoryQuery(): string {
     return this.inputs.memoryQuery();
+  }
+
+  /** Delegation freezes this root input when starting work or queueing communication. */
+  public answerInputMessageId(): string | null {
+    return this.inputs.answerInputMessageId();
   }
 
   public start(): Promise<void> {

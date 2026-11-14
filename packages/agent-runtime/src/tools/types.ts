@@ -8,6 +8,7 @@ import type {
   MemoryToolHandlers,
   SearchToolHandlers,
   WebToolHandlers,
+  FileChangeToolHandlers,
 } from '@my-pi-harness/tools';
 import type { Artifact, RunView, SessionSummary, Workspace } from '@my-pi-harness/protocol';
 import type { ApprovalReviewer } from './approval-review';
@@ -16,6 +17,7 @@ import type { WorkRuntime } from '../work/runtime';
 import type { ExternalTools } from './external';
 import type { RunControls } from '../capabilities/ports';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
+import type { RequestAdmission } from '../runs/request';
 
 export interface ToolRunContext {
   controls?: RunControls;
@@ -23,6 +25,7 @@ export interface ToolRunContext {
   memory?: MemoryToolHandlers;
   search?: SearchToolHandlers;
   modelStream?: StreamFn;
+  modelAdmission?: RequestAdmission;
   beforeTool?(this: void, mutating: boolean, signal: AbortSignal): Promise<() => void>;
   session: SessionSummary;
   run: RunView;
@@ -32,6 +35,8 @@ export interface ToolRunContext {
   supportsImages: boolean;
   recorded: Set<string>;
   assistantMessageId(): string;
+  inputMessageId?(): string | null;
+  answerInputMessageId?(): string | null;
   /** Read parser diagnostics for the exact original arguments object of the current assistant. */
   argumentsError?(input: unknown): string | undefined;
   commit(events: readonly EventInput[]): void;
@@ -52,6 +57,7 @@ export interface ToolRuntimeOptions {
   pythonPath?: string;
   commands?: CommandManager;
   artifacts?(context: ToolRunContext): ArtifactToolHandlers;
+  fileChanges?(context: ToolRunContext): FileChangeToolHandlers;
 }
 
 export interface ToolExecutionResult {

@@ -19,11 +19,25 @@ Node端的模型接入与持久会话运行层，使用精确固定的Pi core/ai
 
 `runs/execution.ts`拥有单次执行的取消、失败、终态及扩展工作结算；`agent.ts`装配Pi Agent和每次请求的能力/上下文钩子，`request.ts`拥有请求名额、派发前复核及实际流结算，`inputs.ts`投递队列与`RunInjectedInput`，`messages.ts`拥有SDK事件记录和未执行工具的结算，`prepare.ts`共用主子Run的模型检查与输入接受准备。`runs/ports.ts`声明可选`RunHooks`、记忆/来源窄端口和注入输入接口，执行器不导入subagents、记忆领域服务或搜索实现。注入输入在实际消费时提供整批持久记录，仍由Run统一提交；持久化失败由执行器中止整个Run。输入准备继续使用共享协议中的AgentMessage表达续作来源。
 
+`runs/request-observer.ts`为每次实际stream调用记录独立modelRequestId、输入归属与终态，覆盖主子对话、审批复核和压缩。最终输入沿原context.prepared、tool.review.requested和context.compaction.prepared保存，以同一ID关联；派发前失效草稿不计请求数。观察器保留原流的唯一消费者，首可观测SDK响应取Provider回调、当前迭代器非start事件或已解析终态中最早的宿主观测，包括成功和失败终态；它不表示网络TTFB或供应商送达证据，响应前直接抛错时保持未知。终态根据实际stopReason和Usage记录，SDK默认全零Usage保留未知。审计失败中止执行，审批与摘要不能将其转换为普通模型失败后继续；实际流结算后才释放模型名额。轨迹读取、索引和界面投影由storage及宿主负责。
+
+`runs/request-pricing.ts`在请求交接时冻结Gateway明确标记的Pi目录费率与完整分档规则，收到实际Usage后调用Pi calculateCost计算USD估价，保留cacheWrite1h的长期缓存写入区别。费率不含模型headers，计算不修改SDK结果；自定义Provider的零价占位没有目录来源，因此价格未知。请求日志保存规则和带来源估算，storage只聚合叶记录，不依赖Pi重新计算历史价格。
+
+请求排队耗时只累计实际模型名额等待，执行耗时由单调时钟测得；墙钟时间按观察值保留，回拨区间由存储明确标记不可确定。上游超长responseId仅保留在原Pi私有消息中，公开请求摘要省略该字段，避免诊断元数据阻断正常回答。
+
+请求的inputMessageId表示当前Run实际消费输入，answerInputMessageId表示发起该工作的根人类输入。根锚点仅随真实输入消费更新，子任务创建时继承当时来源；通信在排队时保存发送者的根锚点，续作及运行中通信消费后使用该冻结值。后续根输入不会重分配旧子请求，Agent通信也不替换根人类输入；任务祖先关系仍由原工具及Run事实推导。
+
 `subagents/coordinator.ts`唯一拥有活动节点索引、任务树、计时器、写入拥有者及子树创建/停止/收束；`policy.ts`解析角色、限额、附件范围和工具访问约束，`messaging.ts`拥有通信幂等、路由与续作准入，读取协调器的节点索引并通过回调启动续作。tools包声明五个委派工具的模型schema，`tool-dispatch.ts`适配工具调用与等待，`run-adapter.ts`实现RunHooks，将请求并发、写入仲裁、通信消费及收束接入Run。`launch.ts`准备子模型、工具与上下文并启动共享RunExecution。生命周期继续由协调器拥有，不单独增加另一份任务状态或生命周期服务。
 
 tools包的ToolRegistration拥有模型schema、来源、默认/按需加载、可用条件、参数效果策略与绑定入口；`tools/selection.ts`按实际领域端口、工作区、平台、模型能力和调用者访问约束选择初始集合与候选。`bindings.ts`为每个主子Run分别绑定Work、Task、能力、命令和产物端口；`runtime.ts`编排校验、审批与执行，`policy.ts`拥有逐次审批，`mcp-dispatch.ts`拥有外部派发屏障和未知结果，`ledger.ts`拥有工具记录及canonical结果。执行函数只留在内存，日志冻结模型可见定义及授权来源。SDK拒绝与未派发调用复用ledger的宿主终态入口。
 
+原生文件工具经`ToolRuntimeOptions.fileChanges`注入宿主服务，主子Run分别绑定归属；每次调用的`toolCallId`是ledger的持久ID，区别于可能重复的Provider调用ID。`beforePublish(operationId)`将精确文件操作与工具发布屏障关联，只有可信sandbox确认尚未尝试目标写入时才能调用`confirmNotPublished`。实际文件发布后持久化失败保留unknown并中止当前执行，不标记未应用或自动重复写入。MCP派发仍使用独立传输实现和server结果语义，不复用文件发布代码。
+
 ## 模型与会话运行
+
+导入会话的`getSessionExecutionAccess`来自当前宿主持久状态，`importedThroughSeq`永久标识历史范围，不能由归档自行授予执行权。未绑定时允许阅读、订阅和分支浏览，发送、编辑重发、队列恢复、配置修改及Work命令统一拒绝。`assertSessionExecutionAllowed`同时供宿主的工具批准、子任务交互等路由使用；历史批准和等待项不会重建内存执行者。
+
+显式绑定经`importedBindingCommand`在会话串行门内执行，要求没有活动Run或待启动请求；宿主在该回调内验证当前模型、工作区和权限，并同批保存配置及绑定事实。绑定后新Run重新冻结当前能力，导入会话的编辑不会隐式继承历史消息的MCP或Skill选择。storage的历史Skill查询永久排除导入范围内的授权事实；归档资源仅供还原，不成为本机Skill租约。旧队列与待答项由导入收口事实终结，不因后续绑定而恢复。
 
 `ModelGateway`装配账户实例、模型清单、连接探测与认证。OpenAI（Codex）、Anthropic、Google、DeepSeek、MiniMax、Kimi六个内置Provider按公开factory固定为单例入口，名称、端点和模型目录只读；自定义Provider允许空模型列表，模型Dialog草稿一次提交整个Provider，保留未提交的同ID模型headers/compat，切换协议同步已有模型API。自定义Provider使用Pi的Chat Completions、Responses或Anthropic lazy API。请求HTTP与模型SSE解析由Pi负责。OpenAI兼容Base URL通常含`/v1`；Anthropic SDK会追加`/v1/messages`，通常配置不含`/v1`的服务根地址。HTTPS及显式回环HTTP可用，地址不得含用户信息、query或fragment。
 

@@ -25,6 +25,6 @@
 
 ## 产物运行
 
-当前构建、资源装配与应用目录打包入口见 [测试入口](../05_CONSTRAINTS/testing.md)。应用目录携带自身运行资源，包含daemon源码与tsx，不依赖本仓库、用户工具链或Vite；正式安装器及签名发布在后续平台发布步骤实现。
+当前构建、资源装配与应用目录打包入口见 [测试入口](../05_CONSTRAINTS/testing.md)。应用目录携带自身运行资源，包含daemon源码与tsx，不依赖本仓库、用户工具链或Vite；安装器、unsigned测试候选及签名发布条件见[发布规范](../06_RELEASES/overview.md)，是否完成目标平台验收以实际记录为准。
 
 Skills选择、创建、安装与插件管理见[Skills与插件](Skills与插件.md)，办公依赖与操作见[办公文档](office.md)，外部账户见[服务连接](connections.md)。

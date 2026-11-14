@@ -480,7 +480,9 @@ describe('SessionRuntime durable execution', () => {
         listSessions: () => actual.listSessions(),
         getSession: (id) => actual.getSession(id),
         getSnapshot: (id) => actual.getSnapshot(id),
+        getSessionExecutionAccess: (id) => actual.getSessionExecutionAccess(id),
         publishMessageDelta: (id, delta) => actual.publishMessageDelta(id, delta),
+        subscribeCommitted: (listener, failed) => actual.subscribeCommitted(listener, failed),
         readEvents: (id, after, limit) => actual.readEvents(id, after, limit),
         getModelContext: (id, branch) => actual.getModelContext(id, branch),
         findRequest: (id, request) => actual.findRequest(id, request),
@@ -522,7 +524,9 @@ describe('SessionRuntime durable execution', () => {
           if (accepted) throw new Error('Injected post-accept read failure');
           return actual.getSnapshot(id);
         },
+        getSessionExecutionAccess: (id) => actual.getSessionExecutionAccess(id),
         publishMessageDelta: (id, delta) => actual.publishMessageDelta(id, delta),
+        subscribeCommitted: (listener, failed) => actual.subscribeCommitted(listener, failed),
         readEvents: (id, after, limit) => actual.readEvents(id, after, limit),
         getModelContext: (id, branch) => actual.getModelContext(id, branch),
         getQueueBranch: (id, input) => actual.getQueueBranch(id, input),

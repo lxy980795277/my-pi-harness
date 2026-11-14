@@ -22,7 +22,13 @@ interface MessagingHost {
   inTree(caller: SubagentNode, taskId: string): AgentTaskSummary;
   checkDeadline(node: SubagentNode): void;
   commit(sessionId: string, events: readonly EventInput[]): void;
-  resume(parent: SubagentNode, task: AgentTask, text: string, messageId: string): void;
+  resume(
+    parent: SubagentNode,
+    task: AgentTask,
+    text: string,
+    messageId: string,
+    answerInputMessageId: string | null,
+  ): void;
 }
 
 /** Own task-message acceptance and delivery; live node indexes remain coordinator-owned. */
@@ -99,7 +105,14 @@ export class SubagentMessaging {
       )
         throw new RuntimeError('AGENT_WRITE_CONFLICT', '父任务尚不能转交写入拥有权。');
     }
-    const record = { id, sourceRunId: sender.run.id, target, text, createdAt: Date.now() };
+    const record = {
+      id,
+      sourceRunId: sender.run.id,
+      target,
+      text,
+      createdAt: Date.now(),
+      answerInputMessageId: sender.execution?.answerInputMessageId() ?? null,
+    };
     this.host.commit(sender.session.id, [
       {
         type: 'task.message_queued',
@@ -109,7 +122,7 @@ export class SubagentMessaging {
       },
     ]);
     if (idle && continueRun && node.task && node.parent) {
-      this.host.resume(node.parent, node.task, text, id);
+      this.host.resume(node.parent, node.task, text, id, record.answerInputMessageId);
     } else if (!idle) node.execution?.rebuildQueue();
     return (
       this.host.store.listAgentMessages(sender.session.id).find((message) => message.id === id) ?? {

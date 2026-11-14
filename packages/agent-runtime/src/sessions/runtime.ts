@@ -73,6 +73,7 @@ export class SessionRuntime {
   private readonly disabled = new Set<string>();
   private closed = false;
   private stopPromise: Promise<void> | undefined;
+  private readonly unsubscribeCommitted: () => void;
 
   private readonly capabilityInputs: InputCapabilityResolver;
   private readonly references: InputReferenceResolver;
@@ -102,6 +103,10 @@ export class SessionRuntime {
         publishMessageDelta: (id, delta) => this.publishMessageDelta(id, delta),
         onError: (error) => options.onError(error),
       });
+    this.unsubscribeCommitted = options.store.subscribeCommitted(
+      (events) => this.publish(events),
+      (error) => options.onError(error),
+    );
   }
 
   public get subagents(): SubagentCoordinator {
@@ -118,7 +123,6 @@ export class SessionRuntime {
       branchId: randomUUID(),
       at: Date.now(),
     });
-    this.publish(this.options.store.readEvents(session.id, 0, 1000));
     return session;
   }
 
@@ -143,6 +147,29 @@ export class SessionRuntime {
     this.assertReadable(sessionId);
     return this.requireSession(sessionId);
   }
+
+  /** Host command routes and serialized execution share the same durable import admission check. */
+  public assertSessionExecutionAllowed(sessionId: string): void {
+    this.assertReadable(sessionId);
+    this.requireSession(sessionId);
+    if (!this.options.store.getSessionExecutionAccess(sessionId).bound)
+      throw new RuntimeError(
+        'SESSION_IMPORT_UNBOUND',
+        '请先为导入的会话绑定当前模型、工作区和权限，再开始新的执行。',
+      );
+  }
+
+  /** Serialize a host-validated import binding without granting authority to ordinary session patches. */
+  public importedBindingCommand<T>(sessionId: string, operation: () => T | Promise<T>): Promise<T> {
+    return this.serialize(sessionId, () => {
+      this.requireSession(sessionId);
+      if (this.options.store.getSessionExecutionAccess(sessionId).importedThroughSeq === null)
+        throw new RuntimeError('SESSION_NOT_IMPORTED', '只有导入的会话需要重新绑定执行环境。');
+      if (this.active.has(sessionId) || (this.pendingStarts.get(sessionId)?.size ?? 0) > 0)
+        throw new RuntimeError('SESSION_BUSY', '请先等待当前执行或待启动请求结束，再重新绑定。');
+      return operation();
+    });
+  }
   public isProviderActive(providerId: string): boolean {
     return [...this.active.values()].some(({ options }) => options.run.providerId === providerId);
   }
@@ -154,6 +181,7 @@ export class SessionRuntime {
     allowActive = false,
   ): Promise<T> {
     return this.serialize(sessionId, () => {
+      this.assertSessionExecutionAllowed(sessionId);
       const snapshot = this.getSnapshot(sessionId);
       if (!allowActive && this.active.has(sessionId))
         throw new RuntimeError('SESSION_BUSY', '请先停止当前运行再修改工作状态。');
@@ -184,7 +212,7 @@ export class SessionRuntime {
 
   public updateSession(sessionId: string, input: SessionPatchInput): Promise<SessionSnapshot> {
     return this.serialize(sessionId, () => {
-      this.requireSession(sessionId);
+      this.assertSessionExecutionAllowed(sessionId);
       this.commit(sessionId, [
         { type: 'session.configured', runId: null, at: Date.now(), data: input },
       ]);
@@ -416,6 +444,8 @@ export class SessionRuntime {
           'Select a user message in the current branch',
         );
       this.requireInput({ text: input.text, attachmentIds: original.attachmentIds });
+      const imported =
+        this.options.store.getSessionExecutionAccess(sessionId).importedThroughSeq !== null;
       const branchId = randomUUID();
       const branch = {
         id: branchId,
@@ -430,8 +460,8 @@ export class SessionRuntime {
           text: input.text,
           mode: 'send',
           requestId: input.requestId,
-          mcpTools: input.mcpTools ?? original.mcpTools ?? [],
-          skills: input.skills ?? original.skills ?? [],
+          mcpTools: input.mcpTools ?? (imported ? [] : (original.mcpTools ?? [])),
+          skills: input.skills ?? (imported ? [] : (original.skills ?? [])),
           ...(original.attachmentIds ? { attachmentIds: original.attachmentIds } : {}),
         },
         signal,
@@ -655,6 +685,7 @@ export class SessionRuntime {
           resolved,
           history: prepared.history,
           user: prepared.user,
+          inputMessageId: prepared.inputMessageId,
           systemPrompt: prepared.systemPrompt,
           basePrompt,
           instructionsPrompt: initialPrompt,
@@ -855,6 +886,7 @@ export class SessionRuntime {
     try {
       return this.serialize(sessionId, () => {
         controller.signal.throwIfAborted();
+        this.assertSessionExecutionAllowed(sessionId);
         return operation(controller.signal);
       }).finally(release);
     } catch (error) {
@@ -901,8 +933,7 @@ export class SessionRuntime {
     if (this.closed) throw new RuntimeError('RUNTIME_CLOSED', 'Runtime is closing');
   }
   private commit(sessionId: string, inputs: readonly EventInput[]): void {
-    const events = this.options.store.append(sessionId, inputs);
-    this.publish(events);
+    this.options.store.append(sessionId, inputs);
   }
   private publish(events: readonly HarnessEvent[]): void {
     this.subagentCoordinator?.observe(events);
@@ -950,6 +981,7 @@ export class SessionRuntime {
       failures.push(error);
     }
     this.listeners.clear();
+    this.unsubscribeCommitted();
     if (failures.length > 0) throw new AggregateError(failures, 'Runtime shutdown failed');
   }
 }

@@ -1,4 +1,6 @@
 export * from './sessions/context';
+export * from './sessions/trace';
+export * from './sessions/file-changes';
 export * from './memory/memory';
 export * from './memory/mutations';
 export * from './search/search';
@@ -159,3 +161,27 @@ export type {
 } from './host/desktop';
 export * from './extensions/connections';
 export * from './sessions/agents';
+
+export {
+  SessionArchiveManifestSchema,
+  SessionArchivePreviewSchema,
+  SessionArchiveImportReceiptSchema,
+  SessionArchiveImportBindingSchema,
+  SessionExecutionAccessSchema,
+} from './sessions/archives';
+export type {
+  SessionArchiveManifest,
+  SessionArchivePreview,
+  SessionArchiveImportReceipt,
+  SessionArchiveImportBinding,
+  SessionExecutionAccess,
+} from './sessions/archives';
+export {
+  SESSION_ARCHIVE_MAXIMUM_UPLOAD_BYTES,
+  SessionArchiveJobSchema,
+  SessionArchiveJobsQuerySchema,
+  SessionArchiveJobsPageSchema,
+  type SessionArchiveJob,
+  type SessionArchiveJobsQuery,
+  type SessionArchiveJobsPage,
+} from './sessions/archive-jobs';

@@ -25,6 +25,7 @@ import {
   type RequestAcceptance,
 } from '@my-pi-harness/protocol/internal';
 import type { WorkspaceRepository } from '../repositories/workspaces';
+import { isRequestSnapshotEvent } from './trace-projection';
 
 /** Validates one durable command and stages its journal records inside the profile transaction. */
 export class SessionEventCommit {
@@ -149,7 +150,9 @@ export class SessionEventCommit {
       .get();
     if (current?.archived) {
       if (inputs.length === 1 && inputs[0]?.type === 'session.deleted') return [];
-      throw new StorageError('SESSION_NOT_FOUND', 'Session is archived');
+      // Recovery observations settle shared file locks without reopening the archived conversation.
+      if (inputs.length !== 1 || inputs[0]?.type !== 'file.operation.observed')
+        throw new StorageError('SESSION_NOT_FOUND', 'Session is archived');
     }
     const session = this.projector.session(sessionId);
     if (this.duplicate(sessionId, inputs)) return [];
@@ -199,7 +202,7 @@ export class SessionEventCommit {
         .insert(schema.events)
         .values({
           ...event,
-          privateData: event.type === 'context.prepared' ? null : (privateData ?? null),
+          privateData: isRequestSnapshotEvent(event.type) ? null : (privateData ?? null),
         })
         .run();
       this.stage({ event, privateData: privateData ?? null });

@@ -8,7 +8,10 @@ import {
   type HarnessEvent,
   type ToolCallView,
 } from '@my-pi-harness/protocol';
-import { StoredToolResultSchema } from '@my-pi-harness/protocol/internal';
+import {
+  StoredToolResultSchema,
+  FileOperationIntentSchema,
+} from '@my-pi-harness/protocol/internal';
 import { StorageError } from '../../shared/errors';
 import * as schema from '../../sqlite/schema';
 import { checked } from '../../shared/validation';
@@ -190,6 +193,34 @@ export class ToolProjection {
     return checked(RunViewSchema, row.data);
   }
 
+  private filePublication(tool: ReturnType<typeof checked<typeof ToolCallRecordSchema>>): boolean {
+    if (
+      tool.binding.kind !== 'accepted' ||
+      tool.binding.source.kind !== 'workspace' ||
+      (tool.name !== 'write_file' && tool.name !== 'edit_file') ||
+      tool.dispatch.state !== 'may_have_started'
+    )
+      return false;
+    const row = this.db
+      .select({ data: schema.events.data, runId: schema.events.runId })
+      .from(schema.events)
+      .where(
+        and(
+          eq(schema.events.sessionId, tool.sessionId),
+          eq(schema.events.type, 'file.operation.prepared'),
+          sql`json_extract(${schema.events.data}, '$.operationId') = ${tool.dispatch.attemptId}`,
+        ),
+      )
+      .get();
+    if (row === undefined || row.runId !== tool.runId) return false;
+    const intent = checked(FileOperationIntentSchema, row.data);
+    return (
+      intent.action === 'write' &&
+      intent.source.kind === 'tool' &&
+      intent.source.toolCallId === tool.id
+    );
+  }
+
   public apply(event: HarnessEvent): void {
     const { tool, afterMessageId } = checked(ToolEventSchema, event.data);
     const run = this.run(event);
@@ -200,9 +231,10 @@ export class ToolProjection {
     )
       throw new StorageError('INVALID_EVENT', 'Tool identity does not match its run');
     const external = tool.binding.kind === 'accepted' && tool.binding.source.kind === 'mcp';
+    const filePublication = this.filePublication(tool);
     if (
       (external && tool.dispatch.state === 'not_applicable') ||
-      (!external && tool.dispatch.state !== 'not_applicable')
+      (!external && tool.dispatch.state !== 'not_applicable' && !filePublication)
     )
       throw new StorageError(
         'INVALID_EVENT',
@@ -265,7 +297,8 @@ export class ToolProjection {
           );
       } else if (
         before.dispatch.state === 'not_applicable' &&
-        tool.dispatch.state !== 'not_applicable'
+        tool.dispatch.state !== 'not_applicable' &&
+        !filePublication
       )
         throw new StorageError(
           'INVALID_EVENT',
@@ -281,6 +314,11 @@ export class ToolProjection {
       return;
     }
     if (previous) throw new StorageError('CONFLICT', 'Tool request already exists');
+    if (!external && tool.dispatch.state !== 'not_applicable')
+      throw new StorageError(
+        'INVALID_EVENT',
+        'New native tool requests must precede file publication',
+      );
     if (external && tool.dispatch.state !== 'not_started')
       throw new StorageError(
         'INVALID_EVENT',

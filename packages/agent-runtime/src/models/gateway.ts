@@ -34,6 +34,8 @@ import { applicationStream } from './identity';
 
 export interface ResolvedModel {
   model: Model<Api>;
+  /** Native catalog rates are estimates; custom-model zero placeholders have no known price. */
+  priceSource?: 'pi-catalog';
   streamFn: StreamFn;
   release(): void;
 }
@@ -410,6 +412,7 @@ export class ModelGateway {
       signal?.throwIfAborted();
       return {
         model: structuredClone(model),
+        ...(config.kind === 'builtin' ? { priceSource: 'pi-catalog' as const } : {}),
         streamFn: applicationStream(
           keyless ? keylessStream(provider) : this.models.streamSimple.bind(this.models),
         ),

@@ -10,7 +10,6 @@ import {
 import { Value } from 'typebox/value';
 import { app } from 'electron';
 import { createDesktopAuthorization } from './authorization';
-import { resolveSessionLogRoot } from './session-log-root';
 
 /** 桌面只监督自己启动的独立 Node 服务，不 import 服务业务源码。 */
 export interface ManagedDaemon {
@@ -66,17 +65,11 @@ export async function startDaemon({ signal }: DaemonStartOptions = {}): Promise<
   const cwd = app.isPackaged
     ? resolve(resources, 'daemon')
     : fileURLToPath(new URL('../../../daemon', import.meta.url));
-  const configuredLogRoot = process.env['MY_PI_HARNESS_SESSION_LOG_ROOT'];
   const environment: NodeJS.ProcessEnv = {
     ...process.env,
     MY_PI_HARNESS_PORT: app.isPackaged ? '0' : '4311',
     MY_PI_HARNESS_PARENT_PID: String(process.pid),
     MY_PI_HARNESS_DESKTOP_SECRET: ownerSecret,
-    MY_PI_HARNESS_SESSION_LOG_ROOT: resolveSessionLogRoot({
-      packaged: app.isPackaged,
-      developmentRoot: fileURLToPath(new URL('../../../../', import.meta.url)),
-      ...(configuredLogRoot === undefined ? {} : { configuredRoot: configuredLogRoot }),
-    }),
     ...(app.isPackaged ? { MY_PI_HARNESS_WEB_DIST_PATH: resolve(resources, 'web') } : {}),
   };
   for (const key of Object.keys(environment)) {

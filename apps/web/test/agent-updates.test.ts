@@ -84,13 +84,13 @@ function renderHook(): () => () => void {
 function queries() {
   const gates: Gate[] = [];
   const calls: string[] = [];
-  let taskCalls = 0;
+  let factCalls = 0;
   owned.invalidate.mockImplementation(({ queryKey }) => {
     const name = queryKey[0];
     if (typeof name !== 'string') throw new Error('Invalid fixture query key');
     calls.push(name);
     if (name === 'agent-settings') return Promise.resolve();
-    const index = Math.floor(taskCalls++ / 3);
+    const index = Math.floor(factCalls++ / 6);
     let current = gates[index];
     if (current === undefined) {
       current = gate();
@@ -106,7 +106,7 @@ function queries() {
       if (current === undefined) throw new Error('Missing query gate');
       current.release();
     },
-    taskCalls: (): number => {
+    factCalls: (): number => {
       return calls.filter((name) => name !== 'agent-settings').length;
     },
     settingsCalls: (): number => {
@@ -136,20 +136,22 @@ describe('task SSE invalidation ownership', () => {
     try {
       source(0).notify('ready');
       await vi.advanceTimersByTimeAsync(0);
-      expect(reads.taskCalls()).toBe(3);
+      expect(reads.factCalls()).toBe(6);
+      expect(reads.calls).toContain('trace');
+      expect(reads.calls).toContain('trace-content');
       source(0).notify('changed');
       source(0).notify('ready');
       source(0).notify('changed');
       await vi.advanceTimersByTimeAsync(300);
-      expect(reads.taskCalls()).toBe(3);
+      expect(reads.factCalls()).toBe(6);
       reads.release(0);
       await vi.advanceTimersByTimeAsync(0);
-      expect(reads.taskCalls()).toBe(6);
+      expect(reads.factCalls()).toBe(12);
       expect(reads.settingsCalls()).toBe(1);
       reads.release(1);
       await vi.advanceTimersByTimeAsync(0);
       expect(reads.settingsCalls()).toBe(2);
-      expect(reads.taskCalls()).toBe(6);
+      expect(reads.factCalls()).toBe(12);
     } finally {
       close();
       for (const pending of reads.gates) pending.release();
@@ -171,23 +173,23 @@ describe('task SSE invalidation ownership', () => {
       close = mount();
       source(1).notify('ready');
       await vi.advanceTimersByTimeAsync(0);
-      expect(reads.taskCalls()).toBe(6);
+      expect(reads.factCalls()).toBe(12);
       reads.release(0);
       await vi.advanceTimersByTimeAsync(0);
       expect(reads.settingsCalls()).toBe(0);
       source(1).notify('changed');
       await vi.advanceTimersByTimeAsync(300);
-      expect(reads.taskCalls()).toBe(6);
+      expect(reads.factCalls()).toBe(12);
       reads.release(1);
       await vi.advanceTimersByTimeAsync(0);
-      expect(reads.taskCalls()).toBe(9);
+      expect(reads.factCalls()).toBe(18);
       expect(reads.settingsCalls()).toBe(1);
       close();
       source(0).notify('ready');
       source(1).notify('ready');
       reads.release(2);
       await vi.advanceTimersByTimeAsync(1000);
-      expect(reads.taskCalls()).toBe(9);
+      expect(reads.factCalls()).toBe(18);
       expect(reads.settingsCalls()).toBe(1);
     } finally {
       close();

@@ -11,6 +11,8 @@ import { RuntimePage } from '@/features/runtime/components/runtime-page';
 import { SessionsPage } from '@/features/sessions/components/sessions-page';
 import { SettingsDialog } from '@/features/settings/components/settings-dialog';
 import { TaskHost } from '@/features/tasks/components/task-host';
+import { FileChangeHost } from '@/features/file-changes/components/file-change-host';
+import { ArchiveHost } from '@/features/archives/components/archive-host';
 import { TasksPage } from '@/features/tasks/components/tasks-page';
 import { describeError } from '@/utils/describe-error';
 import { SearchHost } from '@/features/search/components/search-host';
@@ -108,6 +110,8 @@ export const App: FC = () => {
       )}
       <TaskHost />
       <SearchHost />
+      <FileChangeHost />
+      <ArchiveHost />
     </div>
   );
 };

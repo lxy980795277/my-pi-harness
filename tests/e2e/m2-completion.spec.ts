@@ -126,11 +126,16 @@ test('完整工具链复用 SDK 调用ID，逐次审批、真实编辑与受限�
       ]);
     expect(await readFile(join(directory, 'note.txt'), 'utf8')).toBe(edited);
     expect(model.requests).toHaveLength(5);
-    const difference = editCard.getByRole('region', { name: '文件差异', exact: true });
-    const result = editCard.getByRole('region', { name: '执行结果', exact: true });
+    await editCard.getByRole('button', { name: '查看此工具的文件变更', exact: true }).click();
+    const fileChanges = page.getByRole('dialog', { name: '文件变更', exact: true });
+    await fileChanges.getByRole('button', { name: /^note\.txt 主对话 已应用$/u }).click();
+    const difference = fileChanges.getByRole('region', { name: '文件变更详情', exact: true });
     await expect(difference.locator('pre')).toBeVisible();
     await expect(difference.locator('pre')).toContainText('+Edited workspace text');
     await expect(difference.locator('pre')).toContainText('-Old workspace text');
+    await fileChanges.getByRole('button', { name: '关闭文件变更', exact: true }).click();
+    await expect(fileChanges).toBeHidden();
+    const result = editCard.getByRole('region', { name: '执行结果', exact: true });
     await expect(result.locator('pre')).toBeVisible();
     await expect(result.locator('pre')).toContainText('SHA-256:');
     await page

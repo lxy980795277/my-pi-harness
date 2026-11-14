@@ -7,6 +7,11 @@ import type { SessionCommands } from '@/features/sessions/hooks/use-session-comm
 import { WorkPanel } from '@/features/work/components/work-panel';
 import { WorkRequests } from '@/features/work/components/work-requests';
 import { useWork } from '@/features/work/hooks/use-work';
+import { ArchiveAccess } from '@/features/archives/components/archive-access';
+import { useSessionExecutionAccess } from '@/features/archives/hooks/use-archive-access';
+import { Button } from '@/components/ui/button';
+import { Notice } from '@/components/ui/notice';
+import { describeError } from '@/utils/describe-error';
 
 interface ConversationBodyProps {
   snapshot: SessionSnapshot;
@@ -23,10 +28,13 @@ export const ConversationBody: FC<ConversationBodyProps> = ({
   commands,
 }) => {
   const work = useWork(snapshot);
+  const access = useSessionExecutionAccess(snapshot.session.id);
   return (
     <>
       <MessageTimeline
         sessionId={snapshot.session.id}
+        snapshotSeq={snapshot.snapshotSeq}
+        liveRevision={snapshot.liveRevision}
         workspaceId={snapshot.session.workspaceId}
         approvalMode={snapshot.session.approvalMode}
         messages={snapshot.messages}
@@ -34,13 +42,13 @@ export const ConversationBody: FC<ConversationBodyProps> = ({
         runs={snapshot.runs}
         branchId={snapshot.session.activeBranchId}
         activeRunId={snapshot.session.activeRunId}
-        canEdit={snapshot.session.activeRunId === null}
+        canEdit={access.canExecute && snapshot.session.activeRunId === null}
         onEdit={commands.edit}
         onDecide={commands.decide}
       >
-        <WorkRequests state={work} />
+        {access.canExecute && <WorkRequests state={work} />}
       </MessageTimeline>
-      {snapshot.queue.length > 0 && (
+      {access.canExecute && snapshot.queue.length > 0 && (
         <QueuePanel
           workspaceId={snapshot.session.workspaceId}
           approvalMode={snapshot.session.approvalMode}
@@ -51,16 +59,32 @@ export const ConversationBody: FC<ConversationBodyProps> = ({
           onResume={commands.resume}
         />
       )}
-      <WorkPanel session={snapshot} state={work}>
-        <Composer
-          session={snapshot.session}
-          activeRun={lastRun}
-          providers={providers}
-          onSend={commands.send}
-          onStop={commands.stop}
-          onPatch={commands.patch}
-        />
-      </WorkPanel>
+      {access.query.isPending && (
+        <p className="shrink-0 px-6 py-4 text-center text-xs text-muted-foreground" role="status">
+          正在确认会话执行权限…
+        </p>
+      )}
+      {access.query.isError && (
+        <div className="space-y-2 px-6 py-4">
+          <Notice tone="error">{describeError(access.query.error)}</Notice>
+          <Button type="button" variant="outline" onClick={access.refresh}>
+            重新读取执行权限
+          </Button>
+        </div>
+      )}
+      {access.query.data?.bound === false && <ArchiveAccess sessionId={snapshot.session.id} />}
+      {access.canExecute && (
+        <WorkPanel session={snapshot} state={work}>
+          <Composer
+            session={snapshot.session}
+            activeRun={lastRun}
+            providers={providers}
+            onSend={commands.send}
+            onStop={commands.stop}
+            onPatch={commands.patch}
+          />
+        </WorkPanel>
+      )}
     </>
   );
 };

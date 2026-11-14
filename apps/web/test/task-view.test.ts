@@ -39,6 +39,7 @@ function task(id: string, changes: Partial<AgentTaskSummary> = {}): AgentTaskSum
     closeReason: null,
     error: null,
     usage: null,
+    usageCoverage: { requestCount: 0, recordedRequests: 0, unknownRequests: 0 },
     ...changes,
   };
 }

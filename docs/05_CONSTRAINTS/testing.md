@@ -4,21 +4,23 @@
 
 ## 命令与检查范围
 
-| 命令                   | 证据范围                                                          |
-| ---------------------- | ----------------------------------------------------------------- |
-| `pnpm format:check`    | 格式                                                              |
-| `pnpm lint`            | ESLint、Oxlint a11y、依赖、源码约定、文档与版本                   |
-| `pnpm typecheck`       | 全 workspace 源码，包括 Web 独立 Bundler 测试面                   |
-| `pnpm test`            | Vitest 源码行为，不依赖 dist                                      |
-| `pnpm check`           | 上述四类，不包括 Playwright 或打包                                |
-| `pnpm build`           | Web及Electron main/preload构建与版本生成                          |
-| `pnpm test:artifact`   | 源码daemon CLI、IPC、恢复、退出及隔离生产deploy，不要求后端build  |
-| `pnpm test:e2e`        | Playwright用户场景：先构建Web，daemon由Node/tsx启动               |
-| `pnpm test:m2`         | 工作区/工具/目录桥/时间线源码与M2浏览器链路，先 build             |
-| `pnpm test:m3`         | 上下文、附件、工作状态源码与M3浏览器链路，先 build                |
-| `pnpm test:provider`   | 显式专用 TEST_API_KEY/BASE_URL/MODEL 的真实 Provider；缺配置 skip |
-| `pnpm package:desktop` | 构建、资源准备与应用目录打包                                      |
-| `pnpm smoke:desktop`   | 实际桌面产物启动、隔离、桥及退出；前提见脚本                      |
+| 命令                             | 证据范围                                                          |
+| -------------------------------- | ----------------------------------------------------------------- |
+| `pnpm format:check`              | 格式                                                              |
+| `pnpm lint`                      | ESLint、Oxlint a11y、依赖、源码约定、文档与版本                   |
+| `pnpm typecheck`                 | 全 workspace 源码，包括 Web 独立 Bundler 测试面                   |
+| `pnpm test`                      | Vitest 源码行为，不依赖 dist                                      |
+| `pnpm check`                     | 上述四类，不包括 Playwright 或打包                                |
+| `pnpm build`                     | Web及Electron main/preload构建与版本生成                          |
+| `pnpm test:artifact`             | 源码daemon CLI、IPC、恢复、退出及隔离生产deploy，不要求后端build  |
+| `pnpm test:e2e`                  | Playwright用户场景：先构建Web，daemon由Node/tsx启动               |
+| `pnpm test:m2`                   | 工作区/工具/目录桥/时间线源码与M2浏览器链路，先 build             |
+| `pnpm test:m3`                   | 上下文、附件、工作状态源码与M3浏览器链路，先 build                |
+| `pnpm test:provider`             | 显式专用 TEST_API_KEY/BASE_URL/MODEL 的真实 Provider；缺配置 skip |
+| `pnpm package:desktop`           | 构建、资源准备与应用目录打包                                      |
+| `pnpm smoke:desktop`             | 实际桌面产物启动、隔离、桥及退出；前提见脚本                      |
+| `pnpm package:desktop:installer` | 本机macOS DMG或Windows NSIS，默认标记unsigned测试候选             |
+| `pnpm smoke:desktop:installer`   | 实际安装路径、候选重装、数据保留及移除应用；不代替跨版本迁移      |
 
 根 package.json 是可执行入口，命令变化同步本页。局部变更运行最小充分检查；里程碑整体验收可做工程范围检查。代码、环境及风险未变化时复用已有通过结果，不因 commit/push 重复全量。CI负责keyless全量和macOS/Windows矩阵，真实供应商与外部账户独立配置，不让普通测试依赖用户Key或产生费用。
 
@@ -63,7 +65,7 @@ ESLint根入口加载scripts/eslint中的本地配置与规则，相关依赖位
 ## 并发与清理
 
 - 每个用例独占临时目录、动态端口和身份，不污染用户 profile、Keychain 或开发端口；不输出认证头和秘密。测试凭据用明确假值或独立临时 namespace。
-- 桌面smoke显式设置临时`MY_PI_HARNESS_PROFILE_DIRECTORY`与`MY_PI_HARNESS_SESSION_LOG_ROOT`，同时隔离Electron用户目录；`--user-data-dir`只隔离Cookie和缓存，不能隔离daemon业务数据。profile目录归属与覆盖优先级见[启动配置](../01_ARCHITECTURE/overview.md#启动配置)。
+- 桌面smoke设置临时`MY_PI_HARNESS_PROFILE_DIRECTORY`并隔离Electron用户目录；源码或旧日志根用例同时显式设置`MY_PI_HARNESS_SESSION_LOG_ROOT`，新安装缺省路径用例必须不设置该覆盖；`--user-data-dir`只隔离Cookie和缓存，不能隔离daemon业务数据。profile目录归属与覆盖优先级见[启动配置](../01_ARCHITECTURE/overview.md#启动配置)。
 - 源码Vitest最多4个worker，限制真实ESLint/TypeScript编译面与子进程测试的冷启动资源争用；平台超时仍是失败，不通过跳过断言或全局延长时限掩盖。
 - 所有失败路径在 finally/afterEach 关闭请求、流、child、server、计时器与句柄，不仅清空变量。超时必须使测试失败，不能伪装自跳过。
 - 等明确事件或有界状态轮询，不用任意 sleep 代替就绪。fetch 超时不能证明端口关闭，child.killed 不等于退出；观察所属 PID、真实控制关闭和连接拒绝，避免误测另一实例。

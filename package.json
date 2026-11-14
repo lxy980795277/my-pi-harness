@@ -1,6 +1,6 @@
 {
   "name": "my-pi-harness",
-  "version": "0.21.0",
+  "version": "0.22.0",
   "private": true,
   "type": "module",
   "description": "Local-first PC agent harness built independently on Pi",
@@ -28,8 +28,11 @@
     "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test",
     "version:sync": "node scripts/version.mjs --write",
     "version:check": "node scripts/version.mjs",
-    "package:desktop": "pnpm build && node scripts/prepare-desktop.mjs && pnpm --filter @my-pi-harness/desktop package",
+    "prepare:desktop": "node scripts/prepare-desktop.mjs",
+    "package:desktop": "pnpm build && pnpm prepare:desktop && pnpm --filter @my-pi-harness/desktop package",
+    "package:desktop:installer": "pnpm build && pnpm prepare:desktop && pnpm --filter @my-pi-harness/desktop package:installer",
     "smoke:desktop": "node --import tsx scripts/smoke-desktop.mjs",
+    "smoke:desktop:installer": "node --import tsx scripts/smoke-desktop-install.mjs",
     "prepare": "husky",
     "test:provider": "vitest run apps/daemon/test/provider-real.test.ts"
   },

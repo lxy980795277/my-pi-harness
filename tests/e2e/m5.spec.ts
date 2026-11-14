@@ -158,8 +158,13 @@ test('M5 真实委派隔离上下文，结果、任务树、看板和设置可�
     await expect(dialog).toContainText('M5-CHILD-RESULT');
     await expect(dialog).not.toContainText('M5-ROOT-SECRET');
     await expect(dialog.getByText('Token 预算', { exact: true })).toHaveCount(0);
-    await expect(dialog.getByText('已记录 Token', { exact: true })).toBeVisible();
-    await expect(dialog.getByText('1,100', { exact: true })).toBeVisible();
+    const taskUsage = dialog.getByRole('region', { name: '任务用量', exact: true });
+    const recordedUsage = taskUsage.getByText('用量 1.1K tok', { exact: true });
+    await expect(recordedUsage).toBeVisible();
+    await expect(recordedUsage).toHaveAttribute('title', /总计 1,100 tok/u);
+    await expect(taskUsage).toContainText('已记录 1 / 1 次模型调用');
+    await taskUsage.getByRole('button', { name: '展开统计', exact: true }).click();
+    await expect(taskUsage.getByText('已记录 Token', { exact: true })).toBeVisible();
     await mkdir('output/playwright', { recursive: true });
     await page.screenshot({ path: 'output/playwright/m5-task-detail-light.png' });
     await page.keyboard.press('Escape');

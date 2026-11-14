@@ -8,6 +8,8 @@ import { ApprovalAudit } from '@/features/sessions/components/approval-audit';
 import { ToolArtifacts } from '@/features/artifacts/components/artifact-card';
 import { useToolCard } from '@/features/sessions/hooks/use-tool-card';
 import { cn } from '@/utils/cn';
+import { FileChangeEntry } from '@/features/file-changes/components/file-change-entry';
+import { supportsFileChanges } from '@/features/file-changes/utils/file-change-view';
 
 interface ToolCardProps {
   tool: ToolCallView;
@@ -96,7 +98,14 @@ export const ToolCard: FC<ToolCardProps> = memo(({ tool, onDecide }) => {
           {state.unknown && (
             <Notice tone="error">结果未知，操作可能已生效，需要核验。不会自动重试此操作。</Notice>
           )}
-          {tool.diff !== null && (
+          {supportsFileChanges(tool) && (
+            <FileChangeEntry
+              sessionId={tool.sessionId}
+              scope={{ toolCallId: tool.id }}
+              label="查看此工具的文件变更"
+            />
+          )}
+          {tool.diff !== null && !supportsFileChanges(tool) && (
             <section aria-label="文件差异" className="min-w-0 space-y-2">
               <p className="text-xs text-muted-foreground">文件差异</p>
               <pre className="max-h-72 overflow-auto font-mono text-xs leading-5 whitespace-pre-wrap">

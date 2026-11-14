@@ -1,12 +1,7 @@
 import { Type } from 'typebox';
-import { workspacePath } from '@my-pi-harness/sandbox';
-import {
-  assertPreimage,
-  decodeText,
-  fileChangeResult,
-  readCurrentContent,
-  writeTextFileAtomic,
-} from '../lib/filesystem';
+import { decodeText, fileChangeResult } from '../lib/filesystem';
+import { fileChangeInvocation } from '../lib/file-changes';
+import { requireFileChangeHandlers } from '../lib/tool-context';
 import { ToolError, completeToolRegistration, strictObjectSchema } from '../lib/tool-registry';
 
 const parameters = strictObjectSchema({
@@ -25,15 +20,19 @@ export const writeFileTool = completeToolRegistration({
   loading: 'default',
   readOnly: false,
   async execute(ports, args, invocation) {
-    const context = await ports.workspace(invocation.signal);
-    if (context.readOnly)
+    if (ports.readOnly)
       throw new ToolError('READ_ONLY', 'File changes are disabled by the current policy');
-    const path = await workspacePath(context.workspaceRoot, args.path, true);
-    const current = await readCurrentContent(path, context.signal);
-    assertPreimage(current, args.expectedHash);
-    const before = current === null ? '' : decodeText(current);
-    const result = fileChangeResult(args.path, before, args.content);
-    await writeTextFileAtomic(path, args.content, current, context);
-    return result;
+    return requireFileChangeHandlers(ports).modify(
+      {
+        path: args.path,
+        expectedHash: args.expectedHash,
+        prepare(current) {
+          const before = current === null ? '' : decodeText(current);
+          const result = fileChangeResult(args.path, before, args.content);
+          return { content: Buffer.from(args.content), result };
+        },
+      },
+      fileChangeInvocation(invocation),
+    );
   },
 });

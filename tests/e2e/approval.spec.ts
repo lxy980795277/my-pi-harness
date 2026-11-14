@@ -77,7 +77,7 @@ test('权限菜单展示三种策略、说明、统一图标和当前选项，�
   await expect(trigger).toBeFocused();
   await expect(trigger).toHaveCSS('border-color', triggerStyle.border);
   await expect(trigger).toHaveCSS('box-shadow', triggerStyle.shadow);
-  await expect(trigger).not.toHaveCSS('background-color', triggerStyle.background);
+  await expect(trigger).toHaveCSS('background-color', triggerStyle.background);
   await expect(surface).toHaveCSS('border-color', surfaceBorder);
   await chooseOption(page, trigger, '请求批准');
   await expect(trigger).toContainText('请求批准');

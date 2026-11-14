@@ -7,7 +7,7 @@ import { MemoryService } from '@my-pi-harness/memory';
 import type { MessageView, SearchScope } from '@my-pi-harness/protocol';
 import type { SearchSourceSnapshot } from '@my-pi-harness/protocol/internal';
 import { afterEach, describe, expect, it } from 'vitest';
-import { openProfileStore, type ProfileStore } from '../src/index';
+import { openProfileStore, SCHEMA_VERSION, type ProfileStore } from '../src/index';
 import { createAgentSession, spawn } from './fixtures/agent-session';
 import { MEMORY_PROPOSALS_SQL } from '../src/sqlite/migrations/0014-memory-proposals';
 
@@ -191,6 +191,9 @@ describe('persistent search sources and derived index', () => {
       db.exec('DROP INDEX search_chunks_generation_cursor');
       db.prepare('DELETE FROM schema_migrations WHERE version>=15').run();
       db.exec(
+        'DROP TABLE trace_entries; DROP TABLE request_snapshots; DROP TABLE trace_tool_timings; DROP TABLE trace_human_waits; DROP INDEX events_message_identity; DROP TABLE file_operations; DROP TABLE file_changes; DROP TABLE file_change_heads; DROP TABLE file_image_refs; DROP TABLE file_change_batches; DROP TABLE session_import_access; DROP TABLE session_archive_imports;',
+      );
+      db.exec(
         MEMORY_PROPOSALS_SQL.slice(MEMORY_PROPOSALS_SQL.indexOf('CREATE TABLE memory_proposals')),
       );
       db.pragma('user_version=14');
@@ -199,7 +202,7 @@ describe('persistent search sources and derived index', () => {
     expect(
       sql(value, (db) => db.pragma('index_info(search_chunks_generation_cursor)')),
     ).toMatchObject([{ name: 'generation' }, { name: 'id' }]);
-    expect(sql(value, (db) => db.pragma('user_version', { simple: true }))).toBe(16);
+    expect(sql(value, (db) => db.pragma('user_version', { simple: true }))).toBe(SCHEMA_VERSION);
     expect(value.store.search.lexical(access(value), { tokens: ['Existing'] })).toHaveLength(2);
     const page = value.store.search.vectors(access(value), { modelSignature: model });
     expect(page.items.map((item) => item.source.id).sort()).toEqual(

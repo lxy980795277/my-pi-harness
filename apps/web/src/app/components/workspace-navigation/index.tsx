@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import type { WorkspacePage } from '@/app/types/application';
 import { WorkspaceTree } from '@/features/workspaces/components/workspace-tree';
 import { SearchEntry } from '@/features/search/components/search-entry';
+import { ArchiveEntry } from '@/features/archives/components/archive-entry';
 
 interface WorkspaceNavigationProps {
   page: WorkspacePage;
@@ -49,6 +50,7 @@ export const WorkspaceNavigation: FC<WorkspaceNavigationProps> = ({
           新对话
         </Button>
         <SearchEntry />
+        <ArchiveEntry />
         <NavigationItem
           page="tasks"
           activePage={page}

@@ -22,7 +22,9 @@ lib/tool-registry.ts拥有ToolRegistration、注册工厂和ToolRegistry。ToolR
 
 tools/按模型工具名使用kebab-case文件名，例如read-file.ts、edit-file.ts、spawn-agent.ts和load-skill.ts。每个文件集中声明自己的参数schema、注册元数据和执行逻辑；工具专属实现留在所属文件。tools/index.ts只聚合导出，根workspace-tool-registry.ts组合原生目录，目录顺序与默认/按需声明保持明确。utils/tool-search.ts拥有目录检索，不与注册装配混放。不存在按工具族拆出的schema清单、注册数组或按工具名称选择实现的第二套派发。
 
-lib/提供注册与上下文契约和有实际共同消费者的操作，不承接每个模型工具的声明或统一执行所有工具。文件预像校验、稳定读取与原子写入可由多个工具共用；命令状态和Skill版本与租约分别由commands/、skills/拥有，插件贡献由独立plugins包拥有，正文提取由utils/document-text.ts提供。拆分工具入口不拆散这些服务，也不把它们放回工具注册文件。
+lib/提供注册与上下文契约和有实际共同消费者的操作，不承接每个模型工具的声明或统一执行所有工具。文件字节读取与发布由sandbox拥有；命令状态和Skill版本与租约分别由commands/、skills/拥有，插件贡献由独立plugins包拥有，正文提取由utils/document-text.ts提供。拆分工具入口不拆散这些服务，也不把它们放回工具注册文件。
+
+`write_file`和`edit_file`只声明参数、预期hash及文本准备函数，由宿主注入的`fileChanges.modify`在写入门内读取预像、执行文本语义、记录历史并调用sandbox发布；没有宿主服务时明确拒绝，不直接写文件。文本编辑保留原BOM及CRLF，hash始终针对原始字节。`MAXIMUM_FILE_CHANGE_BYTES`公开原生文件修改的500,000字节上限，宿主和测试复用该值。`FileChangeInvocation`由runtime绑定实际toolCallId、取消信号与持久发布屏障，模型不能提供这些来源。历史、撤销和恢复由宿主及storage负责。
 
 bind接收当前Run的ToolContext，返回异步调用入口；注册工厂同时接纳同步和异步实现，同步异常也通过返回Promise拒绝。lib/tool-context.ts拥有公共执行上下文及各类工具回调组合，具体工具的回调接口和输入类型随对应工具文件定义；回调仅提供实际领域操作，不传Run、Coordinator或数据库。主子执行器各自重绑session/run/task、Work上下文与角色上限。执行闭包不进入日志，模型可见定义、来源指纹和授权版本由runtime冻结。新增工具同时设计参数校验、结果内容、效果策略和真实服务可用性。
 

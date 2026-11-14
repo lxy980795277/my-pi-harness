@@ -1,6 +1,6 @@
 # 使用模型与会话
 
-M1提供文字对话、配置与认证、停止、持久队列和历史分支。M2新增工作区与有审批的工具执行，操作见[工作区与工具](workspace-execution.md)。M3的附件、上下文、计划与检查点见[对应指南](context-interaction.md)；MCP与Skills入口见[MCP扩展](MCP扩展.md)及[Skills与插件](Skills与插件.md)；M5操作见[子Agent与任务看板](子Agent与任务看板.md)，记忆和Computer Use仍属后续范围。
+M1提供文字对话、配置与认证、停止、持久队列和历史分支。M2新增工作区与有审批的工具执行，操作见[工作区与工具](workspace-execution.md)。M3的附件、上下文、计划与检查点见[对应指南](context-interaction.md)；MCP与Skills入口见[MCP扩展](MCP扩展.md)及[Skills与插件](Skills与插件.md)；M5操作见[子Agent与任务看板](子Agent与任务看板.md)。长期记忆与跨会话检索归属M6，执行轨迹、统一用量、文件撤销重做及会话归档归属M7，接口见[API总览](../03_API/overview.md)。Computer Use仍属后续范围。
 
 ## 进入工作台
 
@@ -58,7 +58,7 @@ Enter发送，Shift+Enter换行；Ctrl/Cmd+Enter也可发送。中文输入法�
 
 刷新页面后在左侧工作区树选择已保存会话继续查看；旧会话位于“未分配工作区”，时间显示创建时间，超过24小时后按本地日期MM-DD展示，悬停可见完整时间。删除会话实际执行归档并从列表移除，保留JSONL会话事实及原分支内容以维护历史完整性；它不是彻底擦除个人数据的入口。
 
-会话数据库保存在原应用profile的`data.sqlite`，JSONL另放在仓库根目录的`.my-pi-harness/sessions/<profile标识>/<会话ID>.jsonl`，开发和正式运行采用相同规则。独立安装包启动时通过`MY_PI_HARNESS_SESSION_LOG_ROOT`指定仓库中的`.my-pi-harness`绝对路径。profile标识由数据库目录的完整路径摘要生成，Electron与独立daemon各自隔离；自定义profile不改变默认日志根。JSONL是会话事实源，SQLite保存配置与可重建查询投影；缺失已有会话日志时明确报错，不从SQLite反向补造日志。
+会话数据库保存在应用profile的`data.sqlite`，JSONL路径与覆盖规则见[启动配置](../01_ARCHITECTURE/overview.md#启动配置)。源码开发默认使用仓库中的隐藏目录，独立安装默认使用profile内的隐藏目录；显式日志根优先。已有数据库须继续使用原日志根，或先用完整会话归档迁移，不会自动搬移日志。JSONL是会话事实源，SQLite保存配置与可重建查询投影；缺失已有日志时明确报错，不从SQLite反向补造日志。
 
 JSONL保存会话执行事实，包括恢复所需的私有模型数据，不应作为公开分享文件；附件保存在独立内容文件中，完整备份需要同时保留附件与配置。写入先持久日志再更新SQLite；失败时停止后续持久写入，修复后重启校验恢复，不自动重做模型或工具副作用。
 

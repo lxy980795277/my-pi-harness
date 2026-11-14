@@ -1,12 +1,7 @@
 import { Type } from 'typebox';
-import { workspacePath } from '@my-pi-harness/sandbox';
-import {
-  assertPreimage,
-  decodeText,
-  fileChangeResult,
-  readCurrentContent,
-  writeTextFileAtomic,
-} from '../lib/filesystem';
+import { decodeText, fileChangeResult } from '../lib/filesystem';
+import { fileChangeInvocation } from '../lib/file-changes';
+import { requireFileChangeHandlers } from '../lib/tool-context';
 import { ToolError, completeToolRegistration, strictObjectSchema } from '../lib/tool-registry';
 
 const parameters = strictObjectSchema({
@@ -27,24 +22,29 @@ export const editFileTool = completeToolRegistration({
   loading: 'default',
   readOnly: false,
   async execute(ports, args, invocation) {
-    const context = await ports.workspace(invocation.signal);
-    if (context.readOnly)
+    if (ports.readOnly)
       throw new ToolError('READ_ONLY', 'File changes are disabled by the current policy');
-    const path = await workspacePath(context.workspaceRoot, args.path);
-    const current = await readCurrentContent(path, context.signal);
-    assertPreimage(current, args.expectedHash);
-    if (current === null) throw new ToolError('FILE_MISSING', 'The file to edit does not exist');
-    const before = decodeText(current);
-    const parts = before.split(args.oldText);
-    const count = parts.length - 1;
-    if (count === 0 || (count > 1 && args.replaceAll !== true))
-      throw new ToolError(
-        'EDIT_AMBIGUOUS',
-        'The old text must match exactly once unless replaceAll is enabled',
-      );
-    const after = parts.join(args.newText);
-    const result = fileChangeResult(args.path, before, after);
-    await writeTextFileAtomic(path, after, current, context);
-    return result;
+    return requireFileChangeHandlers(ports).modify(
+      {
+        path: args.path,
+        expectedHash: args.expectedHash,
+        prepare(current) {
+          if (current === null)
+            throw new ToolError('FILE_MISSING', 'The file to edit does not exist');
+          const before = decodeText(current);
+          const parts = before.split(args.oldText);
+          const count = parts.length - 1;
+          if (count === 0 || (count > 1 && args.replaceAll !== true))
+            throw new ToolError(
+              'EDIT_AMBIGUOUS',
+              'The old text must match exactly once unless replaceAll is enabled',
+            );
+          const after = parts.join(args.newText);
+          const result = fileChangeResult(args.path, before, after);
+          return { content: Buffer.from(after), result };
+        },
+      },
+      fileChangeInvocation(invocation),
+    );
   },
 });

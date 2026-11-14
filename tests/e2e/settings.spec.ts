@@ -164,7 +164,13 @@ test('内置厂商只读设置、弹窗焦点与动态样式 CSP', async ({ page
   });
   await page.goto(daemon.origin);
   const navigation = page.getByRole('navigation', { name: '页面导航', exact: true });
-  await expect(navigation.getByRole('button')).toHaveCount(2);
+  await expect(navigation.getByRole('button')).toHaveText([
+    '新对话',
+    '搜索记忆与对话',
+    '导入会话',
+    '任务看板',
+    '运行状态',
+  ]);
   await expect(navigation.getByRole('button', { name: '设置', exact: true })).toHaveCount(0);
   const trigger = page.getByRole('button', { name: '用户信息，打开菜单', exact: true });
   await openUserSettings(page);

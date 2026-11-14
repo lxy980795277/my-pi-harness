@@ -18,6 +18,7 @@ import {
 import { requestFailureText } from '@/utils/run-failure';
 import { describeError } from '@/utils/describe-error';
 import { MemoryUsagePanel } from '@/features/memory/components/memory-usage';
+import { UsagePanel } from '@/features/usage/components/usage-panel';
 
 interface TaskDetailProps {
   task: AgentTaskSummary;
@@ -56,10 +57,13 @@ export const TaskDetail: FC<TaskDetailProps> = ({ task }) => {
           </Button>
         )}
       </div>
-      <dl className="grid grid-cols-2 gap-x-4 gap-y-2 rounded-xl bg-muted/40 p-3 text-xs">
-        <dt className="text-muted-foreground">已记录 Token</dt>
-        <dd>{task.usage?.totalTokens.toLocaleString() ?? '暂无计量'}</dd>
-      </dl>
+      <UsagePanel
+        sessionId={task.sessionId}
+        scope={{ taskId: task.id, includeDescendants: true }}
+        running={task.status === 'running' || task.status === 'waiting' || task.status === 'queued'}
+        compact
+        title="任务用量"
+      />
       {state.query.isPending && (
         <p className="text-sm text-muted-foreground" role="status">
           正在读取任务…

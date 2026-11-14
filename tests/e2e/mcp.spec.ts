@@ -139,7 +139,7 @@ for (const remoteName of ['echo', 'disconnect'] as const) {
         [{ name: tool.name, arguments: { value: 'browser MCP once' } }],
         'MCP 已完成。',
       );
-      await configureTestProvider(page, model.origin);
+      await configureTestProvider(page, model.origin, 32768);
       await page.reload();
       await selectTool(page, remoteName);
       const submitted: unknown[] = [];
@@ -155,7 +155,10 @@ for (const remoteName of ['echo', 'disconnect'] as const) {
           await route.fulfill({
             status: 503,
             contentType: 'application/json',
-            body: JSON.stringify({ message: 'Synthetic lost MCP acceptance response' }),
+            body: JSON.stringify({
+              code: 'SYNTHETIC_RESPONSE_LOST',
+              message: 'Synthetic lost MCP acceptance response',
+            }),
           });
           return;
         }

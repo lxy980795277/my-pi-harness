@@ -50,6 +50,7 @@ export class SkillContextQuery {
           and(
             eq(schema.events.sessionId, sessionId),
             gt(schema.events.seq, cursor),
+            sql`${schema.events.seq} > coalesce((SELECT imported_through_seq FROM session_import_access WHERE session_id=${sessionId}),0)`,
             inArray(schema.events.type, ['run.accepted', 'run.tools_loaded', 'message.started']),
           ),
         )

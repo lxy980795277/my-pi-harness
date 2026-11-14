@@ -151,28 +151,45 @@ test('客户端仍在时缺失应用Cookie进入登录页，不加载私有数�
 });
 
 test('服务端撤销后私有请求触发重新登录并清理页面草稿', async ({ page, daemon }) => {
-  await interceptGitHubAuthorization(page, daemon.origin);
-  await page.goto(daemon.origin);
-  await page.getByLabel('消息', { exact: true }).fill('登录失效后不可恢复的草稿');
-  const response = await page.request.get(`${daemon.origin}/api/auth/status`);
-  const status: unknown = await response.json();
-  if (!Value.Check(AuthStatusSchema, status) || status.csrfToken === null)
-    throw new Error('The revoked-session test requires an initialized client');
-  const logout = await page.request.post(`${daemon.origin}/api/auth/logout`, {
-    headers: { Origin: daemon.origin, 'X-CSRF-Token': status.csrfToken },
-    data: {},
-  });
-  expect(logout.ok()).toBe(true);
-  await page.getByRole('button', { name: '任务看板', exact: true }).click();
-  await expect(page.getByTestId('login-page')).toBeVisible();
-  await expect(page.getByRole('dialog', { name: '设置', exact: true })).toHaveCount(0);
-  await expect(page.getByTestId('workspace-shell')).toHaveCount(0);
-  await page.getByRole('button', { name: '使用 GitHub 登录', exact: true }).click();
-  await page.getByRole('link', { name: '批准 GitHub 授权', exact: true }).click();
-  await expect(page.getByLabel('消息', { exact: true })).toHaveValue('');
-  await expect(page.getByRole('button', { name: '用户信息，打开菜单', exact: true })).toContainText(
-    'E2E User',
+  const requested = createGate();
+  const responseGate = createGate();
+  await page.route(
+    '**/api/agents?**',
+    async (route) => {
+      requested.release();
+      await responseGate.wait;
+      await route.continue();
+    },
+    { times: 1 },
   );
+  try {
+    await interceptGitHubAuthorization(page, daemon.origin);
+    await page.goto(daemon.origin);
+    await page.getByLabel('消息', { exact: true }).fill('登录失效后不可恢复的草稿');
+    const response = await page.request.get(`${daemon.origin}/api/auth/status`);
+    const status: unknown = await response.json();
+    if (!Value.Check(AuthStatusSchema, status) || status.csrfToken === null)
+      throw new Error('The revoked-session test requires an initialized client');
+    await page.getByRole('button', { name: '任务看板', exact: true }).click();
+    await requested.wait;
+    const logout = await page.request.post(`${daemon.origin}/api/auth/logout`, {
+      headers: { Origin: daemon.origin, 'X-CSRF-Token': status.csrfToken },
+      data: {},
+    });
+    expect(logout.ok()).toBe(true);
+    responseGate.release();
+    await expect(page.getByTestId('login-page')).toBeVisible();
+    await expect(page.getByRole('dialog', { name: '设置', exact: true })).toHaveCount(0);
+    await expect(page.getByTestId('workspace-shell')).toHaveCount(0);
+    await page.getByRole('button', { name: '使用 GitHub 登录', exact: true }).click();
+    await page.getByRole('link', { name: '批准 GitHub 授权', exact: true }).click();
+    await expect(page.getByLabel('消息', { exact: true })).toHaveValue('');
+    await expect(
+      page.getByRole('button', { name: '用户信息，打开菜单', exact: true }),
+    ).toContainText('E2E User');
+  } finally {
+    responseGate.release();
+  }
 });
 
 test('桌面入口使用设备码并自动打开浏览器，打开失败可手动重试', async ({ page, daemon }) => {

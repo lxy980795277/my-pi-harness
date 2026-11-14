@@ -1,11 +1,7 @@
 import type { MessageView } from '@my-pi-harness/protocol';
 
-/** Display-ready facts for one settled answer, including all of its model steps. */
-export interface AnswerMetadata {
-  tokensLabel: string;
-  tokensTitle: string;
-  durationLabel: string;
-  durationTitle: string;
+/** Recorded answer timestamp; request usage and elapsed time come from the host usage query. */
+export interface AnswerTimestamp {
   timeLabel: string;
   timeTitle: string;
   dateTime: string;
@@ -16,5 +12,5 @@ export interface AnswerFooter {
   inputId: string;
   copyText: string;
   memoryMessage: MessageView;
-  metadata: AnswerMetadata;
+  timestamp: AnswerTimestamp;
 }

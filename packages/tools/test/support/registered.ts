@@ -9,6 +9,7 @@ import {
   type WebFetchGatewayAccess,
   type WebToolHandlers,
 } from '../../src/index';
+import { testFileChanges } from './file-changes';
 
 export function describeRegistered(name: string, args: Record<string, unknown>): ToolPolicy {
   const registration = nativeTool(name);
@@ -34,8 +35,14 @@ export async function executeRegistered(
   return registration.bind({
     owner: { sessionId: 'session', runId: 'run', taskId: null },
     readOnly: context.readOnly,
+    fileChanges: testFileChanges(context),
     ...(context.skillGateway ? { skillGateway: context.skillGateway } : {}),
     ...(context.web ? { web: context.web } : {}),
     workspace: async () => ({ ...context, workspaceRoot: await canonicalWorkspace(context) }),
-  })(args, { toolCallId: 'fixture', signal: context.signal });
+  })(args, {
+    toolCallId: 'fixture',
+    signal: context.signal,
+    beforePublish: () => undefined,
+    confirmNotPublished: () => undefined,
+  });
 }

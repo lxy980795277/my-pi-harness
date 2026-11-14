@@ -7,6 +7,8 @@ import { encodeContextMessage, snapshotPrivateData } from '../context/codec';
 import { fitContext } from '../context/budget';
 import type { ModelGateway, ResolvedModel } from '../models/gateway';
 import type { EventInput } from '../sessions/ports';
+import { scheduledStream, type RequestAdmission } from '../runs/request';
+import { RequestAuditError } from '../runs/request-observer';
 
 export type ApprovalReviewResult = Static<typeof REVIEW_RESULT>;
 
@@ -17,6 +19,10 @@ export interface ApprovalReviewInput {
   tool: Pick<ToolCallRecord, 'id' | 'name' | 'arguments' | 'summary'>;
   /** The owning Run admits this request; the reviewer still owns its independently resolved lease. */
   modelStream?: StreamFn;
+  modelAdmission?: RequestAdmission;
+  branchId?: string;
+  inputMessageId?: string | null;
+  answerInputMessageId?: string | null;
   commit(events: readonly EventInput[]): void;
 }
 
@@ -90,29 +96,48 @@ export class ModelApprovalReviewer implements ApprovalReviewer {
         signal.throwIfAborted();
         return this.finish(input, this.fallback());
       }
-      input.commit([
-        {
-          type: 'tool.review.requested',
-          runId: input.runId,
-          at: Date.now(),
-          data: this.identity(input),
-          privateData: snapshotPrivateData({
-            version: 1,
-            purpose: 'tool-approval',
-            systemPrompt: REVIEW_PROMPT,
-            messages: [encodeContextMessage(user)],
-            maxOutput,
-          }),
-        },
-      ]);
-      const verdict = await this.evaluate(
-        lease,
-        user,
-        maxOutput,
-        combined,
-        signal,
+      let auditFailure: Error | undefined;
+      const commit = (events: readonly EventInput[]): void => {
+        try {
+          input.commit(events);
+        } catch (error) {
+          auditFailure = error instanceof Error ? error : new RequestAuditError(error);
+          throw auditFailure;
+        }
+      };
+      const stream = scheduledStream(
         input.modelStream ?? lease.streamFn,
+        input.modelAdmission,
+        () => undefined,
+        {
+          branchId: input.branchId ?? input.session.activeBranchId,
+          runId: input.runId,
+          providerId: input.session.providerId,
+          purpose: 'approval',
+          ...(lease.priceSource ? { priceSource: lease.priceSource } : {}),
+          inputMessageId: () => input.inputMessageId ?? null,
+          answerInputMessageId: () => input.answerInputMessageId ?? null,
+          commit,
+          prepare: (modelRequestId) =>
+            commit([
+              {
+                type: 'tool.review.requested',
+                runId: input.runId,
+                at: Date.now(),
+                data: { ...this.identity(input), modelRequestId },
+                privateData: snapshotPrivateData({
+                  version: 1,
+                  purpose: 'tool-approval',
+                  systemPrompt: REVIEW_PROMPT,
+                  messages: [encodeContextMessage(user)],
+                  maxOutput,
+                }),
+              },
+            ]),
+        },
       );
+      const verdict = await this.evaluate(lease, user, maxOutput, combined, signal, stream);
+      if (auditFailure !== undefined) throw auditFailure;
       signal.throwIfAborted();
       return this.finish(input, verdict);
     } finally {
@@ -155,7 +180,8 @@ export class ModelApprovalReviewer implements ApprovalReviewer {
       const parsed: unknown = JSON.parse(text);
       if (!Value.Check(REVIEW_RESULT, parsed)) return this.fallback();
       return parsed;
-    } catch {
+    } catch (error) {
+      if (error instanceof RequestAuditError) throw error;
       signal.throwIfAborted();
       return this.fallback();
     } finally {

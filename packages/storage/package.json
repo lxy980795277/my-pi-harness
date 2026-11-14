@@ -19,6 +19,7 @@
     "@my-pi-harness/protocol": "workspace:*",
     "@napi-rs/keyring": "catalog:",
     "better-sqlite3": "catalog:",
+    "diff": "catalog:",
     "drizzle-orm": "catalog:",
     "typebox": "catalog:"
   },

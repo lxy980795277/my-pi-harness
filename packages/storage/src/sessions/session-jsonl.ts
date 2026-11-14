@@ -24,6 +24,13 @@ import {
   encodeJournalRecords,
   type JournalCodecState,
 } from './journal-codec';
+import { JournalIndex, type JournalAddress } from './journal-index';
+
+/** Request parts are read lazily from validated journal byte locations. */
+export interface JournalSnapshotReader {
+  count(section: 'system' | 'messages' | 'tools'): number;
+  read(section: 'system' | 'messages' | 'tools', index: number): unknown;
+}
 
 /** One command's complete public envelopes and private replay material. */
 export type StoredSessionEvent = Static<typeof StoredEventSchema>;
@@ -72,6 +79,7 @@ function missing(error: unknown): boolean {
 /** Authoritative host journal; appends are durable before the SQLite projection commits. */
 export class SessionJournal {
   private readonly cursors = new Map<string, Cursor>();
+  private readonly indexes = new Map<string, JournalIndex>();
   public constructor(private readonly files: PrivateSessionFiles) {}
 
   public sessionIds(): string[] {
@@ -124,6 +132,8 @@ export class SessionJournal {
     let lineLength = 0;
     let parts: Buffer[] = [];
     let changed = false;
+    const index = new JournalIndex();
+    this.indexes.set(sessionId, index);
     const decode = (bytes: Buffer): readonly StoredSessionEvent[] => {
       const decoded: unknown = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
       const value = checked(SessionBatchSchema, decoded);
@@ -137,6 +147,7 @@ export class SessionJournal {
       }
       const decodedRecords = decodeJournalRecords(value.records, context);
       context = decodedRecords.state;
+      index.remember(value.records, validBytes, bytes.length);
       return decodedRecords.records;
     };
     try {
@@ -233,6 +244,102 @@ export class SessionJournal {
     }
   }
 
+  private readAddress(sessionId: string, address: JournalAddress): StoredSessionEvent {
+    const cursor = this.cursors.get(sessionId);
+    if (cursor === undefined || address.offset + address.length > cursor.byteLength)
+      throw new StorageError(
+        'SESSION_LOG_INVALID',
+        'Request snapshot exceeds the committed journal',
+      );
+    const { fd, path } = this.open(sessionId, false);
+    try {
+      if (signature(this.files.checkFile(fd, path)) !== cursor.signature)
+        throw new StorageError('SESSION_LOG_INVALID', 'Session journal changed outside its owner');
+      const bytes = Buffer.alloc(address.length);
+      let read = 0;
+      while (read < bytes.length) {
+        const length = readSync(fd, bytes, read, bytes.length - read, address.offset + read);
+        if (length === 0)
+          throw new StorageError('SESSION_LOG_INVALID', 'Request snapshot is incomplete');
+        read += length;
+      }
+      const value = checked(
+        SessionBatchSchema,
+        JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)),
+      );
+      const { checksum: digest, ...body } = value;
+      if (checksum(body) !== digest)
+        throw new StorageError('SESSION_LOG_INVALID', 'Request snapshot checksum is invalid');
+      const record = value.records[address.record];
+      if (record === undefined || record.event.sessionId !== sessionId)
+        throw new StorageError('SESSION_LOG_INVALID', 'Request snapshot address is invalid');
+      return record;
+    } finally {
+      closeSync(fd);
+    }
+  }
+
+  /** Open a metadata-only snapshot reader without replaying earlier request bodies. */
+  public requestSnapshot(sessionId: string, seq: number): JournalSnapshotReader {
+    const index = this.indexes.get(sessionId);
+    const address = index?.record(seq);
+    if (index === undefined || address === undefined)
+      throw new StorageError('INVALID_RECORD', 'Request snapshot is unavailable');
+    const snapshot = index.snapshot(seq);
+    let cached: { address: JournalAddress; record: StoredSessionEvent } | undefined;
+    const load = (target: JournalAddress): StoredSessionEvent => {
+      if (cached?.address.offset !== target.offset || cached.address.record !== target.record)
+        cached = { address: target, record: this.readAddress(sessionId, target) };
+      return cached.record;
+    };
+    const raw = (): Record<string, unknown> => {
+      const data = load(address).privateData;
+      if (data === null) throw new StorageError('INVALID_RECORD', 'Request has no input audit');
+      return data;
+    };
+    const messages = (): unknown[] => {
+      const value = raw()['messages'];
+      if (!Array.isArray(value))
+        throw new StorageError('INVALID_RECORD', 'Request messages are unavailable');
+      return value;
+    };
+    const message = (position: number): unknown => {
+      if (snapshot === undefined) return messages()[position];
+      const source = snapshot.messages[position];
+      if (source === undefined) return undefined;
+      const value = load(source.address).privateData?.['messages'];
+      if (!Array.isArray(value))
+        throw new StorageError('SESSION_LOG_INVALID', 'Request source is invalid');
+      return value[source.index];
+    };
+    const systemMessage = (): Record<string, unknown> | undefined => {
+      const envelope = message(0);
+      if (envelope === null || typeof envelope !== 'object' || Array.isArray(envelope))
+        return undefined;
+      const value: unknown = Reflect.get(envelope, 'message');
+      if (value === null || typeof value !== 'object' || Array.isArray(value)) return undefined;
+      return value as Record<string, unknown>;
+    };
+    const tools = (): unknown[] => {
+      const value = systemMessage()?.['toolsAdded'];
+      return Array.isArray(value) ? value : [];
+    };
+    return {
+      count: (section) => {
+        if (section === 'system') return 1;
+        if (section === 'tools') return tools().length;
+        return snapshot?.messages.length ?? messages().length;
+      },
+      read: (section, position) => {
+        if (section === 'messages') return message(position);
+        if (section === 'tools') return tools()[position];
+        const value = raw()['systemPrompt'];
+        if (value === 0) return systemMessage()?.['content'];
+        return value;
+      },
+    };
+  }
+
   /** Commit one fully validated command; callers freeze writes after every uncertain failure. */
   public append(sessionId: string, records: readonly StoredSessionEvent[]): void {
     if (records.length === 0) return;
@@ -265,6 +372,9 @@ export class SessionJournal {
       fsyncSync(fd);
       if (created) this.files.syncDirectory(this.files.directory);
       const current = this.files.checkFile(fd, path);
+      const index = this.indexes.get(sessionId) ?? new JournalIndex();
+      index.remember(batch.records, before.size, bytes.length - 1);
+      this.indexes.set(sessionId, index);
       this.cursors.set(sessionId, {
         seq: firstSeq + batch.records.length - 1,
         context: encoded.state,

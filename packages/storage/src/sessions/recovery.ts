@@ -16,6 +16,7 @@ import { SessionCreatedSchema } from './event-validation';
 import type { ProjectionWriter } from './projections/projector';
 import { validateToolBatch } from './projections/tool-batch';
 import type { SessionJournal } from './session-jsonl';
+import { isRequestSnapshotEvent } from './trace-projection';
 
 /** Rebuilds disposable projections from authoritative files inside the owner's startup transaction. */
 export class SessionRecovery {
@@ -60,7 +61,51 @@ export class SessionRecovery {
       .run();
   }
 
+  /** Replay one newly published journal without rebuilding unrelated profile state. */
+  public replaySession(id: string, attachmentIds: readonly string[] = []): void {
+    this.projectAttachments(attachmentIds);
+    for (const records of this.journal.read(id)) {
+      validateToolBatch(records.map(({ event, privateData }) => ({ ...event, privateData })));
+      validateAgentBatch(
+        this.db,
+        id,
+        records.map(({ event, privateData }) => ({
+          ...event,
+          ...(privateData === null ? {} : { privateData }),
+        })),
+      );
+      for (const { event, privateData } of records) {
+        if (event.type === 'session.created') this.createProjection(event);
+        else this.projector.apply(event, privateData ?? undefined);
+        this.db
+          .insert(schema.events)
+          .values({
+            ...event,
+            privateData: isRequestSnapshotEvent(event.type) ? null : privateData,
+          })
+          .run();
+      }
+    }
+  }
+
+  private projectAttachments(ids: readonly string[]): void {
+    for (const id of ids) {
+      const content = this.blobs.read(id);
+      if (content === undefined)
+        throw new StorageError(
+          'SESSION_LOG_INVALID',
+          'Attachment blob disappeared during projection recovery',
+        );
+      this.db
+        .insert(schema.attachments)
+        .values({ id, data: content.attachment })
+        .onConflictDoNothing()
+        .run();
+    }
+  }
+
   public rebuild(): void {
+    this.projector.resetTrace();
     const ids = this.journal.sessionIds();
     const available = new Set(ids);
     const previousIds = this.db.select({ id: schema.sessions.id }).from(schema.sessions).all();
@@ -92,39 +137,9 @@ export class SessionRecovery {
       schema.attachments,
     ])
       this.db.delete(table).run();
-    for (const id of this.blobs.ids()) {
-      const content = this.blobs.read(id);
-      if (!content)
-        throw new StorageError(
-          'SESSION_LOG_INVALID',
-          'Attachment blob disappeared during recovery',
-        );
-      this.db.insert(schema.attachments).values({ id, data: content.attachment }).run();
-    }
-    for (const id of ids) {
-      for (const records of this.journal.read(id)) {
-        validateToolBatch(records.map(({ event, privateData }) => ({ ...event, privateData })));
-        validateAgentBatch(
-          this.db,
-          id,
-          records.map(({ event, privateData }) => ({
-            ...event,
-            ...(privateData === null ? {} : { privateData }),
-          })),
-        );
-        for (const { event, privateData } of records) {
-          if (event.type === 'session.created') this.createProjection(event);
-          else this.projector.apply(event, privateData ?? undefined);
-          this.db
-            .insert(schema.events)
-            .values({
-              ...event,
-              privateData: event.type === 'context.prepared' ? null : privateData,
-            })
-            .run();
-        }
-      }
-    }
+    this.projectAttachments(this.blobs.ids());
+    for (const id of ids) this.replaySession(id);
+    this.projector.finishRebuild();
     for (const { data } of this.db
       .select({ data: schema.artifacts.data })
       .from(schema.artifacts)

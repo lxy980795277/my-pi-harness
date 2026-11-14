@@ -47,6 +47,10 @@ export interface RunExecutionOptions {
   search?: RunSearchPort;
   initialSearchQuotes?: readonly SearchSourceSelection[];
   initialMemorySource?: MemoryMessageSource;
+  /** Durable initial input identity, including delegated inputs without a human memory source. */
+  inputMessageId?: string;
+  /** A delegated request belongs to the root answer that caused this execution or communication. */
+  answerInputMessageId?: string | null;
   userMemoryIds?: readonly string[];
 }
 
@@ -55,6 +59,8 @@ export interface RunAgentHost {
   signal: AbortSignal;
   recorded: Set<string>;
   assistantMessageId(): string;
+  inputMessageId(): string | null;
+  answerInputMessageId(): string | null;
   memoryQuery(): string;
   currentTask(): string;
   memorySource(): MemoryMessageSource | undefined;

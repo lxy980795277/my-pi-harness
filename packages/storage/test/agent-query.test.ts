@@ -90,6 +90,35 @@ function reportedMessage(
     },
   };
   store.append('session', [
+    event(
+      'model.request.started',
+      {
+        modelRequestId: `${id}-request`,
+        branchId: 'main',
+        purpose: 'conversation',
+        inputMessageId: runId === 'root' ? 'root-user' : `user-${runId.slice(4)}`,
+        answerInputMessageId: 'root-user',
+        providerId: 'provider',
+        modelId: 'model',
+        queuedAt: 1,
+        queueDurationMs: 1,
+        startedAt: 2,
+      },
+      runId,
+    ),
+    event(
+      'model.request.completed',
+      {
+        modelRequestId: `${id}-request`,
+        status: 'completed',
+        finishedAt: 3,
+        durationMs: 1,
+        firstResponseMs: 0,
+        error: null,
+        usage: message.usage,
+      },
+      runId,
+    ),
     event('message.started', message, runId, {
       codecVersion: 1,
       sdkVersion: '1.1.0',

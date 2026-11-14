@@ -188,6 +188,8 @@ export async function launchAgentRun(
       resolved,
       history: prepared.history,
       user: prepared.user,
+      inputMessageId: prepared.inputMessageId,
+      answerInputMessageId: node.answerInputMessageId,
       systemPrompt: prepared.systemPrompt,
       basePrompt,
       instructionsPrompt: source.instructionsPrompt ?? source.basePrompt,

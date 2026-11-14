@@ -5,6 +5,7 @@ import { applySessionStreamUpdate } from '@/features/sessions/queries/session-st
 import { subscribeSse } from '@/services/base-sse';
 import { describeError } from '@/utils/describe-error';
 import { parseResponse } from '@/utils/parse-response';
+import { markSessionReceived } from '@/utils/render-diagnostics';
 
 interface LiveSessionObserver {
   snapshot: (snapshot: SessionSnapshot) => void;
@@ -69,6 +70,7 @@ export const subscribeLiveSession = (id: string, observer: LiveSessionObserver):
         }
         const next = applySessionStreamUpdate(current, update, id);
         if (next === current) return;
+        markSessionReceived(id, next.snapshotSeq, next.liveRevision, performance.now());
         current = next;
         pending = next;
         clearTimeout(baselineTimer);

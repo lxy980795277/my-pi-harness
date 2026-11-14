@@ -1,4 +1,9 @@
-import type { HarnessEvent, SessionSnapshot, SessionSummary } from '@my-pi-harness/protocol';
+import type {
+  HarnessEvent,
+  SessionSnapshot,
+  SessionSummary,
+  SessionExecutionAccess,
+} from '@my-pi-harness/protocol';
 import type {
   EventInput,
   RequestAcceptance,
@@ -21,8 +26,15 @@ export interface RuntimeStore {
   listSessions(): SessionSummary[];
   getSession(id: string): SessionSummary | undefined;
   getSnapshot(id: string): SessionSnapshot;
+  /** Imported history has no execution authority until this host records an explicit current binding. */
+  getSessionExecutionAccess(sessionId: string): SessionExecutionAccess;
   publishMessageDelta(sessionId: string, delta: LiveMessageDelta): void;
   append(sessionId: string, events: readonly EventInput[]): HarnessEvent[];
+  /** Publish facts only after their journal and projection transaction has committed. */
+  subscribeCommitted(
+    receive: (events: readonly HarnessEvent[]) => void,
+    failed: (error: unknown) => void,
+  ): () => void;
   readEvents(sessionId: string, afterSeq: number, limit: number): HarnessEvent[];
   getModelContext(
     sessionId: string,

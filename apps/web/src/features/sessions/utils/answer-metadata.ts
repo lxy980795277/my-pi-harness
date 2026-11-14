@@ -1,17 +1,11 @@
 import type { MessageView, RunView } from '@my-pi-harness/protocol';
-import type { AnswerFooter, AnswerMetadata } from '@/features/sessions/types/answer-metadata';
+import type { AnswerFooter, AnswerTimestamp } from '@/features/sessions/types/answer-metadata';
 import {
   answerTurnFinishedAt,
   collectAnswerTurns,
   lastAnswerTurnsByRun,
 } from '@/features/sessions/utils/answer-turns';
 
-const COMPACT_TOKENS = new Intl.NumberFormat('en', {
-  notation: 'compact',
-  maximumFractionDigits: 1,
-});
-const EXACT_TOKENS = new Intl.NumberFormat('zh-CN');
-const SECONDS = new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 1 });
 const ANSWER_TIME = new Intl.DateTimeFormat('zh-CN', {
   hour: '2-digit',
   minute: '2-digit',
@@ -26,52 +20,6 @@ const ANSWER_DATE = new Intl.DateTimeFormat('zh-CN', {
   second: '2-digit',
   hour12: false,
 });
-
-const describeUsage = (
-  assistants: readonly MessageView[],
-): Pick<AnswerMetadata, 'tokensLabel' | 'tokensTitle'> => {
-  let totalTokens = 0;
-  let inputTokens = 0;
-  let outputTokens = 0;
-  let cacheReadTokens = 0;
-  let cacheWriteTokens = 0;
-  let recorded = 0;
-  for (const assistant of assistants) {
-    const usage = assistant.usage;
-    if (usage === undefined) continue;
-    totalTokens += usage.totalTokens;
-    inputTokens += usage.inputTokens;
-    outputTokens += usage.outputTokens;
-    cacheReadTokens += usage.cacheReadTokens;
-    cacheWriteTokens += usage.cacheWriteTokens;
-    recorded += 1;
-  }
-  if (recorded === 0) {
-    return { tokensLabel: '用量未记录', tokensTitle: '未记录本次回答的模型用量' };
-  }
-  let tokensLabel = `用量 ${COMPACT_TOKENS.format(totalTokens)} tok`;
-  let prefix = '';
-  if (recorded < assistants.length) {
-    tokensLabel = `部分用量 ${COMPACT_TOKENS.format(totalTokens)} tok`;
-    prefix = `已记录 ${recorded} / ${assistants.length} 次模型调用；`;
-  }
-  return {
-    tokensLabel,
-    tokensTitle:
-      `${prefix}总计 ${EXACT_TOKENS.format(totalTokens)} tok；` +
-      `输入 ${EXACT_TOKENS.format(inputTokens)}，输出 ${EXACT_TOKENS.format(outputTokens)}；` +
-      `缓存读取 ${EXACT_TOKENS.format(cacheReadTokens)}，缓存写入 ${EXACT_TOKENS.format(cacheWriteTokens)}；` +
-      '仅主对话模型调用（含工具轮）',
-  };
-};
-
-const describeDuration = (durationMs: number): string => {
-  const seconds = Math.max(0, durationMs) / 1_000;
-  if (seconds < 60) return `用时 ${SECONDS.format(seconds)} 秒`;
-  const minutes = Math.floor(seconds / 60);
-  const remainder = Math.floor(seconds % 60);
-  return `用时 ${minutes} 分 ${remainder} 秒`;
-};
 
 /** Keys settled input turns by their last assistant so actions follow trailing tool calls. */
 export const buildAnswerFooters = (
@@ -104,13 +52,9 @@ export const buildAnswerFooters = (
     const lastInRun = runId !== null && lastTurnByRun.get(runId) === turn;
     if (lastInRun && (run?.status === 'running' || runId === activeRunId)) continue;
     const finishedAt = answerTurnFinishedAt(turn, run, lastInRun, branchId);
-    let durationLabel = '用时未记录';
-    let durationTitle = '本次回答未记录完整的结束时间';
     let timestamp = answer.createdAt;
     let timeTitle = `开始生成：${ANSWER_DATE.format(timestamp)}`;
     if (finishedAt !== undefined) {
-      durationLabel = describeDuration(finishedAt - turn.user.createdAt);
-      durationTitle = '从本次输入到回答结束，包含工具执行时间';
       timestamp = finishedAt;
       timeTitle = ANSWER_DATE.format(timestamp);
     }
@@ -122,10 +66,7 @@ export const buildAnswerFooters = (
       inputId: turn.user.id,
       copyText: body.join('\n\n'),
       memoryMessage: answer,
-      metadata: {
-        ...describeUsage(turn.assistants),
-        durationLabel,
-        durationTitle,
+      timestamp: {
         timeLabel: ANSWER_TIME.format(timestamp),
         timeTitle,
         dateTime: new Date(timestamp).toISOString(),
@@ -135,18 +76,14 @@ export const buildAnswerFooters = (
   return footers;
 };
 
-/** Equivalent historical statistics keep answer action rows reusable during later token updates. */
-export const equalAnswerMetadata = (
-  previous: AnswerMetadata | undefined,
-  next: AnswerMetadata | undefined,
+/** Equivalent recorded timestamps keep answer action rows reusable during later token updates. */
+export const equalAnswerTimestamp = (
+  previous: AnswerTimestamp | undefined,
+  next: AnswerTimestamp | undefined,
 ): boolean => {
   if (previous === next) return true;
   if (previous === undefined || next === undefined) return false;
   return (
-    previous.tokensLabel === next.tokensLabel &&
-    previous.tokensTitle === next.tokensTitle &&
-    previous.durationLabel === next.durationLabel &&
-    previous.durationTitle === next.durationTitle &&
     previous.timeLabel === next.timeLabel &&
     previous.timeTitle === next.timeTitle &&
     previous.dateTime === next.dateTime

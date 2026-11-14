@@ -11,7 +11,8 @@
     "build": "electron-vite build",
     "typecheck": "tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.preload.json --noEmit",
     "lint": "eslint .",
-    "package": "electron-builder --config electron-builder.config.cjs --dir"
+    "package": "node ../../scripts/package-desktop.mjs dir",
+    "package:installer": "node ../../scripts/package-desktop.mjs installer"
   },
   "dependencies": {
     "@my-pi-harness/protocol": "workspace:*",

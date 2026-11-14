@@ -45,6 +45,10 @@ import { OAuthLaunchTickets } from '../http/oauth-launch-tickets';
 import type { RemoteMcpManager } from '@my-pi-harness/integrations';
 import { LocalSearchModelResource } from '../search/local-model-resource';
 import { LocalToolSearchEmbedder } from '../search/tool-search-embedder';
+import { FileChangeService } from '../file-changes/service';
+import { FileChangeBatches } from '../file-changes/batches';
+import { recoverFileChanges } from '../file-changes/recovery';
+import { SessionArchiveService } from '../archives/service';
 
 /** Resources have one daemon owner and close in dependency order. */
 export interface ApplicationServices {
@@ -59,6 +63,9 @@ export interface ApplicationServices {
   search: SearchService;
   web: WebService;
   attachments: AttachmentService;
+  fileChanges: FileChangeService;
+  fileChangeBatches: FileChangeBatches;
+  archives: SessionArchiveService;
   login: LoginService;
   mcp: McpService;
   remoteMcp: RemoteMcpService;
@@ -113,6 +120,9 @@ export async function createApplicationServices(
   let models: LocalSearchModelResource | undefined;
   let search: SearchService | undefined;
   let web: WebService | undefined;
+  let fileChanges: FileChangeService | undefined;
+  let fileChangeBatches: FileChangeBatches | undefined;
+  let archives: SessionArchiveService | undefined;
   let resolveOrigin = (): string => `http://127.0.0.1:${config.port}`;
   const listenerOrigin = (): string => resolveOrigin();
   const webOrigin = (): string => config.developmentOrigin ?? listenerOrigin();
@@ -136,6 +146,15 @@ export async function createApplicationServices(
     });
     await gateway.initialize();
     const workspaces = new WorkspaceService(store, config.profileDirectory);
+    fileChanges = new FileChangeService({ store, workspaces, profileDirectory });
+    const ownedFileChanges = fileChanges;
+    await recoverFileChanges(store, ownedFileChanges);
+    fileChangeBatches = new FileChangeBatches({
+      store,
+      files: ownedFileChanges,
+      onError: options.onError ?? (() => undefined),
+    });
+    const ownedFileChangeBatches = fileChangeBatches;
     mcp = new McpService({
       store,
       credentials,
@@ -282,6 +301,20 @@ export async function createApplicationServices(
     artifacts = new ArtifactService(store, workspaces, profileDirectory);
     const ownedArtifacts = artifacts;
     const tools = new ToolRuntime({
+      fileChanges: (context) => ({
+        modify: (input, invocation) =>
+          ownedFileChanges.modify(
+            {
+              sessionId: context.session.id,
+              runId: context.run.id,
+              branchId: context.run.branchId,
+              workspaceId: context.session.workspaceId,
+              readOnly: context.readOnly,
+            },
+            input,
+            invocation,
+          ),
+      }),
       web: {
         search: (input, invocation) => ownedWeb.search(input, invocation.signal),
         fetchPage: (input, invocation) => ownedWeb.fetchPage(input, invocation.signal),
@@ -342,6 +375,15 @@ export async function createApplicationServices(
       search: new SessionSearchService(store, ownedSearch),
     });
     runtimeRef.current = runtime;
+    archives = await SessionArchiveService.create({
+      store,
+      runtime,
+      gateway: ownedGateway,
+      workspaces,
+      profileDirectory,
+      onError: options.onError ?? (() => undefined),
+    });
+    const ownedArchives = archives;
     const login = new LoginService([
       new GitHubIdentityProvider(
         config.githubClientId,
@@ -382,6 +424,9 @@ export async function createApplicationServices(
       search: ownedSearch,
       web: ownedWeb,
       attachments: ownedAttachments,
+      fileChanges: ownedFileChanges,
+      fileChangeBatches: ownedFileChangeBatches,
+      archives: ownedArchives,
       login,
       mcp: ownedMcp,
       remoteMcp: ownedRemoteMcp,
@@ -407,6 +452,9 @@ export async function createApplicationServices(
         closing ??= (async () => {
           const failures: unknown[] = [];
           ownedWeb.stopAccepting();
+          ownedArchives.stopAccepting();
+          ownedFileChangeBatches.stopAccepting();
+          ownedFileChanges.stopAccepting();
           ownedMcp.stopAccepting();
           ownedLaunchTickets.close();
           ownedRemoteMcp.stopAccepting();
@@ -417,8 +465,11 @@ export async function createApplicationServices(
             () => login.close(),
             () => ownedPluginConnections.close(),
             () => ownedAttachments.close(),
+            () => ownedArchives.close(),
             () => runtime.close(),
             () => tools.close(),
+            () => ownedFileChangeBatches.close(),
+            () => ownedFileChanges.close(),
             () => ownedWeb.close(),
             () => ownedArtifacts.close(),
             () => ownedSearch.close(),
@@ -453,6 +504,9 @@ export async function createApplicationServices(
       () => work?.close(),
       async () => await commands?.close(),
       async () => await artifacts?.close(),
+      async () => await archives?.close(),
+      async () => await fileChangeBatches?.close(),
+      async () => await fileChanges?.close(),
       async () => await attachments?.close(),
       async () => await pluginConnections?.close(),
       async () => await search?.close(),

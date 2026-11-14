@@ -9,6 +9,7 @@ import { fetchSession } from '@/features/sessions/services/sessions';
 import { useAsyncEvent } from '@/hooks/use-async-event';
 import { drainInvalidations, type RefreshOwner } from '@/utils/invalidation-refresh';
 import { completedMemoryWriteIds, refreshMemoryFacts } from '@/features/memory/queries/cache';
+import { refreshLiveTrace } from '@/features/trace/queries/cache';
 
 interface ConnectionState {
   id: string;
@@ -47,7 +48,11 @@ export const useSession = (id: string): LiveSession => {
         await drainInvalidations(signal, owner, async (): Promise<void> => {
           const memoryChanged = owner.memoryChanged;
           owner.memoryChanged = false;
-          const refreshes = [queryClient.invalidateQueries({ queryKey: ['work', id] })];
+          const refreshes = [
+            queryClient.invalidateQueries({ queryKey: ['work', id] }),
+            queryClient.invalidateQueries({ queryKey: ['usage', id] }),
+            refreshLiveTrace(queryClient, id),
+          ];
           if (memoryChanged) refreshes.push(refreshMemoryFacts(queryClient));
           await Promise.all(refreshes);
         });

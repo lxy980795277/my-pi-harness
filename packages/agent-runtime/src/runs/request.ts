@@ -2,8 +2,9 @@ import type { StreamFn } from '@earendil-works/pi-agent-core';
 import type { PreparedContext } from '../context/request-context';
 import type { RunHooks, RunMemoryPort, RunMemoryRequest } from './ports';
 import { RuntimeError } from '../errors';
+import { observedRequest, type RequestObservation } from './request-observer';
 
-type RequestAdmission = Pick<RunHooks, 'acquireRequest' | 'trackRequest'>;
+export type RequestAdmission = Pick<RunHooks, 'acquireRequest' | 'trackRequest'>;
 
 export interface RequestDispatch {
   hooks?: RequestAdmission;
@@ -14,6 +15,7 @@ export interface RequestDispatch {
   validate(): Promise<void>;
   stream: StreamFn;
   onError(error: unknown): void;
+  observation?: RequestObservation;
 }
 
 /** Hold admission until the provider's actual terminal result, including iterator cancellation. */
@@ -21,11 +23,20 @@ export function scheduledStream(
   stream: StreamFn,
   hooks: RequestAdmission | undefined,
   onError: (error: unknown) => void,
+  observation?: RequestObservation,
 ): StreamFn {
   return async (model, context, options) => {
+    const queuedAt = Date.now();
+    const admissionStart = performance.now();
     const release = await hooks?.acquireRequest(options?.signal ?? new AbortController().signal);
+    const queueDurationMs = hooks ? Math.max(0, Math.round(performance.now() - admissionStart)) : 0;
     try {
-      const result = await stream(model, context, options);
+      const result = await observedRequest(
+        stream,
+        observation,
+        queuedAt,
+        queueDurationMs,
+      )(model, context, options);
       const completion = result.result().then(
         () => release?.(),
         (error: unknown) => {
@@ -45,9 +56,13 @@ export function scheduledStream(
 /** Finalize a fresh local draft only after model admission and immediately before host handoff. */
 export function dispatchRequest(owner: RequestDispatch): StreamFn {
   return async (model, context, options) => {
+    const queuedAt = Date.now();
+    let queueDurationMs = 0;
     for (let attempt = 0; attempt < 3; attempt += 1) {
       owner.identity.signal.throwIfAborted();
+      const admissionStart = performance.now();
       const releaseSlot = await owner.hooks?.acquireRequest(owner.identity.signal);
+      if (owner.hooks) queueDurationMs += Math.max(0, performance.now() - admissionStart);
       let released = false;
       const release = (): void => {
         if (released) return;
@@ -70,8 +85,16 @@ export function dispatchRequest(owner: RequestDispatch): StreamFn {
           await owner.prepare();
           continue;
         }
-        draft.commit();
-        const result = await owner.stream(model, { ...context, messages: draft.messages }, options);
+        const observation = owner.observation
+          ? { ...owner.observation, prepare: (id: string) => draft.commit(id) }
+          : undefined;
+        if (!observation) draft.commit();
+        const result = await observedRequest(
+          owner.stream,
+          observation,
+          queuedAt,
+          Math.round(queueDurationMs),
+        )(model, { ...context, messages: draft.messages }, options);
         handedOff = true;
         const completion = result.result().then(
           () => release?.(),

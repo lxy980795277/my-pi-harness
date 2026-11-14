@@ -73,6 +73,10 @@ test('插件预览、独立 Skill 开关和整体停用持久反映到目录', a
   expect(preview.plugin.installed).toBe(false);
   const skill = preview.skills.find((entry) => entry.name === 'documents');
   if (skill === undefined) throw new Error('Documents plugin must provide its bundled Skill');
+  const catalogSkill = page.getByRole('button', {
+    name: `${skill.name} ${skill.description}`,
+    exact: true,
+  });
 
   await openUserSettings(page);
   await page.getByRole('tab', { name: '插件', exact: true }).click();
@@ -109,7 +113,7 @@ test('插件预览、独立 Skill 开关和整体停用持久反映到目录', a
     pluginId: 'documents',
     enabled: true,
   });
-  await expect(page.getByRole('button', { name: /documents 创建有样式/u })).toBeVisible();
+  await expect(catalogSkill).toBeVisible();
 
   await page.getByRole('tab', { name: '插件', exact: true }).click();
   await card.getByRole('button', { name: '查看 Documents 插件详情', exact: true }).click();
@@ -131,7 +135,7 @@ test('插件预览、独立 Skill 开关和整体停用持久反映到目录', a
     pluginId: 'documents',
     enabled: false,
   });
-  await expect(page.getByRole('button', { name: /documents 创建有样式/u })).toBeVisible();
+  await expect(catalogSkill).toBeVisible();
   await page.getByRole('tab', { name: '插件', exact: true }).click();
   await card.getByRole('button', { name: '查看 Documents 插件详情', exact: true }).click();
   await expect(skillToggle).not.toBeChecked();
@@ -149,7 +153,7 @@ test('插件预览、独立 Skill 开关和整体停用持久反映到目录', a
     pluginId: 'documents',
     enabled: true,
   });
-  await expect(page.getByRole('button', { name: /documents 创建有样式/u })).toBeVisible();
+  await expect(catalogSkill).toBeVisible();
   await page.getByRole('tab', { name: '插件', exact: true }).click();
 
   const pluginToggle = card.getByRole('switch', { name: '启用 Documents 插件', exact: true });
@@ -160,7 +164,7 @@ test('插件预览、独立 Skill 开关和整体停用持久反映到目录', a
   expect(inactivePluginSkills.find((entry) => entry.name === 'documents')).toMatchObject({
     enabled: false,
   });
-  await expect(page.getByRole('button', { name: /documents 创建有样式/u })).toBeVisible();
+  await expect(catalogSkill).toBeVisible();
   await page.getByRole('tab', { name: '插件', exact: true }).click();
   await card.getByRole('button', { name: '查看 Documents 插件详情', exact: true }).click();
   await expect(skillToggle).not.toBeChecked();

@@ -5,6 +5,7 @@ import { nativeTool } from '../src/index';
 import { webPageText, webSearchText, webRawText } from '../src/lib/web-content';
 import { describeRegistered, executeRegistered } from './support/registered';
 
+const functionMatcher: unknown = expect.any(Function);
 const source = {
   title: 'Public source',
   url: 'https://example.com/article',
@@ -57,6 +58,8 @@ describe('public search and explicit page extraction', () => {
       {
         toolCallId: 'fixture',
         signal: context.signal,
+        beforePublish: functionMatcher,
+        confirmNotPublished: functionMatcher,
       },
     );
     expect(web.fetchPage).toHaveBeenCalledWith(
@@ -64,6 +67,8 @@ describe('public search and explicit page extraction', () => {
       {
         toolCallId: 'fixture',
         signal: context.signal,
+        beforePublish: functionMatcher,
+        confirmNotPublished: functionMatcher,
       },
     );
     expect(JSON.stringify(search.content)).toContain(source.url);
@@ -122,6 +127,8 @@ describe('public search and explicit page extraction', () => {
       {
         toolCallId: 'fixture',
         signal: context.signal,
+        beforePublish: functionMatcher,
+        confirmNotPublished: functionMatcher,
       },
     );
   });

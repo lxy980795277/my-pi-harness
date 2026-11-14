@@ -24,6 +24,7 @@ export interface SubagentNode {
   tree: SubagentTree;
   parent: SubagentNode | undefined;
   task: AgentTask | undefined;
+  answerInputMessageId: string | null;
   depth: number;
   limits: AgentLimits;
   controller: AbortController;

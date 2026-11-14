@@ -6,6 +6,7 @@ import {
   type ToolRegistry,
   type ToolContext,
   type ToolResult,
+  type ToolInvocation,
 } from '@my-pi-harness/tools';
 import { RuntimeError } from '../errors';
 import { createWorkToolHandlers } from '../work/tool-port';
@@ -57,6 +58,7 @@ export function createToolContext(
     ...(options.skillGateway ? { skillGateway: options.skillGateway } : {}),
     ...(options.web ? { web: options.web } : {}),
     ...(options.artifacts ? { artifacts: options.artifacts(context) } : {}),
+    ...(options.fileChanges ? { fileChanges: options.fileChanges(context) } : {}),
     ...(options.commands
       ? {
           commands: options.commands.bind({
@@ -86,10 +88,7 @@ export function bindNativeTool(
   selected: RunToolRecord,
   ports: ToolContext,
   registry?: ToolRegistry,
-): (
-  args: Record<string, unknown>,
-  i: { toolCallId: string; signal: AbortSignal },
-) => Promise<ToolResult> {
+): (args: Record<string, unknown>, i: ToolInvocation) => Promise<ToolResult> {
   const registration = registry
     ? registry.get(selected.definition.name)
     : nativeTool(selected.definition.name);
@@ -111,7 +110,30 @@ export function bindRunTool(
     return (ledger, signal) => dispatchMcpTool(selected, ledger, options.externalTools, signal);
   const execute = bindNativeTool(selected, ports, options.registry);
   return async (ledger, signal) => {
-    const result = await execute(ledger.tool.arguments, { toolCallId: ledger.tool.id, signal });
+    const result = await execute(ledger.tool.arguments, {
+      toolCallId: ledger.tool.id,
+      signal,
+      beforePublish(operationId) {
+        signal.throwIfAborted();
+        if (ledger.tool.dispatch.state === 'may_have_started')
+          throw new RuntimeError('DUPLICATE_DISPATCH', '本次调用不允许重复发布。');
+        ledger.tool.dispatch = {
+          state: 'may_have_started',
+          attemptId: operationId,
+          at: Date.now(),
+        };
+        ledger.update();
+      },
+      confirmNotPublished() {
+        if (
+          ledger.tool.dispatch.state !== 'may_have_started' ||
+          ledger.tool.dispatch.confirmedNotWritten
+        )
+          return;
+        ledger.tool.dispatch = { ...ledger.tool.dispatch, confirmedNotWritten: true };
+        ledger.update();
+      },
+    });
     return {
       status: 'completed',
       origin: 'tool',

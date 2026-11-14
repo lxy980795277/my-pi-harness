@@ -19,9 +19,12 @@ import { cn } from '@/utils/cn';
 import { useSaveMessageMemory } from '@/features/memory/hooks/use-save-message-memory';
 import { MemoryEditor } from '@/features/memory/components/memory-editor';
 import { Notice } from '@/components/ui/notice';
+import { useTimelineRenderMark } from '@/hooks/use-render-diagnostic';
 
 interface MessageTimelineProps {
   sessionId: string;
+  snapshotSeq: number;
+  liveRevision: number;
   workspaceId: string | null;
   approvalMode: ApprovalMode;
   messages: MessageView[];
@@ -38,6 +41,8 @@ interface MessageTimelineProps {
 /** Render the visible measured rows and overscan while keeping the complete history scrollable. */
 export const MessageTimeline: FC<MessageTimelineProps> = ({
   sessionId,
+  snapshotSeq,
+  liveRevision,
   workspaceId,
   approvalMode,
   messages,
@@ -51,6 +56,7 @@ export const MessageTimeline: FC<MessageTimelineProps> = ({
   children,
 }) => {
   const state = useMessageTimeline(sessionId, messages, tools, activeRunId, runs, branchId);
+  useTimelineRenderMark(sessionId, snapshotSeq, liveRevision);
   const memory = useSaveMessageMemory(workspaceId, branchId);
   return (
     <div className="relative min-h-0 flex-1">
@@ -102,7 +108,11 @@ export const MessageTimeline: FC<MessageTimelineProps> = ({
                     />
                   )}
                   {entry.type === 'answer-footer' && (
-                    <AnswerFooter footer={entry.footer} onSaveMemory={memory.open} />
+                    <AnswerFooter
+                      sessionId={sessionId}
+                      footer={entry.footer}
+                      onSaveMemory={memory.open}
+                    />
                   )}
                   {entry.type === 'request-error' && (
                     <article className="min-w-0" aria-label="Agent的消息">

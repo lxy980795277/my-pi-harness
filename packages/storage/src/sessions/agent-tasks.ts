@@ -6,7 +6,6 @@ import {
   AgentTaskSummarySchema,
   BranchViewSchema,
   MessageViewSchema,
-  MessageUsageSchema,
   RunViewSchema,
   SessionSnapshotSchema,
   SessionSummarySchema,
@@ -17,7 +16,6 @@ import {
   type AgentMessageTarget,
   type AgentTaskDetail,
   type AgentTaskSummary,
-  type MessageUsage,
   type MessageView,
   type ToolCallView,
   type RunView,
@@ -28,6 +26,7 @@ import { StorageError } from '../shared/errors';
 import { checked } from '../shared/validation';
 import * as schema from '../sqlite/schema';
 import { WorkRepository } from './projections/work';
+import type { ExecutionUsageQuery } from './execution-usage';
 
 interface TaskMessagePage {
   messages: MessageView[];
@@ -36,7 +35,10 @@ interface TaskMessagePage {
 
 /** Read-only task projections; parent and root relationships come from committed tool sources. */
 export class AgentTaskQuery {
-  public constructor(private readonly db: BetterSQLite3Database<typeof schema>) {}
+  public constructor(
+    private readonly db: BetterSQLite3Database<typeof schema>,
+    private readonly executionUsage: ExecutionUsageQuery,
+  ) {}
 
   /** Resolve the task created by one committed delegation tool. */
   public findBySource(sessionId: string, sourceToolCallId: string): AgentTaskSummary | undefined {
@@ -133,7 +135,7 @@ export class AgentTaskQuery {
         checked(AgentTaskSummarySchema.properties.closeReason, row.closeReason) ?? 'interrupted';
     else if (latest)
       status = latest.status === 'running' && waiting !== null ? 'waiting' : latest.status;
-    const usage = this.usage(sessionId, taskId);
+    const usage = this.executionUsage.taskUsage(sessionId, taskId);
     return checked(AgentTaskSummarySchema, {
       ...row.data,
       sessionId,
@@ -149,7 +151,7 @@ export class AgentTaskQuery {
       closedAt: row.closedAt,
       closeReason: row.closeReason,
       error: row.error ?? latest?.error ?? null,
-      usage,
+      ...usage,
     });
   }
 
@@ -410,47 +412,5 @@ export class AgentTaskQuery {
       .orderBy(asc(sql`${schema.toolCalls}.rowid`))
       .all()
       .map((row) => checked(ToolCallViewSchema, { ...row.data, afterMessageId: row.anchor }));
-  }
-
-  private usage(sessionId: string, taskId: string): MessageUsage | null {
-    const members = sql`WITH RECURSIVE subtree(id) AS (
-      SELECT id FROM agent_tasks WHERE session_id = ${sessionId} AND id = ${taskId}
-      UNION
-      SELECT child.id FROM agent_tasks child
-      INNER JOIN runs parent ON parent.id = child.parent_run_id
-      INNER JOIN subtree ON parent.task_id = subtree.id
-      WHERE child.session_id = ${sessionId}
-    ) SELECT id FROM subtree`;
-    let usage: MessageUsage | null = null;
-    for (const row of this.db
-      .select({ usage: sql<string>`json_extract(${schema.messages.data}, '$.usage')` })
-      .from(schema.taskMessages)
-      .innerJoin(schema.messages, eq(schema.messages.id, schema.taskMessages.messageId))
-      .where(
-        and(
-          eq(schema.messages.sessionId, sessionId),
-          sql`${schema.taskMessages.taskId} IN (${members})`,
-          sql`json_type(${schema.messages.data}, '$.usage') IS NOT NULL`,
-        ),
-      )
-      .all()) {
-      const reported = checked(MessageUsageSchema, JSON.parse(row.usage));
-      usage ??= {
-        inputTokens: 0,
-        outputTokens: 0,
-        cacheReadTokens: 0,
-        cacheWriteTokens: 0,
-        totalTokens: 0,
-      };
-      for (const field of [
-        'inputTokens',
-        'outputTokens',
-        'cacheReadTokens',
-        'cacheWriteTokens',
-        'totalTokens',
-      ] as const)
-        usage[field] += reported[field];
-    }
-    return usage;
   }
 }

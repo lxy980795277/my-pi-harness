@@ -22,6 +22,8 @@ export interface RunInjectedInput {
   readonly message: UserMessage;
   /** Plain task communication text; it is never a direct human preference declaration. */
   readonly taskQuery?: string;
+  /** Root human input frozen by the sender when this communication was queued. */
+  readonly answerInputMessageId?: string | null;
   consume(): readonly EventInput[];
 }
 

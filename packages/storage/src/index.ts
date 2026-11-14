@@ -1,4 +1,5 @@
 export { ProfileStore } from './profile/store';
+export type { ModelRequestImage } from './sessions/trace';
 export { MemoryRepository } from './memory/repository';
 export { SearchRepository } from './search/repository';
 export { openProfileStore } from './profile/open';
@@ -46,3 +47,13 @@ export {
 
 export { ConnectionRepository, type StoredConnection } from './repositories/connections';
 export { PluginCredentialStore } from './credentials/plugin-credentials';
+
+export type { PendingFileOperations, PendingFileBatches } from './sessions/file-changes/repository';
+
+export type {
+  SessionArchiveInput,
+  SessionArchiveSource,
+  SessionArchiveEntry,
+  SessionArchiveOptions,
+  SessionArchiveImportsQuery,
+} from './archives/types';

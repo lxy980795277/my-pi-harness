@@ -9,7 +9,8 @@ import { _electron as electron, expect } from '@playwright/test';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const { version } = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
 const executable =
-  process.platform === 'darwin'
+  process.env.MY_PI_HARNESS_SMOKE_EXECUTABLE ??
+  (process.platform === 'darwin'
     ? join(
         root,
         'release',
@@ -31,12 +32,14 @@ const executable =
           'release',
           process.arch === 'arm64' ? 'linux-arm64-unpacked' : 'linux-unpacked',
           'my-pi-harness',
-        );
+        ));
+assert(isAbsolute(executable), 'Desktop smoke requires an absolute executable path');
 await access(executable);
-const resources =
+const resources = await realpath(
   process.platform === 'darwin'
     ? join(dirname(executable), '..', 'Resources')
-    : join(dirname(executable), 'resources');
+    : join(dirname(executable), 'resources'),
+);
 async function checkResourceLinks(directory) {
   for (const entry of await readdir(directory, { withFileTypes: true })) {
     const path = join(directory, entry.name);
@@ -91,12 +94,13 @@ const profileDirectory =
   process.platform === 'win32'
     ? join(temporary, 'My Pi Harness', 'profiles', 'default')
     : join(temporary, 'profiles', 'default');
+const sessionLogRoot = join(profileDirectory, '.my-pi-harness');
 const fixtureLocalToken = randomBytes(32).toString('base64url');
 const fixtureLoginToken = randomBytes(32).toString('base64url');
 const digest = (token) => createHash('sha256').update(token).digest('hex');
 // Test-owned profile seeding keeps the shipped application free of authentication bypasses.
 const fixtureStore = await openProfileStore(profileDirectory, {
-  sessionLogRoot: join(temporary, '.my-pi-harness'),
+  sessionLogRoot,
 });
 try {
   const createdAt = Date.now();
@@ -154,7 +158,6 @@ const env = {
   MY_PI_HARNESS_RENDERER_URL: 'http://127.0.0.1:1',
   MY_PI_HARNESS_DEVELOPMENT_ORIGIN: 'http://127.0.0.1:5174',
   MY_PI_HARNESS_PROFILE_DIRECTORY: profileDirectory,
-  MY_PI_HARNESS_SESSION_LOG_ROOT: join(temporary, '.my-pi-harness'),
 };
 delete env['ELECTRON_RUN_AS_NODE'];
 try {

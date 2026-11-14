@@ -6,6 +6,10 @@
 
 `resolveWorkspaceRoot`注册真实工作区根；`canonicalWorkspace`复核保存的路径。`workspacePath`拒绝越界、链接、敏感名称及跨平台歧义文件名。`openRegular`持有单链接常规文件的inode；`readStableFile`有界读取并检查描述符元数据、最终路径身份及观察到的替换。父目录的并发重命名仍需要OS目录能力，不能以这些检查声称消除了所有文件竞态。
 
+`readWorkspaceFileSnapshot`从同一描述符取得精确字节、0777权限位及文件身份，并记录规范工作区根和父目录的device/inode。`publishWorkspaceFile`复核预像及目录身份，通过同目录临时文件原子创建或替换，也支持受控删除；临时字节校验、chmod和文件sync在宿主`beforePublish`屏障之前完成，屏障之后再次检查目标及临时身份。原始BOM、换行和支持的权限位均随字节图像保留，POSIX还同步父目录。相同图像不调用屏障；临时清理只删除自身仍拥有的inode。
+
+发布前取消或检查失败不会触及目标，`FilePublicationError.publication=not-published`可供宿主确认未发布；目标syscall一旦尝试，后续失败一律为unknown，取消也不打断实际结算。此状态只描述文件发布，不等同于业务历史已经持久化。sandbox不拥有写入顺序、会话来源、历史或重试决策，宿主必须先记录意图并串行化相关写入。路径检查不能提供跨进程比较后交换，也不声称消除了未观察到的外部目录竞态。
+
 文件守卫与Seatbelt从同一敏感名称声明生成规则，大小写均受保护。文件API拒绝`.git`路径；进程允许读取`.git`，并拒绝写入。`isPublicAddress`将IPv4-mapped IPv6交给相同的IPv4规则。`resolveSocketAddress`持有可取消Resolver，在全部A/AAAA完成后对每个地址执行调用方的明确策略，全部通过才选择首个地址；空结果报告DNS_FAILED，取消拒绝迟到结果。`createPinnedLookup`固定Node单地址及多地址lookup回调，不再查询DNS。Web与远端传输保留各自URL、精确网关/测试来源例外、重定向、凭据和正文策略。
 
 ## 进程

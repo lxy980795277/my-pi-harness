@@ -59,13 +59,16 @@ function readInteger(
   return parsed;
 }
 
-function repositorySessionLogRoot(): string {
+/** Source launches keep repository logs; installed deployments keep logs inside their resolved profile. */
+export function defaultSessionLogRoot(profileDirectory: string, repository: string): string {
+  return existsSync(join(repository, 'pnpm-workspace.yaml'))
+    ? join(repository, '.my-pi-harness')
+    : join(profileDirectory, '.my-pi-harness');
+}
+
+function sessionLogRoot(profileDirectory: string): string {
   const repository = fileURLToPath(new URL('../../../../', import.meta.url));
-  if (!existsSync(join(repository, 'pnpm-workspace.yaml')))
-    throw new DaemonConfigError(
-      'Set MY_PI_HARNESS_SESSION_LOG_ROOT to the repository .my-pi-harness directory when launching outside the repository',
-    );
-  return join(repository, '.my-pi-harness');
+  return defaultSessionLogRoot(profileDirectory, repository);
 }
 
 /**
@@ -120,7 +123,7 @@ export function loadDaemonConfig(
     skillOAuthClients: skillOAuthClients(environment),
     ...(pythonPath === undefined ? {} : { pythonPath }),
     profileDirectory: configuredProfile ?? defaultProfile,
-    sessionLogRoot: configuredLogRoot ?? repositorySessionLogRoot(),
+    sessionLogRoot: configuredLogRoot ?? sessionLogRoot(configuredProfile ?? defaultProfile),
     ownerSecret: environment.MY_PI_HARNESS_DESKTOP_SECRET ?? null,
     developmentOrigin: developmentOrigin ?? null,
     githubClientId: githubClientId ?? null,

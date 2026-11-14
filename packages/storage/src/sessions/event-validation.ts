@@ -58,7 +58,11 @@ export const BranchSelectionSchema = Type.Object(
   { additionalProperties: false },
 );
 export const WorkEventSchema = Type.Object(
-  { state: WorkStateSchema, taskId: Type.Optional(Type.String({ minLength: 1, maxLength: 160 })) },
+  {
+    state: WorkStateSchema,
+    taskId: Type.Optional(Type.String({ minLength: 1, maxLength: 160 })),
+    modelRequestId: Type.Optional(Type.String({ minLength: 1, maxLength: 160 })),
+  },
   { additionalProperties: false },
 );
 export const CheckpointEventSchema = Type.Object(
@@ -74,6 +78,7 @@ export const RestoreEventSchema = Type.Object(
 );
 export const PreparedEventSchema = Type.Object(
   {
+    modelRequestId: Type.Optional(Type.String({ minLength: 1, maxLength: 160 })),
     branchId: Type.String({ minLength: 1 }),
     usage: ContextUsageSchema,
     messageIds: Type.Array(Type.String({ minLength: 1 }), { maxItems: 10_000 }),

@@ -695,7 +695,7 @@ describe('settled answer process disclosure', () => {
     expect(entries[1]).toMatchObject({ type: 'process', durationLabel: '13s' });
     expect(entries.at(-1)).toMatchObject({
       type: 'answer-footer',
-      footer: { metadata: { dateTime: new Date(14_000).toISOString() } },
+      footer: { timestamp: { dateTime: new Date(14_000).toISOString() } },
     });
     const missingTiming = { ...successfulAnswer(), thinking: 'recorded thought' };
     delete missingTiming.finishedAt;

@@ -34,7 +34,8 @@
     "tsx": "catalog:",
     "@my-pi-harness/plugins": "workspace:*",
     "@huggingface/transformers": "catalog:",
-    "@my-pi-harness/memory": "workspace:*"
+    "@my-pi-harness/memory": "workspace:*",
+    "tar-stream": "catalog:"
   },
   "devDependencies": {
     "@types/node": "catalog:",

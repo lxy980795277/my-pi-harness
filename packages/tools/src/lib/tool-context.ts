@@ -30,6 +30,7 @@ import type { RunCommandHandler } from '../tools/run-command';
 import type { WaitCommandHandler } from '../tools/wait-command';
 import type { StopCommandHandler } from '../tools/stop-command';
 import type { PublishArtifactHandler } from '../tools/publish-artifact';
+import type { FileChangeToolHandlers } from './file-changes';
 
 export interface WorkspaceToolContext {
   workspaceRoot: string;
@@ -106,6 +107,7 @@ export interface ToolContext {
   capabilities?: CapabilityToolHandlers;
   commands?: CommandToolHandlers;
   artifacts?: ArtifactToolHandlers;
+  fileChanges?: FileChangeToolHandlers;
   skillGateway?: WebFetchGatewayAccess;
 }
 
@@ -139,4 +141,10 @@ export function requireCapabilityHandlers(context: ToolContext): CapabilityToolH
 export function requireCommandHandlers(context: ToolContext): CommandToolHandlers {
   if (!context.commands) throw new ToolError('COMMAND_UNAVAILABLE', '命令服务不可用。');
   return context.commands;
+}
+
+export function requireFileChangeHandlers(context: ToolContext): FileChangeToolHandlers {
+  if (!context.fileChanges)
+    throw new ToolError('FILE_CHANGES_UNAVAILABLE', 'The file change service is not configured');
+  return context.fileChanges;
 }
